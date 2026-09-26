@@ -34,7 +34,8 @@ housing has 12 conflicted files, quests have 4.
 
 ## Rules for every session
 
-- One task = one branch `cloud/<short-name>` = one PR into `main`. Never push to `main` or to `import/*`/`archive/*`.
+- One task = one session = one PR into `main`. Work on the branch the session was assigned (`claude/...`) and
+  title the PR `Task N: <task name>`. Never push to `main` or to `import/*`/`archive/*`.
 - Never commit game client files (`client/` is ignored) or extracted assets.
 - Don't touch `.github/workflows/update-public-server.yml`.
 - End commit messages with a `Co-Authored-By: Claude` trailer, and credit the original author when merging an import.

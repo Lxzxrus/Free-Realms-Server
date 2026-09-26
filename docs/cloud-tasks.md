@@ -1,13 +1,14 @@
 # Cloud tasks
 
-One task = one cloud session = one branch `cloud/<name>` = one PR into `main`. Read `CLAUDE.md` first. The
+One task = one cloud session = one PR into `main`, on the branch the session was assigned. Title the PR
+`Task N: <name>`, where the names below (`env-check` and so on) are labels, not branch names. Read `CLAUDE.md` first. The
 self-check is `cd src && dotnet restore && dotnet build --no-restore && dotnet test --no-build`.
 
 Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can run in parallel once 2 is merged.
 
 ---
 
-## 1. `cloud/env-check`: calibrate the environment
+## 1. `env-check`: calibrate the environment
 
 - **Task:** confirm a cloud session can build and test `main`, and record how.
 - **Scope:** `docs/cloud-environment.md` (new). `scripts/cloud-setup.sh` only if the install fails for a
@@ -17,7 +18,7 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
 - **Deliverable:** a PR whose doc records the SDK and runtime versions, test counts, how long setup, restore,
   build and test each took, and anything the environment blocked.
 
-## 2. `cloud/housing-merge`: bring in housing
+## 2. `housing-merge`: bring in housing
 
 - **Task:** merge `import/housing-full-archive` into a branch from `main`, resolve every conflict, and get the
   self-check and a server boot passing.
@@ -36,7 +37,7 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
   should try in the client (enter a lot, place, move and save furniture, leave, re-enter, relog) and what each
   one should do.
 
-## 3. `cloud/quests-merge`: bring in quests *(after 2 is merged)*
+## 3. `quests-merge`: bring in quests *(after 2 is merged)*
 
 - **Task:** merge `import/quest-upstream-v2` into a branch from `main`, then fix the known defects listed in
   `CLAUDE.md`.
@@ -47,7 +48,7 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
 - **Check:** the self-check and a boot logging `Loaded N quests`.
 - **Deliverable:** a PR crediting JadenY, with an in-game checklist.
 
-## 4. `cloud/trading-port`: port trading from FreeRealms-Legacy
+## 4. `trading-port`: port trading from FreeRealms-Legacy
 
 - **Task:** hand-port player-to-player trading from `import/frl-main` (`src/Sanctuary.Game/Trading` and its
   handlers, registrations, and database changes if any).
@@ -55,7 +56,7 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
 - **Check:** the self-check. Add tests for any trade-commit logic that can be tested without a client.
 - **Deliverable:** a PR listing every file ported and every adaptation made.
 
-## 5. `cloud/security-recheck`: carry over our FreeRealms-Legacy fixes
+## 5. `security-recheck`: carry over our FreeRealms-Legacy fixes
 
 - **Task:** for each fix below, check whether `main` still has the problem. If it does, port the fix from
   `import/frl-main` as its own commit.
