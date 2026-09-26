@@ -29,8 +29,13 @@ SDK, the .NET 9 runtime and a running MariaDB (the MySQL test fails, not skips, 
 | `import/frl-quests` | Our port of JadenY's quests to FreeRealms-Legacy, verified in the game client | Read-only reference for tests and lessons |
 | `archive/sulphural-main-2026-08-18` | JadenY's big merge of housing, pets, mounts and more. The only surviving copy | Read-only reference. **Don't merge it**: 124+ conflicts |
 
-Both imports share OSFR commit `8ab6dd6` with `main`, so git merges them natively. Trial merges into `main`:
-housing has 12 conflicted files, quests have 4.
+Both imports share OSFR commit `8ab6dd6` with `main`, so git merges them natively. Housing was merged in Task 2
+(12 conflicted files). A trial merge of quests on top of housing conflicts in 5 files: `Player`, `BaseZone`,
+`IZone`, `WorldZone` and Gateway `Program.cs`.
+
+Housing was written against an early prototype of upstream's zoning rewrite. The merge kept `main`'s final
+zoning (`ZoneManager.TryMovePlayerToZone`, `EvictIfEmpty`), so enter zones through `Player.TeleportToZone`,
+never by creating a zone instance directly.
 
 ## Rules for every session
 
