@@ -1,0 +1,58 @@
+# Free Realms server (standalone)
+
+Nate's own Free Realms server: Nate and Claude develop, his wife playtests, and it will run on a Linux PC.
+The code is Sanctuary, the Open Source Free Realms (OSFR) emulator in C#/.NET. `main` is OSFR `main` plus our
+work. The repo is private for now. The code is AGPL-3.0, so it goes public, or source is offered to players,
+at launch.
+
+**Priorities:** housing first, then opening unreleased map zones, then items made by volunteer artists.
+Minigames and more quests wait until there's a lull.
+
+## Build and self-check
+
+```bash
+cd src && dotnet restore && dotnet build --no-restore && dotnet test --no-build
+```
+
+This is what CI runs (`.github/workflows/build.yml`). A task isn't done until it passes. The MariaDB test
+skips when no database is running; that's expected. Needs the .NET 10 SDK and the .NET 9 runtime, which
+`scripts/cloud-setup.sh` installs in cloud sessions.
+
+## Branches
+
+| Branch | What it is | Rule |
+|---|---|---|
+| `main` | OSFR `main` plus our work | Never push to it directly. Changes arrive by PR |
+| `import/housing-full-archive` | The housing system by `raisingkaines`, from his OSFR fork | Read-only source. Credit him in commits |
+| `import/quest-upstream-v2` | JadenY's quest system, from Sulphural's fork | Read-only source. Credit JadenY |
+| `import/frl-main` | FreeRealms-Legacy. **No git history in common with `main`**; port by hand | Read-only. Trading lives in `src/Sanctuary.Game/Trading` |
+| `import/frl-quests` | Our port of JadenY's quests to FreeRealms-Legacy, verified in the game client | Read-only reference for tests and lessons |
+| `archive/sulphural-main-2026-08-18` | JadenY's big merge of housing, pets, mounts and more. The only surviving copy | Read-only reference. **Don't merge it**: 124+ conflicts |
+
+Both imports share OSFR commit `8ab6dd6` with `main`, so git merges them natively. Trial merges into `main`:
+housing has 12 conflicted files, quests have 4.
+
+## Rules for every session
+
+- One task = one branch `cloud/<short-name>` = one PR into `main`. Never push to `main` or to `import/*`/`archive/*`.
+- Never commit game client files (`client/` is ignored) or extracted assets.
+- Don't touch `.github/workflows/update-public-server.yml`.
+- End commit messages with a `Co-Authored-By: Claude` trailer, and credit the original author when merging an import.
+- Build and tests passing isn't the finish line. List exactly what Nate must check in the game client, because
+  nothing here has been verified in game until he says so.
+
+## Lessons from porting quests (read before merging or porting anything)
+
+- When a feature arrives from another fork, its changes to **shared** packet files matter as much as its own
+  files. Reward previews, the npc-add packet's quest marker and `NotificationInfo` all broke silently because
+  our copies of shared files were kept. Resolve conflicts in shared packet files toward the side that the
+  feature's author tested against the client, and say which way you went.
+- A handler that exists but isn't routed in its dispatcher does nothing. Check every new handler has a route.
+- `.Include(...)` in the login character query decides what a player gets back on relog.
+- Static packet handlers get services in `ConfigureServices`. A field declared `= null!` and never assigned
+  compiles cleanly and crashes at runtime.
+- Real defects found in JadenY's quest code, which still need fixing after a merge: `BaseQuestPacket.TryRead`
+  and `TakeMeThereRequestPacket` use `&&` where `||` was meant; a single pending turn-in slot drops quests that
+  finish in the same tick; two packets call their sub-opcode `OpCode`.
+
+Task specs for cloud sessions: `docs/cloud-tasks.md`.
