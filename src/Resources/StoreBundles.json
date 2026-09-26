@@ -18176,11 +18176,6 @@
                             "Quantity":  1,
                             "GameItemId":  4614,
                             "MarketingItemId":  10384
-                        },
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
                         }
                     ],
         "Id":  4536,
@@ -18196,8 +18191,7 @@
         "DiscountType":  212,
         "SkuId":  1,
         "MemberDiscount":  1,
-        "MembersOnlyPrice":  1,
-        "ForceCanPreview":  2
+        "MembersOnlyPrice":  1
     },
     {
         "Comment":  "Stormy Hoverboard",
@@ -18987,7 +18981,7 @@
                         {
                             "Quantity":  1,
                             "GameItemId":  4787,
-                            "MarketingItemId":  17184
+                            "MarketingItemId":  11110
                         }
                     ],
         "Id":  4709,

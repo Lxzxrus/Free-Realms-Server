@@ -23,6 +23,7 @@ public class ZoneManager : IZoneManager
     private readonly ILogger _logger;
     private readonly IResourceManager _resourceManager;
     private readonly IServiceProvider _serviceProvider;
+    private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
     private static int _uniqueId = 1;
 
     private int NextID() => Interlocked.Increment(ref _uniqueId) - 1;
@@ -40,12 +41,14 @@ public class ZoneManager : IZoneManager
     public ZoneManager(
         ILoggerFactory loggerFactory,
         IResourceManager resourceManager,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        IDbContextFactory<DatabaseContext> dbContextFactory)
     {
         _logger = loggerFactory.CreateLogger<ZoneManager>();
 
         _resourceManager = resourceManager;
         _serviceProvider = serviceProvider;
+        _dbContextFactory = dbContextFactory;
     }
 
     public bool Load()
@@ -186,7 +189,9 @@ public class ZoneManager : IZoneManager
             Id = NextID(),
             OwnerId = ownerId // Note: should always be 'null'.
         },
-        HousingZoneDefinition housingZoneDefinition => new HousingZone(housingZoneDefinition, _serviceProvider)
+        HousingZoneDefinition housingZoneDefinition when ownerId is not null
+            && TryGetHouseId(ownerId.Value, housingZoneDefinition.Id, out var houseId) =>
+            new HousingZone(housingZoneDefinition, houseId, _serviceProvider)
         {
             Id = NextID(),
             OwnerId = ownerId
@@ -226,7 +231,7 @@ public class ZoneManager : IZoneManager
     }
 
 
-    private static bool PlayerCanAccessZone(BaseZoneDefinition definition, ulong? ownerId) => definition switch
+    private bool PlayerCanAccessZone(BaseZoneDefinition definition, ulong? ownerId) => definition switch
     {
         // NOTE: One day, we may need to worry about code that tries to allow a player into a zone
         // they're not aloud to be inside of (e.g., a private(?) house. Not sure if that existed).
@@ -236,26 +241,21 @@ public class ZoneManager : IZoneManager
         // This is why we don't pass a player instance here directly.
         WorldZoneDefinition => true,
         CombatZoneDefinition => ownerId is not null,
-        HousingZoneDefinition housing => ownerId is not null && PlayerOwnsHouse(ownerId.Value, housing.Id),
+        HousingZoneDefinition housing => ownerId is not null && TryGetHouseId(ownerId.Value, housing.Id, out _),
         _ => false
     };
 
-    private static bool PlayerOwnsHouse(ulong ownerId, int zoneDefinitionId)
+    private bool TryGetHouseId(ulong ownerId, int zoneDefinitionId, out ulong houseId)
     {
-        // NOTE: I'm not sure I like this function living here...
-        // maybe just throw this DB logic into the 'PlayerCanAccessZone' funciton in
-        // the first place..? Idk
+        using var dbContext = _dbContextFactory.CreateDbContext();
 
-        // TODO: fetch from DB
+        var dbHouseId = dbContext.Houses
+            .Where(house => house.CharacterId == ownerId && house.ZoneDefinitionId == zoneDefinitionId)
+            .Select(house => (ulong?)house.Id)
+            .SingleOrDefault();
 
-        // using var dbContext = _dbContextFactory.CreateDbContext();
+        houseId = dbHouseId ?? 0;
 
-        // var dbHouse = dbContext.Houses.SingleOrDefault(house =>
-        //     house.CharacterId == ownerId && house.ZoneDefinitionId == zoneDefinitionId);
-
-        // if (dbHouse is null)
-        //     return false;
-
-        throw new NotImplementedException();
+        return dbHouseId is not null;
     }
 }
