@@ -22,6 +22,8 @@ public interface IQuestManager
 
     void CompleteQuest(Player player, int questId);
 
+    bool TryHandInPendingQuest(Player player);
+
     void AbandonQuest(Player player, int questId);
 
     void SetActiveQuest(Player player, int questId);

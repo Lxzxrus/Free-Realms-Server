@@ -13,6 +13,7 @@ using Sanctuary.Game;
 using Sanctuary.Game.ChatCommands;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Interactions;
+using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Combat;
 using Sanctuary.Game.Zones;
@@ -83,7 +84,7 @@ public sealed class Player : ClientPcData, IEntity
 
     public int ActiveQuestId { get; set; }
 
-    public System.Action? PendingQuestEndAction { get; set; }
+    public PendingQuestTurnIns PendingQuestTurnIns { get; } = new();
 
     public void AwardXp(int xp)
     {

@@ -289,6 +289,15 @@ public sealed class QuestManager : IQuestManager
         RefreshObjectiveTarget(player);
     }
 
+    public bool TryHandInPendingQuest(Player player)
+    {
+        if (!player.PendingQuestTurnIns.TryDequeue(questId => player.Quests.TryGetValue(questId, out var completed) && !completed, out var questId))
+            return false;
+
+        CompleteQuest(player, questId);
+        return true;
+    }
+
     public void AbandonQuest(Player player, int questId)
     {
         if ((DateTime.UtcNow - player.LastQuestAcceptedAt).TotalSeconds < 3)
@@ -661,7 +670,7 @@ public sealed class QuestManager : IQuestManager
 
         player.SendTunneled(end);
 
-        player.PendingQuestEndAction = () => CompleteQuest(player, quest.QuestId);
+        player.PendingQuestTurnIns.Enqueue(quest.QuestId);
     }
 
     private static void SendQuestAdd(Player player, QuestDefinition quest, int helperTextId, float completedPercentage = 0f, bool suppressStartBanner = false)

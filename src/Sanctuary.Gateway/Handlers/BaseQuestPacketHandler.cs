@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.IO;
+using Sanctuary.Game.Quests;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -13,11 +14,14 @@ namespace Sanctuary.Gateway.Handlers;
 public static class BaseQuestPacketHandler
 {
     private static ILogger _logger = null!;
+    private static IQuestManager _questManager = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
         _logger = loggerFactory.CreateLogger(nameof(BaseQuestPacketHandler));
+
+        _questManager = serviceProvider.GetRequiredService<IQuestManager>();
     }
 
     public static bool HandlePacket(GatewayConnection connection, PacketReader reader)
@@ -41,10 +45,7 @@ public static class BaseQuestPacketHandler
 
     private static bool HandleQuestEndReply(GatewayConnection connection)
     {
-        var pending = connection.Player.PendingQuestEndAction;
-        connection.Player.PendingQuestEndAction = null;
-
-        if (pending is null)
+        if (!_questManager.TryHandInPendingQuest(connection.Player))
         {
             connection.Player.SendTunneled(new QuestEndBlockedPacket
             {
@@ -53,8 +54,6 @@ public static class BaseQuestPacketHandler
             });
             return true;
         }
-
-        pending.Invoke();
 
         connection.Player.SendTunneled(new CommandPacketQuestDialogComplete());
         return true;
