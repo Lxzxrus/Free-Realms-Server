@@ -118,16 +118,16 @@ public sealed class CakeAbility(AbilityServices services) : ConsumableAbility(se
 
         for (var i = 1; i < cakeDefinition.SpawnEffectIds.Length; i++)
         {
-            var spawnEffect = new PlayerUpdatePacketPlayCompositeEffect
+            var spawnEffect = Player.SerializeTunneled(new PlayerUpdatePacketPlayCompositeEffect
             {
                 Guid = cakeNpc.Guid,
                 CompositeEffectId = cakeDefinition.SpawnEffectIds[i],
                 Position = spawnPosition,
                 Clear = false
-            };
+            });
 
             foreach (var recipient in spawnRecipients)
-                recipient.SendTunneled(spawnEffect);
+                recipient.SendSerialized(spawnEffect);
         }
 
         var despawnTime = DateTimeOffset.UtcNow.AddMilliseconds(cakeDefinition.LifetimeMs);
@@ -179,15 +179,15 @@ public sealed class CakeAbility(AbilityServices services) : ConsumableAbility(se
 
     private static void SetCakeAnimation(Npc cakeNpc, int animationId)
     {
-        var packet = new PlayerUpdatePacketSetAnimation
+        var data = Player.SerializeTunneled(new PlayerUpdatePacketSetAnimation
         {
             Guid = cakeNpc.Guid,
             AnimationId = animationId,
             Flags = 1
-        };
+        });
 
         foreach (var viewer in cakeNpc.VisiblePlayers.Values)
-            viewer.SendTunneled(packet);
+            viewer.SendSerialized(data);
     }
 
     private static int RollExcluding(int count, int previous)
