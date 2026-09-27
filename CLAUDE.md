@@ -63,4 +63,5 @@ never by creating a zone instance directly.
   fixed in Task 3. The same `&&` opcode guard is in about 30 of upstream OSFR's packet base classes, so any
   packet's `TryRead` accepts the wrong opcode. Don't copy that pattern; fix it upstream-wide as its own task.
 
-Task specs for cloud sessions: `docs/cloud-tasks.md`.
+Where things stand, including what's merged and verified: `docs/status.md`. Read it, but don't edit it; Nate
+updates it after merges. Task specs for cloud sessions: `docs/cloud-tasks.md`.

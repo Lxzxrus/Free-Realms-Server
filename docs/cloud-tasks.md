@@ -67,3 +67,48 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
 - **Scope:** only the files those fixes touch.
 - **Check:** the self-check.
 - **Deliverable:** a PR with one commit per fix and a table saying which were already fixed upstream.
+
+## 6. `unreachable-quests`: take out quests that can't be finished
+
+- **Task:** these five quests name npcs that nothing spawns, so players get stuck: 104146 (Brawler: Restless
+  Rumors), 104154 (Brawler: The Growler Report), 3010 (Looking for Lavender), 3031 (Purr...fect Secret) and 3081
+  (Sobering Homecoming). Move them out of `src/Resources/Quests.json` into a new
+  `src/Resources/Quests.disabled.json` that the server doesn't load, so they can come back when their npcs exist.
+- **Watch the chains:** 3011, 3032 and 3080 reference these quests, and the two Brawler quests reference each
+  other. The loader refuses unknown references, so fix every reference. Keep a remaining quest reachable where
+  you can (for example, clear a prerequisite that pointed at a removed quest) and list each decision in the PR.
+- **Scope:** the two JSON files, `src/Resources/QUESTS.md` if it lists these quests, and tests.
+- **Check:** the self-check, plus a boot that logs the new quest count with no loader errors. Add or update a
+  test that fails if any shipped quest names an npc guid that `FabledRealms.lua` doesn't spawn.
+- **Deliverable:** a PR listing what moved and how each chain was repaired.
+
+## 7. `opcode-guards`: fix the `&&` opcode guards upstream-wide
+
+- **Task:** about 30 packet base classes check their opcode with
+  `if (!reader.TryRead(out short opCode) && opCode != OpCode)`, which accepts the wrong opcode. Change each to
+  `||`, and the same for sub-opcode checks written the same way.
+- **Before changing anything:** confirm, for each family, that the bytes the handler receives start at the
+  family opcode, as Task 3 did for quests. If a family's guard is currently masking an offset mismatch, don't
+  fix it blind. Leave it and list it in the PR.
+- **Also:** `CakeAbility.cs` has the same per-recipient serialization loop that Task 5's P1 fixed elsewhere. Apply
+  the same fix.
+- **Scope:** the guard lines, `CakeAbility.cs`, and tests.
+- **Check:** the self-check. Add a table-driven test that feeds each fixed family a packet with the wrong opcode
+  and expects rejection.
+- **Deliverable:** a PR with a table of every guard changed and every one skipped, with the reason.
+
+## 8. `housing-toggles`: port the three extra housing toggles
+
+- **Task:** `archive/sulphural-main-2026-08-18` has three housing handlers `main` lacks:
+  `ClientHousingPacketToggleFloraAllowedHandler`, `ClientHousingPacketToggleLockedHandler` and
+  `ClientHousingPacketTogglePetAutospawnHandler`. Port them by hand, since the archive can't be merged, along
+  with their packets and any data they need.
+- **Before porting:** `main`'s housing already has `DbHouse.IsLocked` and checks it when a visitor enters.
+  Reuse what exists; add database columns only if a toggle has nowhere to store its state, via a proper
+  migration with the model-snapshot tests passing.
+- **Scope:** the three handlers, their packets and routes in `BaseHousingPacketHandler`, the minimum data and
+  migration, and tests.
+- **Check:** the self-check and a boot. Every new handler must be routed and must get its services in
+  `ConfigureServices`.
+- **Deliverable:** a PR crediting JadenY, with in-game checks for each toggle: what the owner does, and what a
+  visitor should then see.
