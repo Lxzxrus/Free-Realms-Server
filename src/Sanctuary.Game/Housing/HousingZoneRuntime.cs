@@ -219,6 +219,39 @@ public sealed class HousingZoneRuntime : IDisposable
         }
     }
 
+    public void ToggleSetting(Player player, HouseSetting setting)
+    {
+        lock (_mutationLock)
+        {
+            if (_disposed || !ReferenceEquals(player.Zone, _zone))
+                return;
+
+            using var dbContext = _dbContextFactory.CreateDbContext();
+
+            // Only the owner may change the house. Anyone else gets the real state back,
+            // so a checkbox they flipped in their panel flips back.
+            if (!IsOwner(player) || _zone.OwnerId is not ulong ownerId)
+            {
+                var unchangedHouse = LoadHouse(dbContext);
+                if (unchangedHouse is not null)
+                    SendHouseInfo(player, unchangedHouse);
+
+                return;
+            }
+
+            var value = HouseSettings.Toggle(dbContext, _zone.HouseId, ownerId, setting);
+            if (value is null)
+                return;
+
+            _logger.LogInformation("{Player} set {Setting} to {Value}.", player.Name.FullName, setting, value);
+
+            dbContext.ChangeTracker.Clear();
+            var refreshedHouse = LoadHouse(dbContext);
+            if (refreshedHouse is not null)
+                BroadcastHouseInfo(refreshedHouse);
+        }
+    }
+
     public void BeginPlacement(Player player, int itemRecordId)
     {
         lock (_mutationLock)
