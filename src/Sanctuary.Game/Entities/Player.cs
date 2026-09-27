@@ -165,7 +165,7 @@ public sealed class Player : ClientPcData, IEntity
     /// Sends an already-serialized buffer. The udp library copies at every point it retains data,
     /// so one buffer can safely be shared across recipients.
     /// </summary>
-    internal void SendSerialized(byte[] data)
+    public void SendSerialized(byte[] data)
     {
         _connection.Send(UdpChannel.Reliable1, data);
     }
@@ -205,7 +205,7 @@ public sealed class Player : ClientPcData, IEntity
     /// <summary>
     /// Wraps a packet for tunneling once, so broadcasts don't re-serialize per recipient.
     /// </summary>
-    internal static byte[] SerializeTunneled(ISerializablePacket packet)
+    public static byte[] SerializeTunneled(ISerializablePacket packet)
     {
         var packetTunneled = new PacketTunneledClientPacket
         {
