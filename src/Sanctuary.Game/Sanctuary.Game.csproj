@@ -11,6 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Sanctuary.Game.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Sanctuary.Core\Sanctuary.Core.csproj" />
     <ProjectReference Include="..\Sanctuary.Database\Sanctuary.Database.csproj" />
     <ProjectReference Include="..\Sanctuary.Scripting\Sanctuary.Scripting.csproj" />

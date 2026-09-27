@@ -14,6 +14,7 @@ using Sanctuary.Database;
 using Sanctuary.Game;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Quests;
+using Sanctuary.Game.Trading;
 using Sanctuary.Gateway;
 using Sanctuary.Scripting;
 using Sanctuary.UdpLibrary.Configuration;
@@ -105,6 +106,9 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<IQuestManager, QuestManager>();
     serviceCollection.AddSingleton<IRewardManager, RewardManager>();
     serviceCollection.AddSingleton<IHouseManager, HouseManager>();
+    serviceCollection.AddSingleton<TradeOptions>();
+    serviceCollection.AddSingleton<ITradeCommitter, TradeCommitter>();
+    serviceCollection.AddSingleton<ITradeManager, TradeManager>();
 });
 
 builder.ConfigureLogging((hostBuilderContext, loggingBuilder) =>
