@@ -29,9 +29,10 @@ SDK, the .NET 9 runtime and a running MariaDB (the MySQL test fails, not skips, 
 | `import/frl-quests` | Our port of JadenY's quests to FreeRealms-Legacy, verified in the game client | Read-only reference for tests and lessons |
 | `archive/sulphural-main-2026-08-18` | JadenY's big merge of housing, pets, mounts and more. The only surviving copy | Read-only reference. **Don't merge it**: 124+ conflicts |
 
-Both imports share OSFR commit `8ab6dd6` with `main`, so git merges them natively. Housing was merged in Task 2
-(12 conflicted files). A trial merge of quests on top of housing conflicts in 5 files: `Player`, `BaseZone`,
-`IZone`, `WorldZone` and Gateway `Program.cs`.
+Both imports share OSFR history with `main`, so git merges them natively. Housing was merged in Task 2
+(12 conflicted files) and quests in Task 3 (5 conflicted files). Quest hooks on zone entry live in
+`WorldZone.OnClientIsReady`. JadenY's comment stripping of shared OSFR files was not taken, so upstream's comments
+stay and future OSFR merges stay small.
 
 Housing was written against an early prototype of upstream's zoning rewrite. The merge kept `main`'s final
 zoning (`ZoneManager.TryMovePlayerToZone`, `EvictIfEmpty`), so enter zones through `Player.TeleportToZone`,
@@ -57,8 +58,9 @@ never by creating a zone instance directly.
 - `.Include(...)` in the login character query decides what a player gets back on relog.
 - Static packet handlers get services in `ConfigureServices`. A field declared `= null!` and never assigned
   compiles cleanly and crashes at runtime.
-- Real defects found in JadenY's quest code, which still need fixing after a merge: `BaseQuestPacket.TryRead`
-  and `TakeMeThereRequestPacket` use `&&` where `||` was meant; a single pending turn-in slot drops quests that
-  finish in the same tick; two packets call their sub-opcode `OpCode`.
+- The defects found in JadenY's quest code (`&&` for `||` in `BaseQuestPacket.TryRead` and
+  `TakeMeThereRequestPacket`, a single pending turn-in slot, two packets calling their sub-opcode `OpCode`) were
+  fixed in Task 3. The same `&&` opcode guard is in about 30 of upstream OSFR's packet base classes, so any
+  packet's `TryRead` accepts the wrong opcode. Don't copy that pattern; fix it upstream-wide as its own task.
 
 Task specs for cloud sessions: `docs/cloud-tasks.md`.

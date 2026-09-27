@@ -13,6 +13,8 @@ using Sanctuary.Game;
 using Sanctuary.Game.ChatCommands;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Interactions;
+using Sanctuary.Game.Quests;
+using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Combat;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
@@ -57,6 +59,43 @@ public sealed class Player : ClientPcData, IEntity
 
     public ConcurrentSet<ulong> IncomingFriendRequests { get; } = [];
     public ConcurrentSet<ulong> IncomingGuildInvites { get; } = [];
+
+
+    public ulong CharacterId { get; set; }
+
+    public ulong LastInteractNpcGuid { get; set; }
+    public DateTime LastInteractAt { get; set; }
+
+    public DateTime LastQuestAcceptedAt { get; set; }
+
+    public Dictionary<int, bool> Quests { get; } = new();
+
+    public Dictionary<int, int> QuestGoalProgress { get; } = new();
+
+    public Dictionary<int, int> QuestCollectProgress { get; } = new();
+
+    public HashSet<ulong> TalkedQuestNpcs { get; } = new();
+
+    public Queue<QuestDialogueLine> PendingDialogue { get; } = new();
+    public ulong PendingDialogueNpcGuid { get; set; }
+
+    public ulong TalkingNpcGuid { get; set; }
+    public int TalkAnimationTicket { get; set; }
+
+    public int ActiveQuestId { get; set; }
+
+    public PendingQuestTurnIns PendingQuestTurnIns { get; } = new();
+
+    public void AwardXp(int xp)
+    {
+        SendTunneled(new ClientUpdatePacketUpdateProfileExperience
+        {
+            ProfileId = ActiveProfileId,
+            XpGained = xp,
+            TotalXpInLevel = 0,
+            CurrentLevel = 0
+        });
+    }
 
     public ConcurrentDictionary<ChatChannel, bool> ChatChannelStatus { get; set; } = [];
 
@@ -442,7 +481,11 @@ public sealed class Player : ClientPcData, IEntity
             if (npc is Mount)
                 continue;
 
-            SendTunneled(npc.GetAddNpcPacket());
+            var playerUpdatePacketAddNpc = npc.GetAddNpcPacket();
+
+            playerUpdatePacketAddNpc.NotificationImageSetId = GetNotificationImageId(npc);
+
+            SendTunneled(playerUpdatePacketAddNpc);
         }
 
         var playerUpdatePacketNpcRelevance = new PlayerUpdatePacketNpcRelevance();
@@ -467,10 +510,22 @@ public sealed class Player : ClientPcData, IEntity
 
         foreach (var npc in npcs)
         {
-            if (npc.Notification is null)
-                continue;
-
-            playerUpdatePacketAddNotifications.Notifications.Add(npc.Notification);
+            var questImageId = GetNotificationImageId(npc);
+            if (questImageId != 0)
+            {
+                playerUpdatePacketAddNotifications.Notifications.Add(new NotificationInfo
+                {
+                    Guid = npc.Guid,
+                    Combat = false,
+                    ImageId = questImageId,
+                    NameId = npc.NameId,
+                    SubTextId = npc.SubTextNameId,
+                });
+            }
+            else if (npc.Notification is not null)
+            {
+                playerUpdatePacketAddNotifications.Notifications.Add(npc.Notification);
+            }
         }
 
         if (playerUpdatePacketAddNotifications.Notifications.Count > 0)
@@ -478,6 +533,31 @@ public sealed class Player : ClientPcData, IEntity
 
         foreach (var npc in npcs)
             VisibleNpcs.TryAdd(npc.Guid, npc);
+    }
+
+    public int GetNotificationImageId(Npc npc)
+    {
+        var quests = _resourceManager.Quests;
+
+        if (quests.ByGiver.TryGetValue(npc.Guid, out var giverQuestIds))
+        {
+            foreach (var questId in giverQuestIds)
+            {
+                if (quests.TryGet(questId, out var quest) && quest.IsOfferableFor(Quests))
+                    return quest.NotificationAvailable;
+            }
+        }
+
+        if (quests.ByTarget.TryGetValue(npc.Guid, out var targetQuestIds))
+        {
+            foreach (var questId in targetQuestIds)
+            {
+                if (Quests.TryGetValue(questId, out var completed) && !completed && quests.TryGet(questId, out var quest))
+                    return quest.NotificationActive;
+            }
+        }
+
+        return npc.Notification?.ImageId ?? 0;
     }
 
     public void OnAddVisiblePlayers(params IEnumerable<Player> players)
@@ -1066,5 +1146,41 @@ public sealed class Player : ClientPcData, IEntity
         ZoneTile.Entities.Remove(Guid, out _);
         Zone.TryRemovePlayer(Guid);
         _zoneManager.EvictIfEmpty(Zone);
+    }
+
+    public sealed record InteractionMenu(ulong Guid, IReadOnlyDictionary<int, Action<Player>> Options);
+
+    public InteractionMenu? OpenInteractionMenu { get; set; }
+
+    private const int NpcInteractionIdBase = 1_000_000;
+
+    public void SendInteractionMenu(Npc npc, IReadOnlyList<NpcInteractionOption> options)
+    {
+        var packet = new CommandPacketInteractionList();
+
+        packet.List.Guid = npc.Guid;
+        packet.List.Name = npc.Name ?? string.Empty;
+
+        var actions = new Dictionary<int, Action<Player>>(options.Count);
+
+        for (var i = 0; i < options.Count; i++)
+        {
+            var option = options[i];
+            var id = NpcInteractionIdBase + i;
+
+            packet.List.Interactions.Add(new InteractionData
+            {
+                Id = id,
+                IconId = option.IconId,
+                ButtonText = option.ButtonTextId,
+                TooltipId = option.TooltipId
+            });
+
+            actions[id] = option.Invoke;
+        }
+
+        OpenInteractionMenu = new InteractionMenu(npc.Guid, actions);
+
+        SendTunneled(packet);
     }
 }

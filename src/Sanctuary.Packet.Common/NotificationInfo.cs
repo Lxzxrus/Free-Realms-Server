@@ -6,43 +6,34 @@ public class NotificationInfo : ISerializableType
 {
     public ulong Guid { get; set; }
 
-    /// <summary>
-    /// Observed in packet logs. When true, the client expects the compact payload.
-    /// </summary>
-    public bool IsCompact { get; set; }
-
-    public int NotificationType { get; set; }
-
-    public int IconId { get; set; }
-    public int IconState { get; set; }
-    public int Unknown { get; set; }
+    public int Unknown3 { get; set; }
+    public int DescriptionId { get; set; }
+    public int ImageId { get; set; }
     public int NameId { get; set; }
-    public int ReferenceId { get; set; }
-    public int Unknown2 { get; set; }
-
-    public bool Unknown3 { get; set; }
-    public bool Enabled { get; set; } = true;
+    public int SubTextId { get; set; }
+    public int Type { get; set; }
+    public bool Unknown8 { get; set; }
+    public int CompositeEffectId { get; set; }
+    public bool Combat { get; set; }
+    public bool Unknown10 { get; set; }
 
     public void Serialize(PacketWriter writer)
     {
         writer.Write(Guid);
-        writer.Write(IsCompact);
+        writer.Write(Combat);
+        writer.Write(Type);
 
-        if (IsCompact)
+        if (!Combat)
         {
-            writer.Write(NotificationType);
-            writer.Write(Enabled);
-            return;
+            writer.Write(Unknown3);
+            writer.Write(ImageId);
+            writer.Write(DescriptionId);
+            writer.Write(NameId);
+            writer.Write(SubTextId);
+            writer.Write(Unknown8);
+            writer.Write(CompositeEffectId);
         }
 
-        writer.Write(NotificationType);
-        writer.Write(IconId);
-        writer.Write(IconState);
-        writer.Write(Unknown);
-        writer.Write(NameId);
-        writer.Write(ReferenceId);
-        writer.Write(Unknown2);
-        writer.Write(Unknown3);
-        writer.Write(Enabled);
+        writer.Write(Unknown10);
     }
 }

@@ -47,6 +47,9 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.Property<int>("ActiveProfileId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("ActiveQuestId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("ActiveTitleId")
                         .HasColumnType("INTEGER");
 
@@ -182,6 +185,30 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Characters");
+                });
+
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterQuest", b =>
+                {
+                    b.Property<int>("QuestId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<ulong>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Completed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GoalCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GoalProgress")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("QuestId", "CharacterId");
+
+                    b.HasIndex("CharacterId");
+
+                    b.ToTable("CharacterQuests");
                 });
 
             modelBuilder.Entity("Sanctuary.Database.Entities.DbFriend", b =>
@@ -651,6 +678,17 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterQuest", b =>
+                {
+                    b.HasOne("Sanctuary.Database.Entities.DbCharacter", "Character")
+                        .WithMany("Quests")
+                        .HasForeignKey("CharacterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Character");
+                });
+
             modelBuilder.Entity("Sanctuary.Database.Entities.DbFriend", b =>
                 {
                     b.HasOne("Sanctuary.Database.Entities.DbCharacter", "Character")
@@ -790,6 +828,8 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.Navigation("Mounts");
 
                     b.Navigation("Profiles");
+
+                    b.Navigation("Quests");
 
                     b.Navigation("Titles");
                 });
