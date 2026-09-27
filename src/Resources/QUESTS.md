@@ -15,9 +15,11 @@ using them, not a substitute.
 `100000000000 + definitionId` convention used by `zone.spawnNpcWithGuid` calls, e.g.
 `src/Scripts/Zone/FabledRealms.lua`) - not the `Npcs.json` definition id itself.
 
-There's no validation: if the guid doesn't match a spawned NPC, the quest silently can never be
-offered or turned in - no error, no log. `/npc spawn <definitionId>` (admin-only) prints a guid you
-can use for ad hoc testing.
+The server doesn't validate this: if the guid doesn't match a spawned NPC, the quest silently can
+never be offered or turned in - no error, no log. The test
+`QuestDefinitionCollectionTests.ShippedQuests_NameOnlyNpcsThatFabledRealmsSpawns` catches it instead,
+so `dotnet test` fails on any quest naming a guid `FabledRealms.lua` doesn't spawn.
+`/npc spawn <definitionId>` (admin-only) prints a guid you can use for ad hoc testing.
 
 ## Minimal quest
 
@@ -52,7 +54,7 @@ With no `Goals` array, the quest falls back to a single synthesized "talk to `Ta
 built from `ObjectiveDescriptionId`/`SubGoalId`/`TargetDialogueId` (see
 `QuestDefinition.EffectiveGoals`). This is the legacy shape and still works fine for simple
 give-and-turn-in-at-the-same-NPC quests (see `QuestId: 3001` "Nomi's Little Brother" style quests
-in `Quests.json` for a real single-goal example, or `3010`/`3011` for a real multi-step chain).
+in `Quests.json` for a real single-goal example, or `3040`-`3043` for a real multi-step chain).
 
 ## Multi-goal quests
 
@@ -128,6 +130,23 @@ collect quests can skip the call entirely and it's harmless either way.
   both directions. Used for the two race-specific "Introduce Yourself" quests (`2563`/`2564`) so a
   player only ever gets one. Abandoning a quest clears it from the player's quest state, which lifts
   the exclusion automatically.
+- The loader doesn't check these ids either. `ShippedQuests_ReferenceOnlyShippedQuests` fails the
+  tests if any of them names a quest that isn't in `Quests.json`.
+
+## Disabled quests
+
+[`Quests.disabled.json`](Quests.disabled.json) holds quests the server doesn't load, because they
+name npcs no zone script spawns yet. Their entries are kept exactly as they were, so bringing one
+back means moving it into `Quests.json` once its npcs spawn, and restoring the chain links that
+were cut when it left:
+
+| Quest | Missing npcs | Restore when it comes back |
+|---|---|---|
+| 104146 Brawler: Restless Rumors | `100000033082` | Move together with 104154; they chain to each other |
+| 104154 Brawler: The Growler Report | `100000033082`, `100000033083` | Move together with 104146 |
+| 3010 Looking for Lavender | `100000040011`, `100000040012` | Set 3011's `PrerequisiteQuestId` back to `3010` |
+| 3031 Purr...fect Secret | `100000040016`-`100000040019` | Set 3032's `PrerequisiteQuestId` back to `3031` |
+| 3081 Sobering Homecoming | `100000040032`-`100000040034` | Set 3080's `NextQuestId` back to `3081` |
 
 ## Rewards
 
