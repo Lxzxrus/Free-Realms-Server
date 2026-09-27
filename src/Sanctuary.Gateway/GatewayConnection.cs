@@ -6,6 +6,7 @@ using System.Numerics;
 using System.Text;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -76,6 +77,8 @@ public class GatewayConnection : UdpConnection
         // Just in case check if player is null.
         if (Player is null)
             return;
+
+        _serviceProvider.GetRequiredService<ITradeManager>().OnDisconnected(Player);
 
         SendFriendOffline();
 

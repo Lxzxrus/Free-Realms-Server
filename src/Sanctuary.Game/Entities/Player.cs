@@ -29,6 +29,7 @@ public sealed class Player : ClientPcData, IEntity
     private readonly UdpConnection _connection;
     private readonly IResourceManager _resourceManager;
     private readonly IZoneManager _zoneManager;
+    private readonly ITradeManager _tradeManager;
 
     public bool Visible { get; set; }
 
@@ -143,13 +144,14 @@ public sealed class Player : ClientPcData, IEntity
 
     public ConcurrentSet<OneTimeNotification> SeenOneTimeNotifications { get; } = [];
 
-    public Player(BaseZone zone, UdpConnection connection, IResourceManager resourceManager, IZoneManager zoneManager)
+    public Player(BaseZone zone, UdpConnection connection, IResourceManager resourceManager, IZoneManager zoneManager, ITradeManager tradeManager)
     {
         Zone = zone;
 
         _connection = connection;
         _resourceManager = resourceManager;
         _zoneManager = zoneManager;
+        _tradeManager = tradeManager;
     }
 
     #region Connection
@@ -245,6 +247,11 @@ public sealed class Player : ClientPcData, IEntity
     {
         _connection.Disconnect();
     }
+
+    internal bool IsConnectedForTrade => _connection.Status == Status.Connected;
+
+    internal bool TryAcquireTradeMutationGuard(TimeSpan timeout, out IDisposable? lease) =>
+        _connection.TryAcquireMutationGuard(timeout, out lease);
 
     public void Dismount()
     {
@@ -411,6 +418,8 @@ public sealed class Player : ClientPcData, IEntity
     {
         if (Zone.DefinitionId == zoneDefinitionId && Zone.OwnerId == ownerId)
             return true;
+
+        _tradeManager.OnZoning(this);
 
         if (Zone is WorldZone)
         {
@@ -680,6 +689,9 @@ public sealed class Player : ClientPcData, IEntity
 
         if (GuildData is null && GuildInviteInteraction.CanInvite(player))
             commandPacketInteractionList.List.Interactions.Add(GuildInviteInteraction.Data);
+
+        if (_tradeManager.CanTrade(player, this))
+            commandPacketInteractionList.List.Interactions.Add(TradeInteraction.Data);
 
         player.SendTunneled(commandPacketInteractionList);
     }
