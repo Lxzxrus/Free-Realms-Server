@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -123,15 +122,24 @@ public sealed class Player : ClientPcData, IEntity
         _connection.Send(UdpChannel.Reliable1, data);
     }
 
+    /// <summary>
+    /// Sends an already-serialized buffer. The udp library copies at every point it retains data,
+    /// so one buffer can safely be shared across recipients.
+    /// </summary>
+    internal void SendSerialized(byte[] data)
+    {
+        _connection.Send(UdpChannel.Reliable1, data);
+    }
+
     public void SendToVisible(ISerializablePacket packet, bool sendToSelf = false)
     {
-        var visiblePlayers = VisiblePlayers.ToFrozenDictionary();
+        var data = packet.Serialize();
 
-        foreach (var visiblePlayer in visiblePlayers)
-            visiblePlayer.Value.Send(packet);
+        foreach (var visiblePlayer in VisiblePlayers)
+            visiblePlayer.Value.SendSerialized(data);
 
         if (sendToSelf)
-            Send(packet);
+            SendSerialized(data);
     }
 
     public void SendTunneled(ISerializablePacket packet)
@@ -155,15 +163,28 @@ public sealed class Player : ClientPcData, IEntity
         Send(packetTunneled);
     }
 
+    /// <summary>
+    /// Wraps a packet for tunneling once, so broadcasts don't re-serialize per recipient.
+    /// </summary>
+    internal static byte[] SerializeTunneled(ISerializablePacket packet)
+    {
+        var packetTunneled = new PacketTunneledClientPacket
+        {
+            Payload = packet.Serialize()
+        };
+
+        return packetTunneled.Serialize();
+    }
+
     public void SendTunneledToVisible(ISerializablePacket packet, bool sendToSelf = false)
     {
-        var visiblePlayers = VisiblePlayers.ToFrozenDictionary();
+        var data = SerializeTunneled(packet);
 
-        foreach (var visiblePlayer in visiblePlayers)
-            visiblePlayer.Value.SendTunneled(packet);
+        foreach (var visiblePlayer in VisiblePlayers)
+            visiblePlayer.Value.SendSerialized(data);
 
         if (sendToSelf)
-            SendTunneled(packet);
+            SendSerialized(data);
     }
 
     public void SendTunneledToVisibleDelayed(ISerializablePacket packet, int delayMs, bool sendToSelf = false)
