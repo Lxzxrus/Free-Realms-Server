@@ -6,11 +6,11 @@ namespace Sanctuary.Packet;
 
 public class QuestAbandonedPacket : BaseQuestPacket, IDeserializable<QuestAbandonedPacket>, ISerializablePacket
 {
-    public new const int OpCode = 6;
+    public const int SubOpCode = 6;
 
     public int QuestId;
 
-    public QuestAbandonedPacket() : base(OpCode)
+    public QuestAbandonedPacket() : base(SubOpCode)
     {
     }
 

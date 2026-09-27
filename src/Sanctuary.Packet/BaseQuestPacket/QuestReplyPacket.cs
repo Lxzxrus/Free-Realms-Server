@@ -6,12 +6,12 @@ namespace Sanctuary.Packet;
 
 public class QuestReplyPacket : BaseQuestPacket, IDeserializable<QuestReplyPacket>
 {
-    public new const int OpCode = 2;
+    public const int SubOpCode = 2;
 
     public int QuestId;
     public bool Accepted;
 
-    public QuestReplyPacket() : base(OpCode)
+    public QuestReplyPacket() : base(SubOpCode)
     {
     }
 

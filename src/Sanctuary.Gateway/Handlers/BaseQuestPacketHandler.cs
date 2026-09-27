@@ -30,8 +30,8 @@ public static class BaseQuestPacketHandler
 
         return subOpCode switch
         {
-            QuestReplyPacket.OpCode => QuestReplyPacketHandler.HandlePacket(connection, reader.Span),
-            QuestAbandonedPacket.OpCode => QuestAbandonedPacketHandler.HandlePacket(connection, reader.Span),
+            QuestReplyPacket.SubOpCode => QuestReplyPacketHandler.HandlePacket(connection, reader.Span),
+            QuestAbandonedPacket.SubOpCode => QuestAbandonedPacketHandler.HandlePacket(connection, reader.Span),
             QuestEndPacket.SubOpCode + 1 => HandleQuestEndReply(connection),
             _ => HandleUnknownOpCode(subOpCode)
         };
