@@ -112,3 +112,53 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
   `ConfigureServices`.
 - **Deliverable:** a PR crediting JadenY, with in-game checks for each toggle: what the owner does, and what a
   visitor should then see.
+
+## 9. `security-audit`: threat model and ranked findings
+
+- **Task:** map every way into the server and every way it could be abused, then produce a ranked list of
+  findings. **This is analysis only: change no code.** Nate's goal is that no attack succeeds and the game stays
+  smooth for everyone, on a home PC (4-core i5-2320, one core as the ceiling, home IP address).
+- **Cover at least:** WebAPI (registration, login, sessions, password storage, `/image` upload, the `#if DEBUG`
+  auth bypasses); the Login and Gateway UDP servers (unauthenticated traffic, connection and handshake floods,
+  malformed and oversized packets, per-packet allocation, what one bad packet can do in Release vs Debug);
+  authorization inside the game (admin and chat commands, housing, trading, anything that trusts client-sent
+  ids or positions); secrets and config (`LoginGatewayChallenge`, dev grants in `login.json`, connection
+  strings); game-traffic encryption (declared, never enabled); dependencies (`dotnet list package --vulnerable`);
+  and what a home deployment exposes (which ports must be open, DDoS, backups).
+- **Method:** confirm each finding in the code, with file and line. Where it's cheap and safe, prove it with a
+  test or a local reproduction, and say which findings are proven and which are only read.
+- **Deliverable:** a PR adding `docs/security/threat-model.md`: a table ranked by severity (what an attacker
+  does, what it costs us, where the code is, the proposed fix, and a task-sized estimate), followed by the
+  details. The repo goes public at launch, so write it knowing every finding must be fixed by then.
+- **Check:** the self-check still passes (nothing under `src/` changes).
+
+## 10. `load-test-bot`: measure where the server tops out
+
+- **Task:** build a headless load-test client, a new console project `src/Sanctuary.LoadTest`, that logs N fake
+  players in through the real protocol (WebAPI session, Login, Gateway), puts them in the world, and has them walk,
+  jump and chat at realistic rates. Report the server's cost as N grows.
+- **Measure:** Gateway CPU (total and busiest thread), packets and bytes per second in and out, and one
+  latency figure: the delay between a bot sending a move and another bot seeing it. Run 10, 25, 50 and 100
+  bots, clustered in one spot and spread across the zone.
+- **Scope:** the new project, its registration in `Sanctuary.slnx`, test-account seeding it needs, and
+  `scripts/cloud-setup.sh` if WebAPI needs the ASP.NET Core 9 runtime (`dotnet-install.sh --runtime aspnetcore
+  --channel 9.0`). No changes to server behaviour. If the server needs a hook to be measurable, stop and
+  propose it in the PR instead.
+- **Reuse:** `Sanctuary.UdpLibrary` already has a client side (the Gateway uses it to connect to Login).
+- **Check:** the self-check, plus a run with 10 bots that completes without errors on either side.
+- **Deliverable:** a PR with the bot, instructions for running it against a server on another machine (the
+  Optiplex), and `docs/performance/baseline.md` with the results. Say plainly that the cloud VM isn't the
+  Optiplex, so its numbers are only a relative baseline.
+
+## 11. `playtest-plan`: one ordered in-game test session
+
+- **Task:** read the in-game checklists in the descriptions of PRs #2–#8 and combine them into one plan that
+  Nate and his wife can work through in an evening or two, with two clients.
+- **Order:** setup first (fresh database, accounts, characters, who should or shouldn't be friends, which
+  house to publish), then the most important and most likely to break items first. Remove duplicates, and note
+  where one step sets up another.
+- **Include:** what should happen at each step, what to look for in the Gateway log, and a column to mark
+  pass or fail, so the results can go straight back into a task.
+- **Scope:** `docs/playtest-plan.md` only.
+- **Check:** the self-check still passes.
+- **Deliverable:** a PR with the plan.
