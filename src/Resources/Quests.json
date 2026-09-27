@@ -165,98 +165,6 @@
     ]
   },
   {
-    "Name": "Brawler: Restless Rumors",
-    "QuestId": 104146,
-    "TitleId": 104146,
-    "DescriptionId": 104147,
-    "GiverDialogueId": 104145,
-    "ObjectiveDescriptionId": 104147,
-    "IconId": 43278,
-    "GiverGuid": 100000002912,
-    "TargetGuid": 100000033082,
-    "RewardCoins": 15,
-    "RewardExperience": 20,
-    "RewardItems": [],
-    "PrerequisiteQuestId": 0,
-    "NextQuestId": 104154,
-    "NotificationAvailable": 2,
-    "NotificationActive": 6,
-    "Goals": [
-      {
-        "NameId": 115619,
-        "DialogueId": 104148,
-        "TargetGuid": 100000033082
-      }
-    ]
-  },
-  {
-    "Name": "Brawler: The Growler Report",
-    "QuestId": 104154,
-    "TitleId": 104154,
-    "DescriptionId": 104155,
-    "GiverDialogueId": 104153,
-    "ObjectiveDescriptionId": 104155,
-    "IconId": 43278,
-    "GiverGuid": 100000033082,
-    "TargetGuid": 100000033083,
-    "RewardCoins": 15,
-    "RewardExperience": 63,
-    "RewardItems": [
-      75855
-    ],
-    "PrerequisiteQuestId": 104146,
-    "NextQuestId": 0,
-    "NotificationAvailable": 2,
-    "NotificationActive": 6,
-    "Goals": [
-      {
-        "NameId": 104155,
-        "DialogueId": 104156,
-        "TargetGuid": 100000033083
-      }
-    ]
-  },
-  {
-    "Name": "Looking for Lavender",
-    "QuestId": 3010,
-    "TitleId": 390787,
-    "DescriptionId": 390788,
-    "GiverDialogueId": 390786,
-    "ObjectiveDescriptionId": 390797,
-    "IconId": 43278,
-    "GiverGuid": 100000002419,
-    "TargetGuid": 100000002419,
-    "RewardCoins": 36,
-    "RewardExperience": 100,
-    "RewardItems": [],
-    "PrerequisiteQuestId": 0,
-    "NextQuestId": 3011,
-    "NotificationAvailable": 2,
-    "NotificationActive": 6,
-    "Goals": [
-      {
-        "NameId": 390798,
-        "DialogueId": 390817,
-        "TargetGuid": 100000040011
-      },
-      {
-        "NameId": 390800,
-        "DialogueId": 390820,
-        "TargetGuid": 100000040012
-      },
-      {
-        "NameId": 390802,
-        "DialogueId": 390822,
-        "TargetGuid": 100000002359
-      },
-      {
-        "NameId": 390804,
-        "DialogueId": 390789,
-        "TargetGuid": 100000002419
-      }
-    ]
-  },
-  {
     "Name": "A Reliable Source",
     "QuestId": 3011,
     "TitleId": 390845,
@@ -269,7 +177,7 @@
     "RewardCoins": 24,
     "RewardExperience": 80,
     "RewardItems": [],
-    "PrerequisiteQuestId": 3010,
+    "PrerequisiteQuestId": 0,
     "NextQuestId": 0,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
@@ -357,51 +265,6 @@
     ]
   },
   {
-    "Name": "Purr...fect Secret",
-    "QuestId": 3031,
-    "TitleId": 389700,
-    "DescriptionId": 116709,
-    "GiverDialogueId": 38042,
-    "ObjectiveDescriptionId": 116709,
-    "IconId": 43278,
-    "GiverGuid": 100000003380,
-    "TargetGuid": 100000003380,
-    "RewardCoins": 2,
-    "RewardExperience": 90,
-    "RewardItems": [],
-    "PrerequisiteQuestId": 0,
-    "NextQuestId": 0,
-    "NotificationAvailable": 2,
-    "NotificationActive": 6,
-    "Goals": [
-      {
-        "NameId": 389708,
-        "DialogueId": 389904,
-        "TargetGuid": 100000040016
-      },
-      {
-        "NameId": 389709,
-        "DialogueId": 389905,
-        "TargetGuid": 100000040017
-      },
-      {
-        "NameId": 389710,
-        "DialogueId": 389910,
-        "TargetGuid": 100000040018
-      },
-      {
-        "NameId": 389712,
-        "DialogueId": 389911,
-        "TargetGuid": 100000040019
-      },
-      {
-        "NameId": 38127,
-        "DialogueId": 45612,
-        "TargetGuid": 100000003380
-      }
-    ]
-  },
-  {
     "Name": "Who Done It?",
     "QuestId": 3032,
     "TitleId": 389951,
@@ -414,7 +277,7 @@
     "RewardCoins": 5,
     "RewardExperience": 90,
     "RewardItems": [],
-    "PrerequisiteQuestId": 3031,
+    "PrerequisiteQuestId": 0,
     "NextQuestId": 3033,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
@@ -781,7 +644,7 @@
     "RewardExperience": 120,
     "RewardItems": [],
     "PrerequisiteQuestId": 0,
-    "NextQuestId": 3081,
+    "NextQuestId": 0,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
     "Goals": [
@@ -789,70 +652,6 @@
         "NameId": 440471,
         "DialogueId": 440468,
         "TargetGuid": 100000003841
-      }
-    ]
-  },
-  {
-    "Name": "Sobering Homecoming - regroup the Freewheelers for Dorn Geargrinder",
-    "QuestId": 3081,
-    "TitleId": 438840,
-    "DescriptionId": 438841,
-    "GiverDialogueId": 438839,
-    "ObjectiveDescriptionId": 438900,
-    "IconId": 43278,
-    "GiverGuid": 100000003840,
-    "TargetGuid": 100000003840,
-    "RewardCoins": 50,
-    "RewardExperience": 140,
-    "RewardItems": [],
-    "PrerequisiteQuestId": 3080,
-    "NextQuestId": 0,
-    "NotificationAvailable": 2,
-    "NotificationActive": 6,
-    "Goals": [
-      {
-        "NameId": 438901,
-        "TargetGuid": 100000003842,
-        "Dialogue": [
-          {
-            "TextId": 438967,
-            "ResponseTextId": 423585
-          }
-        ]
-      },
-      {
-        "NameId": 438499,
-        "TargetGuid": 100000003841,
-        "Dialogue": [
-          {
-            "TextId": 438969,
-            "ResponseTextId": 428407
-          }
-        ]
-      },
-      {
-        "NameId": 438985,
-        "RequiredCount": 3,
-        "TargetGuid": 100000040032,
-        "TargetGuids": [
-          100000040033,
-          100000040034
-        ],
-        "TargetDialogueIds": [
-          438971,
-          438973,
-          438975
-        ],
-        "TargetResponseIds": [
-          438972,
-          438974,
-          8136
-        ]
-      },
-      {
-        "NameId": 437816,
-        "DialogueId": 438842,
-        "TargetGuid": 100000003840
       }
     ]
   }
