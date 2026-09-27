@@ -118,14 +118,14 @@ public static class PortraitEndpoints
                     return Results.BadRequest("Invalid image format.");
                 }
 
-                if (file.Name == "thumbnailFile" && image.Width != 70 && image.Height != 70)
+                if (file.Name == "thumbnailFile" && (image.Width != 70 || image.Height != 70))
                 {
                     _logger.LogWarning("Invalid thumbnailFile size: {Width}x{Height}", image.Width, image.Height);
 
                     return Results.BadRequest("Invalid thumbnailFile size.");
                 }
 
-                if (file.Name == "imageFile" && image.Width != 180 && image.Height != 330)
+                if (file.Name == "imageFile" && (image.Width != 180 || image.Height != 330))
                 {
                     _logger.LogWarning("Invalid imageFile size: {Width}x{Height}", image.Width, image.Height);
 

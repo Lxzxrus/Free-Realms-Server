@@ -168,9 +168,11 @@ public class Npc : IScriptableNpc, IEntity
             Unknown = 0
         };
 
+        var data = Player.SerializeTunneled(packet);
+
         foreach (var visiblePlayer in VisiblePlayers)
         {
-            visiblePlayer.Value.SendTunneled(packet);
+            visiblePlayer.Value.SendSerialized(data);
         }
     }
 
@@ -423,8 +425,10 @@ public class Npc : IScriptableNpc, IEntity
             Message = message
         };
 
+        var data = Player.SerializeTunneled(packet);
+
         foreach (var visiblePlayer in VisiblePlayers)
-            visiblePlayer.Value.SendTunneled(packet);
+            visiblePlayer.Value.SendSerialized(data);
     }
 
     public void SayLocalized(int stringId)
@@ -435,8 +439,10 @@ public class Npc : IScriptableNpc, IEntity
             StringId = stringId
         };
 
+        var data = Player.SerializeTunneled(packet);
+
         foreach (var visiblePlayer in VisiblePlayers)
-            visiblePlayer.Value.SendTunneled(packet);
+            visiblePlayer.Value.SendSerialized(data);
     }
 
     public void MoveTo(float x, float y, float z, bool direct)

@@ -61,6 +61,13 @@ public static class AuthEndpoints
             return Results.Unauthorized();
         }
 
+        if (dbUser.LockedUntil > DateTimeOffset.UtcNow)
+        {
+            _logger.LogWarning("Login failed, account is banned for username: {Username}", request.Username);
+
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        }
+
         dbUser.Session = Guid.NewGuid().ToString("N");
         dbUser.SessionCreated = DateTimeOffset.UtcNow;
 
