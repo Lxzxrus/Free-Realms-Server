@@ -16,6 +16,8 @@ public sealed class CollectionNodeTypeDefinition
     public float PlacementYOffset { get; set; }
     public List<CollectionNodeDropDefinition> DropTable { get; set; } = [];
 
+    public bool HasDrop => DropTable.Count > 0;
+
     private WeightedDropTable<CollectionNodeDropDefinition>? _table;
     public WeightedDropTable<CollectionNodeDropDefinition> Table => _table ??= new WeightedDropTable<CollectionNodeDropDefinition>(DropTable);
 }

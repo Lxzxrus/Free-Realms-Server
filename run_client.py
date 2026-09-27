@@ -234,7 +234,7 @@ def run_client_for_login(client_folder, address, port, username, password):
     print("  python run_client.py -g 1")
     print()
 
-    api_server_port = 5000
+    api_server_port = 20040
     try:
         session = get_session(address, api_server_port, username, password)
     except requests.RequestException as e:

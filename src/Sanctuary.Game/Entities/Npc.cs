@@ -321,7 +321,7 @@ public class Npc : IScriptableNpc, IEntity
 
             ActiveProfile = default,
 
-            Unknown67 = default,
+            NotificationImageSetId = default,
             Unknown68 = default,
 
             NameScale = default,

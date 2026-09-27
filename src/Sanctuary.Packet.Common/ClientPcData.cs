@@ -334,8 +334,8 @@ public class ClientPcData
 
     public int Gender;
 
-    // public ClientQuestData Quests = new();
-    // public ClientAchievementData Achievements = new();
+    public int NonMemberQuestLimit = 30;
+    public int MemberQuestLimit = 30;
 
     // public List<Acquaintance> Acquaintances = new();
     // public List<RecipeData> Recipes = new();
@@ -515,8 +515,8 @@ public class ClientPcData
         writer.Write(0);
         writer.Write(0);
         writer.Write(false);
-        writer.Write(0);
-        writer.Write(0);
+        writer.Write(NonMemberQuestLimit);
+        writer.Write(MemberQuestLimit);
 
         // TODO Achievements
         writer.Write(0);

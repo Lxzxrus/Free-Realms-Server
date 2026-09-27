@@ -53,7 +53,7 @@ public sealed class CollectionNodeTypeDefinitionCollection : ObservableConcurren
 
                 var totalDropWeight = entry.DropTable.Sum(drop => (long)drop.Weight);
 
-                if (entry.ModelId <= 0 || entry.DropTable.Count == 0 ||
+                if (entry.ModelId <= 0 ||
                     entry.DropTable.Any(drop => drop.ItemDefinitionId <= 0 || drop.Weight <= 0) ||
                     totalDropWeight > int.MaxValue ||
                     entry.DropTable.Select(drop => drop.ItemDefinitionId).Distinct().Count() != entry.DropTable.Count ||
