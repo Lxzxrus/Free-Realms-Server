@@ -31,4 +31,12 @@ public class MySqlTest : DatabaseTestBase
 
         Assert.IsTrue(await dbContext.Database.CanConnectAsync(TestContext.CancellationToken));
     }
+
+    [TestMethod]
+    public async Task HasNoPendingModelChangesAsync()
+    {
+        await using var dbContext = await CreateDbContextAsync(TestContext.CancellationToken);
+
+        Assert.IsFalse(dbContext.Database.HasPendingModelChanges());
+    }
 }

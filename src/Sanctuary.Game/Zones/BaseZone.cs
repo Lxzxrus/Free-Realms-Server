@@ -470,6 +470,10 @@ public abstract class BaseZone : IZone, IDisposable
         if (_resourceManager.Stores.TryGetValue(1, out var mainStore))
         {
             var packetInGamePurchaseStoreBundles = new PacketInGamePurchaseStoreBundles();
+            var availableHouseBundleIds = _resourceManager.Zones.Values
+                .OfType<HousingZoneDefinition>()
+                .Select(definition => definition.StoreBundleId)
+                .ToHashSet();
 
             packetInGamePurchaseStoreBundles.StoreId = mainStore.Id;
 
@@ -480,6 +484,13 @@ public abstract class BaseZone : IZone, IDisposable
 
             foreach (var storeBundle in mainStore.Bundles.Values)
             {
+                var containsHouseItem = storeBundle.Entries.Any(entry =>
+                    _resourceManager.ClientItemDefinitions.TryGetValue(entry.MarketingItemId, out var definition) &&
+                    definition.Type == 16);
+
+                if (containsHouseItem && !availableHouseBundleIds.Contains(storeBundle.Id))
+                    continue;
+
                 var valid = storeBundle.Entries.All(x => _resourceManager.ClientItemDefinitions.ContainsKey(x.MarketingItemId));
 
                 if (valid)
@@ -1085,7 +1096,12 @@ public abstract class BaseZone : IZone, IDisposable
 
     public bool TryRemovePlayer(ulong guid)
     {
-        return _players.TryRemove(guid, out _) && _entities.TryRemove(guid, out _);
+        if (!_players.TryRemove(guid, out var player))
+            return false;
+
+        _entities.TryRemove(guid, out _);
+        OnPlayerRemoved(player);
+        return true;
     }
 
     #endregion
@@ -1368,6 +1384,15 @@ public abstract class BaseZone : IZone, IDisposable
 
         Task.WaitAll(_updateEveryTickTask, _updateEverySecondTask);
 
+        try
+        {
+            OnDisposing();
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Failed to dispose zone runtime for {ZoneName} ({ZoneId}).", Name, Id);
+        }
+
         lock (_collectionNodeLock)
             _collectionNodeRefills.Clear();
 
@@ -1380,6 +1405,14 @@ public abstract class BaseZone : IZone, IDisposable
         _players.Clear();
 
         _scriptManager.DeleteContext(this);
+    }
+
+    protected virtual void OnPlayerRemoved(Player player)
+    {
+    }
+
+    protected virtual void OnDisposing()
+    {
     }
 
 }
