@@ -3,7 +3,7 @@
 *Where the project stands. **Only Nate or his local Claude session edits this file**, after merges. Cloud
 sessions read it but never change it, so parallel PRs can't conflict on it.*
 
-Last updated: 2026-09-26. CI on `main` is green after PR #8.
+Last updated: 2026-10-06. CI on `main` is green after PR #8.
 
 ## Merged into `main`
 
@@ -18,10 +18,17 @@ Last updated: 2026-09-26. CI on `main` is green after PR #8.
 | #7 | 8: housing-toggles | Lock, flora and pet-autospawn toggles; owner-only, which fixed a hole in JadenY's version | **No** |
 | #8 | 7: opcode-guards | 58 `&&` opcode guards fixed in 41 files, with a test per guard; cake broadcasts serialized once | **No** |
 
+## Direction (2026-10-06)
+
+Going **public** on a budget VPS with DDoS protection; the Optiplex becomes staging. Security is a launch
+blocker: assume a capable insider attacker who knows this code, and keep every secret out of the repo, because
+the source goes public at launch. Strictly defensive.
+
 ## Next
 
 - **Playtest.** Nothing is verified in game yet. Task 11 compiles one ordered plan from every PR's checklist.
-- **Task 9 (security audit)** and **task 10 (load-test bot)**, specced in `docs/cloud-tasks.md`.
+- **Task 9 (security audit, with a backdoor review of the imported code)**, **task 10 (load-test bot)** and
+  **task 12 (launcher)**, specced in `docs/cloud-tasks.md`.
 
 ## Known problems
 

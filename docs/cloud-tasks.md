@@ -116,15 +116,22 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
 ## 9. `security-audit`: threat model and ranked findings
 
 - **Task:** map every way into the server and every way it could be abused, then produce a ranked list of
-  findings. **This is analysis only: change no code.** Nate's goal is that no attack succeeds and the game stays
-  smooth for everyone, on a home PC (4-core i5-2320, one core as the ceiling, home IP address).
+  findings. **This is analysis only: change no code.** The server is going public on a budget VPS (the Optiplex
+  becomes staging), and Nate's goal is that no attack succeeds and the game stays smooth for everyone.
+- **The adversary:** assume a capable insider. The former FreeRealms-Legacy owner (`raisingkaines`) wrote the
+  housing and trading code we merged, knows this codebase well, and is expected to attack us. The source will be
+  public at launch (AGPL), so assume the attacker has read every line, and never count secrecy of code as a defence.
+- **Backdoor review first:** read every line that came from him (the housing merge, PR #2, and the trading port,
+  PR #5) for anything that looks deliberate: hidden accounts, chat or admin commands, authorization that a special
+  value bypasses, hard-coded ids or names, outbound network connections, timers or conditions that change
+  behaviour later, and obfuscated logic. Report what you checked and what you found, even if it's nothing.
 - **Cover at least:** WebAPI (registration, login, sessions, password storage, `/image` upload, the `#if DEBUG`
   auth bypasses); the Login and Gateway UDP servers (unauthenticated traffic, connection and handshake floods,
   malformed and oversized packets, per-packet allocation, what one bad packet can do in Release vs Debug);
   authorization inside the game (admin and chat commands, housing, trading, anything that trusts client-sent
   ids or positions); secrets and config (`LoginGatewayChallenge`, dev grants in `login.json`, connection
-  strings); game-traffic encryption (declared, never enabled); dependencies (`dotnet list package --vulnerable`);
-  and what a home deployment exposes (which ports must be open, DDoS, backups).
+  strings, and everything that must leave the repo before it goes public); game-traffic encryption (declared, never enabled); dependencies (`dotnet list package --vulnerable`);
+  and what a VPS deployment exposes (which ports must be open, DDoS, admin access to the box, backups).
 - **Method:** confirm each finding in the code, with file and line. Where it's cheap and safe, prove it with a
   test or a local reproduction, and say which findings are proven and which are only read.
 - **Deliverable:** a PR adding `docs/security/threat-model.md`: a table ranked by severity (what an attacker
@@ -162,3 +169,22 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
 - **Scope:** `docs/playtest-plan.md` only.
 - **Check:** the self-check still passes.
 - **Deliverable:** a PR with the plan.
+
+## 12. `launcher`: our own launcher, from OSFR's
+
+- **Task:** players need a proper launcher, because `run_client.py` hardcodes the password `testtest` for every
+  account and is a developer tool only. Import OSFR's AGPL launcher
+  (https://github.com/Open-Source-Free-Realms/Launcher, C#, with Windows, macOS and Linux build scripts) into a
+  new `launcher/` folder, keeping its license and crediting it in the README and the commit. Then make it ours.
+- **Make it ours:** first, find out how it chooses a server and logs in. Then set our server as its default
+  (one setting, so the address can change), use real registration and login against our WebAPI with the
+  password the player types, and handle errors clearly (wrong password, banned account, server down). Brand it
+  plainly as our server. Don't advertise the old project.
+- **Security:** never store a password; store the session token only if the launcher already does that safely.
+  Use HTTPS for WebAPI calls wherever the launcher supports it, and say plainly in the PR what still goes over
+  plain HTTP. Note anything the WebAPI needs for HTTPS at deployment.
+- **Scope:** `launcher/`, its CI build if it fits the existing workflow, and docs. No server changes; if the
+  launcher needs one, stop and propose it in the PR.
+- **Check:** the self-check still passes, and the launcher builds for win-x64.
+- **Deliverable:** a PR with the launcher, what was changed from OSFR's, and in-game steps for Nate: register,
+  log in, play, and each error case.
