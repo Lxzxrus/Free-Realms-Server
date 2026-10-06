@@ -27,8 +27,9 @@ the source goes public at launch. Strictly defensive.
 ## Next
 
 - **Playtest.** Nothing is verified in game yet. Task 11 compiles one ordered plan from every PR's checklist.
-- **Task 9 (security audit, with a backdoor review of the imported code)**, **task 10 (load-test bot)** and
-  **task 12 (launcher)**, specced in `docs/cloud-tasks.md`.
+- **Merge** the task 9 audit (no PR yet), #9 (playtest plan) and #10 (load-test bot); finish task 12 (launcher).
+- **Security and stability fixes:** tasks 13–17 in `docs/cloud-tasks.md`, from the audit (F1–F13) and the
+  load test. 13–15 are launch blockers. The audit's backdoor review of imported code found nothing deliberate.
 
 ## Known problems
 
@@ -46,4 +47,4 @@ the source goes public at launch. Strictly defensive.
 ## Cloud credit
 
 $100 one-time credit, expires 4 November 2026. Measured costs: task 1 ~$2 (including a blocked first attempt),
-task 2 ~$5, tasks 3 and 5 ~$7 together, tasks 4, 6, 7 and 8 ~$8 together. $78 left.
+task 2 ~$5, tasks 3 and 5 ~$7 together, tasks 4, 6, 7 and 8 ~$8 together, tasks 9-11 plus task 12's first attempt ~$29 together. $49 left.

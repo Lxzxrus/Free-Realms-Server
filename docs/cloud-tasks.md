@@ -188,3 +188,68 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
 - **Check:** the self-check still passes, and the launcher builds for win-x64.
 - **Deliverable:** a PR with the launcher, what was changed from OSFR's, and in-game steps for Nate: register,
   log in, play, and each error case.
+
+## Security and stability fixes (from the task 9 audit and the task 10 load test)
+
+Findings are numbered as in `docs/security/threat-model.md` (F1–F13). Each task below fixes its findings as
+separate commits, adds tests where code can be tested without a client, and states what still needs a live
+check. The load-test bot (`src/Sanctuary.LoadTest`) is available for anything about load or the network.
+
+## 13. `launch-config`: no Debug, no secrets, no dev economy (F1, F2, F3, F9, F13)
+
+- **F1:** a Debug build must refuse to start unless an explicit setting (for example `AllowDebugBuild=true`)
+  is present, and it must log a loud warning when it does start. Release builds are unaffected.
+- **F2:** the `LoginGatewayChallenge` value in the repo is OSFR's public default, already known worldwide, so
+  **don't rewrite git history**. Remove it from tracked config; Login and Gateway read it from configuration
+  (environment variable or a local, git-ignored file); and both refuse to start if it's missing or still the
+  old default. Ship `.example` files documenting every setting.
+- **F3:** make the address the LoginGateway listener binds configurable, defaulting to `127.0.0.1`, so on a
+  single VPS only the local Gateway can reach it.
+- **F9:** set launch-appropriate defaults: starting coins and station cash, `UnlockAllTitles`,
+  `UnlockAllProfiles` and `MemberByDefault` off. Keep the dev values available through a documented local
+  config file, because playtests use them.
+- **F13:** `docker-compose.yml` takes database credentials from the environment with no defaults, and never
+  publishes the database port.
+- **Check:** the self-check, a boot with the new config, and a boot that refuses each bad case (Debug without
+  the setting, missing challenge, default challenge). Update `CLAUDE.md` and the README with how to run locally
+  now.
+
+## 14. `udp-hardening`: one bad client can't take the server down (F4, F5, F10, task 10's findings)
+
+- **F4:** an exception while processing one connection's packets (including inside `Sanctuary.UdpLibrary`, as
+  in `ProcessCookedPacket`) drops that connection and logs it. It must never stop the host.
+- **F5:** per-IP connection limits and connect-rate limits; lower `IncomingLogicalPacketMax` for the
+  player-facing roles to the largest packet the server really receives; cap fragment buffers in flight per
+  connection.
+- **F10:** a connection that throws repeatedly is disconnected, with a log line saying why.
+- **Task 10's findings:** raise the Gateway's player-facing receive buffer (the load test measured 4 MiB as
+  enough for 200 clustered bots), and bound how far a connection can fall behind before it's disconnected, so
+  an overloaded server recovers instead of growing without limit (948 MiB in the test).
+- **Check:** the self-check, tests for the limits, and load-test runs at 100, 150 and 200 clustered bots that
+  show no socket drops and recovery afterwards. Add the results to `docs/performance/baseline.md`.
+
+## 15. `webapi-hardening`: the website side (F6, F7)
+
+- **F6:** `/image` requires a valid session that owns the `characterId`, caps request size, caps storage per
+  character, and is rate-limited.
+- **F7:** per-IP rate limits on `/register` and `/login`, with a lockout after repeated failures per account
+  that doesn't let an attacker lock any account out forever. Make HTTPS deployment straightforward: document
+  running WebAPI behind a TLS reverse proxy (for example Caddy) on the VPS, and make the launcher's expectations
+  (task 12) match.
+- **Check:** the self-check, plus tests with the ASP.NET test host for each limit and each authorization rule.
+
+## 16. `defence-in-depth`: Lua sandbox and dependencies (F11, F12)
+
+- **F11:** open only the safe Lua libraries (base, table, string, math). No `os`, `io`, `package` or
+  `debug`. Confirm every shipped script still loads and runs at boot.
+- **F12:** update the packages so `dotnet list package --vulnerable --include-transitive` reports nothing,
+  without moving off .NET 9 unless that's unavoidable (say so in the PR if it is).
+- **Check:** the self-check, a boot, and the vulnerability scan's output in the PR.
+
+## 17. `quest-turn-in-id`: hand in the right quest
+
+- **Task:** the playtest-plan session found that the quest turn-in reply doesn't say which quest it's for, and
+  the server hands in the oldest one waiting. Closing one turn-in window and accepting another could complete
+  the wrong quest. Confirm it in the code, then make the server hand in the quest whose window was shown last,
+  or otherwise tie each reply to its window, and add tests.
+- **Check:** the self-check. In-game step: playtest step QX1 in `docs/playtest-plan.md`.
