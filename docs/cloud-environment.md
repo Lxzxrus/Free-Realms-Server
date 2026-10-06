@@ -29,7 +29,7 @@ and creates the same database and user that CI's MariaDB service has, so the tes
 |---|---|---|
 | .NET SDK | 10.0.401 | `src/global.json` asks for 10.0.100 with `latestFeature` roll-forward |
 | Microsoft.NETCore.App | 9.0.20 and 10.0.12 | Every project targets `net9.0` |
-| Microsoft.AspNetCore.App | 10.0.12 only | **No 9.x.** Building works, but running `Sanctuary.WebAPI` needs ASP.NET Core 9 (`dotnet-install.sh --channel 9.0 --runtime aspnetcore`). Login and Gateway need only NETCore 9 |
+| Microsoft.AspNetCore.App | 10.0.12; 9.0.20 since Task 10 | Running `Sanctuary.WebAPI` needs ASP.NET Core 9, which the setup script installs since Task 10 (`load-test-bot`, about 4 s). Login and Gateway need only NETCore 9 |
 | MariaDB | 10.11.14 (Ubuntu package) | CI uses `mariadb:11.6`, and the test sets `VersionString` to `11.6.0-MariaDB`. Migrations apply cleanly on 10.11 anyway |
 | EF Core | 9.0.17 (`Directory.Packages.props`) | |
 | dotnet-ef | Not installed by default | See the housing-merge notes below |
@@ -73,7 +73,8 @@ These are missing but not blocked:
 - **systemd.** The MariaDB package's post-install start is refused by `policy-rc.d`. The setup script starts
   MariaDB with `service` instead.
 - **Docker daemon.** The CLI is present but has nothing to talk to.
-- **ASP.NET Core 9 runtime.** See Versions. Only needed to run `Sanctuary.WebAPI`.
+- **ASP.NET Core 9 runtime.** See Versions. Only needed to run `Sanctuary.WebAPI`; the setup script installs it
+  since Task 10.
 
 ## Notes for the housing merge (Task 2)
 
