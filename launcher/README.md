@@ -15,6 +15,8 @@ GNU AGPL v3: see [LICENSE](LICENSE).
 | Authors (installer) | `ServerName team` | `LauncherAuthors`, same file |
 | App id: the settings folder and the installer id. **Can't change once players have it installed** | `ServerNameLauncher` | `LauncherId`, same file |
 | Server address | `https://play.example.com` | `DefaultServerUrl`, same file |
+| SHA-256 of `FreeRealms.exe`. **Empty: the launcher starts no game until it's set** | empty | `ClientExecutableSha256`, same file (see [the client pin](#the-client-pin)) |
+| Where launcher updates come from | `https://github.com/Lxzxrus/Free-Realms-Server` | `UpdateRepositoryUrl`, same file. The release workflow sets it to the repository it runs in |
 | Server name and description shown in the launcher | `ServerName` | [server/servermanifest.xml](server/servermanifest.xml), on the server |
 | Where players download the game client | `https://files.example.com` | `<ClientUrl>` in [server/servermanifest.xml](server/servermanifest.xml) |
 
@@ -48,14 +50,19 @@ What the server must host for this is in [server/README.md](server/README.md).
 - **Passwords are never stored.** The password is held in memory for one request and cleared. Only the username
   is remembered, and only if the player ticks "Remember Username". The session id isn't stored either: it goes
   straight to the game's command line and works once, within 5 minutes.
-- **HTTPS outside the local network.** Every HTTP request the launcher makes (server manifest, login, register,
-  game files, launcher updates) must be `https://`, unless the host is this machine or a private network address
+- **HTTPS outside the local network.** Every request the launcher makes to a game server (server manifest, login,
+  register, game files) must be `https://`, unless the host is this machine or a private network address
   (`10/8`, `172.16/12`, `192.168/16`, link-local, IPv6 unique-local, or a `.local` name). Anything else is refused
   before it's sent: over plain HTTP, anyone on the path could read the password or swap `FreeRealms.exe`. Local
-  plain HTTP shows a warning on the login and register forms.
+  plain HTTP shows a warning on the login and register forms. Updates are always HTTPS, to GitHub only.
 - **Files stay in the client folder.** A server's file list can't write outside the client folder, and a server's
   name can't escape the servers folder.
-- **Updates come from our server only**, over HTTPS (see below).
+- **Updates come from this repository's GitHub Releases, never from the game server**, so someone who breaks into
+  the VPS can't push a launcher to players. The update address must be `https://github.com/{owner}/{repository}`;
+  anything else turns updates off. Releases are built by a workflow that runs only on `main` and only when
+  started by hand (see [Publishing a release](#publishing-a-release)).
+- **The game's executable is pinned.** The launcher only starts a `FreeRealms.exe` whose SHA-256 matches the one
+  it was built with, and never saves one from a server that doesn't match (see [the client pin](#the-client-pin)).
 
 ## Building
 
@@ -72,16 +79,70 @@ The `build_*.sh` and `build_*.bat` scripts make installers and update packages w
 [Velopack](https://velopack.io) (`dotnet tool install -g vpk`), for example `./build_linux-x64.sh 1.0.0` or
 `build_win-x64.bat 1.0.0`. They put the release in `releases/`.
 
-**Updates.** The launcher looks for updates under `<DefaultServerUrl>/launcher/`. To publish one, upload the
-contents of `releases/` there (the Caddy example in [server/Caddyfile](server/Caddyfile) serves that folder). Only
-installed copies update; a copy run from a plain `publish` folder doesn't.
+Only installed copies update; a copy run from a plain `publish` folder doesn't.
+
+## Publishing a release
+
+Installed launchers update from this repository's GitHub Releases, through Velopack's GitHub source. They look
+for a release when the player clicks the arrows button at the top of the window.
+
+1. Merge everything the release needs into `main`, including the real `ClientExecutableSha256`.
+2. On GitHub: **Actions** > **Launcher release** > **Run workflow**, leave the branch on `main`, and type the
+   version, such as `1.0.0`. It must be higher than the last launcher release, or no launcher will update to it.
+3. The workflow refuses to run from any other branch, refuses a version that isn't `x.y.z`, and refuses to build
+   while `ClientExecutableSha256` is empty. It runs the launcher's tests, builds Windows (x64) and Linux (x64)
+   with the `build_*` scripts, and publishes the GitHub release `launcher-v1.0.0` holding both.
+4. Players download the installer from that release page: `ServerNameLauncher-win-Setup.exe` on Windows,
+   `ServerNameLauncher.AppImage` on Linux (both named after `LauncherId`).
+
+The launcher reads releases without a token, so **updates only work once the repository is public**. While it's
+private, installed launchers can't see the releases: the update button finds nothing or reports an error, and a
+new version has to be installed by hand from the release page or a local `build_*` script. Don't put a token in the launcher to get around
+this: every player could read it.
+
+The workflow doesn't build macOS or ARM; use the matching `build_*` script and attach its `releases/` files to the
+same GitHub release by hand if that's ever needed. The installers aren't code-signed, so Windows SmartScreen warns
+players the first time.
+
+To do it all by hand instead: on `main`, set `UpdateRepositoryUrl`, run `build_win-x64.bat 1.0.0` on Windows and
+`./build_linux-x64.sh 1.0.0` on Linux, then create a GitHub release tagged `launcher-v1.0.0` and attach every file
+from both `releases/` folders.
+
+## The client pin
+
+`ClientExecutableSha256` in [src/Directory.Build.props](src/Directory.Build.props) is the SHA-256 of the game
+client's `FreeRealms.exe`, the one every player already has. Get it from a copy you trust:
+
+```bash
+sha256sum FreeRealms.exe                    # Linux
+Get-FileHash FreeRealms.exe                 # Windows PowerShell
+```
+
+Paste the 64 hex digits in (case doesn't matter). It isn't a secret. What the launcher does with it:
+
+- **Play** and the launch itself both hash `FreeRealms.exe` in the server's client folder and refuse to start it if
+  it doesn't match. The player sees: *"FreeRealms.exe isn't the Free Realms game this launcher was made for, so it
+  won't be started. It may have been changed or replaced. Put the original FreeRealms.exe back in:"* and the
+  folder.
+- A server's `clientmanifest.xml` may download any other game file, but a `FreeRealms.exe` it sends (under any
+  case, such as `freerealms.exe`) is hashed before it's written, and thrown away if it fails: *"The server sent a
+  FreeRealms.exe that isn't the Free Realms game this launcher was made for. It wasn't saved, and the game won't
+  be started."* A copy already on disk that passes is never replaced, whatever the manifest says.
+- While the setting is empty, no game starts: *"This copy of the launcher was built without the game's
+  fingerprint, so it can't check FreeRealms.exe and won't start the game."* For a local test build, pass it on the
+  command line instead: `-p:ClientExecutableSha256=<hash>`.
+
+The pin covers the executable only. A server's client manifest can still deliver other files, including DLLs
+that `FreeRealms.exe` loads from its own folder, so the pin doesn't stop a malicious server on its own. Pinning the
+whole client is a separate task.
 
 ## Changes from OSFR's launcher
 
 - **Ours, not OSFR's:** our name, id, icon and default server, all set in `src/Directory.Build.props`. OSFR's
   tree logo is replaced by a plain icon. The settings folder is our own, so it never mixes with an OSFR install.
-- **Updates from our server** (Velopack `SimpleWebSource` on `<DefaultServerUrl>/launcher/`) instead of OSFR's
-  GitHub releases, which would have replaced our launcher with theirs.
+- **Updates from this repository's GitHub Releases** instead of OSFR's, which would have replaced our launcher
+  with theirs, and only from an `https://github.com/` address. A release workflow publishes them from `main`.
+- **The game's executable is pinned** to one SHA-256 (`ClientExecutableSha256`).
 - **Discord removed:** the Discord Game SDK (27 MB of proprietary binaries) and the rich-presence integration,
   which used OSFR's own Discord application.
 - **"Remember Password" removed.** OSFR kept passwords encrypted with ASP.NET Data Protection, whose keys sit
@@ -102,4 +163,5 @@ installed copies update; a copy run from a plain `publish` folder doesn't.
   uses Inter, which Avalonia ships.
 - Error notifications stay 8 seconds instead of 3, and the missing `Text.Main.Info` text that info notifications
   need was added.
-- Tests in `src/Launcher.Tests` for the WebAPI contract, the HTTPS rule, the launch arguments and the path checks.
+- Tests in `src/Launcher.Tests` for the WebAPI contract, the HTTPS rule, the launch arguments, the path checks, the
+  update source and the client pin.

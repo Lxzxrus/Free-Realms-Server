@@ -14,8 +14,19 @@
     <!-- Settings folder under the user's local app data, and Velopack's app id. Letters and digits only. -->
     <LauncherId Condition="'$(LauncherId)' == ''">ServerNameLauncher</LauncherId>
 
-    <!-- The server added on first run. It must serve servermanifest.xml (see launcher/server/README.md).
-         Launcher updates are looked for under <DefaultServerUrl>/launcher/. -->
+    <!-- The server added on first run. It must serve servermanifest.xml (see launcher/server/README.md). -->
     <DefaultServerUrl Condition="'$(DefaultServerUrl)' == ''">https://play.example.com</DefaultServerUrl>
+
+    <!-- Launcher updates come from this repository's GitHub Releases, never from the game server, so a break-in on
+         the server can't push a launcher to players. Must be https://github.com/{owner}/{repository}, and the
+         repository must be public: the launcher has no token. The release workflow sets it to the repository it
+         publishes from. -->
+    <UpdateRepositoryUrl Condition="'$(UpdateRepositoryUrl)' == ''">https://github.com/Lxzxrus/Free-Realms-Server</UpdateRepositoryUrl>
+
+    <!-- SHA-256 of the game client's FreeRealms.exe, as 64 hex digits (sha256sum FreeRealms.exe, or
+         Get-FileHash FreeRealms.exe in PowerShell). The launcher refuses to start any other FreeRealms.exe and never
+         keeps one a server's client manifest sends that doesn't match. While it's empty the launcher starts no game
+         at all, and the release workflow refuses to build. -->
+    <ClientExecutableSha256 Condition="'$(ClientExecutableSha256)' == ''"></ClientExecutableSha256>
   </PropertyGroup>
 </Project>

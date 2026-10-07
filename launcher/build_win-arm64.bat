@@ -13,6 +13,7 @@ echo.
 echo Compiling Launcher with dotnet...
 echo %~dp0publish
 dotnet publish .\src\Launcher\Launcher.csproj -c Release --no-self-contained -r win-arm64 --property:PublishDir="%~dp0publish"
+if errorlevel 1 exit /b 1
 
 rem Name, authors and app id come from src\Directory.Build.props.
 for /f "delims=" %%i in ('dotnet msbuild .\src\Launcher\Launcher.csproj -getProperty:LauncherTitle') do set "title=%%i"
