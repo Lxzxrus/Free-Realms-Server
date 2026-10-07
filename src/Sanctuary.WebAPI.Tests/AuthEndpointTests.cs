@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -23,7 +24,7 @@ public class AuthEndpointTests
     };
 
     [TestMethod]
-    public async Task LoginReturnsSessionAndLaunchArguments()
+    public async Task LoginReturnsSessionAndASignedPortraitUploadUrl()
     {
         using var host = new WebAPIHost();
         await host.StartAsync();
@@ -36,7 +37,21 @@ public class AuthEndpointTests
 
         Assert.IsNotNull(body);
         Assert.IsFalse(string.IsNullOrEmpty(body.SessionId));
-        Assert.AreEqual("AssetDelivery:IndirectServerAddress=http://assets.example", body.LaunchArguments);
+        Assert.MatchesRegex(
+            new Regex("^AssetDelivery:IndirectServerAddress=http://assets.example Portrait:UploadUrl=https://play.example/image/[0-9a-f]{64}$"),
+            body.LaunchArguments);
+    }
+
+    [TestMethod]
+    public async Task EachLoginGetsItsOwnUploadToken()
+    {
+        using var host = new WebAPIHost();
+        await host.StartAsync();
+
+        var alice = await host.GetPortraitUploadPathAsync("alice");
+        var bob = await host.GetPortraitUploadPathAsync("bob");
+
+        Assert.AreNotEqual(alice, bob);
     }
 
     [TestMethod]
@@ -320,5 +335,18 @@ public class AuthEndpointTests
 
         Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
         Assert.AreEqual(HttpStatusCode.OK, second.StatusCode);
+    }
+
+    [TestMethod]
+    public void PortraitUploadUrlInLaunchArgumentsRefusesToStart()
+    {
+        using var host = new WebAPIHost(new()
+        {
+            ["WebAPI:LaunchArguments"] = "Portrait:UploadUrl=http://127.0.0.1:20040/image",
+        });
+
+        var exception = Assert.Throws<Exception>(() => host.CreateClient());
+
+        Assert.Contains("must not contain Portrait:UploadUrl", exception.ToString());
     }
 }

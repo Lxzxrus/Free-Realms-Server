@@ -7,9 +7,28 @@ public class WebAPIOptions
 {
     public const string Section = "WebAPI";
 
+    /// <summary>
+    /// Arguments handed to the client on login. Must not contain <c>Portrait:UploadUrl</c>;
+    /// that argument is built per login from <see cref="PortraitUploadUrl"/>.
+    /// </summary>
     public string? LaunchArguments { get; set; }
 
     public bool? MemberByDefault { get; set; }
+
+    /// <summary>
+    /// Public base URL of the portrait endpoint, for example <c>https://play.example.com/image</c>.
+    /// Each login appends a signed token to it. Leave it empty to turn portrait uploads off.
+    /// </summary>
+    public string? PortraitUploadUrl { get; set; }
+
+    /// <summary>How long a portrait upload token from one login stays valid.</summary>
+    public TimeSpan PortraitUploadTokenLifetime { get; set; } = TimeSpan.FromHours(24);
+
+    /// <summary>Largest portrait upload request accepted, in bytes.</summary>
+    public long PortraitMaxRequestBytes { get; set; } = 1024 * 1024;
+
+    /// <summary>Where portraits are stored, one folder per character guid.</summary>
+    public string ImagesDirectory { get; set; } = "Images";
 
     /// <summary>
     /// Proxies (addresses or CIDR ranges) whose <c>X-Forwarded-For</c> is trusted. Empty means loopback only,
@@ -28,6 +47,8 @@ public class RateLimitOptions
     public int LoginPerMinute { get; set; } = 10;
 
     public int RegisterPerHour { get; set; } = 5;
+
+    public int ImagePerMinute { get; set; } = 6;
 }
 
 /// <summary>

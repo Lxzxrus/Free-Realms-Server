@@ -34,6 +34,14 @@ builder.Services.AddOptionsWithValidateOnStart<DatabaseOptions>()
 
 builder.Services.AddOptionsWithValidateOnStart<WebAPIOptions>()
     .BindConfiguration(WebAPIOptions.Section)
+    .Validate(x => x.LaunchArguments?.Contains("Portrait:UploadUrl", StringComparison.OrdinalIgnoreCase) != true,
+        "WebAPI:LaunchArguments must not contain Portrait:UploadUrl. Set WebAPI:PortraitUploadUrl instead; login adds a signed token to it.")
+    .Validate(x => string.IsNullOrEmpty(x.PortraitUploadUrl)
+            || (Uri.TryCreate(x.PortraitUploadUrl, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+                && string.IsNullOrEmpty(uri.Query)
+                && !x.PortraitUploadUrl.Contains(' ')),
+        "WebAPI:PortraitUploadUrl must be an absolute http(s) URL with no query string, for example https://play.example.com/image.")
     .Validate(x => x.TrustedProxies.TrueForAll(p => IPAddress.TryParse(p, out _) || System.Net.IPNetwork.TryParse(p, out _)),
         "WebAPI:TrustedProxies must hold IP addresses or CIDR ranges.")
     .ValidateOnStart();
@@ -67,6 +75,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(builder.Configuration.GetSec
 // Abuse limits
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginThrottle>();
+builder.Services.AddSingleton<PortraitUploadTokens>();
 builder.Services.AddWebAPIRateLimiting(webAPIOptions.RateLimits);
 
 // Database

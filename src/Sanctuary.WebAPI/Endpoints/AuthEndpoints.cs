@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -53,7 +54,8 @@ public static class AuthEndpoints
         CancellationToken cancellationToken,
         IOptionsSnapshot<WebAPIOptions> webAPIOptions,
         IDbContextFactory<DatabaseContext> dbContextFactory,
-        LoginThrottle loginThrottle)
+        LoginThrottle loginThrottle,
+        PortraitUploadTokens portraitUploadTokens)
     {
         if (!MiniValidator.TryValidate(request, out var errors))
             return Results.ValidationProblem(errors);
@@ -113,11 +115,30 @@ public static class AuthEndpoints
             return Results.InternalServerError();
         }
 
+        var options = webAPIOptions.Value;
+
         return Results.Ok(new LoginResponseModel
         {
             SessionId = dbUser.Session,
-            LaunchArguments = webAPIOptions.Value.LaunchArguments
+            LaunchArguments = BuildLaunchArguments(options, portraitUploadTokens.Create(dbUser.Id, options.PortraitUploadTokenLifetime))
         });
+    }
+
+    /// <summary>
+    /// The configured arguments plus this login's own portrait upload URL. The client sends portraits with no
+    /// credentials, so the signed token in the URL is what ties an upload to this user.
+    /// </summary>
+    internal static string? BuildLaunchArguments(WebAPIOptions options, string portraitUploadToken)
+    {
+        var arguments = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(options.LaunchArguments))
+            arguments.Add(options.LaunchArguments.Trim());
+
+        if (!string.IsNullOrWhiteSpace(options.PortraitUploadUrl))
+            arguments.Add($"Portrait:UploadUrl={options.PortraitUploadUrl.TrimEnd('/')}/{portraitUploadToken}");
+
+        return arguments.Count == 0 ? null : string.Join(' ', arguments);
     }
 
     private static async Task<IResult> RegisterHandlerAsync(

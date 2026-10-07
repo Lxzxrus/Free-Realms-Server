@@ -38,6 +38,8 @@ internal sealed class WebAPIHost : WebApplicationFactory<Program>
 
     public string Root { get; } = Path.Combine(Path.GetTempPath(), "sanctuary-webapi-tests", Guid.NewGuid().ToString("N"));
 
+    public string ImagesDirectory => Path.Combine(Root, "Images");
+
     public TestTimeProvider Time { get; } = new();
 
     public WebAPIHost(Dictionary<string, string?>? settings = null)
@@ -50,8 +52,11 @@ internal sealed class WebAPIHost : WebApplicationFactory<Program>
             ["Database:Provider"] = "Sqlite",
             ["Database:ConnectionString"] = $"Data Source={Path.Combine(Root, "test.db")}",
             ["WebAPI:LaunchArguments"] = "AssetDelivery:IndirectServerAddress=http://assets.example",
+            ["WebAPI:PortraitUploadUrl"] = "https://play.example/image",
+            ["WebAPI:ImagesDirectory"] = ImagesDirectory,
             ["WebAPI:RateLimits:LoginPerMinute"] = "1000",
             ["WebAPI:RateLimits:RegisterPerHour"] = "1000",
+            ["WebAPI:RateLimits:ImagePerMinute"] = "1000",
         };
 
         foreach (var (key, value) in settings ?? [])
@@ -118,6 +123,24 @@ internal sealed class WebAPIHost : WebApplicationFactory<Program>
     public Task<HttpResponseMessage> LoginAsync(string username, string password = Password, string address = DefaultAddress)
     {
         return CreateClient(address).PostAsJsonAsync("/login", new { username, password });
+    }
+
+    /// <summary>Logs in and returns the portrait upload path (<c>/image/{token}</c>) from the launch arguments.</summary>
+    public async Task<string> GetPortraitUploadPathAsync(string username)
+    {
+        using var response = await LoginAsync(username);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<LoginBody>();
+
+        const string prefix = "Portrait:UploadUrl=https://play.example";
+
+        var argument = Array.Find(body!.LaunchArguments!.Split(' '), x => x.StartsWith(prefix, StringComparison.Ordinal));
+
+        Assert.IsNotNull(argument);
+
+        return argument[prefix.Length..];
     }
 
     protected override void Dispose(bool disposing)
