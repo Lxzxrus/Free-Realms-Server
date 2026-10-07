@@ -34,6 +34,28 @@ Going **public** on a budget VPS with DDoS protection; the Optiplex becomes stag
 blocker: assume a capable insider attacker who knows this code, and keep every secret out of the repo, because
 the source goes public at launch. Strictly defensive.
 
+## Launch plan (decided 2026-10-09)
+
+Players are leaving the old FreeRealms-Legacy server after a housing update broke lot loading. Evergrove's pitch is
+**working creative housing**, so it must work on day one. Our housing is the owner's August code plus our fixes; his
+new update isn't in this repo.
+
+1. Review and merge task 21 (creative housing).
+2. Focused playtest, housing first: lots load, build, save, relog, a friend visits. Then launcher and login.
+3. Fix what the playtest finds.
+4. **Whole-client pinning (task 22, launch requirement):** the launcher ships known-good hashes for every client
+   file, verifies a player's existing client, and replaces any mismatch from the official OSFR client download.
+   Players' clients came from the old owner's distribution, and the game loads DLLs beside `FreeRealms.exe`.
+5. VPS setup with Nate (OVH VPS-1, `play.evergrove.fyi`, HTTPS, Release build, nightly backups).
+6. Launcher release: name and app id `EvergroveLauncher`, the hash pins, published through GitHub Releases.
+   **The repo goes public on launch day** (AGPL, and Releases-based updates need it).
+7. Soft launch: an invited Discord group for a weekend, then open.
+
+Decisions: **no Station Cash grant**; the economy is real from day one, and the Marketplace waits for the economy
+phase (say so in the announcement). Launcher branding (logo, background, colours) by Nate's artists, ideally
+matching the Discord icon. Deferred until after launch: ranked plots and the competition, the Station Cash economy,
+tasks 17 and 19.
+
 ## Next
 
 - **Playtest.** Nothing is verified in game yet. Task 11 compiles one ordered plan from every PR's checklist.

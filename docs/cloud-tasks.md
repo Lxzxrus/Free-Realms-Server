@@ -311,3 +311,20 @@ check. The load-test bot (`src/Sanctuary.LoadTest`) is available for anything ab
   creative fixture can never reach inventory or a trade, and turning the setting off restores today's behaviour.
 - **Deliverable:** a PR with in-game checks: open the editor, browse the catalog, place, move and pick up pieces,
   and confirm the inventory doesn't change.
+
+## 22. `client-pinning`: verify every client file (launch requirement)
+
+- **Task:** task 20 pinned only `FreeRealms.exe`, but the game also loads DLLs and other files beside it. Many
+  players will reuse a client that came from the former FreeRealms-Legacy owner's distribution, and he is treated
+  as hostile. Ship known-good SHA-256 hashes for **every** client file with the launcher (built from the official
+  OSFR client manifest, `https://opensourcefreerealms.com/clientmanifest.xml`, at a pinned version). On first run
+  and before each launch, verify the player's client; replace any missing or mismatched file from the official
+  OSFR client download, verified against the pinned hash before it's written. Never run a client with an unverified
+  executable or DLL. Files the server adds may only be data files, never executables or libraries.
+- **Also:** let a player point the launcher at an existing client folder, so returning players don't download
+  1 GB again.
+- **Scope:** `launcher/`, plus a script under `launcher/` that regenerates the hash list from a manifest.
+- **Check:** the self-check, the launcher's tests (a tampered DLL is replaced, a missing file is fetched, a
+  server-added `.dll` or `.exe` is refused), and a win-x64 build.
+- **Deliverable:** a PR explaining how the hash list is made and refreshed, and what a player sees while their
+  client is checked or repaired.
