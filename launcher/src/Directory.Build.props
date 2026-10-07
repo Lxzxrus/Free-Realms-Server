@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    The launcher's identity and its default server, in one place. Override any of them at build time,
+    for example: dotnet publish -p:DefaultServerUrl=http://192.168.1.20:8080
+
+    PLACEHOLDERS: the name, the id and the domain below are not decided yet. The id names the settings folder
+    and the installer's app id, so it can't change once players have installed the launcher.
+  -->
+  <PropertyGroup>
+    <!-- Shown in the window title, the installer and the HTTP User-Agent. -->
+    <LauncherTitle Condition="'$(LauncherTitle)' == ''">ServerName Launcher</LauncherTitle>
+    <LauncherAuthors Condition="'$(LauncherAuthors)' == ''">ServerName team</LauncherAuthors>
+
+    <!-- Settings folder under the user's local app data, and Velopack's app id. Letters and digits only. -->
+    <LauncherId Condition="'$(LauncherId)' == ''">ServerNameLauncher</LauncherId>
+
+    <!-- The server added on first run. It must serve servermanifest.xml (see launcher/server/README.md).
+         Launcher updates are looked for under <DefaultServerUrl>/launcher/. -->
+    <DefaultServerUrl Condition="'$(DefaultServerUrl)' == ''">https://play.example.com</DefaultServerUrl>
+  </PropertyGroup>
+</Project>

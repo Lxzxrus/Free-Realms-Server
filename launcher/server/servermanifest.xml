@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the launcher reads from <server URL>/servermanifest.xml. See README.md in this folder.
+  PLACEHOLDERS: the name, play.example.com and files.example.com are not decided yet.
+-->
+<ServerManifest version="2">
+  <Name>ServerName</Name>
+  <!-- Markdown, shown on the launcher's server page. Links open in the browser. -->
+  <Description>Welcome! Register with the button under the login form, then press Play.</Description>
+
+  <!-- WebAPI, behind Caddy (docs/webapi.md). Must be https:// unless it's on the local network. -->
+  <WebApiUrl>https://play.example.com/</WebApiUrl>
+
+  <!-- The Login server: host and UDP port. -->
+  <LoginServer>play.example.com:20042</LoginServer>
+
+  <!-- Optional. Where clientmanifest.xml and client/ are served. Leave it out to serve them from the server URL;
+       if neither has clientmanifest.xml, players put their own copy of the client in the launcher's folder. -->
+  <ClientUrl>https://files.example.com</ClientUrl>
+</ServerManifest>
