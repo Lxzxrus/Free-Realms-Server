@@ -10,6 +10,8 @@ using System.Threading;
 using Collections.Pooled;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Sanctuary.Core.IO;
 using Sanctuary.UdpLibrary.Abstractions;
@@ -54,6 +56,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     public UdpParams Params { get; set; }
 
     public readonly IServiceProvider _serviceProvider;
+
+    /// <summary>
+    /// The application's logger for this manager (category: the manager's type), or a null logger if the service
+    /// provider has no <see cref="ILoggerFactory"/>.
+    /// </summary>
+    public ILogger Logger { get; }
 
     private readonly IUdpDriver _driver;
 
@@ -165,6 +173,8 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         Params = udpParams;
 
         _serviceProvider = serviceProvider;
+
+        Logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger(GetType().FullName ?? GetType().Name) ?? NullLogger.Instance;
 
         Params.MaxRawPacketSize = Math.Min(Params.MaxRawPacketSize, Constants.HardMaxRawPacketSize);
 
@@ -338,7 +348,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
                     found = true;
 
-                    ProcessRawPacket(_socketAddress, data);
+                    ProcessRawPacketGuarded(_socketAddress, data);
 
                     if (ClockElapsed(start) >= maxPollingTime)
                     {
@@ -387,7 +397,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                         if (top is null)
                             break;
 
-                        top.GiveTime();
+                        GiveConnectionTimeGuarded(top);
 
                         processed++;
                     }
@@ -400,9 +410,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                 }
                 else
                 {
-                    foreach (var con in ConnectionList)
+                    // a snapshot, since a connection that disconnects during its time removes itself from the list
+                    foreach (var con in ConnectionList.ToArray())
                     {
-                        con.GiveTime();
+                        GiveConnectionTimeGuarded(con);
                     }
                 }
 
@@ -495,6 +506,82 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
                 break;
             }
+        }
+    }
+
+    /// <summary>
+    /// Processes one incoming packet. An exception from it (in this library or in the application's callbacks) must never
+    /// reach the caller of <see cref="GiveTime"/>, because that is the server's only loop: the connection the packet
+    /// belongs to is dropped instead.
+    /// </summary>
+    private void ProcessRawPacketGuarded(SocketAddress socketAddress, Span<byte> data)
+    {
+        try
+        {
+            ProcessRawPacket(socketAddress, data);
+        }
+        catch (Exception ex)
+        {
+            DropFaultedConnection(AddressGetConnection(socketAddress), socketAddress, ex, $"processing a {data.Length} byte packet ({Convert.ToHexString(data.Slice(0, Math.Min(data.Length, 32)))}{(data.Length > 32 ? "..." : "")})");
+        }
+    }
+
+    private void GiveConnectionTimeGuarded(UdpConnection con)
+    {
+        try
+        {
+            con.GiveTime();
+        }
+        catch (Exception ex)
+        {
+            DropFaultedConnection(con, con.SocketAddress, ex, "giving it processing time");
+        }
+    }
+
+    private void DropFaultedConnection(UdpConnection? con, SocketAddress socketAddress, Exception exception, string activity)
+    {
+        lock (_statsGuard)
+        {
+            ManagerStats.ConnectionFaults++;
+        }
+
+        if (con is null)
+        {
+            Logger.LogError(exception, "An exception escaped while {activity} from {address}, which has no connection.", activity, FormatAddress(socketAddress));
+            return;
+        }
+
+        if (con.Status == Status.Disconnected)
+        {
+            // it already disconnected (the exception came from the application's disconnect callback), so there is nothing to drop
+            Logger.LogError(exception, "An exception escaped while {activity} for {connection}, which had already disconnected.", activity, con);
+            return;
+        }
+
+        Logger.LogError(exception, "Dropping {connection}: an exception escaped while {activity}.", con, activity);
+
+        try
+        {
+            con.InternalDisconnect(0, DisconnectReason.CorruptPacket);
+        }
+        catch (Exception disconnectException)
+        {
+            // the connection is removed before the application hears of the disconnect, so this can only be the application's callback
+            Logger.LogError(disconnectException, "{connection} also threw while disconnecting.", con);
+
+            RemoveConnection(con);
+        }
+    }
+
+    private static string FormatAddress(SocketAddress socketAddress)
+    {
+        try
+        {
+            return new IPEndPoint(IPAddress.Any, 0).Create(socketAddress).ToString() ?? "an unknown address";
+        }
+        catch
+        {
+            return "an unknown address";
         }
     }
 

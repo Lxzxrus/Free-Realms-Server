@@ -844,23 +844,28 @@ internal class UdpReliableChannel
                 BigDataLen = 0;
             }
 
-            // can't happen in theory since they should add up exact, but protect against it if it does
-            var safetyMax = Math.Min(BigDataTargetLen - BigDataLen, reader.RemainingLength);
-
-            Debug.Assert(safetyMax == reader.RemainingLength);
+            // the fragments must add up to exactly the declared length; more is corruption or tampering
+            if (reader.RemainingLength > BigDataTargetLen - BigDataLen)
+            {
+                UdpConnection.CallbackCorruptPacket(data, UdpCorruptionReason.FragmentBad);
+                return;
+            }
 
             reader.RemainingSpan.CopyTo(BigDataPtr.AsSpan(BigDataLen));
-            BigDataLen += safetyMax;
+            BigDataLen += reader.RemainingLength;
 
             if (BigDataTargetLen == BigDataLen)
             {
-                // send big-packet off to application
-                UdpConnection.ProcessCookedPacket(BigDataPtr.AsSpan(0, BigDataLen));
+                var bigData = BigDataPtr;
+                var bigDataLen = BigDataLen;
 
-                // delete big packet, and reset
+                // delete big packet, and reset (first, so an exception while processing it can't leave it half-done)
                 BigDataLen = 0;
                 BigDataTargetLen = 0;
                 BigDataPtr = null;
+
+                // send big-packet off to application
+                UdpConnection.ProcessCookedPacket(bigData.AsSpan(0, bigDataLen));
             }
         }
     }

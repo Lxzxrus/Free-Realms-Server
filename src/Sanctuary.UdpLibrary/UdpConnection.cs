@@ -258,6 +258,10 @@ public class UdpConnection : PriorityQueueMember
     {
         lock (_guard)
         {
+            // already done; disconnecting again would tell the application twice
+            if (Status == Status.Disconnected)
+                return;
+
             if (DisconnectReason == DisconnectReason.None)
                 DisconnectReason = reason;
 
@@ -1175,9 +1179,15 @@ public class UdpConnection : PriorityQueueMember
 
                     while (ptr < endPtr)
                     {
-                        ptr += UdpMisc.GetVariableValue(data.Slice(ptr), out var len);
+                        if (!UdpMisc.TryGetVariableValue(data.Slice(ptr), out var len, out var lenBytes))
+                        {
+                            CallbackCorruptPacket(data, UdpCorruptionReason.MisformattedGroup);
+                            return;
+                        }
 
-                        if (ptr > endPtr || len > endPtr - ptr)
+                        ptr += lenBytes;
+
+                        if (len < 0 || len > endPtr - ptr)
                         {
                             // specified more data in this piece than is left in the entire packet
                             // this is either corruption, or more likely a hacker

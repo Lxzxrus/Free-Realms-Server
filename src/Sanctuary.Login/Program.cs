@@ -58,6 +58,10 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
 
     ArgumentNullException.ThrowIfNull(serverOptions);
 
+    // The UDP library drops a connection whose packets throw, so an exception that still reaches the host is a bug
+    // in the main loop itself: stop, so a supervisor (systemd) restarts the server, rather than run on without a loop.
+    serviceCollection.Configure<HostOptions>(options => options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.StopHost);
+
     // LoginGateway UDP Server
     serviceCollection.AddSingleton(serviceProvider =>
     {

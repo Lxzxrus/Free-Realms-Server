@@ -709,6 +709,10 @@ public class GatewayConnection : UdpConnection
         if (!_options.UseCompression)
             return base.DecryptUserSupplied(destData, sourceData);
 
+        // every compressed packet starts with a flag byte; without one it's corrupt
+        if (sourceData.IsEmpty)
+            return -1;
+
         if (sourceData[0] == 1)
         {
             return ZLib.Decompress(sourceData.Slice(1), destData);

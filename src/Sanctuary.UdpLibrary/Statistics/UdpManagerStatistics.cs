@@ -59,6 +59,11 @@ public struct UdpManagerStatistics
     public long MaxDeliveryTimeExceeded;
 
     /// <summary>
+    /// number of connections dropped because an exception escaped while processing them
+    /// </summary>
+    public long ConnectionFaults;
+
+    /// <summary>
     /// number of connections currently being managed
     /// </summary>
     public int ConnectionCount;
@@ -114,6 +119,7 @@ public struct UdpManagerStatistics
         SocketOverflowErrors = 0;
         MaxPollingTimeExceeded = 0;
         MaxDeliveryTimeExceeded = 0;
+        ConnectionFaults = 0;
         ConnectionCount = 0;
         DisconnectPendingCount = 0;
         EventListCount = 0;
