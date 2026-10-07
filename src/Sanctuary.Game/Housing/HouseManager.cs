@@ -40,8 +40,9 @@ public sealed class HouseManager : IHouseManager
         return dbContext.Houses
             .AsNoTracking()
             .Where(house => house.CharacterId == characterId)
-            .OrderBy(house => house.Id)
             .ToList()
+            // SQLite can't sort by ulong in SQL, so sort after loading.
+            .OrderBy(house => house.Id)
             .Where(house => IsAvailableHouse(house.ZoneDefinitionId))
             .ToList();
     }
@@ -163,10 +164,13 @@ public sealed class HouseManager : IHouseManager
     {
         try
         {
+            // A captured value, not DateTimeOffset.UtcNow inside the expression: SQLite can't translate that.
+            var now = DateTimeOffset.UtcNow;
+
             using var dbContext = _dbContextFactory.CreateDbContext();
             dbContext.Houses
                 .Where(house => house.Id == houseId)
-                .ExecuteUpdate(setters => setters.SetProperty(house => house.LastVisited, DateTimeOffset.UtcNow));
+                .ExecuteUpdate(setters => setters.SetProperty(house => house.LastVisited, now));
         }
         catch (Exception exception)
         {

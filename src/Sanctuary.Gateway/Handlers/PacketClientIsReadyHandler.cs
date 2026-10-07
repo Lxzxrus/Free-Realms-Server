@@ -26,6 +26,12 @@ public static class PacketClientIsReadyHandler
 
         connection.Player.Zone.OnClientIsReady(connection.Player);
 
+        // The client never asks for its house list; "My Houses" shows whatever the server last sent. Send it on
+        // entering the world so a relog, or a lot bought earlier, shows up. Not inside a house: the house sends
+        // its own instance list, and a second one after it may override what the client needs to decorate.
+        if (connection.Player.Zone is not Sanctuary.Game.Zones.HousingZone)
+            ClientHousingPacketRequestPlayerHousesHandler.SendHouseList(connection);
+
         return true;
     }
 }

@@ -33,6 +33,10 @@ public static class WallOfDataUIEventPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(WallOfDataUIEventPacket), packet);
 
+        // Opening "My Houses" only reports a UI event, so refresh the house list when the player opens it.
+        if (packet.TableName == "MyStuffBrowser" && packet.Callback == "GotoMyHouses")
+            ClientHousingPacketRequestPlayerHousesHandler.SendHouseList(connection);
+
         return true;
     }
 }

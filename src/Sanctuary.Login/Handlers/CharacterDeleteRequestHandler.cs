@@ -95,6 +95,8 @@ public static class CharacterDeleteRequestHandler
                     {
                         var newLeader = dbContext.GuildMembers
                             .Where(x => x.GuildId == guildMember.GuildId)
+                            // SQLite can't sort by DateTimeOffset or ulong in SQL, so sort after loading.
+                            .AsEnumerable()
                             .OrderBy(x => x.Role)
                             .ThenBy(x => x.Joined)
                             .ThenBy(x => x.Id)

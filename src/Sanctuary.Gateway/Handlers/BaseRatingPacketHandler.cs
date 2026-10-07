@@ -347,11 +347,15 @@ public static class BaseRatingPacketHandler
                 (!house.IsMembersOnly || isMember));
     }
 
-    private static IOrderedQueryable<DbHouse> SortDirectoryQuery(IQueryable<DbHouse> query, int mode)
+    // SQLite can't sort by ulong (the house id) in SQL. The query has already filtered in the database, so the
+    // sort runs on the loaded houses; that works the same on every provider.
+    private static IOrderedEnumerable<DbHouse> SortDirectoryQuery(IQueryable<DbHouse> query, int mode)
     {
+        var houses = query.AsEnumerable();
+
         return mode == 3
-            ? query.OrderByDescending(house => house.Id)
-            : query
+            ? houses.OrderByDescending(house => house.Id)
+            : houses
                 .OrderByDescending(house => house.Rating)
                 .ThenByDescending(house => house.Votes)
                 .ThenByDescending(house => house.Id);
@@ -397,6 +401,8 @@ public static class BaseRatingPacketHandler
 
         var ownedCandidate = query
             .Where(house => house.CharacterId == ownerId)
+            .AsEnumerable()
+            // SQLite can't sort by ulong in SQL, so sort after loading.
             .OrderBy(house => house.Id)
             .FirstOrDefault();
         return ownedCandidate is not null && CanViewCandidate(connection, ownedCandidate)
