@@ -39,7 +39,7 @@
     // "DefaultProfileId": 1,
 
     // Coins and station cash a new character starts with. Playtests use 999999999 for both.
-    // "StartingCoins": 0,
+    // "StartingCoins": 1000,
     // "StartingStationCash": 0,
 
     // Give a new character every title and every profile (job). Playtests turn both on.

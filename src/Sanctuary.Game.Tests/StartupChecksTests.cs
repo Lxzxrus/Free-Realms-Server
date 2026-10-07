@@ -164,7 +164,7 @@ public sealed class StartupChecksTests
         using var document = JsonDocument.Parse(ReadSource("Sanctuary.Login/login.json"));
         var server = document.RootElement.GetProperty("Server");
 
-        Assert.AreEqual(0, server.GetProperty("StartingCoins").GetInt32());
+        Assert.AreEqual(1000, server.GetProperty("StartingCoins").GetInt32());
         Assert.AreEqual(0, server.GetProperty("StartingStationCash").GetInt32());
         Assert.IsFalse(server.GetProperty("UnlockAllTitles").GetBoolean());
         Assert.IsFalse(server.GetProperty("UnlockAllProfiles").GetBoolean());

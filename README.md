@@ -117,7 +117,7 @@ runs from.
   (`openssl rand -base64 32`). Both refuse to start without it, or with OSFR's old public value.
 - **Debug builds** refuse to start unless `"AllowDebugBuild": true` is set, because they skip login checks and make
   every player an Admin. Set it for a private test server only, never for one others can reach.
-- **Playtest values:** the tracked settings are the ones for launch: new characters start with 0 coins and 0
+- **Playtest values:** the tracked settings are the ones for launch: new characters start with 1,000 coins and 0
   station cash and nothing unlocked, and new accounts aren't members. For a playtest, set `StartingCoins`,
   `StartingStationCash`, `UnlockAllTitles` and `UnlockAllProfiles` in `login.local.json`, and
   `WebAPI:MemberByDefault` in `appsettings.local.json`. `docs/playtest-plan.md` has the exact files.
