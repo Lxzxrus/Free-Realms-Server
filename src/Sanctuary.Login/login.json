@@ -3,17 +3,17 @@
     "Port": 20042,
 
     "LoginGatewayPort": 20041,
-    "LoginGatewayChallenge": "OSFR-EDITz@2024",
+    "LoginGatewayBindAddress": "127.0.0.1",
 
     "IsLocked": false,
 
     "DefaultTitleId": 0,
     "DefaultProfileId": 1,
 
-    "StartingCoins": 999999999,
-    "StartingStationCash": 999999999,
+    "StartingCoins": 0,
+    "StartingStationCash": 0,
 
-    "UnlockAllTitles": true,
-    "UnlockAllProfiles": true
+    "UnlockAllTitles": false,
+    "UnlockAllProfiles": false
   }
 }

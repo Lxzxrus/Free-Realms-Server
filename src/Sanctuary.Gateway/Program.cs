@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using NLog.Extensions.Logging;
 
@@ -38,6 +39,7 @@ builder.ConfigureAppConfiguration((hostBuilderContext, configurationBuilder) =>
         configurationBuilder.AddJsonFile("database.json", optional: true);
 
     configurationBuilder.AddJsonFile("gateway.json", optional: false, reloadOnChange: true);
+    configurationBuilder.AddJsonFile("gateway.local.json", optional: true, reloadOnChange: true);
 
     configurationBuilder.AddEnvironmentVariables();
 });
@@ -128,4 +130,22 @@ builder.ConfigureLogging((hostBuilderContext, loggingBuilder) =>
 
 var host = builder.Build();
 
+#if DEBUG
+const bool isDebugBuild = true;
+#else
+const bool isDebugBuild = false;
+#endif
+
+var configuration = host.Services.GetRequiredService<IConfiguration>();
+var options = host.Services.GetRequiredService<IOptions<GatewayServerOptions>>().Value;
+
+if (!StartupChecks.Passes(host.Services.GetRequiredService<ILogger<Program>>(), isDebugBuild,
+    StartupChecks.CheckBuild(isDebugBuild, configuration),
+    StartupChecks.CheckLoginGatewayChallenge(options.LoginGatewayChallenge)))
+{
+    return 1;
+}
+
 await host.RunAsync();
+
+return 0;

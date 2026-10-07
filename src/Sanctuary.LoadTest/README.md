@@ -61,6 +61,9 @@ On the Optiplex:
    Server__ServerAddress=192.168.1.50:20260 dotnet Sanctuary.Gateway.dll
    ```
 
+   Login and Gateway also need the same `Server__LoginGatewayChallenge`, from the environment or their
+   `*.local.json` files (see the main README); they refuse to start without it.
+
    and open TCP 20040 and UDP 20042 and 20260 to the LAN only. Close them again afterwards: WebAPI over plain
    HTTP must not face the internet.
 2. Start the monitor, which prints the Gateway's CPU and its socket's UDP drops every 5 seconds, with a UTC time stamp:
