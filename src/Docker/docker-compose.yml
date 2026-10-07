@@ -3,12 +3,11 @@ services:
     image: mariadb:10.5
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-sanctuary}
-      MYSQL_USER: ${MYSQL_USER:-sanctuary}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-sanctuary}
-    ports:
-      - "3306:3306"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD, see .env.example}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE, see .env.example}
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER, see .env.example}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD, see .env.example}
+    # No ports: the database is reachable only by the servers, over the Compose network. Never publish 3306.
     volumes:
       - db:/var/lib/mysql
     healthcheck:
@@ -33,7 +32,7 @@ services:
     environment: &common-env
       Database__Provider: "0" # MySql (MariaDB uses the same provider)
       Database__VersionString: 10.5.29-mariadb
-      Database__ConnectionString: Server=sanctuary.mysql;Port=3306;Database=${MYSQL_DATABASE:-sanctuary};User=${MYSQL_USER:-sanctuary};Password=${MYSQL_PASSWORD:-sanctuary};
+      Database__ConnectionString: Server=sanctuary.mysql;Port=3306;Database=${MYSQL_DATABASE:?Set MYSQL_DATABASE, see .env.example};User=${MYSQL_USER:?Set MYSQL_USER, see .env.example};Password=${MYSQL_PASSWORD:?Set MYSQL_PASSWORD, see .env.example};
       Server__LoginGatewayAddress: sanctuary.login:20041
       Server__ServerAddress: localhost:20260 # replace 'localhost' with your public IP or domain name
       Urls: http://0.0.0.0:20040
