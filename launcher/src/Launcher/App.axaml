@@ -16,7 +16,7 @@
       </ResourceDictionary.MergedDictionaries>
 
       <!-- Additional Resources -->
-      <FontFamily x:Key="FontDefault">/Assets/Fonts/Maiandra-GD-Regular.otf#Maiandra GD</FontFamily>
+      <FontFamily x:Key="FontDefault">fonts:Inter#Inter</FontFamily>
     </ResourceDictionary>
   </Application.Resources>
 

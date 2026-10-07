@@ -165,6 +165,7 @@ public partial class Server : ObservableObject
 
                 Info.WebApiUrl = serverManifest.WebApiUrl;
                 Info.LoginServer = serverManifest.LoginServer;
+                Info.ClientUrl = serverManifest.ClientUrl;
 
                 Settings.Instance.Save();
             }
@@ -173,7 +174,9 @@ public partial class Server : ObservableObject
                 ServerStatusFill = RedBrush;
                 Status = App.GetText("Text.ServerStatus.Offline");
 
-                App.AddNotification("An error occurred while getting server info.", true);
+                App.AddNotification(ex is InsecureTransportException
+                    ? App.GetText("Text.WebApi.Insecure")
+                    : App.GetText("Text.WebApi.ServerDown"), true);
 
                 _logger.Error(ex, "An exception was thrown while getting server info for: {Url}.", Info.Url);
 
@@ -236,21 +239,25 @@ public partial class Server : ObservableObject
 
         if (!string.IsNullOrEmpty(Info.Url))
         {
-        var clientManifest = await GetClientManifestAsync();
+            var (found, clientManifest) = await GetClientManifestAsync();
 
-        if (clientManifest is null)
-            return;
-
-        StatusMessage = App.GetText("Text.Server.VerifyClientFiles");
-
-        if (!await VerifyClientFilesAsync(clientManifest))
-        {
-            StatusMessage = string.Empty;
-
+            if (!found)
                 return;
+
+            // Null when the server doesn't host the game files: the player's own copy in the client folder is used.
+            if (clientManifest is not null)
+            {
+                StatusMessage = App.GetText("Text.Server.VerifyClientFiles");
+
+                if (!await VerifyClientFilesAsync(clientManifest))
+                {
+                    StatusMessage = string.Empty;
+
+                    return;
+                }
             }
 
-            if (!clientManifest.Languages.Contains(Settings.Instance.Locale))
+            if (clientManifest is not null && !clientManifest.Languages.Contains(Settings.Instance.Locale))
             {
                 StatusMessage = string.Empty;
 
@@ -272,7 +279,7 @@ public partial class Server : ObservableObject
         {
             StatusMessage = string.Empty;
 
-            App.AddNotification("Unable to login, the server is offline.", true);
+            App.AddNotification(App.GetText("Text.Server.GameServerOffline"), true);
 
             return;
         }
@@ -309,14 +316,29 @@ public partial class Server : ObservableObject
             App.AddNotification("Unable to open server directory.", true);
     }
 
-    private async Task<ClientManifest?> GetClientManifestAsync()
+    private string ClientBaseUrl => string.IsNullOrEmpty(Info.ClientUrl) ? Info.Url : Info.ClientUrl;
+
+    private string ClientDirectory => Path.Combine(Constants.SavePath, Info.SavePath, "Client");
+
+    /// <summary>
+    /// Found is false when the player can't play: the error has been shown. The manifest is null when the server
+    /// doesn't host the game files.
+    /// </summary>
+    private async Task<(bool Found, ClientManifest? Manifest)> GetClientManifestAsync()
     {
         if (string.IsNullOrEmpty(Info.Url))
-            return null;
+            return (false, null);
 
         try
         {
-            var result = await HttpHelper.GetClientManifestAsync(Info.Url);
+            var result = await HttpHelper.GetClientManifestAsync(ClientBaseUrl);
+
+            if (result.Result == ManifestResult.NotFound)
+            {
+                _logger.Info("{Url} has no client manifest; using the client folder as it is.", ClientBaseUrl);
+
+                return (true, null);
+            }
 
             if (result.Result != ManifestResult.Success || result.ClientManifest is null)
             {
@@ -325,28 +347,43 @@ public partial class Server : ObservableObject
                                      {result.Error}
                                      """, true);
 
-                _logger.Error("Failed to get client manifest for: {Url}: {Error}.", Info.Url, result.Error);
+                _logger.Error("Failed to get client manifest for: {Url}: {Error}.", ClientBaseUrl, result.Error);
 
-                return null;
+                return (false, null);
             }
 
-            return result.ClientManifest;
+            return (true, result.ClientManifest);
         }
         catch (Exception ex)
         {
-            App.AddNotification("An error occurred while getting client info.", true);
+            App.AddNotification(ex is InsecureTransportException
+                ? App.GetText("Text.WebApi.Insecure")
+                : App.GetText("Text.WebApi.ServerDown"), true);
 
-            _logger.Error(ex, "An exception was thrown while getting client info for: {Url}.", Info.Url);
+            _logger.Error(ex, "An exception was thrown while getting client info for: {Url}.", ClientBaseUrl);
         }
 
-        return null;
+        return (false, null);
     }
 
     private async Task<bool> VerifyClientFilesAsync(ClientManifest clientManifest)
     {
         _logger.Info("Starting verifying client files for: {Name}.", Info.Name);
 
-        var filesToDownload = await GetFilesToDownloadAsync(clientManifest.RootFolder);
+        List<LocalFile> filesToDownload;
+
+        try
+        {
+            filesToDownload = await GetFilesToDownloadAsync(clientManifest.RootFolder);
+        }
+        catch (InvalidDataException ex)
+        {
+            App.AddNotification(App.GetText("Text.Server.UnsafeClientManifest"), true);
+
+            _logger.Error(ex, "Refusing the client manifest from {Url}.", ClientBaseUrl);
+
+            return false;
+        }
 
         if (filesToDownload.Count == 0)
         {
@@ -462,11 +499,15 @@ public partial class Server : ObservableObject
 
         try
         {
-            var clientFileUri = UriHelper.JoinUriPaths(Info.Url, "client", path, fileName);
-            var fileDirectory = Path.Combine(Constants.SavePath, Info.SavePath, "Client", path);
-            var filePath = Path.Combine(fileDirectory, fileName);
+            if (!PathHelper.TryGetPathInside(ClientDirectory, path, fileName, out var filePath))
+            {
+                _logger.Error("Refusing to write outside the client folder: {Path}.", downloadFilePath);
+                return false;
+            }
 
-            Directory.CreateDirectory(fileDirectory);
+            var clientFileUri = UriHelper.JoinUriPaths(ClientBaseUrl, "client", path, fileName);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
 
             await using var fileStream = await downloadService.DownloadFileTaskAsync(clientFileUri);
 
@@ -497,6 +538,9 @@ public partial class Server : ObservableObject
         // Recurse into subfolders
         foreach (var folder in rootFolder.Folders)
         {
+            if (!PathHelper.TryGetPathInside(ClientDirectory, path, folder.Name, out _))
+                throw new InvalidDataException($"Client manifest folder '{Path.Combine(path, folder.Name)}' is outside the client folder.");
+
             var folderPath = Path.Combine(path, folder.Name);
 
             var folderResults = await GetFilesToDownloadAsync(folder, folderPath);
@@ -507,8 +551,8 @@ public partial class Server : ObservableObject
         // Check files in the current folder
         foreach (var file in rootFolder.Files)
         {
-            var fileDirectory = Path.Combine(Constants.SavePath, Info.SavePath, "Client", path);
-            var filePath = Path.Combine(fileDirectory, file.Name);
+            if (!PathHelper.TryGetPathInside(ClientDirectory, path, file.Name, out var filePath))
+                throw new InvalidDataException($"Client manifest file '{Path.Combine(path, file.Name)}' is outside the client folder.");
 
             if (File.Exists(filePath))
             {
@@ -541,10 +585,5 @@ public partial class Server : ObservableObject
         }
 
         return results;
-    }
-
-    partial void OnProcessChanged(Process? value)
-    {
-        _main.UpdateDiscordActivity();
     }
 }

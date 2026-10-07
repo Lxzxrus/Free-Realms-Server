@@ -6,7 +6,6 @@ using Avalonia.Logging;
 
 using Launcher.Extensions;
 using Launcher.Helpers;
-using Launcher.Services;
 using Launcher.ViewModels;
 
 using NLog;
@@ -25,11 +24,6 @@ internal sealed class Program
         SetupNLog();
 
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-
-        if (Settings.Instance.DiscordActivity)
-        {
-            DiscordService.Start();
-        }
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
 

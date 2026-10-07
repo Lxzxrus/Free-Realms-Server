@@ -9,6 +9,7 @@ using Avalonia.Markup.Xaml;
 
 using CommunityToolkit.Mvvm.Input;
 
+using Launcher.Helpers;
 using Launcher.Models;
 using Launcher.ViewModels;
 
@@ -26,10 +27,13 @@ public partial class App : Application
     private Main _main = null!;
     private Window _window = null!;
 
-    private const string GitHubRepoUrl = "https://github.com/Open-Source-Free-Realms/Launcher";
-    private static readonly UpdateManager _updateManager = new(new GithubSource(GitHubRepoUrl, null, false));
+    // Releases are published to <default server>/launcher/ (see launcher/README.md). Never over plain HTTP to the
+    // internet: an update is a program the launcher runs.
+    private static readonly UpdateManager? _updateManager = TransportPolicy.IsAllowed(Constants.UpdateUrl)
+        ? new UpdateManager(new SimpleWebSource(Constants.UpdateUrl))
+        : null;
 
-    public static SemanticVersion CurrentVersion => _updateManager.CurrentVersion ?? new SemanticVersion(0, 0, 0);
+    public static SemanticVersion CurrentVersion => _updateManager?.CurrentVersion ?? new SemanticVersion(0, 0, 0);
 
     public App()
     {
@@ -39,6 +43,9 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+
+        // The name is set at build time (Directory.Build.props), so it overrides the placeholder in Texts.axaml.
+        Resources["Text.Title"] = Constants.Title;
 
 #if DEBUG
         this.AttachDeveloperTools();
@@ -70,7 +77,11 @@ public partial class App : Application
 
         try
         {
-            if (_updateManager.IsInstalled)
+            if (_updateManager is null)
+            {
+                app._logger.Warn("Updates are off: {Url} is not HTTPS.", Constants.UpdateUrl);
+            }
+            else if (_updateManager.IsInstalled)
             {
                 app._main.Message = GetText("Text.Main.CheckingForUpdates");
 

@@ -8,6 +8,8 @@
 
         <xs:element name="WebApiUrl" type="xs:string" />
         <xs:element name="LoginServer" type="xs:string" />
+
+        <xs:element name="ClientUrl" type="xs:string" minOccurs="0" />
       </xs:all>
 
       <xs:attribute name="version" type="xs:integer" use="required" />

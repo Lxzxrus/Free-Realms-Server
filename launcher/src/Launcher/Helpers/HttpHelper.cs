@@ -25,17 +25,17 @@ public static class HttpHelper
     private static readonly HttpClient _downloadHttpClient = CreateDownloadHttpClient();
     private static readonly TimeSpan _connectionAttemptDelay = TimeSpan.FromMilliseconds(150);
 
-    public static string UserAgent => $"{App.GetText("Text.Title")} v{App.CurrentVersion}";
+    public static string UserAgent => $"{Constants.Id} v{App.CurrentVersion}";
 
     public static HttpClient DownloadHttpClient => _downloadHttpClient;
 
     public static HttpClient CreateHttpClient()
     {
-        var httpClient = new HttpClient(new HttpLoggingHandler(new SocketsHttpHandler()
+        var httpClient = new HttpClient(new HttpLoggingHandler(new TransportPolicyHandler(new SocketsHttpHandler()
         {
             AllowAutoRedirect = true,
             ConnectCallback = HappyEyeballsConnectAsync
-        }));
+        })));
 
         httpClient.Timeout = TimeSpan.FromSeconds(10);
 
@@ -46,14 +46,14 @@ public static class HttpHelper
 
     private static HttpClient CreateDownloadHttpClient()
     {
-        var httpClient = new HttpClient(new SocketsHttpHandler()
+        var httpClient = new HttpClient(new TransportPolicyHandler(new SocketsHttpHandler()
         {
             AllowAutoRedirect = true,
             ConnectCallback = HappyEyeballsConnectAsync,
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
             MaxConnectionsPerServer = Settings.Instance.DownloadThreads,
-        });
+        }));
 
         // Downloader enforces its own per-block timeouts, so disable the
         // overall client timeout to avoid cutting off large files on slow connections.
@@ -263,6 +263,10 @@ public static class HttpHelper
         var clientManifestUri = UriHelper.JoinUriPaths(serverUrl, ClientManifest.FileName.ToLower());
 
         var response = await _httpClient.GetAsync(clientManifestUri);
+
+        // The server doesn't host the client: players supply their own copy.
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return (ManifestResult.NotFound, "The server doesn't provide the game files.", null);
 
         if (!response.IsSuccessStatusCode)
         {

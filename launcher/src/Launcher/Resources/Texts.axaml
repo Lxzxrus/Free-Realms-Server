@@ -16,7 +16,8 @@
 
   <!-- Main Window -->
   <x:String x:Key="Text.Servers" xml:space="preserve">Server List</x:String>
-  <x:String x:Key="Text.Title" xml:space="preserve">OSFR Launcher</x:String>
+  <!-- Replaced at start-up by LauncherTitle from Directory.Build.props. -->
+  <x:String x:Key="Text.Title" xml:space="preserve">Launcher</x:String>
   <x:String x:Key="Text.Main.Relaunching" xml:space="preserve">Relaunching...</x:String>
   <x:String x:Key="Text.Main.NoUpdatesFound" xml:space="preserve">No Updates Found! Launcher is up-to-date.</x:String>
   <x:String x:Key="Text.Main.Downloading" xml:space="preserve">>Downloading Update {0}... ({1}%)</x:String>
@@ -24,6 +25,7 @@
   <x:String x:Key="Text.Main.UpdateError" xml:space="preserve">Error checking for updates.</x:String>
   <x:String x:Key="Text.Main.CheckingForUpdatesToolTip" xml:space="preserve">Check For Updates</x:String>
   <x:String x:Key="Text.Main.Error" xml:space="preserve">Oops :( We hit a roadblock...</x:String>
+  <x:String x:Key="Text.Main.Info" xml:space="preserve">Good news!</x:String>
   <x:String x:Key="Text.Main.AddServer" xml:space="preserve">Add Server</x:String>
 
   <!-- Server Window -->
@@ -34,9 +36,10 @@
   <x:String x:Key="Text.Login" xml:space="preserve">Login</x:String>
   <x:String x:Key="Text.Login.Username" xml:space="preserve">Username:</x:String>
   <x:String x:Key="Text.Login.Password" xml:space="preserve">Password:</x:String>
-  <x:String x:Key="Text.Login.Unauthorized" xml:space="preserve">Incorrect username or password.</x:String>
+  <x:String x:Key="Text.Login.Unauthorized" xml:space="preserve">Wrong username or password.</x:String>
+  <x:String x:Key="Text.Login.Banned" xml:space="preserve">This account is banned.</x:String>
+  <x:String x:Key="Text.Login.TooManyAttempts" xml:space="preserve">Too many login attempts. Try again in {0}.</x:String>
   <x:String x:Key="Text.Login.RememberUsername" xml:space="preserve">Remember Username</x:String>
-  <x:String x:Key="Text.Login.RememberPassword" xml:space="preserve">Remember Password</x:String>
   <x:String x:Key="Text.Login.Loading" xml:space="preserve">Logging In...</x:String>
 
   <!-- Register -->
@@ -46,11 +49,24 @@
   <x:String x:Key="Text.Register.ConfirmPassword" xml:space="preserve">Confirm Password:</x:String>
   <x:String x:Key="Text.Register.ConfirmPassword.Error" xml:space="preserve">Passwords do not match.</x:String>
   <x:String x:Key="Text.Register.Success" xml:space="preserve">Registration complete! You can now log in.</x:String>
-  <x:String x:Key="Text.Register.Conflict" xml:space="preserve">This username is already taken. Please choose a different one.</x:String>
+  <x:String x:Key="Text.Register.Conflict" xml:space="preserve">That name is taken. Please choose a different one.</x:String>
+  <x:String x:Key="Text.Register.TooManyAttempts" xml:space="preserve">Too many accounts were created from your connection. Try again in {0}.</x:String>
+
+  <!-- Answers from the server's web API -->
+  <x:String x:Key="Text.WebApi.Invalid" xml:space="preserve">The server didn't accept that:
+{0}</x:String>
+  <x:String x:Key="Text.WebApi.InvalidUnknown" xml:space="preserve">The server didn't accept that username or password.</x:String>
+  <x:String x:Key="Text.WebApi.ServerDown" xml:space="preserve">Can't reach the server. It may be down; please try again later.</x:String>
+  <x:String x:Key="Text.WebApi.Insecure" xml:space="preserve">This server doesn't use HTTPS, so the launcher won't send your password or download files from it.</x:String>
+  <x:String x:Key="Text.WebApi.Unexpected" xml:space="preserve">The server gave an unexpected answer ({0}). Please try again later.</x:String>
   <x:String x:Key="Text.Register.Loading" xml:space="preserve">Registering your account...</x:String>
 
   <!-- Server Operations -->
-  <x:String x:Key="Text.Server.SecureApiWarning" xml:space="preserve">This server does not use HTTPS. Proceed at your own risk.</x:String>
+  <x:String x:Key="Text.Server.LocalHttpWarning" xml:space="preserve">Local test server without HTTPS. Don't reuse a real password here.</x:String>
+  <x:String x:Key="Text.Server.GameServerOffline" xml:space="preserve">The game server is offline. Please try again later.</x:String>
+  <x:String x:Key="Text.Server.ClientMissing" xml:space="preserve">The game isn't installed for this server. Put the Free Realms client (the folder with FreeRealms.exe) in:
+{0}</x:String>
+  <x:String x:Key="Text.Server.UnsafeClientManifest" xml:space="preserve">The server's list of game files is invalid, so nothing was downloaded.</x:String>
   <x:String x:Key="Text.Server.PreparingGameFiles" xml:space="preserve">Preparing Game Files: ({0}/{1})</x:String>
   <x:String x:Key="Text.Server.VerifyClientFiles" xml:space="preserve">Verifying Client Files...</x:String>
   <x:String x:Key="Text.ServerStatus" xml:space="preserve">Server Status: </x:String>
@@ -66,6 +82,7 @@
   <x:String x:Key="Text.Add_Server.Loading" xml:space="preserve">Adding Server...</x:String>
   <x:String x:Key="Text.Add_Server.InvalidServerUrl1" xml:space="preserve">Invalid url format. {0}</x:String>
   <x:String x:Key="Text.Add_Server.InvalidServerUrl2" xml:space="preserve">Invalid url, only HTTP/HTTPS is supported. {0}</x:String>
+  <x:String x:Key="Text.Add_Server.HttpsRequired" xml:space="preserve">The address must start with https:// (plain http:// only works on your own network).</x:String>
 
   <!-- Delete Server -->
   <x:String x:Key="Text.Delete_Server" xml:space="preserve">Delete Server</x:String>
@@ -79,16 +96,10 @@
   <x:String x:Key="Text.Settings" xml:space="preserve">Settings</x:String>
   <x:String x:Key="Text.Settings.General.Locale" xml:space="preserve">Game Language: </x:String>
   <x:String x:Key="Text.Settings.General.Locale.Tooltip" xml:space="preserve">Select your language choice for the game.</x:String>
-  <x:String x:Key="Text.Settings.General.DiscordActivity" xml:space="preserve">Discord Activity</x:String>
-  <x:String x:Key="Text.Settings.General.DiscordActivity.Tooltip" xml:space="preserve">Enables the Discord Rich Presence (RPC) integration.</x:String>
   <x:String x:Key="Text.Settings.General.ParallelDownload" xml:space="preserve">Parallel Download</x:String>
   <x:String x:Key="Text.Settings.General.ParallelDownloads" xml:space="preserve">Parallel Downloads: </x:String>
   <x:String x:Key="Text.Settings.General.ParallelDownload.Tooltip" xml:space="preserve">Enables / Disables parallel downloading. Hover over "parallel downloads" for more information. If parallel downloading isn't working as intended, consider disabling this option.</x:String>
   <x:String x:Key="Text.Settings.General.ParallelDownloads.Tooltip" xml:space="preserve">Number of parallel downloads. Higher values are faster on faster connections/SSDs but are more resource-intensive. Maximum recommended is your CPU core count; the default is half that.</x:String>
-
-  <!-- Discord -->
-  <x:String x:Key="Text.Discord.Playing" xml:space="preserve">Playing on Server(s): </x:String>
-  <x:String x:Key="Text.Discord.Idle" xml:space="preserve">Idling in the OSFR Launcher</x:String>
 
   <!-- Logs -->
   <x:String x:Key="Text.Logs" xml:space="preserve">Open Logs</x:String>

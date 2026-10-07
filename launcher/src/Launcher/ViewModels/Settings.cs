@@ -8,7 +8,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 using Launcher.Helpers;
 using Launcher.Models;
-using Launcher.Services;
 
 using NLog;
 
@@ -20,9 +19,6 @@ public partial class Settings : ObservableObject
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     private static readonly Lazy<Settings> _instance = new(Create());
-
-    [ObservableProperty]
-    private bool discordActivity = true;
 
     [ObservableProperty]
     private bool parallelDownload = true;
@@ -38,7 +34,6 @@ public partial class Settings : ObservableObject
     private AvaloniaList<ServerInfo> serverInfoList = [];
 
     public event EventHandler? LocaleChanged;
-    public event EventHandler? DiscordActivityChanged;
 
     private Settings() { }
 
@@ -70,14 +65,4 @@ public partial class Settings : ObservableObject
 
     partial void OnLocaleChanged(LocaleType value)
         => LocaleChanged?.Invoke(this, EventArgs.Empty);
-
-    partial void OnDiscordActivityChanged(bool value)
-    {
-        if (value)
-            DiscordService.Start();
-        else
-            DiscordService.Stop();
-
-        DiscordActivityChanged?.Invoke(this, EventArgs.Empty);
-    }
 }

@@ -17,4 +17,9 @@ public sealed class ServerManifest
 
     public required string WebApiUrl { get; set; }
     public required string LoginServer { get; set; }
+
+    /// <summary>
+    /// Optional: where clientmanifest.xml and client/ are served, if not from the server URL itself.
+    /// </summary>
+    public string? ClientUrl { get; set; }
 }

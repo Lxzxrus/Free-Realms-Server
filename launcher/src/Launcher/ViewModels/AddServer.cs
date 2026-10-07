@@ -47,6 +47,9 @@ public partial class AddServer : Popup
         if (serverUri.Scheme != Uri.UriSchemeHttp && serverUri.Scheme != Uri.UriSchemeHttps)
             return new ValidationResult(App.GetText("Text.Add_Server.InvalidServerUrl2", serverUrl));
 
+        if (!TransportPolicy.IsAllowed(serverUri))
+            return new ValidationResult(App.GetText("Text.Add_Server.HttpsRequired"));
+
         return ValidationResult.Success;
     }
 
@@ -110,6 +113,7 @@ public partial class AddServer : Popup
 
                 WebApiUrl = serverManifest.WebApiUrl,
                 LoginServer = serverManifest.LoginServer,
+                ClientUrl = serverManifest.ClientUrl,
 
                 SavePath = savePath
             };
@@ -121,9 +125,11 @@ public partial class AddServer : Popup
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "An exception occurred while adding server.");
+            _logger.Error(ex, "An exception occurred while adding server {Url}.", serverUrl);
 
-            App.AddNotification("An error occurred while adding server.", true);
+            App.AddNotification(ex is InsecureTransportException
+                ? App.GetText("Text.WebApi.Insecure")
+                : App.GetText("Text.WebApi.ServerDown"), true);
 
             return false;
         }

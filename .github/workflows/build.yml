@@ -52,3 +52,31 @@ jobs:
 
     - name: Test
       run: dotnet test --no-build --verbosity normal
+
+  launcher:
+
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./launcher/src
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        global-json-file: ./launcher/src/global.json
+
+    - name: Restore dependencies
+      run: dotnet restore Launcher.slnx
+
+    - name: Build
+      run: dotnet build Launcher.slnx --no-restore
+
+    - name: Test
+      run: dotnet test Launcher.slnx --no-build --verbosity normal
+
+    - name: Publish for win-x64
+      run: dotnet publish Launcher/Launcher.csproj -c Release -r win-x64 --no-self-contained -o ../publish/win-x64

@@ -1,0 +1,18 @@
+# Example Caddy configuration: docs/webapi.md's, plus the files the launcher fetches.
+# PLACEHOLDERS: play.example.com, and /srv/launcher for the folder holding servermanifest.xml.
+play.example.com {
+	# The launcher's server manifest, and launcher updates under /launcher/ (Velopack's releases folder).
+	handle /servermanifest.xml {
+		root * /srv/launcher
+		file_server
+	}
+	handle /launcher/* {
+		root * /srv
+		file_server
+	}
+
+	# Everything else is WebAPI: /login, /register, /image/<token>.
+	handle {
+		reverse_proxy 127.0.0.1:20040
+	}
+}

@@ -1,13 +1,10 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
-using System.Net;
-using System.Net.Http.Json;
 using System.Threading.Tasks;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 
 using Launcher.Helpers;
-using Launcher.Models;
 
 using NLog;
 
@@ -70,65 +67,37 @@ public partial class Register : Popup
 
     public override async Task<bool> ProcessAsync()
     {
-        try
+        ProgressDescription = App.GetText("Text.Register.Loading");
+
+        using var httpClient = HttpHelper.CreateHttpClient();
+
+        var result = await WebApiClient.RegisterAsync(httpClient, _server.Info.WebApiUrl, Username, Password);
+
+        if (result.Status != WebApiStatus.Ok)
         {
-            ProgressDescription = App.GetText("Text.Register.Loading");
+            _logger.Warn("Registration failed for server '{Name}': {Status} (HTTP {HttpStatus}).", _server.Info.Name, result.Status, (int?)result.HttpStatus);
 
-            using var httpClient = HttpHelper.CreateHttpClient();
+            App.AddNotification(WebApiMessages.Describe(result, isLogin: false), true);
 
-            var registerRequest = new RegisterRequest
-            {
-                Username = Username,
-                Password = Password
-            };
-
-            var baseUri = new Uri(_server.Info.WebApiUrl);
-
-            var registerUri = new Uri(baseUri, "register");
-
-            var httpResponse = await httpClient.PostAsJsonAsync(registerUri, registerRequest);
-
-            if (httpResponse.StatusCode == HttpStatusCode.Conflict)
-            {
-                App.AddNotification(App.GetText("Text.Register.Conflict"), true);
-
+            if (result.Status == WebApiStatus.NameTaken)
                 Username = string.Empty;
-
-                return false;
-            }
-
-            if (!httpResponse.IsSuccessStatusCode)
-            {
-                App.AddNotification("Registration failed. Please check your username and password and try again", true);
-
-                _logger.Warn("Registration failed for server: '{Name}'. API returned {StatusCode}: {Reason}.", _server.Info.Name, httpResponse.StatusCode, httpResponse.ReasonPhrase);
-
-                Username = string.Empty;
-                Password = string.Empty;
-
-                return false;
-            }
-
-            App.AddNotification(App.GetText("Text.Register.Success"));
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            App.AddNotification("Registration failed. Please check your username and password and try again", true);
-
-            _logger.Error(ex, "An exception occurred registering on server: '{Name}'.", _server.Info.Name);
 
             return false;
         }
+
+        Password = string.Empty;
+        ConfirmPassword = string.Empty;
+
+        App.AddNotification(App.GetText("Text.Register.Success"));
+
+        return true;
     }
 
     private void AddSecureWarning()
     {
-        if (Uri.TryCreate(_server.Info.WebApiUrl, UriKind.Absolute, out var webApiUrl)
-            && webApiUrl.Scheme != Uri.UriSchemeHttps)
-        {
-            Warning = App.GetText("Text.Server.SecureApiWarning");
-        }
+        if (!TransportPolicy.IsAllowed(_server.Info.WebApiUrl))
+            Warning = App.GetText("Text.WebApi.Insecure");
+        else if (Uri.TryCreate(_server.Info.WebApiUrl, UriKind.Absolute, out var webApiUrl) && webApiUrl.Scheme != Uri.UriSchemeHttps)
+            Warning = App.GetText("Text.Server.LocalHttpWarning");
     }
 }

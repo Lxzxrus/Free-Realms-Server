@@ -12,7 +12,6 @@ using CommunityToolkit.Mvvm.Input;
 
 using Launcher.Helpers;
 using Launcher.Models;
-using Launcher.Services;
 
 using NLog;
 
@@ -53,7 +52,6 @@ public partial class Main : ObservableObject
 
         // Subscribe to changes in the server list from settings to keep the UI in sync.
         Settings.Instance.ServerInfoList.CollectionChanged += ServerInfoList_CollectionChanged;
-        Settings.Instance.DiscordActivityChanged += (_, _) => UpdateDiscordActivity();
     }
 
     private void ServerInfoList_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -82,29 +80,10 @@ public partial class Main : ObservableObject
 
         if (Settings.Instance.ServerInfoList.Count == 0)
         {
-            _logger.Info("No servers found in settings. Adding default servers.");
-            foreach (var defaultServerUrl in Constants.DefaultServerUrls)
-            {
-                _ = AddServer.TryAddServerAsync(defaultServerUrl);
-            }
+            _logger.Info("No servers found in settings. Adding the default server {Url}.", Constants.DefaultServerUrl);
+
+            _ = AddServer.TryAddServerAsync(Constants.DefaultServerUrl);
         }
-
-        UpdateDiscordActivity();
-    }
-
-    public void UpdateDiscordActivity()
-    {
-        if (!Settings.Instance.DiscordActivity)
-            return;
-
-        var serversPlaying = Servers.Where(x => x.Process is not null).Select(x => x.Info.Name);
-        var playingOn = string.Join(", ", serversPlaying);
-
-        var details = string.IsNullOrEmpty(playingOn)
-            ? App.GetText("Text.Discord.Idle")
-            : App.GetText("Text.Discord.Playing");
-
-        DiscordService.UpdateActivity(details, playingOn);
     }
 
     [RelayCommand]
@@ -170,10 +149,10 @@ public partial class Main : ObservableObject
 
         Notifications.Add(notification);
 
-        // Wait for a few seconds before removing the notification
+        // Wait for a few seconds before removing the notification. Errors stay longer, so they can be read.
         Task.Run(async () =>
         {
-            await Task.Delay(3000);
+            await Task.Delay(notification.IsError ? 8000 : 3000);
 
             Notifications.Remove(notification);
         });

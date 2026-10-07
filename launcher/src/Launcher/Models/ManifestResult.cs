@@ -4,6 +4,7 @@ public enum ManifestResult
 {
     Success,
     HttpError,
+    NotFound,
     InvalidFormat,
     InvalidVersion,
     UnsupportedVersion,

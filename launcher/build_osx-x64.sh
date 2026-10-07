@@ -17,8 +17,14 @@ PUBLISH_DIR="$SCRIPT_DIR/publish"
 
 echo ""
 echo "Compiling Launcher with dotnet..."
-dotnet publish ./src/Launcher.slnx -c Release --self-contained -r osx-x64 --property:PublishDir="$PUBLISH_DIR"
+dotnet publish ./src/Launcher/Launcher.csproj -c Release --self-contained -r osx-x64 --property:PublishDir="$PUBLISH_DIR"
+
+# Name, authors and app id come from src/Directory.Build.props.
+prop() { dotnet msbuild ./src/Launcher/Launcher.csproj -getProperty:"$1"; }
+TITLE="$(prop LauncherTitle)"
+AUTHORS="$(prop LauncherAuthors)"
+APP_ID="$(prop LauncherId)"
 
 echo ""
 echo "Building Velopack Release v$BUILD_VERSION"
-vpk pack --packTitle "OSFR Launcher" --packAuthors "OSFR Team" -u OSFRLauncher -e Launcher -o "$RELEASE_DIR" -p "$PUBLISH_DIR" -i ./assets/icon.icns -v $BUILD_VERSION
+vpk pack --packTitle "$TITLE" --packAuthors "$AUTHORS" -u "$APP_ID" -e Launcher -o "$RELEASE_DIR" -p "$PUBLISH_DIR" -i ./assets/icon.icns -v $BUILD_VERSION

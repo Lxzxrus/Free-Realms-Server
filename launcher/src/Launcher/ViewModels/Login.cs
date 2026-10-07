@@ -1,10 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
-using System.Net.Http.Json;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
@@ -13,7 +10,6 @@ using CommunityToolkit.Mvvm.Input;
 
 using Launcher.Helpers;
 using Launcher.Models;
-using Launcher.Services;
 
 using NLog;
 
@@ -32,6 +28,7 @@ public partial class Login : Popup
     [NotifyDataErrorInfo]
     private string username = string.Empty;
 
+    // Held in memory only, for this one request. The launcher never stores a password.
     [Required]
     [ObservableProperty]
     [NotifyDataErrorInfo]
@@ -43,9 +40,6 @@ public partial class Login : Popup
     [ObservableProperty]
     private bool rememberUsername;
 
-    [ObservableProperty]
-    private bool rememberPassword;
-
     public bool AutoFocusUsername => string.IsNullOrEmpty(Username);
     public bool AutoFocusPassword => !string.IsNullOrEmpty(Username) && string.IsNullOrEmpty(Password);
 
@@ -55,14 +49,8 @@ public partial class Login : Popup
 
         AddSecureWarning();
 
-        // Load saved credentials based on user's preferences
         RememberUsername = _server.Info.RememberUsername;
-        RememberPassword = _server.Info.RememberPassword;
         Username = RememberUsername ? _server.Info.Username ?? string.Empty : string.Empty;
-
-        // Move any legacy plaintext password into the OS secret store, then load it back.
-        MigrateLegacyPassword();
-        Password = RememberPassword ? CredentialHelper.GetPassword(_server.Info) ?? string.Empty : string.Empty;
 
         View = new Views.Login
         {
@@ -81,17 +69,6 @@ public partial class Login : Popup
         Settings.Instance.Save();
     }
 
-    // Handles changes to the "Remember Password" checkbox
-    partial void OnRememberPasswordChanged(bool value)
-    {
-        _server.Info.RememberPassword = value;
-
-        if (!value)
-            CredentialHelper.Clear(_server.Info);
-
-        Settings.Instance.Save();
-    }
-
     [RelayCommand]
     public void Register()
     {
@@ -100,103 +77,45 @@ public partial class Login : Popup
 
     public override async Task<bool> ProcessAsync()
     {
-        try
+        ProgressDescription = App.GetText("Text.Login.Loading");
+
+        using var httpClient = HttpHelper.CreateHttpClient();
+
+        var result = await WebApiClient.LoginAsync(httpClient, _server.Info.WebApiUrl, Username, Password);
+
+        if (result.Status != WebApiStatus.Ok || result.Login is null)
         {
-            ProgressDescription = App.GetText("Text.Login.Loading");
+            _logger.Warn("Login failed for server '{Name}': {Status} (HTTP {HttpStatus}).", _server.Info.Name, result.Status, (int?)result.HttpStatus);
 
-            using var httpClient = HttpHelper.CreateHttpClient();
+            App.AddNotification(WebApiMessages.Describe(result, isLogin: true), true);
 
-            var loginRequest = new LoginRequest
-            {
-                Username = Username,
-                Password = Password
-            };
-
-            var baseUri = new Uri(_server.Info.WebApiUrl);
-
-            var loginUri = new Uri(baseUri, "login");
-
-            // Send login request to the API
-            var httpResponse = await httpClient.PostAsJsonAsync(loginUri, loginRequest);
-
-            if (httpResponse.StatusCode == HttpStatusCode.Unauthorized)
-            {
-                App.AddNotification(App.GetText("Text.Login.Unauthorized"), true);
-
-                Password = string.Empty; // Clear password field on failure
-
-                return false;
-            }
-
-            if (!httpResponse.IsSuccessStatusCode)
-            {
-                App.AddNotification("Login failed. Please check your username and password and try again", true);
-
-                _logger.Warn("Login failed for server: '{Name}'. API returned {StatusCode}: {Reason}.", _server.Info.Name, httpResponse.StatusCode, httpResponse.ReasonPhrase);
-
-                return false;
-            }
-
-            var loginResponse = await httpResponse.Content.ReadFromJsonAsync<LoginResponse>();
-
-            if (loginResponse == null || string.IsNullOrEmpty(loginResponse.SessionId))
-            {
-                App.AddNotification("Login failed. Please check your username and password and try again.", true);
-
-                _logger.Warn("Invalid login API response from server: '{Name}'. Response body was null or SessionId was missing.", _server.Info.Name);
-
-                return false;
-            }
-
-            SaveRememberedCredentials();
-
-            // If login is successful, launch the client
-            await LaunchClientAsync(loginResponse.SessionId, loginResponse.LaunchArguments);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            App.AddNotification("Login failed. Please check your username and password and try again", true);
-
-            _logger.Error(ex, "An exception occurred logging into server: '{Name}'.", _server.Info.Name);
+            if (result.Status == WebApiStatus.WrongCredentials)
+                Password = string.Empty;
 
             return false;
         }
+
+        Password = string.Empty;
+
+        SaveRememberedUsername();
+
+        await LaunchClientAsync(result.Login.SessionId, result.Login.LaunchArguments);
+
+        return true;
     }
 
     private void AddSecureWarning()
     {
-        if (Uri.TryCreate(_server.Info.WebApiUrl, UriKind.Absolute, out var webApiUrl)
-            && webApiUrl.Scheme != Uri.UriSchemeHttps)
-        {
-            Warning = App.GetText("Text.Server.SecureApiWarning");
-        }
+        if (!TransportPolicy.IsAllowed(_server.Info.WebApiUrl))
+            Warning = App.GetText("Text.WebApi.Insecure");
+        else if (Uri.TryCreate(_server.Info.WebApiUrl, UriKind.Absolute, out var webApiUrl) && webApiUrl.Scheme != Uri.UriSchemeHttps)
+            Warning = App.GetText("Text.Server.LocalHttpWarning");
     }
 
-    private void SaveRememberedCredentials()
+    private void SaveRememberedUsername()
     {
         _server.Info.Username = RememberUsername && !string.IsNullOrEmpty(Username) ? Username : null;
 
-        if (RememberPassword && !string.IsNullOrEmpty(Password))
-            CredentialHelper.SavePassword(_server.Info, Password);
-        else
-            CredentialHelper.Clear(_server.Info);
-
-        Settings.Instance.Save();
-    }
-
-    private void MigrateLegacyPassword()
-    {
-        var legacyPassword = _server.Info.LegacyPassword;
-
-        if (string.IsNullOrEmpty(legacyPassword))
-            return;
-
-        if (_server.Info.RememberPassword)
-            CredentialHelper.SavePassword(_server.Info, legacyPassword);
-
-        _server.Info.LegacyPassword = null;
         Settings.Instance.Save();
     }
 
@@ -208,33 +127,27 @@ public partial class Login : Popup
             return;
         }
 
-        var launcherArguments = new List<string>
-        {
-            $"Server={_server.Info.LoginServer}",
-            $"SessionId={sessionId}",
-            $"Internationalization:Locale={Settings.Instance.Locale}"
-        };
+        var arguments = LaunchArguments.Build(_server.Info.LoginServer, sessionId, Settings.Instance.Locale.ToString(), serverArguments);
 
-        if (!string.IsNullOrEmpty(serverArguments))
-            launcherArguments.Add(serverArguments);
-
-        var arguments = string.Join(' ', launcherArguments);
         var workingDirectory = Path.Combine(Constants.SavePath, _server.Info.SavePath, "Client");
         var executablePath = Path.Combine(workingDirectory, Constants.ClientExecutableName);
 
         if (!File.Exists(executablePath))
         {
-            App.AddNotification("Unable to launch the game. The executable file could not be found.", true);
+            App.AddNotification(App.GetText("Text.Server.ClientMissing", workingDirectory), true);
 
             _logger.Error("Client executable not found for server: '{Name}' at path: {Path}.", _server.Info.Name, executablePath);
 
             return;
         }
 
-        // Platform-specific process startup logic
-        string fileName;
-        string processArguments;
+        var startInfo = new ProcessStartInfo
+        {
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false
+        };
 
+        // Platform-specific process startup logic
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             var winePath = WineHelper.GetPath();
@@ -246,13 +159,12 @@ public partial class Login : Popup
                 return;
             }
 
-            fileName = winePath;
-            processArguments = $"{Constants.ClientExecutableName} {arguments}";
+            startInfo.FileName = winePath;
+            startInfo.ArgumentList.Add(Constants.ClientExecutableName);
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            fileName = executablePath;
-            processArguments = arguments;
+            startInfo.FileName = executablePath;
         }
         else
         {
@@ -261,12 +173,15 @@ public partial class Login : Popup
             return;
         }
 
-        _server.Process = new Process();
-        _server.Process.StartInfo.WorkingDirectory = workingDirectory;
-        _server.Process.StartInfo.FileName = fileName;
-        _server.Process.StartInfo.Arguments = processArguments;
-        _server.Process.StartInfo.UseShellExecute = true;
-        _server.Process.EnableRaisingEvents = true;
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        _server.Process = new Process
+        {
+            StartInfo = startInfo,
+            EnableRaisingEvents = true
+        };
+
         _server.Process.Exited += _server.ClientProcessExited;
 
         try
