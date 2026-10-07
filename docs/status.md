@@ -20,6 +20,10 @@ Last updated: 2026-10-07.
 | #11 | 9: security-audit | Threat model `docs/security/threat-model.md` (F1–F13); backdoor review of imported code found nothing deliberate | n/a |
 | #10 | 10: load-test-bot | `src/Sanctuary.LoadTest` and `docs/performance/baseline.md`: first limit is the Gateway's 64 KiB UDP receive buffer, not CPU | n/a |
 | #9 | 11: playtest-plan | `docs/playtest-plan.md`: two evenings, ordered, with pass/fail columns | n/a |
+| #12 | 13: launch-config | F1 Debug guard, F2 challenge out of the repo (local `*.local.json`), F3 LoginGateway on 127.0.0.1, F9 launch economy defaults (0 coins: placeholder), F13 compose credentials | **No** |
+| #14 | 14: udp-hardening | F4 fault isolation, F5 per-IP and size limits, F10 fault counter, 4 MiB buffers, backlog limits (`docs/udp-limits.md`); 200 clustered bots, no drops | **No** |
+| #13 | 15: webapi-hardening | F6 signed `/image/<token>` portraits, F7 rate limits and lockouts, forwarded headers, Caddy/HTTPS doc (`docs/webapi.md`) | **No** |
+| #15 | 12: launcher | OSFR's launcher made ours: no stored passwords, HTTPS-only outside the LAN, path guards. Name, domain and client hosting are placeholders | **No** |
 
 ## Direction (2026-10-06)
 
@@ -30,7 +34,11 @@ the source goes public at launch. Strictly defensive.
 ## Next
 
 - **Playtest.** Nothing is verified in game yet. Task 11 compiles one ordered plan from every PR's checklist.
-- **Running:** tasks 13–15 (launch blockers), and task 12 (launcher) after Nate approved the import.
+- **On the last credit:** tasks 18 (status-reply reflection) and 20 (launcher updates from GitHub Releases), then
+  16 if at least $5 is left. Tasks 17 and 19 later, on Nate's plan.
+- **Before launch:** pick the name (the launcher's app id can't change after release), buy a domain, set real
+  starting coins, decide on client hosting, and run the playtest. Self-hosting OSFR's asset server comes later,
+  with the art pipeline.
 - **Security and stability fixes:** tasks 13–17 in `docs/cloud-tasks.md`, from the audit (F1–F13) and the
   load test. 13–15 are launch blockers. The audit's backdoor review of imported code found nothing deliberate.
 
