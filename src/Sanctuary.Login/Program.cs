@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using NLog.Extensions.Logging;
 
@@ -70,6 +71,7 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
             KeepAliveDelay = 10000,
             ProtocolName = "LoginGateway",
             Port = serverOptions.LoginGatewayPort,
+            BindIpAddress = serverOptions.LoginGatewayBindAddress,
         };
 
         return ActivatorUtilities.CreateInstance<GatewayServer>(serviceProvider, udpParams);
@@ -126,10 +128,12 @@ const bool isDebugBuild = false;
 #endif
 
 var configuration = host.Services.GetRequiredService<IConfiguration>();
+var options = host.Services.GetRequiredService<IOptions<LoginServerOptions>>().Value;
 
 if (!StartupChecks.Passes(host.Services.GetRequiredService<ILogger<Program>>(), isDebugBuild,
     StartupChecks.CheckBuild(isDebugBuild, configuration),
-    StartupChecks.CheckLoginGatewayChallenge(configuration["Server:LoginGatewayChallenge"])))
+    StartupChecks.CheckLoginGatewayChallenge(options.LoginGatewayChallenge),
+    StartupChecks.CheckLoginGatewayBindAddress(options.LoginGatewayBindAddress)))
 {
     return 1;
 }

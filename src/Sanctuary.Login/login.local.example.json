@@ -27,6 +27,10 @@
     // UDP port the Gateway connects to.
     // "LoginGatewayPort": 20041,
 
+    // IPv4 address that port listens on. Only the Gateway should reach it, so the default only accepts this
+    // machine. Use 0.0.0.0 only when the Gateway runs on another machine, and firewall the port to that machine.
+    // "LoginGatewayBindAddress": "127.0.0.1",
+
     // true lets only admins log in.
     // "IsLocked": false,
 

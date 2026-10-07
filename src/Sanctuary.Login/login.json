@@ -3,6 +3,7 @@
     "Port": 20042,
 
     "LoginGatewayPort": 20041,
+    "LoginGatewayBindAddress": "127.0.0.1",
 
     "IsLocked": false,
 

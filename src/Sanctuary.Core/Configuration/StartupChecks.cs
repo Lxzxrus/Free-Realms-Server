@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -58,6 +60,19 @@ public static class StartupChecks
             return $"Server:LoginGatewayChallenge is OSFR's public default, which anyone can use. {howToSet}";
 
         return null;
+    }
+
+    /// <summary>
+    /// Returns why the server must not start, or <c>null</c> if the LoginGateway listener can bind this
+    /// address (F3). The socket is IPv4 only.
+    /// </summary>
+    public static string? CheckLoginGatewayBindAddress(string? address)
+    {
+        if (IPAddress.TryParse(address, out var ipAddress) && ipAddress.AddressFamily == AddressFamily.InterNetwork)
+            return null;
+
+        return $"Server:LoginGatewayBindAddress \"{address}\" is not an IPv4 address. "
+            + "Use 127.0.0.1 when the Gateway runs on this machine.";
     }
 
     /// <summary>

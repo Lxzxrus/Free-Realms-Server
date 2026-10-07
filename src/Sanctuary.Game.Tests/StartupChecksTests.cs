@@ -84,6 +84,41 @@ public sealed class StartupChecksTests
         Assert.IsNull(StartupChecks.CheckLoginGatewayChallenge("hHq0lO4M5d3m4dn1g3Ck6PZt1D3Gkq2hJxRkQe0h3cE="));
     }
 
+    [TestMethod]
+    [DataRow("127.0.0.1")]
+    [DataRow("0.0.0.0")]
+    [DataRow("10.0.0.5")]
+    public void BindAddressAcceptsIPv4(string address)
+    {
+        Assert.IsNull(StartupChecks.CheckLoginGatewayBindAddress(address));
+    }
+
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("")]
+    [DataRow("localhost")]
+    [DataRow("::1")]
+    [DataRow("127.0.0.1:20041")]
+    public void BindAddressRefusesAnythingElse(string? address)
+    {
+        Assert.IsNotNull(StartupChecks.CheckLoginGatewayBindAddress(address));
+    }
+
+    [TestMethod]
+    public void BindAddressDefaultsToThisMachineOnly()
+    {
+        var options = new LoginServerOptions
+        {
+            Port = 20042,
+            UseCompression = false,
+            LoginGatewayPort = 20041,
+            LoginGatewayChallenge = "x",
+            DefaultProfileId = 1,
+        };
+
+        Assert.AreEqual("127.0.0.1", options.LoginGatewayBindAddress);
+    }
+
     /// <summary>
     /// The example files must load as they are and with every commented-out setting switched on, using the
     /// same JSON options as the configuration reader (comments and trailing commas allowed).

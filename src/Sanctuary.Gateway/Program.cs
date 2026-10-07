@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using NLog.Extensions.Logging;
 
@@ -136,10 +137,11 @@ const bool isDebugBuild = false;
 #endif
 
 var configuration = host.Services.GetRequiredService<IConfiguration>();
+var options = host.Services.GetRequiredService<IOptions<GatewayServerOptions>>().Value;
 
 if (!StartupChecks.Passes(host.Services.GetRequiredService<ILogger<Program>>(), isDebugBuild,
     StartupChecks.CheckBuild(isDebugBuild, configuration),
-    StartupChecks.CheckLoginGatewayChallenge(configuration["Server:LoginGatewayChallenge"])))
+    StartupChecks.CheckLoginGatewayChallenge(options.LoginGatewayChallenge)))
 {
     return 1;
 }

@@ -63,13 +63,14 @@ services:
       context: ../
       dockerfile: Docker/Sanctuary.Login.dockerfile
     restart: unless-stopped
+    # The LoginGateway port (20041) is reachable only by the Gateway, over the Compose network. Never publish it.
     ports:
-      - "20041:20041/udp"
       - "20042:20042/udp"
     volumes: *common-volumes
     environment:
       <<: *common-env
       Server__LoginGatewayChallenge: ${LOGIN_GATEWAY_CHALLENGE:?Set LOGIN_GATEWAY_CHALLENGE, see .env.example}
+      Server__LoginGatewayBindAddress: 0.0.0.0 # inside the container, so the Gateway's container can reach it
     depends_on:
       sanctuary.mysql:
         condition: service_healthy
