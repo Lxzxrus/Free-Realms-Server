@@ -10,6 +10,8 @@ using System.Threading;
 using Collections.Pooled;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Sanctuary.Core.IO;
 using Sanctuary.UdpLibrary.Abstractions;
@@ -54,6 +56,14 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     public UdpParams Params { get; set; }
 
     public readonly IServiceProvider _serviceProvider;
+
+    /// <summary>
+    /// The application's logger for this manager (category: the manager's type), or a null logger if the service
+    /// provider has no <see cref="ILoggerFactory"/>.
+    /// </summary>
+    public ILogger Logger { get; }
+
+    private readonly ConnectLimiter _connectLimiter;
 
     private readonly IUdpDriver _driver;
 
@@ -166,6 +176,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
         _serviceProvider = serviceProvider;
 
+        Logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger(GetType().FullName ?? GetType().Name) ?? NullLogger.Instance;
+
+        _connectLimiter = new ConnectLimiter(Params);
+
         Params.MaxRawPacketSize = Math.Min(Params.MaxRawPacketSize, Constants.HardMaxRawPacketSize);
 
         if (Params.MaxDataHoldSize == -1)
@@ -228,6 +242,39 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
         _socketAddress = new SocketAddress(AddressFamily.InterNetwork);
         _buffer = GC.AllocateArray<byte>(Params.MaxRawPacketSize, true);
+
+        WarnIfSocketBuffersCapped();
+    }
+
+    /// <summary>
+    /// Linux silently caps socket buffers at net.core.rmem_max and wmem_max, and a receive buffer smaller than asked for
+    /// is the first thing to break under load (see docs/performance/baseline.md), so say so at startup.
+    /// </summary>
+    private void WarnIfSocketBuffersCapped()
+    {
+        if (Params.UdpDriver is not null || !OperatingSystem.IsLinux())
+            return;
+
+        WarnIfCapped("net.core.rmem_max", "receive", Params.IncomingBufferSize);
+        WarnIfCapped("net.core.wmem_max", "send", Params.OutgoingBufferSize);
+    }
+
+    private void WarnIfCapped(string setting, string direction, int wanted)
+    {
+        try
+        {
+            var path = "/proc/sys/" + setting.Replace('.', '/');
+
+            if (!int.TryParse(System.IO.File.ReadAllText(path).Trim(), out var limit) || limit >= wanted)
+                return;
+
+            Logger.LogWarning("The {direction} buffer for UDP port {port} is capped at {limit} KiB by {setting}, below the {wanted} KiB asked for. Raise it: sudo sysctl -w {setting}={wantedBytes} (and add it to /etc/sysctl.conf).",
+                direction, Params.Port, limit / 1024, setting, wanted / 1024, setting, wanted);
+        }
+        catch (Exception)
+        {
+            // not readable (a container, say): nothing to report
+        }
     }
 
     protected void CloseSocket()
@@ -338,7 +385,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
                     found = true;
 
-                    ProcessRawPacket(_socketAddress, data);
+                    ProcessRawPacketGuarded(_socketAddress, data);
 
                     if (ClockElapsed(start) >= maxPollingTime)
                     {
@@ -387,7 +434,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                         if (top is null)
                             break;
 
-                        top.GiveTime();
+                        GiveConnectionTimeGuarded(top);
 
                         processed++;
                     }
@@ -400,9 +447,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                 }
                 else
                 {
-                    foreach (var con in ConnectionList)
+                    // a snapshot, since a connection that disconnects during its time removes itself from the list
+                    foreach (var con in ConnectionList.ToArray())
                     {
-                        con.GiveTime();
+                        GiveConnectionTimeGuarded(con);
                     }
                 }
 
@@ -498,6 +546,82 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         }
     }
 
+    /// <summary>
+    /// Processes one incoming packet. An exception from it (in this library or in the application's callbacks) must never
+    /// reach the caller of <see cref="GiveTime"/>, because that is the server's only loop: the connection the packet
+    /// belongs to is dropped instead.
+    /// </summary>
+    private void ProcessRawPacketGuarded(SocketAddress socketAddress, Span<byte> data)
+    {
+        try
+        {
+            ProcessRawPacket(socketAddress, data);
+        }
+        catch (Exception ex)
+        {
+            DropFaultedConnection(AddressGetConnection(socketAddress), socketAddress, ex, $"processing a {data.Length} byte packet ({Convert.ToHexString(data.Slice(0, Math.Min(data.Length, 32)))}{(data.Length > 32 ? "..." : "")})");
+        }
+    }
+
+    private void GiveConnectionTimeGuarded(UdpConnection con)
+    {
+        try
+        {
+            con.GiveTime();
+        }
+        catch (Exception ex)
+        {
+            DropFaultedConnection(con, con.SocketAddress, ex, "giving it processing time");
+        }
+    }
+
+    private void DropFaultedConnection(UdpConnection? con, SocketAddress socketAddress, Exception exception, string activity)
+    {
+        lock (_statsGuard)
+        {
+            ManagerStats.ConnectionFaults++;
+        }
+
+        if (con is null)
+        {
+            Logger.LogError(exception, "An exception escaped while {activity} from {address}, which has no connection.", activity, FormatAddress(socketAddress));
+            return;
+        }
+
+        if (con.Status == Status.Disconnected)
+        {
+            // it already disconnected (the exception came from the application's disconnect callback), so there is nothing to drop
+            Logger.LogError(exception, "An exception escaped while {activity} for {connection}, which had already disconnected.", activity, con);
+            return;
+        }
+
+        Logger.LogError(exception, "Dropping {connection}: an exception escaped while {activity}.", con, activity);
+
+        try
+        {
+            con.InternalDisconnect(0, DisconnectReason.CorruptPacket);
+        }
+        catch (Exception disconnectException)
+        {
+            // the connection is removed before the application hears of the disconnect, so this can only be the application's callback
+            Logger.LogError(disconnectException, "{connection} also threw while disconnecting.", con);
+
+            RemoveConnection(con);
+        }
+    }
+
+    private static string FormatAddress(SocketAddress socketAddress)
+    {
+        try
+        {
+            return new IPEndPoint(IPAddress.Any, 0).Create(socketAddress).ToString() ?? "an unknown address";
+        }
+        catch
+        {
+            return "an unknown address";
+        }
+    }
+
     private void ProcessDisconnectPending()
     {
         lock (_disconnectPendingGuard)
@@ -537,8 +661,21 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             if (zeroByte == 0 && packetType == (byte)UdpPacketType.Connect)
             {
-                if (ConnectionList.Count >= Params.MaxConnections)
+                ConnectRefusal refusal;
+
+                lock (_connectionGuard)
+                {
+                    refusal = ConnectionList.Count >= Params.MaxConnections
+                        ? ConnectRefusal.ServerFull
+                        : _connectLimiter.TryAdmit(socketAddress, CachedClock);
+                }
+
+                if (refusal != ConnectRefusal.None)
+                {
+                    CountRefusal(refusal);
+                    LogRefusal(socketAddress, refusal);
                     return;
+                }
 
                 // Skip protocol version
                 reader.Advance(4);
@@ -592,11 +729,17 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                                     lock (_connectionGuard)
                                     {
                                         AddressHashTable.Remove(AddressHashValue(curCon.SocketAddress), out _);
+                                        _connectLimiter.ConnectionRemoved(curCon.SocketAddress, CachedClock);
+
+                                        // copy it, since the caller's socket address is the receive buffer, reused for the next packet
+                                        var newAddress = new SocketAddress(socketAddress.Family, socketAddress.Size);
+                                        socketAddress.Buffer.CopyTo(newAddress.Buffer);
 
                                         curCon.EndPoint = ipEndPoint;
-                                        curCon.SocketAddress = socketAddress;
+                                        curCon.SocketAddress = newAddress;
 
                                         AddressHashTable.TryAdd(AddressHashValue(curCon.SocketAddress), curCon);
+                                        _connectLimiter.ConnectionAdded(curCon.SocketAddress, CachedClock);
                                     }
 
                                     return;
@@ -677,8 +820,78 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         lock (_connectionGuard)
         {
             ConnectionList.Add(con);
-            AddressHashTable.TryAdd(AddressHashValue(con.SocketAddress), con);
+
+            if (AddressHashTable.TryAdd(AddressHashValue(con.SocketAddress), con))
+                _connectLimiter.ConnectionAdded(con.SocketAddress, CachedClock);
+
             ConnectCodeHashTable.TryAdd(con.ConnectCode, con);
+        }
+    }
+
+    /// <summary>
+    /// How many connections this manager holds from the IP address of <paramref name="socketAddress"/> (any port).
+    /// Only counted while a per-IP or connect-rate limit is set; 0 otherwise.
+    /// </summary>
+    public int ConnectionsFromAddress(SocketAddress socketAddress)
+    {
+        lock (_connectionGuard)
+        {
+            return _connectLimiter.ConnectionsFrom(socketAddress);
+        }
+    }
+
+    // A refused client retries its connect request every second, and a flood refuses thousands, so log one a minute.
+    private const int RefusalLogInterval = 60000;
+
+    private UdpClockStamp _lastRefusalLogTime;
+    private int _refusalsSinceLog;
+
+    private void LogRefusal(SocketAddress socketAddress, ConnectRefusal refusal)
+    {
+        if (_lastRefusalLogTime != 0 && CachedClockElapsed(_lastRefusalLogTime) < RefusalLogInterval)
+        {
+            _refusalsSinceLog++;
+            return;
+        }
+
+        var why = refusal switch
+        {
+            ConnectRefusal.ServerFull => $"the server is full ({Params.MaxConnections} connections)",
+            ConnectRefusal.AddressConnections => $"that address already has {Params.MaxConnectionsPerIp} connections, the most allowed",
+            ConnectRefusal.AddressRate => $"that address opened {Params.ConnectRatePerIp} connections within {Params.ConnectRateWindow / 1000} s, the most allowed",
+            ConnectRefusal.GlobalRate => $"{Params.ConnectRateGlobal} connections were opened within {Params.ConnectRateWindow / 1000} s, the most allowed",
+            _ => "too many addresses are connecting at once"
+        };
+
+        if (_refusalsSinceLog > 0)
+            Logger.LogWarning("Ignored a connect request from {address}: {reason}. {count} other requests were ignored since the last line like this.", FormatAddress(socketAddress), why, _refusalsSinceLog);
+        else
+            Logger.LogWarning("Ignored a connect request from {address}: {reason}.", FormatAddress(socketAddress), why);
+
+        _lastRefusalLogTime = CachedClock;
+        _refusalsSinceLog = 0;
+    }
+
+    private void CountRefusal(ConnectRefusal refusal)
+    {
+        lock (_statsGuard)
+        {
+            switch (refusal)
+            {
+                case ConnectRefusal.ServerFull: ManagerStats.RefusedServerFull++; break;
+                case ConnectRefusal.AddressConnections: ManagerStats.RefusedAddressConnections++; break;
+                case ConnectRefusal.AddressRate: ManagerStats.RefusedAddressRate++; break;
+                case ConnectRefusal.GlobalRate: ManagerStats.RefusedGlobalRate++; break;
+                case ConnectRefusal.TooManyAddresses: ManagerStats.RefusedTooManyAddresses++; break;
+            }
+        }
+    }
+
+    public void IncrementFaultLimitDisconnects()
+    {
+        lock (_statsGuard)
+        {
+            ManagerStats.FaultLimitDisconnects++;
         }
     }
 
@@ -838,6 +1051,8 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             if (!AddressHashTable.TryRemove(AddressHashValue(con.SocketAddress), out var conInstance))
                 return;
+
+            _connectLimiter.ConnectionRemoved(conInstance.SocketAddress, CachedClock);
 
             ConnectionList.Remove(conInstance);
         }

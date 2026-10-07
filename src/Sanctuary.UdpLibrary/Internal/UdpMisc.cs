@@ -112,6 +112,42 @@ internal static class UdpMisc
         return 1;
     }
 
+    /// <summary>
+    /// <see cref="GetVariableValue"/> for data from the network: false if the buffer ends inside the value.
+    /// </summary>
+    internal static bool TryGetVariableValue(ReadOnlySpan<byte> buffer, out int value, out int bytesRead)
+    {
+        value = 0;
+        bytesRead = 0;
+
+        if (buffer.Length < 1)
+            return false;
+
+        if (buffer[0] != 0xff)
+        {
+            value = buffer[0];
+            bytesRead = 1;
+            return true;
+        }
+
+        if (buffer.Length < 3)
+            return false;
+
+        if (buffer[1] == 0xff && buffer[2] == 0xff)
+        {
+            if (buffer.Length < 7)
+                return false;
+
+            value = buffer[3] << 24 | buffer[4] << 16 | buffer[5] << 8 | buffer[6];
+            bytesRead = 7;
+            return true;
+        }
+
+        value = buffer[1] << 8 | buffer[2];
+        bytesRead = 3;
+        return true;
+    }
+
     internal static int PutVariableValue(Span<byte> buffer, int value)
     {
         if (value < 254)

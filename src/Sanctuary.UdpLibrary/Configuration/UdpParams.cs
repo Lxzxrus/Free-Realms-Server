@@ -176,6 +176,21 @@ public class UdpParams
     public int ReliableOverflowBytes;
 
     /// <summary>
+    /// A connection whose pending reliable data (as for <see cref="ReliableOverflowBytes"/>) stays above
+    /// <see cref="ReliableBacklogBytes"/> for this many milliseconds without a break is disconnected with a
+    /// <see cref="DisconnectReason.ReliableOverflow"/>: it has fallen behind and isn't catching up.  This catches what a byte
+    /// limit can't when a normal burst (entering a zone, say) is bigger than what a lagging connection holds.  0 = off.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int ReliableBacklogTimeout;
+
+    /// <summary>
+    /// See <see cref="ReliableBacklogTimeout"/>.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int ReliableBacklogBytes;
+
+    /// <summary>
     /// How long a connection will hold onto outgoing data in hopes of bundling together future outgoing data in the same
     /// raw packet (specified in milliseconds)
     /// setting this to 0 will cause it to effectively flush at the end of every frame.  This is generally desirable in
@@ -416,6 +431,63 @@ public class UdpParams
     /// <remarks>default = 10mb</remarks>
     public int IncomingLogicalPacketMax;
 
+    /// <summary>
+    /// Total bytes of fragmented packets one connection may have in reassembly at once, across all its reliable channels.
+    /// Each channel reassembles one packet at a time, so without this a connection could hold four buffers of
+    /// <see cref="IncomingLogicalPacketMax"/>.  A first fragment that would go over the cap is treated as corrupt and the
+    /// connection is disconnected.  0 = no cap beyond <see cref="IncomingLogicalPacketMax"/> per channel.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int IncomingFragmentBytesMax;
+
+    /// <summary>
+    /// Most connections one IP address may hold on this manager at once.  Connect requests over the limit are ignored, so
+    /// the other side times out as if the server were full.  0 = no limit.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int MaxConnectionsPerIp;
+
+    /// <summary>
+    /// Most new connections one IP address may open within <see cref="ConnectRateWindow"/>.  0 = no limit.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int ConnectRatePerIp;
+
+    /// <summary>
+    /// Most new connections the whole manager accepts within <see cref="ConnectRateWindow"/>.  This is the limit that
+    /// holds when a flood comes from many (possibly spoofed) addresses.  0 = no limit.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int ConnectRateGlobal;
+
+    /// <summary>
+    /// The window, in milliseconds, that <see cref="ConnectRatePerIp"/> and <see cref="ConnectRateGlobal"/> count over.
+    /// </summary>
+    /// <remarks>default = 10000</remarks>
+    public int ConnectRateWindow;
+
+    /// <summary>
+    /// A connection accepted by this manager that has not sent a single packet passing its CRC check within this many
+    /// milliseconds is dropped without a reply.  A real client starts talking as soon as the confirm packet arrives; a
+    /// connect request from a spoofed address never can, because the confirm (and its encrypt code) went to the real owner
+    /// of that address.  Keep-alives don't count, since they skip the CRC check.  0 = off.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int HandshakeTimeout;
+
+    /// <summary>
+    /// How many exceptions the application may report for one connection through <see cref="UdpConnection.ReportFault"/>
+    /// within <see cref="FaultWindow"/> before that connection is disconnected.  0 = never disconnect for this.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int FaultLimit;
+
+    /// <summary>
+    /// The window, in milliseconds, that <see cref="FaultLimit"/> counts over.
+    /// </summary>
+    /// <remarks>default = 60000</remarks>
+    public int FaultWindow;
+
     public string ProtocolName;
 
     /// <summary>
@@ -465,6 +537,8 @@ public class UdpParams
         ProcessIcmpErrorsDuringNegotiating = false;
         ConnectAttemptDelay = 1000;
         ReliableOverflowBytes = 0;
+        ReliableBacklogTimeout = 0;
+        ReliableBacklogBytes = 0;
         LingerDelay = 10;
         BindIpAddress = string.Empty;
         UdpDriver = null;
@@ -472,6 +546,14 @@ public class UdpParams
         EventQueuing = false;
         ThreadSleepTime = 20;
         IncomingLogicalPacketMax = 20 * 1024 * 1024;
+        IncomingFragmentBytesMax = 0;
+        MaxConnectionsPerIp = 0;
+        ConnectRatePerIp = 0;
+        ConnectRateGlobal = 0;
+        ConnectRateWindow = 10000;
+        HandshakeTimeout = 0;
+        FaultLimit = 0;
+        FaultWindow = 60000;
         ProtocolName = string.Empty;
         UserSuppliedEncryptExpansionBytes = 0;
         UserSuppliedEncryptExpansionBytes2 = 0;

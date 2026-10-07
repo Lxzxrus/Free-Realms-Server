@@ -6,6 +6,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
+using Microsoft.Extensions.Logging;
+
 using Sanctuary.Core.IO;
 using Sanctuary.UdpLibrary.Abstractions;
 using Sanctuary.UdpLibrary.Enumerations;
@@ -121,6 +123,18 @@ public class UdpConnection : PriorityQueueMember
     private UdpClockStamp DisconnectFlushStamp;
     private UdpClockStamp DisconnectFlushTimeout;
 
+    // set on a connection we accepted until the other side sends a packet that passes its CRC check (see UdpParams.HandshakeTimeout)
+    private bool HandshakePending;
+
+    private int FaultCount;
+    private UdpClockStamp FaultWindowStart;
+
+    // when the pending reliable data last went over UdpParams.ReliableBacklogBytes (0 = it's under)
+    private UdpClockStamp BacklogStartTime;
+
+    // bytes reserved by fragmented packets being reassembled, across all reliable channels (see UdpParams.IncomingFragmentBytesMax)
+    internal int IncomingFragmentBytes;
+
     private delegate int CryptFunction(Span<byte> destData, Span<byte> sourceData);
 
     private readonly byte[][] _tempDecryptBuffer;
@@ -162,6 +176,8 @@ public class UdpConnection : PriorityQueueMember
             SetupEncryptModel();
 
             ConnectCode = connectCode;
+
+            HandshakePending = UdpManager.Params.HandshakeTimeout > 0;
         }
     }
 
@@ -258,6 +274,10 @@ public class UdpConnection : PriorityQueueMember
     {
         lock (_guard)
         {
+            // already done; disconnecting again would tell the application twice
+            if (Status == Status.Disconnected)
+                return;
+
             if (DisconnectReason == DisconnectReason.None)
                 DisconnectReason = reason;
 
@@ -651,6 +671,9 @@ public class UdpConnection : PriorityQueueMember
 
                     finalLen -= ConnectionConfig.CrcBytes;
                 }
+
+                // the other side knows our encrypt code, so it received our confirm packet: a real peer, not a spoofed address
+                HandshakePending = false;
 
                 for (var i = Constants.EncryptPasses - 1; i >= 0; i--)
                 {
@@ -1175,9 +1198,15 @@ public class UdpConnection : PriorityQueueMember
 
                     while (ptr < endPtr)
                     {
-                        ptr += UdpMisc.GetVariableValue(data.Slice(ptr), out var len);
+                        if (!UdpMisc.TryGetVariableValue(data.Slice(ptr), out var len, out var lenBytes))
+                        {
+                            CallbackCorruptPacket(data, UdpCorruptionReason.MisformattedGroup);
+                            return;
+                        }
 
-                        if (ptr > endPtr || len > endPtr - ptr)
+                        ptr += lenBytes;
+
+                        if (len < 0 || len > endPtr - ptr)
                         {
                             // specified more data in this piece than is left in the entire packet
                             // this is either corruption, or more likely a hacker
@@ -1259,6 +1288,21 @@ public class UdpConnection : PriorityQueueMember
             case Status.Connected:
             case Status.DisconnectPending:
                 {
+                    if (HandshakePending)
+                    {
+                        var age = ConnectionAge();
+
+                        if (age >= UdpManager.Params.HandshakeTimeout)
+                        {
+                            // most likely a spoofed address, so don't send it anything more
+                            SilentDisconnect = true;
+                            InternalDisconnect(0, DisconnectReason.ConnectFail);
+                            return;
+                        }
+
+                        nextSchedule = Math.Min(nextSchedule, UdpManager.Params.HandshakeTimeout - age);
+                    }
+
                     // sync clock if required
 
                     if (UdpManager.Params.ClockSyncDelay > 0)
@@ -1316,10 +1360,43 @@ public class UdpConnection : PriorityQueueMember
                         nextSchedule = Math.Min(nextSchedule, myNext);
                     }
 
+                    if (totalPendingBytes > ConnectionStats.MaxPendingBytes)
+                        ConnectionStats.MaxPendingBytes = totalPendingBytes;
+
                     if (UdpManager.Params.ReliableOverflowBytes != 0 && totalPendingBytes >= UdpManager.Params.ReliableOverflowBytes)
                     {
+                        UdpManager.Logger.LogWarning("Disconnecting {connection}: it fell behind, with {pending} KiB of reliable data waiting for it (the limit is {limit} KiB).",
+                            this, totalPendingBytes / 1024, UdpManager.Params.ReliableOverflowBytes / 1024);
+
                         InternalDisconnect(0, DisconnectReason.ReliableOverflow);
                         return;
+                    }
+
+                    if (UdpManager.Params.ReliableBacklogTimeout > 0)
+                    {
+                        if (totalPendingBytes <= UdpManager.Params.ReliableBacklogBytes)
+                        {
+                            BacklogStartTime = 0;
+                        }
+                        else if (BacklogStartTime == 0)
+                        {
+                            BacklogStartTime = UdpManager.CachedClock;
+                        }
+                        else
+                        {
+                            var behind = UdpManager.CachedClockElapsed(BacklogStartTime);
+
+                            if (behind >= UdpManager.Params.ReliableBacklogTimeout)
+                            {
+                                UdpManager.Logger.LogWarning("Disconnecting {connection}: it fell behind, with over {limit} KiB of reliable data waiting for it for {seconds} s ({pending} KiB now).",
+                                    this, UdpManager.Params.ReliableBacklogBytes / 1024, behind / 1000, totalPendingBytes / 1024);
+
+                                InternalDisconnect(0, DisconnectReason.ReliableOverflow);
+                                return;
+                            }
+
+                            nextSchedule = Math.Min(nextSchedule, UdpManager.Params.ReliableBacklogTimeout - behind);
+                        }
                     }
 
                     // if we have multi-buffer data
@@ -1648,6 +1725,46 @@ public class UdpConnection : PriorityQueueMember
             }
 
             MultiBufferOffset = 0;
+        }
+    }
+
+    /// <summary>
+    /// Tells the library that the application caught an exception while handling a packet from this connection. A
+    /// connection that does this <see cref="Configuration.UdpParams.FaultLimit"/> times within
+    /// <see cref="Configuration.UdpParams.FaultWindow"/> is disconnected, with a log line saying why: it is either
+    /// broken or sending packets made to make the server throw.
+    /// </summary>
+    /// <returns>true if this report disconnected the connection.</returns>
+    public bool ReportFault()
+    {
+        lock (_guard)
+        {
+            var limit = UdpManager.Params.FaultLimit;
+
+            if (limit <= 0 || Status == Status.Disconnected)
+                return false;
+
+            var now = UdpManager.CachedClock;
+
+            if (FaultCount == 0 || UdpMisc.ClockDiff(FaultWindowStart, now) >= UdpManager.Params.FaultWindow)
+            {
+                FaultWindowStart = now;
+                FaultCount = 0;
+            }
+
+            FaultCount++;
+
+            if (FaultCount < limit)
+                return false;
+
+            UdpManager.IncrementFaultLimitDisconnects();
+
+            UdpManager.Logger.LogWarning("Disconnecting {connection}: {count} exceptions while handling its packets within {seconds} s (the limit is {limit}).",
+                this, FaultCount, UdpManager.Params.FaultWindow / 1000, limit);
+
+            InternalDisconnect(0, DisconnectReason.CorruptPacket);
+
+            return true;
         }
     }
 

@@ -151,14 +151,24 @@ public class GatewayService : BackgroundService
         _server.OnStarted();
 
         // Main server loop.
-        while (!cancellationToken.IsCancellationRequested && clientConnection.Status != Status.Disconnected)
+        try
         {
-            var hadData = false;
-            hadData |= _server.GiveTime();
-            hadData |= _client.GiveTime();
+            while (!cancellationToken.IsCancellationRequested && clientConnection.Status != Status.Disconnected)
+            {
+                var hadData = false;
+                hadData |= _server.GiveTime();
+                hadData |= _client.GiveTime();
 
-            if (!hadData)
-                Thread.Sleep(1);
+                if (!hadData)
+                    Thread.Sleep(1);
+            }
+        }
+        catch (Exception ex)
+        {
+            // the UDP library already drops any one connection that throws, so this is the loop itself failing
+            _logger.LogCritical(ex, "The main loop stopped on an unexpected exception. Stopping {server} so it can be restarted.", nameof(GatewayServer));
+
+            _hostApplicationLifetime.StopApplication();
         }
 
         return Task.CompletedTask;
