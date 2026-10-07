@@ -16,7 +16,6 @@ using Launcher.ViewModels;
 using NLog;
 
 using Velopack;
-using Velopack.Sources;
 
 namespace Launcher;
 
@@ -27,10 +26,10 @@ public partial class App : Application
     private Main _main = null!;
     private Window _window = null!;
 
-    // Releases are published to <default server>/launcher/ (see launcher/README.md). Never over plain HTTP to the
-    // internet: an update is a program the launcher runs.
-    private static readonly UpdateManager? _updateManager = TransportPolicy.IsAllowed(Constants.UpdateUrl)
-        ? new UpdateManager(new SimpleWebSource(Constants.UpdateUrl))
+    // Releases come from this repository's GitHub Releases, over HTTPS (see launcher/README.md). Never from the
+    // game server: an update is a program the launcher runs, and a break-in on the server mustn't reach players.
+    private static readonly UpdateManager? _updateManager = UpdateSource.TryCreate(Constants.UpdateRepositoryUrl, out var source)
+        ? new UpdateManager(source)
         : null;
 
     public static SemanticVersion CurrentVersion => _updateManager?.CurrentVersion ?? new SemanticVersion(0, 0, 0);
@@ -79,7 +78,7 @@ public partial class App : Application
         {
             if (_updateManager is null)
             {
-                app._logger.Warn("Updates are off: {Url} is not HTTPS.", Constants.UpdateUrl);
+                app._logger.Warn("Updates are off: {Url} is not an https://github.com/ repository.", Constants.UpdateRepositoryUrl);
             }
             else if (_updateManager.IsInstalled)
             {

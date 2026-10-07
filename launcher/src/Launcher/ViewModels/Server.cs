@@ -67,6 +67,9 @@ public partial class Server : ObservableObject
     [ObservableProperty]
     private ObservableStringBuilder markdownBuilder = new();
 
+    // Set when the server's client manifest offered a FreeRealms.exe that failed the pin.
+    private volatile bool _refusedClientExecutable;
+
     public Server()
     {
 #if DEBUG && DESIGNMODE
@@ -286,6 +289,10 @@ public partial class Server : ObservableObject
 
         StatusMessage = string.Empty;
 
+        // Before logging in, so a session isn't spent on a game the launcher won't start.
+        if (!await CheckClientPinAsync())
+            return;
+
         // All checks passed, show the login popup
         App.ShowPopup(new Login(this));
     }
@@ -319,6 +326,32 @@ public partial class Server : ObservableObject
     private string ClientBaseUrl => string.IsNullOrEmpty(Info.ClientUrl) ? Info.Url : Info.ClientUrl;
 
     private string ClientDirectory => Path.Combine(Constants.SavePath, Info.SavePath, "Client");
+
+    /// <summary>
+    /// Checks FreeRealms.exe against the pin (see <see cref="ClientPin"/>) and tells the player why it won't be
+    /// started if it fails.
+    /// </summary>
+    public async Task<bool> CheckClientPinAsync()
+    {
+        var executablePath = Path.Combine(ClientDirectory, Constants.ClientExecutableName);
+
+        var result = await ClientPin.CheckFileAsync(executablePath, Constants.ClientExecutableSha256);
+
+        if (result == ClientPinResult.Match)
+            return true;
+
+        _logger.Error("Not starting {Path} for server '{Name}': {Result}.", executablePath, Info.Name, result);
+
+        App.AddNotification(result switch
+        {
+            ClientPinResult.Missing => App.GetText("Text.Server.ClientMissing", ClientDirectory),
+            ClientPinResult.Mismatch => App.GetText("Text.Server.ClientPinMismatch", ClientDirectory),
+            ClientPinResult.Unreadable => App.GetText("Text.Server.ClientPinUnreadable"),
+            _ => App.GetText("Text.Server.ClientPinNotConfigured")
+        }, true);
+
+        return false;
+    }
 
     /// <summary>
     /// Found is false when the player can't play: the error has been shown. The manifest is null when the server
@@ -392,6 +425,7 @@ public partial class Server : ObservableObject
         }
 
         IsDownloading = true;
+        _refusedClientExecutable = false;
 
         var failedFiles = new ConcurrentBag<string>();
 
@@ -475,6 +509,13 @@ public partial class Server : ObservableObject
             App.AddNotification(message.ToString(), true);
         }
 
+        if (_refusedClientExecutable)
+        {
+            App.AddNotification(App.GetText(ClientPin.IsValidHash(Constants.ClientExecutableSha256)
+                ? "Text.Server.ClientPinDownloadRefused"
+                : "Text.Server.ClientPinNotConfigured"), true);
+        }
+
         _logger.Info("Finished verifying client files for: {Name}.", Info.Name);
 
         return failedFiles.IsEmpty;
@@ -517,9 +558,13 @@ public partial class Server : ObservableObject
                 return false;
             }
 
-            await using var writeStream = File.Create(filePath);
+            if (!await ClientPin.TrySaveClientFileAsync(ClientDirectory, filePath, fileStream, Constants.ClientExecutableSha256))
+            {
+                _logger.Error("Refusing {Path} from {Url}: it fails the client pin.", downloadFilePath, clientFileUri);
 
-            await fileStream.CopyToAsync(writeStream);
+                _refusedClientExecutable = true;
+                return false;
+            }
 
             return true;
         }
@@ -553,6 +598,9 @@ public partial class Server : ObservableObject
         {
             if (!PathHelper.TryGetPathInside(ClientDirectory, path, file.Name, out var filePath))
                 throw new InvalidDataException($"Client manifest file '{Path.Combine(path, file.Name)}' is outside the client folder.");
+
+            if (await ClientPin.IsPinnedClientInPlaceAsync(ClientDirectory, filePath, Constants.ClientExecutableSha256))
+                continue;
 
             if (File.Exists(filePath))
             {

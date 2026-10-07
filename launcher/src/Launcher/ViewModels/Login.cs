@@ -132,14 +132,9 @@ public partial class Login : Popup
         var workingDirectory = Path.Combine(Constants.SavePath, _server.Info.SavePath, "Client");
         var executablePath = Path.Combine(workingDirectory, Constants.ClientExecutableName);
 
-        if (!File.Exists(executablePath))
-        {
-            App.AddNotification(App.GetText("Text.Server.ClientMissing", workingDirectory), true);
-
-            _logger.Error("Client executable not found for server: '{Name}' at path: {Path}.", _server.Info.Name, executablePath);
-
+        // Checked again here, right before starting it: the folder can change while the login popup is open.
+        if (!await _server.CheckClientPinAsync())
             return;
-        }
 
         var startInfo = new ProcessStartInfo
         {

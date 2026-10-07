@@ -21,9 +21,16 @@ public static class Constants
     public static readonly string DefaultServerUrl = GetMetadata("DefaultServerUrl");
 
     /// <summary>
-    /// Velopack update feed: our default server hosts launcher releases under /launcher/.
+    /// Launcher updates come from this repository's GitHub Releases (see <see cref="UpdateSource"/>), not from
+    /// <see cref="DefaultServerUrl"/>.
     /// </summary>
-    public static readonly string UpdateUrl = UriHelper.JoinUriPaths(DefaultServerUrl, "launcher");
+    public static readonly string UpdateRepositoryUrl = GetMetadata("UpdateRepositoryUrl");
+
+    /// <summary>
+    /// The expected SHA-256 of <see cref="ClientExecutableName"/> (see <see cref="ClientPin"/>). Empty when the build
+    /// didn't set it, and then no game is started.
+    /// </summary>
+    public static readonly string ClientExecutableSha256 = GetMetadata("ClientExecutableSha256", required: false);
 
     public static readonly string LogsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
 
@@ -33,15 +40,15 @@ public static class Constants
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create),
                 Id);
 
-    private static string GetMetadata(string key)
+    private static string GetMetadata(string key, bool required = true)
     {
         var value = typeof(Constants).Assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(x => x.Key == key)?.Value;
 
-        if (string.IsNullOrWhiteSpace(value))
+        if (string.IsNullOrWhiteSpace(value) && required)
             throw new InvalidOperationException($"Build property '{key}' is not set.");
 
-        return value;
+        return value ?? string.Empty;
     }
 }

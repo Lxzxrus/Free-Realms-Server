@@ -66,6 +66,11 @@
   <x:String x:Key="Text.Server.GameServerOffline" xml:space="preserve">The game server is offline. Please try again later.</x:String>
   <x:String x:Key="Text.Server.ClientMissing" xml:space="preserve">The game isn't installed for this server. Put the Free Realms client (the folder with FreeRealms.exe) in:
 {0}</x:String>
+  <x:String x:Key="Text.Server.ClientPinMismatch" xml:space="preserve">FreeRealms.exe isn't the Free Realms game this launcher was made for, so it won't be started. It may have been changed or replaced. Put the original FreeRealms.exe back in:
+{0}</x:String>
+  <x:String x:Key="Text.Server.ClientPinUnreadable" xml:space="preserve">Couldn't read FreeRealms.exe to check it, so the game wasn't started. Close anything using it and try again.</x:String>
+  <x:String x:Key="Text.Server.ClientPinNotConfigured" xml:space="preserve">This copy of the launcher was built without the game's fingerprint, so it can't check FreeRealms.exe and won't start the game. Download the launcher again from the official release page.</x:String>
+  <x:String x:Key="Text.Server.ClientPinDownloadRefused" xml:space="preserve">The server sent a FreeRealms.exe that isn't the Free Realms game this launcher was made for. It wasn't saved, and the game won't be started.</x:String>
   <x:String x:Key="Text.Server.UnsafeClientManifest" xml:space="preserve">The server's list of game files is invalid, so nothing was downloaded.</x:String>
   <x:String x:Key="Text.Server.PreparingGameFiles" xml:space="preserve">Preparing Game Files: ({0}/{1})</x:String>
   <x:String x:Key="Text.Server.VerifyClientFiles" xml:space="preserve">Verifying Client Files...</x:String>

@@ -24,6 +24,8 @@
     <AssemblyMetadata Include="LauncherTitle" Value="$(LauncherTitle)" />
     <AssemblyMetadata Include="LauncherId" Value="$(LauncherId)" />
     <AssemblyMetadata Include="DefaultServerUrl" Value="$(DefaultServerUrl)" />
+    <AssemblyMetadata Include="UpdateRepositoryUrl" Value="$(UpdateRepositoryUrl)" />
+    <AssemblyMetadata Include="ClientExecutableSha256" Value="$(ClientExecutableSha256)" />
     <InternalsVisibleTo Include="Launcher.Tests" />
   </ItemGroup>
 
