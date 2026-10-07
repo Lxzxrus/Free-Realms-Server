@@ -290,3 +290,24 @@ check. The load-test bot (`src/Sanctuary.LoadTest`) is available for anything ab
   win-x64 build.
 - **Deliverable:** a PR that says how Nate publishes a release, where to put the real hash, and what a player
   sees if the pin fails.
+
+## 21. `creative-housing`: building is free and unlimited, like Minecraft's creative mode
+
+- **Task:** Nate wants housing to play like creative mode: no paying for building parts. Today furniture
+  ("fixtures") is inventory: players buy items in the store, placing one consumes it
+  (`HousingZoneRuntime`, around the consume paths near lines 572–621 and 738–811), and picking it up returns it.
+  Add a setting `Housing:CreativeMode`, defaulting to on. With it on:
+  - the editor's fixture list offers every placeable fixture (see `HousingPlacementCatalog` and
+    `IsFixtureInventoryItem`), in every tint, with an unlimited count;
+  - placing never consumes inventory, and picking up never returns an item, so the editor can't be used to
+    create items that could be traded or sold;
+  - placed fixtures still save with the house, and fixtures players already own keep working.
+  With it off, behaviour is exactly as now.
+- **Lots:** add a separate setting `Housing:FreeLots`, defaulting to on, that makes lots cost nothing.
+- **Watch the size:** the full fixture catalog may be large. Measure the fixture-list packet. If the client's
+  handling of a very large list can't be confirmed without the game, page or cap it, and list the in-game
+  check.
+- **Check:** the self-check and a boot, plus tests that placing doesn't consume, picking up doesn't return, a
+  creative fixture can never reach inventory or a trade, and turning the setting off restores today's behaviour.
+- **Deliverable:** a PR with in-game checks: open the editor, browse the catalog, place, move and pick up pieces,
+  and confirm the inventory doesn't change.
