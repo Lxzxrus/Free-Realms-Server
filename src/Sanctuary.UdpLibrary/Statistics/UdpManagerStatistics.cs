@@ -59,6 +59,15 @@ public struct UdpManagerStatistics
     public long MaxDeliveryTimeExceeded;
 
     /// <summary>
+    /// number of connect requests ignored because of a connection limit, by reason
+    /// </summary>
+    public long RefusedServerFull;
+    public long RefusedAddressConnections;
+    public long RefusedAddressRate;
+    public long RefusedGlobalRate;
+    public long RefusedTooManyAddresses;
+
+    /// <summary>
     /// number of connections dropped because an exception escaped while processing them
     /// </summary>
     public long ConnectionFaults;
@@ -119,6 +128,11 @@ public struct UdpManagerStatistics
         SocketOverflowErrors = 0;
         MaxPollingTimeExceeded = 0;
         MaxDeliveryTimeExceeded = 0;
+        RefusedServerFull = 0;
+        RefusedAddressConnections = 0;
+        RefusedAddressRate = 0;
+        RefusedGlobalRate = 0;
+        RefusedTooManyAddresses = 0;
         ConnectionFaults = 0;
         ConnectionCount = 0;
         DisconnectPendingCount = 0;

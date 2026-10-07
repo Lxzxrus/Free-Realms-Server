@@ -63,6 +63,8 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     /// </summary>
     public ILogger Logger { get; }
 
+    private readonly ConnectLimiter _connectLimiter;
+
     private readonly IUdpDriver _driver;
 
     protected UdpClockStamp LastEmptySocketBufferStamp;
@@ -175,6 +177,8 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         _serviceProvider = serviceProvider;
 
         Logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger(GetType().FullName ?? GetType().Name) ?? NullLogger.Instance;
+
+        _connectLimiter = new ConnectLimiter(Params);
 
         Params.MaxRawPacketSize = Math.Min(Params.MaxRawPacketSize, Constants.HardMaxRawPacketSize);
 
@@ -624,8 +628,21 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             if (zeroByte == 0 && packetType == (byte)UdpPacketType.Connect)
             {
-                if (ConnectionList.Count >= Params.MaxConnections)
+                ConnectRefusal refusal;
+
+                lock (_connectionGuard)
+                {
+                    refusal = ConnectionList.Count >= Params.MaxConnections
+                        ? ConnectRefusal.ServerFull
+                        : _connectLimiter.TryAdmit(socketAddress, CachedClock);
+                }
+
+                if (refusal != ConnectRefusal.None)
+                {
+                    CountRefusal(refusal);
+                    LogRefusal(socketAddress, refusal);
                     return;
+                }
 
                 // Skip protocol version
                 reader.Advance(4);
@@ -679,11 +696,17 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                                     lock (_connectionGuard)
                                     {
                                         AddressHashTable.Remove(AddressHashValue(curCon.SocketAddress), out _);
+                                        _connectLimiter.ConnectionRemoved(curCon.SocketAddress, CachedClock);
+
+                                        // copy it, since the caller's socket address is the receive buffer, reused for the next packet
+                                        var newAddress = new SocketAddress(socketAddress.Family, socketAddress.Size);
+                                        socketAddress.Buffer.CopyTo(newAddress.Buffer);
 
                                         curCon.EndPoint = ipEndPoint;
-                                        curCon.SocketAddress = socketAddress;
+                                        curCon.SocketAddress = newAddress;
 
                                         AddressHashTable.TryAdd(AddressHashValue(curCon.SocketAddress), curCon);
+                                        _connectLimiter.ConnectionAdded(curCon.SocketAddress, CachedClock);
                                     }
 
                                     return;
@@ -764,8 +787,70 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         lock (_connectionGuard)
         {
             ConnectionList.Add(con);
-            AddressHashTable.TryAdd(AddressHashValue(con.SocketAddress), con);
+
+            if (AddressHashTable.TryAdd(AddressHashValue(con.SocketAddress), con))
+                _connectLimiter.ConnectionAdded(con.SocketAddress, CachedClock);
+
             ConnectCodeHashTable.TryAdd(con.ConnectCode, con);
+        }
+    }
+
+    /// <summary>
+    /// How many connections this manager holds from the IP address of <paramref name="socketAddress"/> (any port).
+    /// Only counted while a per-IP or connect-rate limit is set; 0 otherwise.
+    /// </summary>
+    public int ConnectionsFromAddress(SocketAddress socketAddress)
+    {
+        lock (_connectionGuard)
+        {
+            return _connectLimiter.ConnectionsFrom(socketAddress);
+        }
+    }
+
+    // A refused client retries its connect request every second, and a flood refuses thousands, so log one a minute.
+    private const int RefusalLogInterval = 60000;
+
+    private UdpClockStamp _lastRefusalLogTime;
+    private int _refusalsSinceLog;
+
+    private void LogRefusal(SocketAddress socketAddress, ConnectRefusal refusal)
+    {
+        if (_lastRefusalLogTime != 0 && CachedClockElapsed(_lastRefusalLogTime) < RefusalLogInterval)
+        {
+            _refusalsSinceLog++;
+            return;
+        }
+
+        var why = refusal switch
+        {
+            ConnectRefusal.ServerFull => $"the server is full ({Params.MaxConnections} connections)",
+            ConnectRefusal.AddressConnections => $"that address already has {Params.MaxConnectionsPerIp} connections, the most allowed",
+            ConnectRefusal.AddressRate => $"that address opened {Params.ConnectRatePerIp} connections within {Params.ConnectRateWindow / 1000} s, the most allowed",
+            ConnectRefusal.GlobalRate => $"{Params.ConnectRateGlobal} connections were opened within {Params.ConnectRateWindow / 1000} s, the most allowed",
+            _ => "too many addresses are connecting at once"
+        };
+
+        if (_refusalsSinceLog > 0)
+            Logger.LogWarning("Ignored a connect request from {address}: {reason}. {count} other requests were ignored since the last line like this.", FormatAddress(socketAddress), why, _refusalsSinceLog);
+        else
+            Logger.LogWarning("Ignored a connect request from {address}: {reason}.", FormatAddress(socketAddress), why);
+
+        _lastRefusalLogTime = CachedClock;
+        _refusalsSinceLog = 0;
+    }
+
+    private void CountRefusal(ConnectRefusal refusal)
+    {
+        lock (_statsGuard)
+        {
+            switch (refusal)
+            {
+                case ConnectRefusal.ServerFull: ManagerStats.RefusedServerFull++; break;
+                case ConnectRefusal.AddressConnections: ManagerStats.RefusedAddressConnections++; break;
+                case ConnectRefusal.AddressRate: ManagerStats.RefusedAddressRate++; break;
+                case ConnectRefusal.GlobalRate: ManagerStats.RefusedGlobalRate++; break;
+                case ConnectRefusal.TooManyAddresses: ManagerStats.RefusedTooManyAddresses++; break;
+            }
         }
     }
 
@@ -925,6 +1010,8 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             if (!AddressHashTable.TryRemove(AddressHashValue(con.SocketAddress), out var conInstance))
                 return;
+
+            _connectLimiter.ConnectionRemoved(conInstance.SocketAddress, CachedClock);
 
             ConnectionList.Remove(conInstance);
         }

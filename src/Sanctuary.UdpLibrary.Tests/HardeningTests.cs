@@ -123,4 +123,220 @@ public class HardeningTests
         Assert.AreEqual(0, server.Stats.ConnectionFaults, "caught as corruption, not by the exception guard");
         Assert.AreEqual(1, server.Stats.CorruptPacketErrors);
     }
+
+    // ---- F5: connection limits, connect-rate limits, packet and fragment caps ----
+
+    [TestMethod]
+    public void PerIpConnectionLimit()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.MaxConnectionsPerIp = 2);
+
+        var (c1, a1) = Client(network, server, "10.0.0.2");
+        var (c2, a2) = Client(network, server, "10.0.0.2");
+        var (c3, a3) = Client(network, server, "10.0.0.2");
+        var (c4, other) = Client(network, server, "10.0.0.3");
+
+        Assert.AreEqual(Status.Connected, a1.Status);
+        Assert.AreEqual(Status.Connected, a2.Status);
+        Assert.AreEqual(Status.Negotiating, a3.Status, "a third connection from one address is ignored");
+        Assert.AreEqual(Status.Connected, other.Status, "other addresses are unaffected");
+        Assert.IsTrue(server.Stats.RefusedAddressConnections >= 1);
+
+        a1.Disconnect();
+
+        // the refused client retries its connect request every second
+        network.Pump(150, server, c1, c2, c3, c4);
+
+        Assert.AreEqual(Status.Connected, a3.Status, "a slot frees when one of them leaves");
+        Assert.AreEqual(2, server.ConnectionsFromAddress(server.Accepted.Last().SocketAddress));
+    }
+
+    [TestMethod]
+    public void PerIpConnectRate()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.ConnectRatePerIp = 2);
+
+        for (var i = 0; i < 2; i++)
+        {
+            var (client, connection) = Client(network, server, "10.0.0.2");
+            Assert.AreEqual(Status.Connected, connection.Status);
+
+            connection.Disconnect();
+            network.Pump(2, server, client);
+        }
+
+        var (c3, a3) = Client(network, server, "10.0.0.2");
+        Assert.AreEqual(Status.Negotiating, a3.Status, "a third new connection within the window is ignored");
+        Assert.IsTrue(server.Stats.RefusedAddressRate >= 1);
+
+        var (_, other) = Client(network, server, "10.0.0.3");
+        Assert.AreEqual(Status.Connected, other.Status);
+
+        // the window is 10 s
+        network.Pump(1100, server, c3);
+
+        Assert.AreEqual(Status.Connected, a3.Status);
+    }
+
+    [TestMethod]
+    public void GlobalConnectRate()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.ConnectRateGlobal = 2);
+
+        var (_, a) = Client(network, server, "10.0.0.2");
+        var (_, b) = Client(network, server, "10.0.0.3");
+        var (c3, c) = Client(network, server, "10.0.0.4");
+
+        Assert.AreEqual(Status.Connected, a.Status);
+        Assert.AreEqual(Status.Connected, b.Status);
+        Assert.AreEqual(Status.Negotiating, c.Status);
+        Assert.IsTrue(server.Stats.RefusedGlobalRate >= 1);
+
+        network.Pump(1100, server, c3);
+
+        Assert.AreEqual(Status.Connected, c.Status);
+    }
+
+    [TestMethod]
+    public void SpoofedConnectIsDroppedSilentlyAfterHandshakeTimeout()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.HandshakeTimeout = 5000);
+
+        // a connect request from an address that will never answer: nobody is bound to it
+        var spoofed = new IPEndPoint(IPAddress.Parse("203.0.113.9"), 5000);
+        var name = Encoding.ASCII.GetBytes("Fake");
+        var connect = new byte[14 + name.Length + 1];
+
+        connect[1] = 1; // Connect
+        BinaryPrimitives.WriteInt32BigEndian(connect.AsSpan(2), 3);
+        BinaryPrimitives.WriteInt32BigEndian(connect.AsSpan(6), 12345);
+        BinaryPrimitives.WriteInt32BigEndian(connect.AsSpan(10), 512);
+        name.CopyTo(connect, 14);
+
+        network.Deliver(spoofed, server.EndPoint, connect);
+        network.Pump(1, server);
+
+        var spoofedConnection = server.Accepted.Single();
+        Assert.AreEqual(Status.Connected, spoofedConnection.Status);
+
+        // a keep-alive and the confirm, which the owner of that address receives and ignores
+        var sentToSpoofed = network.Sent.Count(x => x.To.Equals(spoofed));
+
+        var (client, real) = Client(network, server, "10.0.0.2");
+        real.Send(UdpChannel.Reliable1, [5]);
+
+        network.Pump(600, server, client);
+
+        Assert.AreEqual(Status.Disconnected, spoofedConnection.Status);
+        Assert.AreEqual(DisconnectReason.ConnectFail, spoofedConnection.DisconnectReason);
+        Assert.AreEqual(sentToSpoofed, network.Sent.Count(x => x.To.Equals(spoofed)), "nothing more: no terminate, no keep-alives");
+
+        Assert.AreEqual(Status.Connected, real.Status, "a client that talks is not affected");
+        Assert.AreEqual(Status.Connected, server.Accepted[1].Status);
+    }
+
+    [TestMethod]
+    public void PacketLargerThanIncomingLogicalPacketMaxIsRefused()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.IncomingLogicalPacketMax = 1000);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        a.Send(UdpChannel.Reliable1, Repeat(1, 900));
+        network.Pump(10, server, client);
+
+        Assert.AreEqual(900, serverA.Received.Single().Length, "fragments up to the limit reassemble");
+
+        a.Send(UdpChannel.Reliable1, Repeat(1, 2000));
+        network.Pump(10, server, client);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+    }
+
+    [TestMethod]
+    public void FragmentBytesInFlightAreCappedAcrossChannels()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.IncomingLogicalPacketMax = 1000;
+            p.IncomingFragmentBytesMax = 1500;
+        });
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        void Send(params byte[] packet)
+        {
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(packet));
+            network.Pump(1, server);
+        }
+
+        static byte[] FirstFragment(byte channel, int total, int length) =>
+            [0, (byte)(13 + channel), 0, 0, (byte)(total >> 24), (byte)(total >> 16), (byte)(total >> 8), (byte)total, .. Repeat(1, length)];
+
+        // channel 1: a 900-byte packet in two fragments, completed, which gives its 900 bytes back
+        Send(FirstFragment(0, 900, 450));
+        Send([0, 13, 0, 1, .. Repeat(1, 450)]);
+        Assert.AreEqual(900, serverA.Received.Single().Length);
+
+        // channel 2 starts a 900-byte packet: 900 in flight
+        Send(FirstFragment(1, 900, 100));
+        Assert.AreEqual(Status.Connected, serverA.Status);
+        Assert.AreEqual(900, serverA.IncomingFragmentBytes);
+
+        // channel 3 starts another: 1800 would be in flight, over the 1500 cap
+        Send(FirstFragment(2, 900, 100));
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+    }
+
+    [TestMethod]
+    public void LimiterKeysByAddressNotPort()
+    {
+        static SocketAddress At(string ip, int port) => new IPEndPoint(IPAddress.Parse(ip), port).Serialize();
+
+        Assert.AreEqual(ConnectLimiter.AddressKey(At("10.0.0.2", 1)), ConnectLimiter.AddressKey(At("10.0.0.2", 65000)));
+        Assert.AreNotEqual(ConnectLimiter.AddressKey(At("10.0.0.2", 1)), ConnectLimiter.AddressKey(At("10.0.0.3", 1)));
+    }
+
+    [TestMethod]
+    public void LimiterTableIsBounded()
+    {
+        var limiter = new ConnectLimiter(new UdpParams { ConnectRatePerIp = 1, ConnectRateWindow = 10000 });
+        var now = 1_000_000L;
+
+        static SocketAddress At(int i) => new IPEndPoint(new IPAddress(BitConverter.GetBytes(0x0a000000 + i)), 1).Serialize();
+
+        for (var i = 0; i < ConnectLimiter.MaxTrackedAddresses; i++)
+            Assert.AreEqual(ConnectRefusal.None, limiter.TryAdmit(At(i), now));
+
+        Assert.AreEqual(ConnectRefusal.TooManyAddresses, limiter.TryAdmit(At(ConnectLimiter.MaxTrackedAddresses), now));
+
+        // once their windows pass, idle addresses are forgotten
+        now += 10000;
+
+        Assert.AreEqual(ConnectRefusal.None, limiter.TryAdmit(At(ConnectLimiter.MaxTrackedAddresses), now));
+        Assert.AreEqual(1, limiter.TrackedAddresses);
+    }
+
+    [TestMethod]
+    public void PlayerUdpOptionsApplyLaunchDefaults()
+    {
+        var udpParams = new UdpParams();
+
+        new PlayerUdpOptions().ApplyTo(udpParams);
+
+        Assert.AreEqual(64 * 1024, udpParams.IncomingLogicalPacketMax);
+        Assert.IsTrue(udpParams.MaxConnectionsPerIp > 0);
+        Assert.IsTrue(udpParams.ConnectRatePerIp > 0);
+        Assert.IsTrue(udpParams.ConnectRateGlobal > 0);
+        Assert.IsTrue(udpParams.HandshakeTimeout > 0);
+    }
 }

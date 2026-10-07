@@ -416,6 +416,50 @@ public class UdpParams
     /// <remarks>default = 10mb</remarks>
     public int IncomingLogicalPacketMax;
 
+    /// <summary>
+    /// Total bytes of fragmented packets one connection may have in reassembly at once, across all its reliable channels.
+    /// Each channel reassembles one packet at a time, so without this a connection could hold four buffers of
+    /// <see cref="IncomingLogicalPacketMax"/>.  A first fragment that would go over the cap is treated as corrupt and the
+    /// connection is disconnected.  0 = no cap beyond <see cref="IncomingLogicalPacketMax"/> per channel.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int IncomingFragmentBytesMax;
+
+    /// <summary>
+    /// Most connections one IP address may hold on this manager at once.  Connect requests over the limit are ignored, so
+    /// the other side times out as if the server were full.  0 = no limit.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int MaxConnectionsPerIp;
+
+    /// <summary>
+    /// Most new connections one IP address may open within <see cref="ConnectRateWindow"/>.  0 = no limit.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int ConnectRatePerIp;
+
+    /// <summary>
+    /// Most new connections the whole manager accepts within <see cref="ConnectRateWindow"/>.  This is the limit that
+    /// holds when a flood comes from many (possibly spoofed) addresses.  0 = no limit.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int ConnectRateGlobal;
+
+    /// <summary>
+    /// The window, in milliseconds, that <see cref="ConnectRatePerIp"/> and <see cref="ConnectRateGlobal"/> count over.
+    /// </summary>
+    /// <remarks>default = 10000</remarks>
+    public int ConnectRateWindow;
+
+    /// <summary>
+    /// A connection accepted by this manager that has not sent a single packet passing its CRC check within this many
+    /// milliseconds is dropped without a reply.  A real client starts talking as soon as the confirm packet arrives; a
+    /// connect request from a spoofed address never can, because the confirm (and its encrypt code) went to the real owner
+    /// of that address.  Keep-alives don't count, since they skip the CRC check.  0 = off.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int HandshakeTimeout;
+
     public string ProtocolName;
 
     /// <summary>
@@ -472,6 +516,12 @@ public class UdpParams
         EventQueuing = false;
         ThreadSleepTime = 20;
         IncomingLogicalPacketMax = 20 * 1024 * 1024;
+        IncomingFragmentBytesMax = 0;
+        MaxConnectionsPerIp = 0;
+        ConnectRatePerIp = 0;
+        ConnectRateGlobal = 0;
+        ConnectRateWindow = 10000;
+        HandshakeTimeout = 0;
         ProtocolName = string.Empty;
         UserSuppliedEncryptExpansionBytes = 0;
         UserSuppliedEncryptExpansionBytes2 = 0;

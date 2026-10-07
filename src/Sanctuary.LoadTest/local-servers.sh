@@ -53,6 +53,11 @@ start() {
     export Database__ConnectionString="server=127.0.0.1;port=3306;uid=$db_user;pwd=$db_password;database=$db"
     export Database__VersionString="$(mariadb -N -e 'SELECT VERSION();' | sed 's/-.*//')-MariaDB"
 
+    # Every bot connects from this machine's address, so lift the per-address limits a public server keeps
+    # (Udp section, see PlayerUdpOptions). Everything else stays at the launch defaults.
+    export Udp__MaxConnectionsPerIp=0
+    export Udp__ConnectRatePerIp=0
+
     # Login applies the migrations, so it goes first.
     launch Login "$logs/login.log"
     wait_for "$logs/login.log" "LoginServer started"

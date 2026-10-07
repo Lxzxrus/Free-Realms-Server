@@ -121,6 +121,12 @@ public class UdpConnection : PriorityQueueMember
     private UdpClockStamp DisconnectFlushStamp;
     private UdpClockStamp DisconnectFlushTimeout;
 
+    // set on a connection we accepted until the other side sends a packet that passes its CRC check (see UdpParams.HandshakeTimeout)
+    private bool HandshakePending;
+
+    // bytes reserved by fragmented packets being reassembled, across all reliable channels (see UdpParams.IncomingFragmentBytesMax)
+    internal int IncomingFragmentBytes;
+
     private delegate int CryptFunction(Span<byte> destData, Span<byte> sourceData);
 
     private readonly byte[][] _tempDecryptBuffer;
@@ -162,6 +168,8 @@ public class UdpConnection : PriorityQueueMember
             SetupEncryptModel();
 
             ConnectCode = connectCode;
+
+            HandshakePending = UdpManager.Params.HandshakeTimeout > 0;
         }
     }
 
@@ -655,6 +663,9 @@ public class UdpConnection : PriorityQueueMember
 
                     finalLen -= ConnectionConfig.CrcBytes;
                 }
+
+                // the other side knows our encrypt code, so it received our confirm packet: a real peer, not a spoofed address
+                HandshakePending = false;
 
                 for (var i = Constants.EncryptPasses - 1; i >= 0; i--)
                 {
@@ -1269,6 +1280,21 @@ public class UdpConnection : PriorityQueueMember
             case Status.Connected:
             case Status.DisconnectPending:
                 {
+                    if (HandshakePending)
+                    {
+                        var age = ConnectionAge();
+
+                        if (age >= UdpManager.Params.HandshakeTimeout)
+                        {
+                            // most likely a spoofed address, so don't send it anything more
+                            SilentDisconnect = true;
+                            InternalDisconnect(0, DisconnectReason.ConnectFail);
+                            return;
+                        }
+
+                        nextSchedule = Math.Min(nextSchedule, UdpManager.Params.HandshakeTimeout - age);
+                    }
+
                     // sync clock if required
 
                     if (UdpManager.Params.ClockSyncDelay > 0)
