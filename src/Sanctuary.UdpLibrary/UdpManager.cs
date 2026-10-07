@@ -854,6 +854,14 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         }
     }
 
+    public void IncrementFaultLimitDisconnects()
+    {
+        lock (_statsGuard)
+        {
+            ManagerStats.FaultLimitDisconnects++;
+        }
+    }
+
     public int Random()
     {
         return UdpMisc.Random(ref RandomSeed);

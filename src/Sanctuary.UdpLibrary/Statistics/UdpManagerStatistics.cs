@@ -73,6 +73,11 @@ public struct UdpManagerStatistics
     public long ConnectionFaults;
 
     /// <summary>
+    /// number of connections disconnected because the application reported too many exceptions for them
+    /// </summary>
+    public long FaultLimitDisconnects;
+
+    /// <summary>
     /// number of connections currently being managed
     /// </summary>
     public int ConnectionCount;
@@ -134,6 +139,7 @@ public struct UdpManagerStatistics
         RefusedGlobalRate = 0;
         RefusedTooManyAddresses = 0;
         ConnectionFaults = 0;
+        FaultLimitDisconnects = 0;
         ConnectionCount = 0;
         DisconnectPendingCount = 0;
         EventListCount = 0;

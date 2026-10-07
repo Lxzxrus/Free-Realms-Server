@@ -25,6 +25,10 @@ public sealed class PlayerUdpOptions
 
     public int HandshakeTimeout { get; set; } = 10000;
 
+    public int FaultLimit { get; set; } = 5;
+
+    public int FaultWindow { get; set; } = 60000;
+
     public void ApplyTo(UdpParams udpParams)
     {
         udpParams.IncomingLogicalPacketMax = IncomingLogicalPacketMax;
@@ -34,5 +38,7 @@ public sealed class PlayerUdpOptions
         udpParams.ConnectRateGlobal = ConnectRateGlobal;
         udpParams.ConnectRateWindow = ConnectRateWindow;
         udpParams.HandshakeTimeout = HandshakeTimeout;
+        udpParams.FaultLimit = FaultLimit;
+        udpParams.FaultWindow = FaultWindow;
     }
 }

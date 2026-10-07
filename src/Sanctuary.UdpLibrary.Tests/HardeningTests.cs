@@ -326,6 +326,48 @@ public class HardeningTests
         Assert.AreEqual(1, limiter.TrackedAddresses);
     }
 
+    // ---- F10: a connection that throws repeatedly is disconnected ----
+
+    [TestMethod]
+    public void RepeatedHandlerFaultsDisconnect()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.FaultLimit = 3;
+            p.FaultWindow = 60000;
+            p.NoDataTimeout = 0;
+        });
+
+        server.Behaviour.ReportFaults = true;
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        void Fault()
+        {
+            a.Send(UdpChannel.Reliable1, [FakeBehaviour.Throw]);
+            network.Pump(3, server, client);
+        }
+
+        Fault();
+        Fault();
+        Assert.AreEqual(Status.Connected, serverA.Status, "two within the window is under the limit");
+
+        // the window starts at the first fault; let it pass
+        network.Pump(61, 1000, server, client);
+
+        Fault();
+        Fault();
+        Assert.AreEqual(Status.Connected, serverA.Status, "the count starts again in a new window");
+
+        Fault();
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+        Assert.AreEqual(1, server.Stats.FaultLimitDisconnects);
+        Assert.AreEqual(0, server.Stats.ConnectionFaults, "reported faults never reach the exception guard");
+    }
+
     [TestMethod]
     public void PlayerUdpOptionsApplyLaunchDefaults()
     {
@@ -338,5 +380,6 @@ public class HardeningTests
         Assert.IsTrue(udpParams.ConnectRatePerIp > 0);
         Assert.IsTrue(udpParams.ConnectRateGlobal > 0);
         Assert.IsTrue(udpParams.HandshakeTimeout > 0);
+        Assert.IsTrue(udpParams.FaultLimit > 0);
     }
 }

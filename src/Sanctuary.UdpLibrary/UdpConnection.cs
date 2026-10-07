@@ -6,6 +6,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
+using Microsoft.Extensions.Logging;
+
 using Sanctuary.Core.IO;
 using Sanctuary.UdpLibrary.Abstractions;
 using Sanctuary.UdpLibrary.Enumerations;
@@ -123,6 +125,9 @@ public class UdpConnection : PriorityQueueMember
 
     // set on a connection we accepted until the other side sends a packet that passes its CRC check (see UdpParams.HandshakeTimeout)
     private bool HandshakePending;
+
+    private int FaultCount;
+    private UdpClockStamp FaultWindowStart;
 
     // bytes reserved by fragmented packets being reassembled, across all reliable channels (see UdpParams.IncomingFragmentBytesMax)
     internal int IncomingFragmentBytes;
@@ -1684,6 +1689,46 @@ public class UdpConnection : PriorityQueueMember
             }
 
             MultiBufferOffset = 0;
+        }
+    }
+
+    /// <summary>
+    /// Tells the library that the application caught an exception while handling a packet from this connection. A
+    /// connection that does this <see cref="Configuration.UdpParams.FaultLimit"/> times within
+    /// <see cref="Configuration.UdpParams.FaultWindow"/> is disconnected, with a log line saying why: it is either
+    /// broken or sending packets made to make the server throw.
+    /// </summary>
+    /// <returns>true if this report disconnected the connection.</returns>
+    public bool ReportFault()
+    {
+        lock (_guard)
+        {
+            var limit = UdpManager.Params.FaultLimit;
+
+            if (limit <= 0 || Status == Status.Disconnected)
+                return false;
+
+            var now = UdpManager.CachedClock;
+
+            if (FaultCount == 0 || UdpMisc.ClockDiff(FaultWindowStart, now) >= UdpManager.Params.FaultWindow)
+            {
+                FaultWindowStart = now;
+                FaultCount = 0;
+            }
+
+            FaultCount++;
+
+            if (FaultCount < limit)
+                return false;
+
+            UdpManager.IncrementFaultLimitDisconnects();
+
+            UdpManager.Logger.LogWarning("Disconnecting {connection}: {count} exceptions while handling its packets within {seconds} s (the limit is {limit}).",
+                this, FaultCount, UdpManager.Params.FaultWindow / 1000, limit);
+
+            InternalDisconnect(0, DisconnectReason.CorruptPacket);
+
+            return true;
         }
     }
 

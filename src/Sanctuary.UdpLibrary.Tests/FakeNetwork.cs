@@ -134,6 +134,9 @@ internal sealed class FakeBehaviour
     /// <summary>A packet starting with this byte throws in the handler.</summary>
     public const byte Throw = 0xEE;
 
+    /// <summary>Catch the handler's exception and report it, as the Gateway and Login servers do in Release.</summary>
+    public bool ReportFaults;
+
     public bool ThrowOnTerminated;
 }
 
@@ -216,7 +219,21 @@ internal sealed class FakeConnection : UdpConnection
     public override void OnRoutePacket(Span<byte> data)
     {
         if (data.Length > 0 && data[0] == FakeBehaviour.Throw)
-            throw new InvalidOperationException("A handler bug.");
+        {
+            if (!_manager.Behaviour.ReportFaults)
+                throw new InvalidOperationException("A handler bug.");
+
+            try
+            {
+                throw new InvalidOperationException("A handler bug.");
+            }
+            catch (InvalidOperationException)
+            {
+                ReportFault();
+            }
+
+            return;
+        }
 
         Received.Add(data.ToArray());
     }

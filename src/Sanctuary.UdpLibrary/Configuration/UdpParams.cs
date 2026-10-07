@@ -460,6 +460,19 @@ public class UdpParams
     /// <remarks>default = 0</remarks>
     public int HandshakeTimeout;
 
+    /// <summary>
+    /// How many exceptions the application may report for one connection through <see cref="UdpConnection.ReportFault"/>
+    /// within <see cref="FaultWindow"/> before that connection is disconnected.  0 = never disconnect for this.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int FaultLimit;
+
+    /// <summary>
+    /// The window, in milliseconds, that <see cref="FaultLimit"/> counts over.
+    /// </summary>
+    /// <remarks>default = 60000</remarks>
+    public int FaultWindow;
+
     public string ProtocolName;
 
     /// <summary>
@@ -522,6 +535,8 @@ public class UdpParams
         ConnectRateGlobal = 0;
         ConnectRateWindow = 10000;
         HandshakeTimeout = 0;
+        FaultLimit = 0;
+        FaultWindow = 60000;
         ProtocolName = string.Empty;
         UserSuppliedEncryptExpansionBytes = 0;
         UserSuppliedEncryptExpansionBytes2 = 0;

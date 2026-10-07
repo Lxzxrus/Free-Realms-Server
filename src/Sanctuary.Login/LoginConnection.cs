@@ -55,6 +55,9 @@ public class LoginConnection : UdpConnection
             && (_useEncryption || !PacketUtils.UnwrapPacket(data, out finalLength, _cipher)))
         {
             _logger.LogError("{connection} failed to unwrap/decrypt packet. ( Data: {data} )", this, Convert.ToHexString(data));
+
+            // a real client never sends one of these, so repeated ones disconnect it (and stop it filling the log)
+            ReportFault();
             return;
         }
 
@@ -97,6 +100,9 @@ public class LoginConnection : UdpConnection
         catch (Exception ex)
         {
             _logger.LogError(ex, "{connection} threw an unhandled exception while handling packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, Convert.ToHexString(data));
+
+            // one exception is a bug to fix; a connection that keeps causing them is disconnected (see UdpParams.FaultLimit)
+            ReportFault();
             return;
         }
 #endif
