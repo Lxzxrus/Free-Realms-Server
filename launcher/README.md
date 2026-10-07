@@ -30,7 +30,9 @@ DefaultServerUrl=http://192.168.1.20:8080 ./build_linux-x64.sh 1.0.0
 1. On first run it adds `DefaultServerUrl` and fetches `<DefaultServerUrl>/servermanifest.xml`, which names the
    WebAPI address, the Login server (`host:port`) and, optionally, where the game files are. Players can add other
    servers with **Add Server**, but the default is the only one it adds by itself.
-2. It pings the Login server over UDP for its status. It refuses to start the game while the server says offline.
+2. It pings the Login server over UDP for its status. It refuses to start the game while the server says offline. The
+   request is padded to the size of the reply (6 bytes), because the server doesn't answer a smaller one (see
+   [docs/udp-limits.md](../docs/udp-limits.md#replies-to-forged-addresses)).
 3. **Play** checks the game files against `clientmanifest.xml` and downloads what's missing. If the server doesn't
    publish one (a `404`), it uses whatever the player put in the client folder (the folder button opens it).
 4. **Login** posts `{"username", "password"}` to `<WebApiUrl>/login` and starts the client with

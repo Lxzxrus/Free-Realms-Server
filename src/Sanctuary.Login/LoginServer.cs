@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Buffers.Binary;
 using System.Linq;
-using System.Net;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -35,20 +34,24 @@ public class LoginServer : UdpManager<LoginConnection>
         return true;
     }
 
-    public override void OnServerStatusRequest(SocketAddress socketAddress)
+    /// <summary>
+    /// The launcher's server status ping (launcher/src/Launcher/Helpers/ServerStatusHelper.cs). The UDP library sends this
+    /// reply only to a request at least as large, and rate-limits it per address, so the launcher pads its request.
+    /// </summary>
+    public override int OnServerStatusRequest(Span<byte> reply)
     {
         // 1 - Is Online
         // 1 - Is Locked
         // 4 - Online Players
-        Span<byte> buf = stackalloc byte[20];
-
-        buf[0] = Convert.ToByte(_gatewayServer.Gateways.Any());
-        buf[1] = Convert.ToByte(_options.IsLocked);
+        reply[0] = Convert.ToByte(_gatewayServer.Gateways.Any());
+        reply[1] = Convert.ToByte(_options.IsLocked);
 
         var onlinePlayers = _gatewayServer.Gateways.Sum(x => x.OnlineCharacters.Count);
 
-        BinaryPrimitives.WriteInt32LittleEndian(buf.Slice(2), onlinePlayers);
+        BinaryPrimitives.WriteInt32LittleEndian(reply.Slice(2), onlinePlayers);
 
-        ActualSend(buf, buf.Length, socketAddress);
+        return StatusReplySize;
     }
+
+    public const int StatusReplySize = 6;
 }

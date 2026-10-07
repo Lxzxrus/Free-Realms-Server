@@ -476,6 +476,22 @@ public class UdpParams
     public int HandshakeTimeout;
 
     /// <summary>
+    /// Most replies this manager sends within <see cref="UnverifiedReplyWindow"/> to one IP address that hasn't proven it
+    /// owns that address: server status replies, unreachable-connection replies, and confirm or terminate packets answering
+    /// a connect request.  The sender address of those requests can be forged, so without a limit the server could be used
+    /// to flood whoever owns it.  Over the limit, the request goes unanswered.  Whatever the limit, no such reply is ever
+    /// larger than the request that caused it.  0 = no limit.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int UnverifiedReplyRatePerIp;
+
+    /// <summary>
+    /// The window, in milliseconds, that <see cref="UnverifiedReplyRatePerIp"/> counts over.
+    /// </summary>
+    /// <remarks>default = 10000</remarks>
+    public int UnverifiedReplyWindow;
+
+    /// <summary>
     /// How many exceptions the application may report for one connection through <see cref="UdpConnection.ReportFault"/>
     /// within <see cref="FaultWindow"/> before that connection is disconnected.  0 = never disconnect for this.
     /// </summary>
@@ -552,6 +568,8 @@ public class UdpParams
         ConnectRateGlobal = 0;
         ConnectRateWindow = 10000;
         HandshakeTimeout = 0;
+        UnverifiedReplyRatePerIp = 0;
+        UnverifiedReplyWindow = 10000;
         FaultLimit = 0;
         FaultWindow = 60000;
         ProtocolName = string.Empty;

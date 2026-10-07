@@ -77,6 +77,8 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
 #endif
             KeepAliveDelay = 10000,
             ProtocolName = "LoginGateway",
+            // only the Gateway connects here, but the port may face a network (see LoginGatewayBindAddress)
+            UnverifiedReplyRatePerIp = 20,
             Port = serverOptions.LoginGatewayPort,
             BindIpAddress = serverOptions.LoginGatewayBindAddress,
         };

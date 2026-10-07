@@ -68,6 +68,13 @@ public struct UdpManagerStatistics
     public long RefusedTooManyAddresses;
 
     /// <summary>
+    /// number of requests from unverified addresses left unanswered because the reply would have been larger than the
+    /// request, or because the address was over <see cref="Configuration.UdpParams.UnverifiedReplyRatePerIp"/>
+    /// </summary>
+    public long RefusedReplySize;
+    public long RefusedReplyRate;
+
+    /// <summary>
     /// number of connections dropped because an exception escaped while processing them
     /// </summary>
     public long ConnectionFaults;
@@ -138,6 +145,8 @@ public struct UdpManagerStatistics
         RefusedAddressRate = 0;
         RefusedGlobalRate = 0;
         RefusedTooManyAddresses = 0;
+        RefusedReplySize = 0;
+        RefusedReplyRate = 0;
         ConnectionFaults = 0;
         FaultLimitDisconnects = 0;
         ConnectionCount = 0;

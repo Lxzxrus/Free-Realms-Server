@@ -32,6 +32,14 @@ public sealed class PlayerUdpOptions
     public int HandshakeTimeout { get; set; } = 10000;
 
     /// <summary>
+    /// Replies per <see cref="UnverifiedReplyWindow"/> to an address that hasn't proven it owns it: the launcher's status
+    /// ping, the confirm answering a connect request, and the unreachable reply. Players behind one router share it.
+    /// </summary>
+    public int UnverifiedReplyRatePerIp { get; set; } = 20;
+
+    public int UnverifiedReplyWindow { get; set; } = 10000;
+
+    /// <summary>
     /// Reliable data that may wait for one connection, sent or not yet sent, before it is disconnected for falling behind.
     /// Entering a zone queues about 4.2 MiB at once (3.5 MiB of it the coin store's item definitions), so this is a hard
     /// ceiling on memory per player, well above that, not the limit that catches a connection falling behind.
@@ -61,6 +69,8 @@ public sealed class PlayerUdpOptions
         udpParams.ConnectRateGlobal = ConnectRateGlobal;
         udpParams.ConnectRateWindow = ConnectRateWindow;
         udpParams.HandshakeTimeout = HandshakeTimeout;
+        udpParams.UnverifiedReplyRatePerIp = UnverifiedReplyRatePerIp;
+        udpParams.UnverifiedReplyWindow = UnverifiedReplyWindow;
         udpParams.ReliableOverflowBytes = ReliableOverflowBytes;
         udpParams.ReliableBacklogTimeout = ReliableBacklogTimeout;
         udpParams.ReliableBacklogBytes = ReliableBacklogBytes;

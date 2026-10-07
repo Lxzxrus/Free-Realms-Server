@@ -126,6 +126,9 @@ public class UdpConnection : PriorityQueueMember
     // set on a connection we accepted until the other side sends a packet that passes its CRC check (see UdpParams.HandshakeTimeout)
     private bool HandshakePending;
 
+    // this connection was accepted by a server-side manager, rather than opened by this side
+    private readonly bool AcceptedConnection;
+
     private int FaultCount;
     private UdpClockStamp FaultWindowStart;
 
@@ -178,6 +181,7 @@ public class UdpConnection : PriorityQueueMember
             ConnectCode = connectCode;
 
             HandshakePending = UdpManager.Params.HandshakeTimeout > 0;
+            AcceptedConnection = true;
         }
     }
 
@@ -326,6 +330,13 @@ public class UdpConnection : PriorityQueueMember
                 UdpManager.CallbackTerminated(this);
         }
     }
+
+    // the confirm packet answering a connect request: header (2), connect code (4), encrypt code (4), CRC bytes (1),
+    // encrypt methods (2), max raw packet size (4), protocol version (4)
+    internal const int ConfirmPacketSize = 21;
+
+    // a terminate packet on the wire: header (2), connect code (4), reason (2), plus encryption expansion and CRC bytes
+    private int TerminatePacketSize => 8 + EncryptExpansionBytes + ConnectionConfig.CrcBytes;
 
     private void SendTerminatePacket(int connectCode, DisconnectReason reason)
     {
@@ -818,7 +829,15 @@ public class UdpConnection : PriorityQueueMember
 
                         ConnectionConfig.MaxRawPacketSize = Math.Min(maxRawPacketSize, ConnectionConfig.MaxRawPacketSize);
 
-                        Span<byte> buf = stackalloc byte[21];
+                        // refuse a wrong protocol before answering, and without a word: the request's sender address may be forged
+                        if (!string.IsNullOrEmpty(UdpManager.Params.ProtocolName) && !string.Equals(UdpManager.Params.ProtocolName, OtherSideProtocolName))
+                        {
+                            SilentDisconnect = true;
+                            InternalDisconnect(0, DisconnectReason.OtherProtocolName);
+                            return;
+                        }
+
+                        Span<byte> buf = stackalloc byte[ConfirmPacketSize];
 
                         // send confirm packet (if our connect code matches up)
                         // prepare UdpPacketConnect packet
@@ -835,10 +854,16 @@ public class UdpConnection : PriorityQueueMember
                         BinaryPrimitives.WriteInt32BigEndian(buf.Slice(13), ConnectionConfig.MaxRawPacketSize);
                         BinaryPrimitives.WriteInt32BigEndian(buf.Slice(17), Constants.ProtocolVersion);
 
-                        RawSend(buf, buf.Length);
-
-                        if (!string.IsNullOrEmpty(UdpManager.Params.ProtocolName) && !string.Equals(UdpManager.Params.ProtocolName, OtherSideProtocolName))
-                            InternalDisconnect(0, DisconnectReason.OtherProtocolName);
+                        // a client resends its connect request until the confirm arrives, so a lost one is answered again
+                        if (UdpManager.TryAdmitUnverifiedReply(buf.Length, data.Length, SocketAddress))
+                            RawSend(buf, buf.Length);
+                    }
+                    else if (HandshakePending)
+                    {
+                        // a new connect request from an address that never proved it owns it: drop this connection quietly, and
+                        // the next request (a client resends it every second) gets a new one
+                        SilentDisconnect = true;
+                        InternalDisconnect(0, DisconnectReason.NewConnectionAttempt);
                     }
                     else
                     {
@@ -850,7 +875,10 @@ public class UdpConnection : PriorityQueueMember
                         // keeping this connection object alive.  So, instead, when we get this situation, we will terminate this connection
                         // and ignore the connect-request packet.  The connect-request packet will be sent again 1 second later by the client
                         // at which time we won't exist and out UdpManager will establish a new connection object for it.
-                        SendTerminatePacket(0, DisconnectReason.NewConnectionAttempt);
+                        // The request isn't CRC'ed, so anyone can send it from this address: answer it no more than any other
+                        // unverified request.
+                        if (UdpManager.TryAdmitUnverifiedReply(TerminatePacketSize, data.Length, SocketAddress))
+                            SendTerminatePacket(0, DisconnectReason.NewConnectionAttempt);
                     }
                 }
                 break;
@@ -996,7 +1024,13 @@ public class UdpConnection : PriorityQueueMember
 
                         if (UdpManager.CachedClockElapsed(PortRemapRequestStartStamp) < Constants.MaximumTimeAllowedForPortRemapping)
                         {
-                            Span<byte> buf = stackalloc byte[21];
+                            // Only the side that opened the connection asks the other to remap it: a server's own address
+                            // doesn't change.  A server that answered would send 10 bytes for every 2 byte unreachable
+                            // packet anyone forges from a player's address.
+                            if (AcceptedConnection)
+                                break;
+
+                            Span<byte> buf = stackalloc byte[10];
 
                             // send confirm packet (if our connect code matches up)
                             // prepare UdpPacketConnect packet
@@ -1266,15 +1300,17 @@ public class UdpConnection : PriorityQueueMember
 
                         var protocolNameBytes = Encoding.ASCII.GetBytes(UdpManager.Params.ProtocolName);
 
-                        Span<byte> buf = stackalloc byte[14 + protocolNameBytes.Length + 1];
+                        // padded with zeros after the name to at least the size of the confirm it asks for, since a server
+                        // doesn't send a reply larger than a request that could have a forged sender address
+                        Span<byte> buf = stackalloc byte[Math.Max(14 + protocolNameBytes.Length + 1, ConfirmPacketSize)];
 
+                        buf.Clear();
                         buf[0] = 0;
                         buf[1] = (byte)UdpPacketType.Connect;
                         BinaryPrimitives.WriteInt32BigEndian(buf.Slice(2), Constants.ProtocolVersion);
                         BinaryPrimitives.WriteInt32BigEndian(buf.Slice(6), ConnectCode);
                         BinaryPrimitives.WriteInt32BigEndian(buf.Slice(10), UdpManager.Params.MaxRawPacketSize);
                         protocolNameBytes.CopyTo(buf.Slice(14));
-                        buf[^1] = 0;
 
                         RawSend(buf, buf.Length);
 
@@ -1532,6 +1568,11 @@ public class UdpConnection : PriorityQueueMember
         // cStatusNegotiating, we don't have the encryption method function pointer initialized yet, as the method
         // is part of the negotiations
         if (Status != Status.Connected && Status != Status.DisconnectPending)
+            return;
+
+        // nothing but the (raw) confirm packet goes to an address until it proves it owns it, so a connect request with a
+        // forged sender address can't make this connection send its owner keep-alives, terminates or anything else
+        if (HandshakePending)
             return;
 
         var finalStart = data;
