@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,21 @@ public static class ServerStatusHelper
         public int OnlinePlayers;
 
         public static ServerStatus Offline = new();
+    }
+
+    /// <summary>
+    /// The status request: the packet type, padded with zeros to the size of the reply. The server never sends a reply
+    /// larger than its request, since the request's sender address could be forged, so an unpadded request goes
+    /// unanswered.
+    /// </summary>
+    public static byte[] CreateRequest()
+    {
+        var request = new byte[Math.Max(2, Unsafe.SizeOf<ServerStatus>())];
+
+        request[0] = 0x00;
+        request[1] = UdpPacketTypeServerStatus;
+
+        return request;
     }
 
     public static async Task<ServerStatus> GetAsync(string serverAddress, int timeout = 5000)
@@ -61,7 +77,7 @@ public static class ServerStatusHelper
 
                 udpClient.Connect(ipAddress, serverPort);
 
-                byte[] buf = [0x00, UdpPacketTypeServerStatus];
+                var buf = CreateRequest();
 
                 if (await udpClient.SendAsync(buf, cts.Token) == buf.Length)
                 {
