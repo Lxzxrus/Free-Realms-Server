@@ -1,13 +1,9 @@
 # Example Caddy configuration: docs/webapi.md's, plus the files the launcher fetches.
 # PLACEHOLDERS: play.example.com, and /srv/launcher for the folder holding servermanifest.xml.
 play.example.com {
-	# The launcher's server manifest, and launcher updates under /launcher/ (Velopack's releases folder).
+	# The launcher's server manifest. Launcher updates are not served from here: they come from GitHub Releases.
 	handle /servermanifest.xml {
 		root * /srv/launcher
-		file_server
-	}
-	handle /launcher/* {
-		root * /srv
 		file_server
 	}
 

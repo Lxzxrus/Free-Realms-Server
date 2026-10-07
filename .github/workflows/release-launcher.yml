@@ -1,0 +1,123 @@
+name: Launcher release
+
+# Publishes a launcher release to this repository's GitHub Releases, which is where installed launchers look for
+# updates. Run by hand only (Actions > Launcher release > Run workflow), and only from main. See launcher/README.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, such as 1.0.0. Must be higher than the last launcher release, or nobody updates.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: launcher-release
+  cancel-in-progress: false
+
+env:
+  VERSION: ${{ inputs.version }}
+  # Read by MSBuild as a property: the launcher updates from the repository it was released from.
+  UpdateRepositoryUrl: https://github.com/${{ github.repository }}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./launcher
+
+    steps:
+    - name: Refuse anything but main
+      run: |
+        if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+          echo "::error::Launcher releases are published from main only, not $GITHUB_REF."
+          exit 1
+        fi
+        if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::The version must look like 1.0.0, not '$VERSION'."
+          exit 1
+        fi
+      working-directory: .
+
+    - uses: actions/checkout@v6
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        global-json-file: ./launcher/src/global.json
+
+    - name: Refuse a launcher without the client pin
+      run: |
+        pin="$(dotnet msbuild src/Launcher/Launcher.csproj -getProperty:ClientExecutableSha256 | tr -d '[:space:]')"
+        if ! [[ "$pin" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+          echo "::error::Set ClientExecutableSha256 in launcher/src/Directory.Build.props to the SHA-256 of FreeRealms.exe first. Without it the launcher starts no game."
+          exit 1
+        fi
+
+    - name: Test
+      run: dotnet test src/Launcher.slnx
+
+    - name: Install Velopack
+      # Keep in step with the Velopack package in src/Launcher/Launcher.csproj.
+      run: |
+        dotnet tool install vpk --version 1.2.0 --tool-path "$RUNNER_TEMP/vpk"
+        echo "$RUNNER_TEMP/vpk" >> "$GITHUB_PATH"
+
+    - name: Build for Windows
+      if: matrix.rid == 'win-x64'
+      shell: cmd
+      run: call build_win-x64.bat %VERSION%
+
+    - name: Build for Linux
+      if: matrix.rid == 'linux-x64'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y squashfs-tools
+        ./build_linux-x64.sh "$VERSION"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: launcher-${{ matrix.rid }}
+        path: launcher/releases/
+        if-no-files-found: error
+        retention-days: 1
+
+  publish:
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: launcher-*
+        path: releases
+        merge-multiple: true
+
+    - name: Publish the release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        ls -l releases
+        gh release create "launcher-v$VERSION" releases/* \
+          --repo "$GITHUB_REPOSITORY" \
+          --target "$GITHUB_SHA" \
+          --title "Launcher $VERSION" \
+          --notes "Windows: download the file ending in -win-Setup.exe and run it. Linux: download the .AppImage. Installed launchers update themselves from this page (the arrows button)."
