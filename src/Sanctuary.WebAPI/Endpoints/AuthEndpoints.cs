@@ -168,7 +168,7 @@ public static class AuthEndpoints
         {
             Username = request.Username,
             Password = hashedPassword,
-            IsMember = webAPIOptions.Value.MemberByDefault ?? true,
+            IsMember = webAPIOptions.Value.MemberByDefault ?? false,
         };
 
         await dbContext.Users.AddAsync(dbUser, cancellationToken);

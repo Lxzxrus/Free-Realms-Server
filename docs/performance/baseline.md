@@ -117,7 +117,7 @@ Players spread over the map stay cheap well beyond that.
 
 ## Proposed follow-ups
 
-None of these are done here: this task changes no server behaviour.
+None of these are done here: this task changes no server behaviour. Task 14 did 1 and 2; see the next section.
 
 1. **Raise the Gateway's socket buffers** (and probably the Login server's player-facing ones, which also use the
    64 KiB default) to 2 to 4 MiB, and set `net.core.rmem_max` on the VPS to match. One line each, tested above.
@@ -130,6 +130,74 @@ None of these are done here: this task changes no server behaviour.
 3. **Measure a lower `MaxDataHoldTime`** for the Gateway (10 to 20 ms): latency in quiet areas against packets per
    second in crowds.
 4. **Measure on the Optiplex** with the bots on another machine, then on the VPS before launch.
+
+## After Task 14 (udp-hardening)
+
+Measured on 2026-10-07, on the same kind of cloud VM (4 vCPUs, 15 GB, `net.core.rmem_max` and `wmem_max` 4 MiB),
+against `main` at `8d99daa` plus Task 14's branch. Same bots and options as above
+(`--steps 0,100,150,200 --threads 3`, 15 s warmup and 60 s measured), and the same caveat: this is the cloud VM,
+not the Optiplex, so only the comparison with the table above means anything.
+
+Task 14 gave the Login and Gateway player sockets 4 MiB receive and send buffers and the limits in
+[`docs/udp-limits.md`](../udp-limits.md). `local-servers.sh` turns the per-address limits off, since every bot
+connects from one address; everything else ran at the launch defaults.
+
+### Run A: launch defaults
+
+| Layout | Bots | Gateway CPU avg | peak | Busiest thread | Packets/s in | out | KiB/s in | out | Move copies/s | Others seen per bot | Move latency p50 / p95 / p99 / max (ms) | Gateway RSS (MiB) | Gateway UDP drops | Bot CPU | Errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|
+| idle | 0 | 6.0% | 9.0% | 2.9% | 0 | 0 | 0.0 | 0.0 | 0 | 0.0 | - | 214 | 0 | 9.2% | 0 |
+| clustered | 100 | 39.0% | 45.0% | 35.9% | 8,812 | 9,501 | 213.6 | 1,782.2 | 31,567 | 99.0 | 14 / 26 / 32 / 58 | 408 | 0 | 34.2% | 0 |
+| spread | 100 | 8.9% | 11.0% | 5.6% | 478 | 439 | 16.9 | 12.8 | 164 | 0.7 | 61 / 65 / 66 / 80 | 408 | 0 | 20.8% | 0 |
+| clustered | 150 | 67.2% | 76.9% | 63.9% | 16,027 | 19,240 | 362.5 | 3,665.7 | 68,875 | 149.0 | 14 / 23 / 27 / 72 | 472 | 0 | 51.2% | 0 |
+| spread | 150 | 10.0% | 12.0% | 6.6% | 825 | 742 | 26.6 | 25.9 | 368 | 1.1 | 61 / 65 / 66 / 86 | 472 | 0 | 25.3% | 0 |
+| clustered | 200 | 86.9% | 92.9% | 83.6% | 20,271 | 28,055 | 392.9 | 5,438.3 | 122,340 | 199.0 | 14 / 24 / 30 / 56 | 554 | 0 | 64.4% | 0 |
+| spread | 200 | 11.3% | 20.9% | 7.7% | 1,184 | 1,046 | 35.9 | 42.7 | 621 | 1.3 | 60 / 65 / 66 / 78 | 527 | 0 | 30.0% | 0 |
+
+**No socket drops at any size, and recovery after every crowd.** Before, 100 clustered dropped 56 datagrams, 150
+dropped 7,054 with a p95 of 6 s, and 200 collapsed (every latency over 10 s, 9,122 drops). Now 200 clustered bots
+see all 199 others with a 14 ms median and 56 ms worst case. Each *spread* row, measured straight after its crowd,
+is back to the quiet-area floor (61 ms, 9 to 11% CPU), where before the *spread 200* row was still at 40.5% CPU
+and 9,179 drops a minute after the crowd broke up. Peak memory was 554 MiB against 948 MiB.
+
+All 200 bots logged in and out cleanly; the Gateway and Login logs have no warnings or errors. Logouts were all
+`Application`, the client leaving.
+
+**The next ceiling is the one thread.** The busiest thread reached 84% of a core at 200 clustered bots, up from 36%
+at 100 and 64% at 150. A single crowd of about 230 to 250 is where it saturates, as predicted above. Players spread
+over the map stay cheap: 11% at 200.
+
+### Run B: the old 64 KiB buffer, to check recovery from an overload
+
+To check the new backlog limit, the Gateway ran again with everything as in run A except
+`Udp__IncomingBufferSize=65536` and `Udp__OutgoingBufferSize=65536`, which brings the collapse back, at 200 bots
+clustered and then spread:
+
+| Layout | Bots | Gateway CPU avg | peak | Busiest thread | Packets/s in | out | KiB/s in | out | Move copies/s | Others seen per bot | Move latency p50 / p95 / p99 / max (ms) | Gateway RSS (MiB) | Gateway UDP drops | Bot CPU | Errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|
+| clustered | 200 | 85.0% | 116.9% | 80.7% | 4,737 | 21,618 | 149.8 | 4,905.6 | 94,946 | 195.0 | 855 / 10,000+ / 10,000+ / 43,448 | 864 | 20,275 | 63.3% | 4 |
+| spread | 200 | 16.2% | 96.9% | 12.9% | 1,034 | 2,523 | 37.4 | 475.7 | 456 | 1.0 | 62 / 8,056 / 10,000+ / 26,373 | 870 | 1,022 | 31.7% | 0 |
+
+The backlog limit disconnected the 4 bots furthest behind ("fell behind, with over 512 KiB of reliable data waiting
+for it for 60 s"; 2.5 to 3.4 MiB each). Compared with the *spread 200* row before Task 14, the minute after the
+crowd is much better but not fully recovered: 16% CPU against 40.5%, 2,523 packets/s out against 9,045, 1,022
+drops against 9,179, and a 62 ms median against 340 ms. The slowest 5% of moves were still 8 s late, and memory
+stayed at 870 MiB; .NET doesn't hand freed memory back to the system quickly.
+
+So the 4 MiB buffer is what prevents the collapse, and the backlog limit only shortens one. The other 196 bots
+stayed just under the limit or kept draining, so they weren't disconnected. Lowering `ReliableBacklogTimeout`
+(say to 20 s) would shed load sooner after an overload, at the risk of disconnecting a player on a slow link while
+a zone loads. That trade can't be judged until a real client has been measured over the internet.
+
+### What entering a zone costs
+
+Measured while choosing the backlog limits: **each zone entry queues about 4.2 MiB of reliable data for that
+player** (4,164 KiB at the peak for every bot), before compression. 3.5 MiB of it is a single packet, the item
+definitions for the whole coin store, from `BaseZone.SendCoinStoreItemList`. The next largest are 327 KiB, 206 KiB
+and 99 KiB. That's why `ReliableOverflowBytes` can't be set low enough to catch a lagging player
+(`docs/udp-limits.md`). It is also upload bandwidth the VPS pays for on every login and zone change, and time a
+player on a slow link waits. Sending the coin store's definitions once per session, or only when the store is
+opened, is worth a task of its own.
 
 ## Making the bot behave like a real client
 

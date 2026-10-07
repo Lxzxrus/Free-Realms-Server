@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 
 using NLog.Extensions.Logging;
 
+using Sanctuary.Core.Configuration;
 using Sanctuary.Core.Extensions;
 using Sanctuary.Database;
 using Sanctuary.WebAPI.Endpoints;
@@ -26,6 +27,11 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.UseUrls();
+
+// Local settings (git-ignored), then the environment and command line again so they still win.
+builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
+builder.Configuration.AddEnvironmentVariables();
+builder.Configuration.AddCommandLine(args);
 
 // Options
 builder.Services.AddOptionsWithValidateOnStart<DatabaseOptions>()
@@ -105,6 +111,15 @@ builder.Logging.AddNLog(nlogConfigFile);
 var app = builder.Build();
 
 #if DEBUG
+const bool isDebugBuild = true;
+#else
+const bool isDebugBuild = false;
+#endif
+
+if (!StartupChecks.Passes(app.Logger, isDebugBuild, StartupChecks.CheckBuild(isDebugBuild, app.Configuration)))
+    return 1;
+
+#if DEBUG
 
 app.UseHttpLogging();
 
@@ -120,6 +135,8 @@ app.MapAuthEndpoints();
 app.MapPortraitEndpoints();
 
 app.Run();
+
+return 0;
 
 // For the ASP.NET test host in Sanctuary.WebAPI.Tests.
 public partial class Program;

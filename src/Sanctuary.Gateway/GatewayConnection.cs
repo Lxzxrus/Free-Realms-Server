@@ -72,7 +72,9 @@ public class GatewayConnection : UdpConnection
             ? OtherSideDisconnectReason
             : DisconnectReason;
 
-        _logger.LogInformation("{connection} disconnected. {reason}", this, reason);
+        GetStats(out var stats);
+
+        _logger.LogInformation("{connection} disconnected. {reason} (most reliable data waiting for it at once: {pending} KiB)", this, reason, stats.MaxPendingBytes / 1024);
 
         // Just in case check if player is null.
         if (Player is null)
@@ -97,6 +99,9 @@ public class GatewayConnection : UdpConnection
             && (_useEncryption || !PacketUtils.UnwrapPacket(data, out finalLength, _cipher)))
         {
             _logger.LogError("{connection} failed to unwrap/decrypt packet. ( Data: {data} )", this, Convert.ToHexString(data));
+
+            // a real client never sends one of these, so repeated ones disconnect it (and stop it filling the log)
+            ReportFault();
             return;
         }
 
@@ -132,6 +137,9 @@ public class GatewayConnection : UdpConnection
         catch (Exception ex)
         {
             _logger.LogError(ex, "{connection} threw an unhandled exception while handling packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, Convert.ToHexString(data));
+
+            // one exception is a bug to fix; a connection that keeps causing them is disconnected (see UdpParams.FaultLimit)
+            ReportFault();
             return;
         }
 #endif
@@ -708,6 +716,10 @@ public class GatewayConnection : UdpConnection
     {
         if (!_options.UseCompression)
             return base.DecryptUserSupplied(destData, sourceData);
+
+        // every compressed packet starts with a flag byte; without one it's corrupt
+        if (sourceData.IsEmpty)
+            return -1;
 
         if (sourceData[0] == 1)
         {

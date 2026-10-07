@@ -41,8 +41,8 @@ its own address.
 
 ## Settings
 
-All under `WebAPI` in `appsettings.json`, or as environment variables with `__` for `:`
-(for example `WebAPI__RateLimits__LoginPerMinute=1000`).
+All under `WebAPI`, in the git-ignored `appsettings.local.json` (copy `appsettings.local.example.json`), or as
+environment variables with `__` for `:` (for example `WebAPI__RateLimits__LoginPerMinute=1000`).
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -60,8 +60,8 @@ All under `WebAPI` in `appsettings.json`, or as environment variables with `__` 
 | `LoginLockout:TrustedAddressLifetime` | `30.00:00:00` | How long an address that logged in stays exempt from the account-wide lock |
 
 **Load tests and playtests from one machine.** The load-test bot logs in up to 200 accounts from one address, which
-the default `LoginPerMinute` refuses. On staging, start WebAPI with
-`WebAPI__RateLimits__LoginPerMinute=1000 WebAPI__RateLimits__RegisterPerHour=1000`.
+the default `LoginPerMinute` refuses. `src/Sanctuary.LoadTest/local-servers.sh` raises the limits itself; when
+starting WebAPI by hand on staging, use `WebAPI__RateLimits__LoginPerMinute=1000 WebAPI__RateLimits__RegisterPerHour=1000`.
 
 ## HTTPS on the VPS with Caddy
 

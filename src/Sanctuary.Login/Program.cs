@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using NLog.Extensions.Logging;
 
@@ -35,6 +36,7 @@ builder.ConfigureAppConfiguration((hostBuilderContext, configurationBuilder) =>
         configurationBuilder.AddJsonFile("database.json", optional: true);
 
     configurationBuilder.AddJsonFile("login.json", optional: false, reloadOnChange: true);
+    configurationBuilder.AddJsonFile("login.local.json", optional: true, reloadOnChange: true);
 
     configurationBuilder.AddEnvironmentVariables();
 });
@@ -58,6 +60,13 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
 
     ArgumentNullException.ThrowIfNull(serverOptions);
 
+    // Limits for the player-facing socket (the "Udp" section; defaults are for a public server)
+    var playerUdpOptions = hostBuilderContext.Configuration.GetSection(PlayerUdpOptions.Section).Get<PlayerUdpOptions>() ?? new PlayerUdpOptions();
+
+    // The UDP library drops a connection whose packets throw, so an exception that still reaches the host is a bug
+    // in the main loop itself: stop, so a supervisor (systemd) restarts the server, rather than run on without a loop.
+    serviceCollection.Configure<HostOptions>(options => options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.StopHost);
+
     // LoginGateway UDP Server
     serviceCollection.AddSingleton(serviceProvider =>
     {
@@ -69,6 +78,7 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
             KeepAliveDelay = 10000,
             ProtocolName = "LoginGateway",
             Port = serverOptions.LoginGatewayPort,
+            BindIpAddress = serverOptions.LoginGatewayBindAddress,
         };
 
         return ActivatorUtilities.CreateInstance<GatewayServer>(serviceProvider, udpParams);
@@ -85,6 +95,8 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
             Port = serverOptions.Port,
             ProtocolName = "LoginUdp_6"
         };
+
+        playerUdpOptions.ApplyTo(udpParams);
 
         if (serverOptions.UseCompression)
         {
@@ -118,7 +130,26 @@ builder.ConfigureLogging((hostBuilderContext, loggingBuilder) =>
 
 var host = builder.Build();
 
+#if DEBUG
+const bool isDebugBuild = true;
+#else
+const bool isDebugBuild = false;
+#endif
+
+var configuration = host.Services.GetRequiredService<IConfiguration>();
+var options = host.Services.GetRequiredService<IOptions<LoginServerOptions>>().Value;
+
+if (!StartupChecks.Passes(host.Services.GetRequiredService<ILogger<Program>>(), isDebugBuild,
+    StartupChecks.CheckBuild(isDebugBuild, configuration),
+    StartupChecks.CheckLoginGatewayChallenge(options.LoginGatewayChallenge),
+    StartupChecks.CheckLoginGatewayBindAddress(options.LoginGatewayBindAddress)))
+{
+    return 1;
+}
+
 // Packet Handlers
 host.Services.ConfigurePacketHandlers();
 
 await host.RunAsync();
+
+return 0;

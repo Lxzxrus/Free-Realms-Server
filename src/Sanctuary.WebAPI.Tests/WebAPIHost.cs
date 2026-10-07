@@ -49,6 +49,8 @@ internal sealed class WebAPIHost : WebApplicationFactory<Program>
         // Limits high enough that tests about something else never hit them.
         _settings = new Dictionary<string, string?>
         {
+            // Tests run Debug builds, which refuse to start without this. The test host has no network listener.
+            ["AllowDebugBuild"] = "true",
             ["Database:Provider"] = "Sqlite",
             ["Database:ConnectionString"] = $"Data Source={Path.Combine(Root, "test.db")}",
             ["WebAPI:LaunchArguments"] = "AssetDelivery:IndirectServerAddress=http://assets.example",

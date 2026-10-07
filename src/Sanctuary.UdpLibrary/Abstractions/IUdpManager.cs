@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Net;
 
+using Microsoft.Extensions.Logging;
+
 using Sanctuary.UdpLibrary.Configuration;
 using Sanctuary.UdpLibrary.Enumerations;
 using Sanctuary.UdpLibrary.Packets;
@@ -11,6 +13,8 @@ public interface IUdpManager
 {
     long CachedClock { get; }
     UdpParams Params { get; set; }
+
+    ILogger Logger { get; }
 
     UdpClockStamp ProcessingInducedLag { get; }
 
@@ -48,4 +52,5 @@ public interface IUdpManager
     void IncrementApplicationPacketsSent();
     void IncrementApplicationPacketsReceived();
     void IncrementCorruptPacketErrors();
+    void IncrementFaultLimitDisconnects();
 }

@@ -3,12 +3,11 @@ services:
     image: mariadb:10.5
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-sanctuary}
-      MYSQL_USER: ${MYSQL_USER:-sanctuary}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-sanctuary}
-    ports:
-      - "3306:3306"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD, see .env.example}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE, see .env.example}
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER, see .env.example}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD, see .env.example}
+    # No ports: the database is reachable only by the servers, over the Compose network. Never publish 3306.
     volumes:
       - db:/var/lib/mysql
     healthcheck:
@@ -32,13 +31,13 @@ services:
       - ../../src/Resources:/app/Resources
       - ../../src/Scripts:/app/Scripts
     environment: &common-env
-      - Database__Provider=0 # MySql (MariaDB uses the same provider)
-      - Database__VersionString=10.5.29-mariadb
-      - Database__ConnectionString=Server=sanctuary.mysql;Port=3306;Database=${MYSQL_DATABASE:-sanctuary};User=${MYSQL_USER:-sanctuary};Password=${MYSQL_PASSWORD:-sanctuary};
-      - Server__LoginGatewayAddress=sanctuary.login:20041
-      - Server__ServerAddress=localhost:20260 # replace 'localhost' with your public IP or domain name
-      - Urls=http://0.0.0.0:20040
-      - WebAPI__TrustedProxies__0=172.16.0.0/12 # Docker's bridge gateway, which loopback connections arrive from
+      Database__Provider: "0" # MySql (MariaDB uses the same provider)
+      Database__VersionString: 10.5.29-mariadb
+      Database__ConnectionString: Server=sanctuary.mysql;Port=3306;Database=${MYSQL_DATABASE:?Set MYSQL_DATABASE, see .env.example};User=${MYSQL_USER:?Set MYSQL_USER, see .env.example};Password=${MYSQL_PASSWORD:?Set MYSQL_PASSWORD, see .env.example};
+      Server__LoginGatewayAddress: sanctuary.login:20041
+      Server__ServerAddress: localhost:20260 # replace 'localhost' with your public IP or domain name
+      Urls: http://0.0.0.0:20040
+      WebAPI__TrustedProxies__0: 172.16.0.0/12 # Docker's bridge gateway, which loopback connections arrive from
     depends_on:
       sanctuary.mysql:
         condition: service_healthy
@@ -52,7 +51,9 @@ services:
     ports:
       - "20260:20260/udp"
     volumes: *common-volumes
-    environment: *common-env
+    environment:
+      <<: *common-env
+      Server__LoginGatewayChallenge: ${LOGIN_GATEWAY_CHALLENGE:?Set LOGIN_GATEWAY_CHALLENGE, see .env.example}
     depends_on:
       sanctuary.mysql:
         condition: service_healthy
@@ -63,11 +64,14 @@ services:
       context: ../
       dockerfile: Docker/Sanctuary.Login.dockerfile
     restart: unless-stopped
+    # The LoginGateway port (20041) is reachable only by the Gateway, over the Compose network. Never publish it.
     ports:
-      - "20041:20041/udp"
       - "20042:20042/udp"
     volumes: *common-volumes
-    environment: *common-env
+    environment:
+      <<: *common-env
+      Server__LoginGatewayChallenge: ${LOGIN_GATEWAY_CHALLENGE:?Set LOGIN_GATEWAY_CHALLENGE, see .env.example}
+      Server__LoginGatewayBindAddress: 0.0.0.0 # inside the container, so the Gateway's container can reach it
     depends_on:
       sanctuary.mysql:
         condition: service_healthy

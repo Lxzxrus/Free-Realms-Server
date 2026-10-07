@@ -18,6 +18,20 @@ This is what CI runs (`.github/workflows/build.yml`). A task isn't done until it
 SDK, the .NET 9 runtime and a running MariaDB (the MySQL test fails, not skips, without one), which
 `scripts/cloud-setup.sh` installs and starts in cloud sessions. Measurements and quirks: `docs/cloud-environment.md`.
 
+## Running locally
+
+Login, Gateway and WebAPI read a git-ignored local file after their tracked config: `login.local.json`,
+`gateway.local.json`, `appsettings.local.json`, in the project folder (the build copies it to `bin/`). Copy the
+`*.local.example.json` beside it; it documents every setting. Environment variables (`Server__Port`) override both.
+
+- Login and Gateway refuse to start without `Server:LoginGatewayChallenge`, the same random value in both, and
+  refuse OSFR's old public value. Never put a real challenge in a tracked file.
+- A Debug build refuses to start unless `"AllowDebugBuild": true` is set, then logs a warning banner. Tests don't
+  start the servers, so `dotnet test` is unaffected.
+- Tracked config holds the launch values (0 coins, nothing unlocked, accounts aren't members). Playtest values go in
+  the local files; `docs/playtest-plan.md` lists them. Docker Compose needs `src/Docker/.env` (`.env.example`).
+- `src/Sanctuary.LoadTest/local-servers.sh` makes its own random challenge, so it needs no local files.
+
 ## Branches
 
 | Branch | What it is | Rule |

@@ -10,6 +10,9 @@ client/
 # Sqlite DBs
 *.db*
 
+# Local server settings: secrets and playtest values (see the *.local.example.json files)
+*.local.json
+
 # User-specific files
 *.rsuser
 *.suo

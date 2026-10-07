@@ -3,7 +3,7 @@
 *Where the project stands. **Only Nate or his local Claude session edits this file**, after merges. Cloud
 sessions read it but never change it, so parallel PRs can't conflict on it.*
 
-Last updated: 2026-10-06. CI on `main` is green after PR #8.
+Last updated: 2026-10-07.
 
 ## Merged into `main`
 
@@ -17,6 +17,9 @@ Last updated: 2026-10-06. CI on `main` is green after PR #8.
 | #6 | 6: unreachable-quests | Five quests with missing npcs moved to `Quests.disabled.json` (19 load); tests for npc guids and quest references | **No** |
 | #7 | 8: housing-toggles | Lock, flora and pet-autospawn toggles; owner-only, which fixed a hole in JadenY's version | **No** |
 | #8 | 7: opcode-guards | 58 `&&` opcode guards fixed in 41 files, with a test per guard; cake broadcasts serialized once | **No** |
+| #11 | 9: security-audit | Threat model `docs/security/threat-model.md` (F1–F13); backdoor review of imported code found nothing deliberate | n/a |
+| #10 | 10: load-test-bot | `src/Sanctuary.LoadTest` and `docs/performance/baseline.md`: first limit is the Gateway's 64 KiB UDP receive buffer, not CPU | n/a |
+| #9 | 11: playtest-plan | `docs/playtest-plan.md`: two evenings, ordered, with pass/fail columns | n/a |
 
 ## Direction (2026-10-06)
 
@@ -27,7 +30,7 @@ the source goes public at launch. Strictly defensive.
 ## Next
 
 - **Playtest.** Nothing is verified in game yet. Task 11 compiles one ordered plan from every PR's checklist.
-- **Merge** the task 9 audit (no PR yet), #9 (playtest plan) and #10 (load-test bot); finish task 12 (launcher).
+- **Running:** tasks 13–15 (launch blockers), and task 12 (launcher) after Nate approved the import.
 - **Security and stability fixes:** tasks 13–17 in `docs/cloud-tasks.md`, from the audit (F1–F13) and the
   load test. 13–15 are launch blockers. The audit's backdoor review of imported code found nothing deliberate.
 
@@ -42,7 +45,6 @@ the source goes public at launch. Strictly defensive.
   without the other breaks trading (PR #5).
 - Player titles: the dispatcher reads the sub-opcode as 2 bytes while the packet reads 4. It works, but it's
   inconsistent (PR #8).
-- WebAPI needs the ASP.NET Core 9 runtime, which cloud sessions don't install yet.
 
 ## Cloud credit
 
