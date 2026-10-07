@@ -98,6 +98,32 @@ Before you can use this software, ensure you have the following installed:
 - **Visual Studio 2022**  
   Make sure to include the **.NET Framework development workload** during installation.
 
+### Local settings
+
+Login, Gateway and WebAPI each read a git-ignored local settings file after their tracked one, and environment
+variables override both (`"Server": { "Port": … }` becomes `Server__Port`). Copy the example beside each project
+and edit the copy; the example documents every setting:
+
+| Server | Copy | to |
+|---|---|---|
+| Login | `src/Sanctuary.Login/login.local.example.json` | `login.local.json` |
+| Gateway | `src/Sanctuary.Gateway/gateway.local.example.json` | `gateway.local.json` |
+| WebAPI | `src/Sanctuary.WebAPI/appsettings.local.example.json` | `appsettings.local.json` |
+
+The build copies each local file next to its server. You can also put it straight into the folder the server
+runs from.
+
+- **Required:** `Server:LoginGatewayChallenge`, set to the same random value for Login and Gateway
+  (`openssl rand -base64 32`). Both refuse to start without it, or with OSFR's old public value.
+- **Debug builds** refuse to start unless `"AllowDebugBuild": true` is set, because they skip login checks and make
+  every player an Admin. Set it for a private test server only, never for one others can reach.
+- **Playtest values:** the tracked settings are the ones for launch: new characters start with 0 coins and 0
+  station cash and nothing unlocked, and new accounts aren't members. For a playtest, set `StartingCoins`,
+  `StartingStationCash`, `UnlockAllTitles` and `UnlockAllProfiles` in `login.local.json`, and
+  `WebAPI:MemberByDefault` in `appsettings.local.json`. `docs/playtest-plan.md` has the exact files.
+- The Login server's Gateway port (20041) listens on `127.0.0.1` only. Change `Server:LoginGatewayBindAddress`
+  only when the Gateway runs on another machine, and firewall the port to that machine.
+
 ### Release
 
 1. Clone the repo
@@ -114,8 +140,9 @@ Before you can use this software, ensure you have the following installed:
         "ConnectionString": "Data Source=D:\\Games\\Free Realms\\sanctuary.db;"
     }
    ```
-5. Launch `Sanctuary.Login`, `Sanctuary.Gateway`
-6. Connect to the client
+5. Create the local settings files with the challenge (see [Local settings](#local-settings))
+6. Launch `Sanctuary.Login`, `Sanctuary.Gateway`
+7. Connect to the client
 
 **_IMPORTANT:_** Update the Data Source file path (D:\\Games\\Free Realms\\sanctuary.db) to match the location where your database files are stored.
 
@@ -148,8 +175,10 @@ Before you can use this software, ensure you have the following installed:
        "ConnectionString": "Data Source=D:\\Games\\Free Realms\\sanctuary.db;"
      }
    }
-5. Launch `Sanctuary.Login`, `Sanctuary.Gateway`
-6. Connect to the client
+5. Create the local settings files with the challenge and `"AllowDebugBuild": true` (see
+   [Local settings](#local-settings))
+6. Launch `Sanctuary.Login`, `Sanctuary.Gateway`
+7. Connect to the client
 
 **_IMPORTANT:_** Update the Data Source file path (D:\\Games\\Free Realms\\sanctuary.db) to match the location where your database files are stored.
 
@@ -161,8 +190,10 @@ Before you can use this software, ensure you have the following installed:
    ```sh
    git clone https://github.com/Open-Source-Free-Realms/Sanctuary.git
    ```
-2. Launch `Docker Compose`
-3. Connect to the client
+2. Copy `src/Docker/.env.example` to `src/Docker/.env` and fill in every value: the Login–Gateway challenge and the
+   database credentials. Compose refuses to start while one is missing. The database port is not published.
+3. Launch `Docker Compose`
+4. Connect to the client
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

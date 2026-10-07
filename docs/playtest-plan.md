@@ -56,7 +56,8 @@ Run a **Debug build in the Development environment** for this playtest:
   running) and have both players log back in.
 - The WebAPI only logs request and response lines in a Debug build in Development, which P5 needs.
 
-> **Never expose this setup to the internet.** A Debug Gateway skips the login-ticket check (`#if !DEBUG` in
+> **Never expose this setup to the internet.** A Debug build only starts because S1's files set
+> `AllowDebugBuild`. A Debug Gateway skips the login-ticket check (`#if !DEBUG` in
 > `PacketLoginHandler`), so anyone who reaches port 20260 can log in as any character with
 > `run_client.py -g <id>`. Play on your home network only.
 
@@ -64,9 +65,10 @@ Run a **Debug build in the Development environment** for this playtest:
 
 Two clients on the server PC is the simplest setup. `run_client.py` makes the client folder safe to run twice.
 
-A second PC needs three settings changed from `127.0.0.1` to the server's LAN address first: `Urls` in
-`src/Sanctuary.WebAPI/appsettings.json`, `ServerAddress` in `src/Sanctuary.Gateway/gateway.json`, and
-`Portrait:UploadUrl` in the WebAPI's `LaunchArguments`. Then run `run_client.py -a <server-ip> …` on that PC.
+A second PC needs three settings changed from `127.0.0.1` to the server's LAN address first, in the local files
+from S1: `Urls` in `appsettings.local.json`, `Server:ServerAddress` in `gateway.local.json`, and
+`Portrait:UploadUrl` in the WebAPI's `LaunchArguments`. The `*.local.example.json` beside each file shows where
+each setting goes. Then run `run_client.py -a <server-ip> …` on that PC.
 
 `run_client.py` logs every account in with the password `testtest`. That is a developer shortcut, and Task 12
 replaces it with a real launcher.
@@ -75,12 +77,12 @@ replaces it with a real launcher.
 
 | ID | From | Who | Do | Expect | Gateway log | ✓/✗ |
 |---|---|---|---|---|---|---|
-| S1 | – | N | Build: `cd src && dotnet build -c Debug`. WebAPI needs the ASP.NET Core 9 runtime installed | Build succeeds | – | |
-| S2 | – | N | Fresh database: delete your old SQLite file, or pick a new path. In each of the three server terminals, set the variables below, then start **Login** from `src/Sanctuary.Login/bin/Debug/net9.0`, **Gateway** from `src/Sanctuary.Gateway/bin/Debug/net9.0` and **WebAPI** from `src/Sanctuary.WebAPI/bin/Debug/net9.0`, in that order. Each runs as `./Sanctuary.<Name>` (or `.exe` on Windows) | Login applies migrations to the empty file and listens on 20042. Gateway listens on 20260 and connects to Login. WebAPI listens on 20040 | Gateway: `Loaded 19 quest definitions`, `Activated 40 collection node(s) across 7 pool(s)`, `Loaded 7 interactions`, `Loaded 12 chat command(s)`, `GatewayServer started and is listening on port '20260'`, `127.0.0.1:20041 connected`. No WARN or ERROR | |
+| S1 | – | N | Create the three local settings files below, then build: `cd src && dotnet build -c Debug`. The build copies the files next to each server. WebAPI needs the ASP.NET Core 9 runtime installed | Build succeeds | – | |
+| S2 | – | N | Fresh database: delete your old SQLite file, or pick a new path. In each of the three server terminals, set the variables below, then start **Login** from `src/Sanctuary.Login/bin/Debug/net9.0`, **Gateway** from `src/Sanctuary.Gateway/bin/Debug/net9.0` and **WebAPI** from `src/Sanctuary.WebAPI/bin/Debug/net9.0`, in that order. Each runs as `./Sanctuary.<Name>` (or `.exe` on Windows) | Login applies migrations to the empty file and listens on 20042. Gateway listens on 20260 and connects to Login. WebAPI listens on 20040 | Gateway: `Loaded 19 quest definitions`, `Activated 40 collection node(s) across 7 pool(s)`, `Loaded 7 interactions`, `Loaded 12 chat command(s)`, `GatewayServer started and is listening on port '20260'`, `127.0.0.1:20041 connected`. No WARN or ERROR apart from the `DEBUG BUILD` banner each server prints first. A `Refusing to start` line names the setting S1's files are missing | |
 | S3 | – | N | Register three accounts (commands below): `nate`, `wife`, `bantest`, all with password `testtest` | Each `curl` prints HTTP 200 | WebAPI: one `POST /register` line each | |
-| S4 | – | N | Check the three rows exist: `sqlite3 <db> "SELECT Id, Username, IsMember, MaxCharacters FROM Users;"` | 3 rows, `IsMember` 1, `MaxCharacters` 10 | – | |
+| S4 | – | N | Check the three rows exist: `sqlite3 <db> "SELECT Id, Username, IsMember, MaxCharacters FROM Users;"` | 3 rows, `IsMember` 1 (`MemberByDefault` in `appsettings.local.json`), `MaxCharacters` 10 | – | |
 | S5 | – | N | Make `nate` an admin: `sqlite3 <db> "UPDATE Users SET IsAdmin = 1 WHERE Username = 'nate';"` | 1 row changed | – | |
-| S6 | #8.1 | N | `python run_client.py -l nate`. Create your character; the client checks the name as you type it | The name check answers and the character is created. New characters start with 999,999,999 coins (`login.json`) | Login log: no `Failed to deserialize` | |
+| S6 | #8.1 | N | `python run_client.py -l nate`. Create your character; the client checks the name as you type it | The name check answers and the character is created. New characters start with 999,999,999 coins (`StartingCoins` in `login.local.json`) | Login log: no `Failed to deserialize` | |
 | S7 | #8.1 | W | `python run_client.py -l wife`. Create a throwaway character, delete it, then create your real one | Delete removes it from the list. The second character is created normally | Login log: no `Failed to deserialize` | |
 | S8 | #8.1 | Both | Enter the world | Both load into Fabled Realms. Quest givers near the start show a yellow marker overhead and on the map | `Received PacketClientIsReady`. No `Failed to deserialize`, no `unhandled packet` | |
 | S9 | – | N | Type `!help` in chat | The list includes `admin`, `mod`, `teleport` and `house`. If `admin` is missing, S5 didn't take: log out and back in | – | |
@@ -92,6 +94,47 @@ export DOTNET_ENVIRONMENT=Development
 export ASPNETCORE_ENVIRONMENT=Development
 export Database__Provider=Sqlite
 export Database__ConnectionString="Data Source=/home/nate/sanctuary-playtest.db"
+```
+
+Local settings files for S1. They are git-ignored, and they hold the playtest values: rich new characters with
+every title and job, member accounts, and permission for a Debug build to start. Make one challenge with
+`openssl rand -base64 32` and put the same value in the first two files.
+
+`src/Sanctuary.Login/login.local.json`:
+
+```json
+{
+  "AllowDebugBuild": true,
+  "Server": {
+    "LoginGatewayChallenge": "<the challenge>",
+    "StartingCoins": 999999999,
+    "StartingStationCash": 999999999,
+    "UnlockAllTitles": true,
+    "UnlockAllProfiles": true
+  }
+}
+```
+
+`src/Sanctuary.Gateway/gateway.local.json`:
+
+```json
+{
+  "AllowDebugBuild": true,
+  "Server": {
+    "LoginGatewayChallenge": "<the challenge>"
+  }
+}
+```
+
+`src/Sanctuary.WebAPI/appsettings.local.json`:
+
+```json
+{
+  "AllowDebugBuild": true,
+  "WebAPI": {
+    "MemberByDefault": true
+  }
+}
 ```
 
 Accounts for S3:
