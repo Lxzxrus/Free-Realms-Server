@@ -27,7 +27,8 @@ public static class TakeMeThereRequestPacketHandler
     {
         if (!TakeMeThereRequestPacket.TryDeserialize(data, out var request))
         {
-            _logger.LogError("Failed to deserialize {packet}.", nameof(TakeMeThereRequestPacket));
+            _logger.LogError("Failed to deserialize {packet}. ( {data} )", nameof(TakeMeThereRequestPacket),
+                Convert.ToHexString(data.Length > 256 ? data[..256] : data));
             return false;
         }
 
