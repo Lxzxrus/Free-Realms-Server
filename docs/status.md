@@ -49,4 +49,4 @@ the source goes public at launch. Strictly defensive.
 ## Cloud credit
 
 $100 one-time credit, expires 4 November 2026. Measured costs: task 1 ~$2 (including a blocked first attempt),
-task 2 ~$5, tasks 3 and 5 ~$7 together, tasks 4, 6, 7 and 8 ~$8 together, tasks 9-11 plus task 12's first attempt ~$29 together, tasks 13-15 ~$23 together. $26 left.
+task 2 ~$5, tasks 3 and 5 ~$7 together, tasks 4, 6, 7 and 8 ~$8 together, tasks 9-11 plus task 12's first attempt ~$29 together, tasks 13-15 ~$23 together, task 12's launcher ~$11. $15 left.

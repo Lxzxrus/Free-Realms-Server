@@ -273,3 +273,20 @@ check. The load-test bot (`src/Sanctuary.LoadTest`) is available for anything ab
   doesn't have). Don't guess: if the client's behaviour can't be confirmed without the game client, make it a
   setting defaulting to the old behaviour, and list the in-game check for Nate.
 - **Check:** the self-check, plus a load-test run showing the queued bytes per zone entry before and after.
+
+## 20. `launcher-supply-chain`: a server break-in can't reach players' PCs *(after PR #15 is merged)*
+
+- **Task:** the launcher (PR #15) updates itself from `{DefaultServerUrl}/launcher`, on the same VPS as the game,
+  so anyone who breaks into the VPS could push a malicious launcher to every player. Switch Velopack's update
+  source to this repository's GitHub Releases (Velopack's GitHub source), so the VPS has no say in what the
+  launcher installs. Keep the HTTPS rule. Add a release workflow, or document the exact manual steps, that
+  builds and publishes a release only from `main` with an explicit trigger.
+- **Also:** pin the game client's executable. Add a launcher setting holding the expected SHA-256 of
+  `FreeRealms.exe` (the client every player already has); before launching, compute the hash and refuse, with a
+  clear message, if it doesn't match. A server's client manifest may download other files, but never a
+  `FreeRealms.exe` that fails the pin.
+- **Scope:** `launcher/` and a release workflow under `.github/workflows/` if you add one. No server changes.
+- **Check:** the self-check, the launcher's tests (add tests for the hash pin and the update source), and a
+  win-x64 build.
+- **Deliverable:** a PR that says how Nate publishes a release, where to put the real hash, and what a player
+  sees if the pin fails.
