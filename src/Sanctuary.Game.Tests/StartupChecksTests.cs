@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -55,6 +59,66 @@ public sealed class StartupChecksTests
 
         Assert.IsNull(StartupChecks.CheckBuild(isDebugBuild: true, configuration));
     }
+
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("")]
+    [DataRow("   ")]
+    public void ChallengeRefusesWhenMissing(string? challenge)
+    {
+        Assert.IsNotNull(StartupChecks.CheckLoginGatewayChallenge(challenge));
+    }
+
+    [TestMethod]
+    [DataRow("OSFR-EDITz@2024")]
+    [DataRow(" OSFR-EDITz@2024 ")]
+    [DataRow("osfr-editz@2024")]
+    public void ChallengeRefusesOsfrsPublicDefault(string challenge)
+    {
+        Assert.IsNotNull(StartupChecks.CheckLoginGatewayChallenge(challenge));
+    }
+
+    [TestMethod]
+    public void ChallengeAcceptsAnyOtherValue()
+    {
+        Assert.IsNull(StartupChecks.CheckLoginGatewayChallenge("hHq0lO4M5d3m4dn1g3Ck6PZt1D3Gkq2hJxRkQe0h3cE="));
+    }
+
+    /// <summary>
+    /// The example files must load as they are and with every commented-out setting switched on, using the
+    /// same JSON options as the configuration reader (comments and trailing commas allowed).
+    /// </summary>
+    [TestMethod]
+    [DataRow("Sanctuary.Login/login.local.example.json")]
+    [DataRow("Sanctuary.Gateway/gateway.local.example.json")]
+    [DataRow("Sanctuary.WebAPI/appsettings.local.example.json")]
+    public void ExampleFileParsesAsIsAndWithEverySettingUncommented(string path)
+    {
+        var text = File.ReadAllText(Path.Combine(SourceDirectory(), path));
+        var uncommented = Regex.Replace(text, @"^(\s*)// (""\w+"":)", "$1$2", RegexOptions.Multiline);
+
+        Assert.AreNotEqual(text, uncommented);
+
+        var options = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+
+        using (JsonDocument.Parse(text, options))
+        using (JsonDocument.Parse(uncommented, options))
+        {
+        }
+    }
+
+    [TestMethod]
+    [DataRow("Sanctuary.Login/login.json")]
+    [DataRow("Sanctuary.Gateway/gateway.json")]
+    public void TrackedConfigHasNoChallenge(string path)
+    {
+        var text = File.ReadAllText(Path.Combine(SourceDirectory(), path));
+
+        Assert.DoesNotContain("LoginGatewayChallenge", text);
+    }
+
+    private static string SourceDirectory([CallerFilePath] string thisFile = "")
+        => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, ".."));
 
     [TestMethod]
     public void PassesLogsEachFailureAndRefuses()

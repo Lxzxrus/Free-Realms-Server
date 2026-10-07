@@ -1,0 +1,45 @@
+// Local settings for the Login server.
+//
+// Copy this file to login.local.json in this folder. The build copies it next to Sanctuary.Login.dll, or you can
+// put it straight into the folder the server runs from. login.local.json is git-ignored, so the secret and any
+// playtest values stay on this machine. Settings here override login.json, and environment variables override
+// both: "Server": { "Port": ... } becomes Server__Port.
+//
+// LoginGatewayChallenge is the only required setting. Every other setting is shown commented out with the value
+// login.json gives it; uncomment a line to change it.
+{
+  // Lets a Debug build start. Without it, a Debug build refuses to. A Debug build skips the login session checks
+  // and makes every player an Admin: never set this on a server that anyone outside your home network can reach.
+  // "AllowDebugBuild": true,
+
+  // The database can go here too, instead of database.json or user secrets.
+  // "Database": { "Provider": "Sqlite", "ConnectionString": "Data Source=/home/nate/sanctuary.db" },
+
+  "Server": {
+    // Required. The shared secret the Gateway sends to prove it is ours. Put the same value in
+    // gateway.local.json. Make one with: openssl rand -base64 32
+    // The server refuses to start if this is missing or is OSFR's public default.
+    "LoginGatewayChallenge": "",
+
+    // UDP port game clients log in on.
+    // "Port": 20042,
+
+    // UDP port the Gateway connects to.
+    // "LoginGatewayPort": 20041,
+
+    // true lets only admins log in.
+    // "IsLocked": false,
+
+    // Title (PlayerTitles.json) and profile (Profiles.json) a new character starts with. 0 means no title.
+    // "DefaultTitleId": 0,
+    // "DefaultProfileId": 1,
+
+    // Coins and station cash a new character starts with.
+    // "StartingCoins": 999999999,
+    // "StartingStationCash": 999999999,
+
+    // Give a new character every title and every profile (job).
+    // "UnlockAllTitles": true,
+    // "UnlockAllProfiles": true,
+  }
+}

@@ -52,6 +52,8 @@ start() {
     export Database__Provider=MySql
     export Database__ConnectionString="server=127.0.0.1;port=3306;uid=$db_user;pwd=$db_password;database=$db"
     export Database__VersionString="$(mariadb -N -e 'SELECT VERSION();' | sed 's/-.*//')-MariaDB"
+    # A fresh Login-Gateway challenge for each run; the servers refuse to start without one.
+    export Server__LoginGatewayChallenge="$(openssl rand -base64 32)"
 
     # Login applies the migrations, so it goes first.
     launch Login "$logs/login.log"

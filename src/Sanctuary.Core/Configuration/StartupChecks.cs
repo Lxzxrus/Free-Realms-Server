@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -18,6 +19,11 @@ public static class StartupChecks
     public const string AllowDebugBuildKey = "AllowDebugBuild";
 
     /// <summary>
+    /// OSFR's <c>LoginGatewayChallenge</c>. It is in OSFR's repository and in ours, so it is never accepted.
+    /// </summary>
+    public const string PublicLoginGatewayChallenge = "OSFR-EDITz@2024";
+
+    /// <summary>
     /// Returns why the server must not start, or <c>null</c> if the build is allowed to run.
     /// A Debug build skips the login ticket and session checks and makes every player an Admin, so it only
     /// runs when <see cref="AllowDebugBuildKey"/> is explicitly <c>true</c>.
@@ -32,6 +38,26 @@ public static class StartupChecks
 
         return $"this is a Debug build, which skips login checks and makes every player an Admin. "
             + $"Build with -c Release, or set {AllowDebugBuildKey}=true for a private test server.";
+    }
+
+    /// <summary>
+    /// Returns why the server must not start, or <c>null</c> if the Login↔Gateway challenge is usable (F2).
+    /// The challenge is the only thing the Login server checks before it trusts a Gateway, so it must be set,
+    /// and it must not be OSFR's default, which is public.
+    /// </summary>
+    public static string? CheckLoginGatewayChallenge(string? challenge)
+    {
+        const string howToSet = "Set the same random value for Login and Gateway in login.local.json and "
+            + "gateway.local.json, or in the environment variable Server__LoginGatewayChallenge "
+            + "(for example: openssl rand -base64 32).";
+
+        if (string.IsNullOrWhiteSpace(challenge))
+            return $"Server:LoginGatewayChallenge is not set. {howToSet}";
+
+        if (string.Equals(challenge.Trim(), PublicLoginGatewayChallenge, StringComparison.OrdinalIgnoreCase))
+            return $"Server:LoginGatewayChallenge is OSFR's public default, which anyone can use. {howToSet}";
+
+        return null;
     }
 
     /// <summary>

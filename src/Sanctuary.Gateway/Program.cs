@@ -38,6 +38,7 @@ builder.ConfigureAppConfiguration((hostBuilderContext, configurationBuilder) =>
         configurationBuilder.AddJsonFile("database.json", optional: true);
 
     configurationBuilder.AddJsonFile("gateway.json", optional: false, reloadOnChange: true);
+    configurationBuilder.AddJsonFile("gateway.local.json", optional: true, reloadOnChange: true);
 
     configurationBuilder.AddEnvironmentVariables();
 });
@@ -137,7 +138,8 @@ const bool isDebugBuild = false;
 var configuration = host.Services.GetRequiredService<IConfiguration>();
 
 if (!StartupChecks.Passes(host.Services.GetRequiredService<ILogger<Program>>(), isDebugBuild,
-    StartupChecks.CheckBuild(isDebugBuild, configuration)))
+    StartupChecks.CheckBuild(isDebugBuild, configuration),
+    StartupChecks.CheckLoginGatewayChallenge(configuration["Server:LoginGatewayChallenge"])))
 {
     return 1;
 }

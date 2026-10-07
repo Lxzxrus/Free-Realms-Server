@@ -31,12 +31,12 @@ services:
       - ../../src/Resources:/app/Resources
       - ../../src/Scripts:/app/Scripts
     environment: &common-env
-      - Database__Provider=0 # MySql (MariaDB uses the same provider)
-      - Database__VersionString=10.5.29-mariadb
-      - Database__ConnectionString=Server=sanctuary.mysql;Port=3306;Database=${MYSQL_DATABASE:-sanctuary};User=${MYSQL_USER:-sanctuary};Password=${MYSQL_PASSWORD:-sanctuary};
-      - Server__LoginGatewayAddress=sanctuary.login:20041
-      - Server__ServerAddress=localhost:20260 # replace 'localhost' with your public IP or domain name
-      - Urls=http://0.0.0.0:20040
+      Database__Provider: "0" # MySql (MariaDB uses the same provider)
+      Database__VersionString: 10.5.29-mariadb
+      Database__ConnectionString: Server=sanctuary.mysql;Port=3306;Database=${MYSQL_DATABASE:-sanctuary};User=${MYSQL_USER:-sanctuary};Password=${MYSQL_PASSWORD:-sanctuary};
+      Server__LoginGatewayAddress: sanctuary.login:20041
+      Server__ServerAddress: localhost:20260 # replace 'localhost' with your public IP or domain name
+      Urls: http://0.0.0.0:20040
     depends_on:
       sanctuary.mysql:
         condition: service_healthy
@@ -50,7 +50,9 @@ services:
     ports:
       - "20260:20260/udp"
     volumes: *common-volumes
-    environment: *common-env
+    environment:
+      <<: *common-env
+      Server__LoginGatewayChallenge: ${LOGIN_GATEWAY_CHALLENGE:?Set LOGIN_GATEWAY_CHALLENGE, see .env.example}
     depends_on:
       sanctuary.mysql:
         condition: service_healthy
@@ -65,7 +67,9 @@ services:
       - "20041:20041/udp"
       - "20042:20042/udp"
     volumes: *common-volumes
-    environment: *common-env
+    environment:
+      <<: *common-env
+      Server__LoginGatewayChallenge: ${LOGIN_GATEWAY_CHALLENGE:?Set LOGIN_GATEWAY_CHALLENGE, see .env.example}
     depends_on:
       sanctuary.mysql:
         condition: service_healthy

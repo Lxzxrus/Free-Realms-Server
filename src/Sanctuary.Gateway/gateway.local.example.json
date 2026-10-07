@@ -1,0 +1,43 @@
+// Local settings for the Gateway (the game server).
+//
+// Copy this file to gateway.local.json in this folder. The build copies it next to Sanctuary.Gateway.dll, or you
+// can put it straight into the folder the server runs from. gateway.local.json is git-ignored, so the secret and
+// any playtest values stay on this machine. Settings here override gateway.json, and environment variables
+// override both: "Server": { "Port": ... } becomes Server__Port.
+//
+// LoginGatewayChallenge is the only required setting. Every other setting is shown commented out with the value
+// gateway.json gives it; uncomment a line to change it.
+{
+  // Lets a Debug build start. Without it, a Debug build refuses to. A Debug build skips the login ticket check
+  // and makes every player an Admin: never set this on a server that anyone outside your home network can reach.
+  // "AllowDebugBuild": true,
+
+  // The database can go here too, instead of database.json or user secrets.
+  // "Database": { "Provider": "Sqlite", "ConnectionString": "Data Source=/home/nate/sanctuary.db" },
+
+  "Server": {
+    // Required. The shared secret this server sends to Login to prove it is ours. Must be the same value as in
+    // login.local.json. Make one with: openssl rand -base64 32
+    // The server refuses to start if this is missing or is OSFR's public default.
+    "LoginGatewayChallenge": "",
+
+    // UDP port game clients connect to.
+    // "Port": 20260,
+    // "UseCompression": true,
+
+    // Environment reported to the client: live, or intl for a Chinese client.
+    // "Environment": "live",
+
+    // Client version the server accepts.
+    // "ClientVersion": "1.910.1.530630",
+
+    // The address Login tells game clients to connect to. On a server others play on, use its public IP or
+    // domain name; for a second PC at home, the server's LAN address.
+    // "ServerAddress": "127.0.0.1:20260",
+
+    // Where Login listens for this server.
+    // "LoginGatewayAddress": "localhost:20041",
+
+    // "ShowMemberNagScreen": false,
+  }
+}
