@@ -76,7 +76,9 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
         var udpParams = new UdpParams(ManagerRole.ExternalClient)
         {
             KeepAliveDelay = 10000,
-            ProtocolName = "LoginGateway"
+            ProtocolName = "LoginGateway",
+            // this side opens the connection, so it has nothing to tell a stranger, and its port faces the internet
+            ReplyUnreachableConnection = false
         };
 
         return ActivatorUtilities.CreateInstance<LoginClient>(serviceProvider, udpParams);

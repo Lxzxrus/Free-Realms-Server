@@ -65,6 +65,9 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
     private readonly ConnectLimiter _connectLimiter;
 
+    private readonly Lock _replyGuard = new();
+    private readonly ReplyLimiter _replyLimiter;
+
     private readonly IUdpDriver _driver;
 
     protected UdpClockStamp LastEmptySocketBufferStamp;
@@ -179,6 +182,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         Logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger(GetType().FullName ?? GetType().Name) ?? NullLogger.Instance;
 
         _connectLimiter = new ConnectLimiter(Params);
+        _replyLimiter = new ReplyLimiter(Params);
 
         Params.MaxRawPacketSize = Math.Min(Params.MaxRawPacketSize, Constants.HardMaxRawPacketSize);
 
@@ -643,9 +647,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         if (data.Length == 2 && zeroByte == 0 && packetType == (byte)UdpPacketType.PortAlive)
             return;
 
-        if (data.Length == 2 && zeroByte == 0 && packetType == (byte)UdpPacketType.ServerStatus)
+        // any length: a requester pads its request to the size of the reply it wants (see TryAdmitUnverifiedReply)
+        if (zeroByte == 0 && packetType == (byte)UdpPacketType.ServerStatus)
         {
-            OnServerStatusRequest(socketAddress);
+            SendServerStatus(socketAddress, data.Length);
             return;
         }
 
@@ -762,7 +767,9 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                         // in this regard.  As such, the UnreachableConnection packet (like the connect and confirm packets) is one
                         // of those internal packet types that is designated as not being encrypted or CRC'ed.
                         Span<byte> buf = [0, (byte)UdpPacketType.UnreachableConnection];
-                        ActualSend(buf, buf.Length, socketAddress);
+
+                        if (TryAdmitUnverifiedReply(buf.Length, data.Length, socketAddress))
+                            ActualSend(buf, buf.Length, socketAddress);
                     }
                 }
             }
@@ -845,6 +852,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
     private UdpClockStamp _lastRefusalLogTime;
     private int _refusalsSinceLog;
+
+    private UdpClockStamp _lastReplyRefusalLogTime;
+    private int _replyRefusalsSinceLog;
+
+    // the largest server status reply an application may write (the Login server's is 6 bytes)
+    private const int MaxServerStatusReply = 64;
 
     private void LogRefusal(SocketAddress socketAddress, ConnectRefusal refusal)
     {
@@ -1265,8 +1278,92 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         }
     }
 
-    public virtual void OnServerStatusRequest(SocketAddress socketAddress)
+    /// <summary>
+    /// Writes the reply to a server status request into <paramref name="reply"/> and returns its length, or 0 for no reply.
+    /// Anyone can send the request, from a forged address, so the manager sends the reply only if it is no larger than the
+    /// request and the requester's address is within <see cref="UdpParams.UnverifiedReplyRatePerIp"/>.
+    /// </summary>
+    public virtual int OnServerStatusRequest(Span<byte> reply)
     {
+        return 0;
+    }
+
+    private void SendServerStatus(SocketAddress socketAddress, int requestLength)
+    {
+        Span<byte> reply = stackalloc byte[MaxServerStatusReply];
+
+        var replyLength = OnServerStatusRequest(reply);
+
+        if (replyLength <= 0)
+            return;
+
+        if (TryAdmitUnverifiedReply(replyLength, requestLength, socketAddress))
+            ActualSend(reply, replyLength, socketAddress);
+    }
+
+    /// <summary>
+    /// Decides whether to answer a request from an address that hasn't proven it owns that address (it could be forged):
+    /// only if the reply is no larger than the request, so the server can't amplify a flood, and the address is within
+    /// <see cref="UdpParams.UnverifiedReplyRatePerIp"/>, so it can't relay one at a single victim either.  A refusal is
+    /// counted and logged at most once per minute; the request goes unanswered.
+    /// </summary>
+    public bool TryAdmitUnverifiedReply(int replyLength, int requestLength, SocketAddress socketAddress)
+    {
+        var tooLarge = replyLength > requestLength;
+        var logIt = false;
+        var othersSinceLog = 0;
+
+        lock (_replyGuard)
+        {
+            if (!tooLarge && _replyLimiter.TryAdmit(socketAddress, CachedClock))
+                return true;
+
+            if (_lastReplyRefusalLogTime != 0 && CachedClockElapsed(_lastReplyRefusalLogTime) < RefusalLogInterval)
+            {
+                _replyRefusalsSinceLog++;
+            }
+            else
+            {
+                logIt = true;
+                othersSinceLog = _replyRefusalsSinceLog;
+
+                _lastReplyRefusalLogTime = CachedClock;
+                _replyRefusalsSinceLog = 0;
+            }
+        }
+
+        lock (_statsGuard)
+        {
+            if (tooLarge)
+                ManagerStats.RefusedReplySize++;
+            else
+                ManagerStats.RefusedReplyRate++;
+        }
+
+        if (logIt)
+        {
+            var why = tooLarge
+                ? $"the {replyLength} byte reply would be larger than the {requestLength} byte request"
+                : $"that address was sent {Params.UnverifiedReplyRatePerIp} replies within {Params.UnverifiedReplyWindow / 1000} s, the most allowed";
+
+            if (othersSinceLog > 0)
+                Logger.LogWarning("Didn't answer a request from {address}: {reason}. {count} other requests went unanswered since the last line like this.", FormatAddress(socketAddress), why, othersSinceLog);
+            else
+                Logger.LogWarning("Didn't answer a request from {address}: {reason}.", FormatAddress(socketAddress), why);
+        }
+
+        return false;
+    }
+
+    internal int ReplyLimiterTrackedAddresses
+    {
+        get
+        {
+            lock (_replyGuard)
+            {
+                return _replyLimiter.TrackedAddresses;
+            }
+        }
     }
 
     public virtual void Dispose()

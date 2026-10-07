@@ -70,10 +70,11 @@ On the Optiplex:
    HTTP must not face the internet.
 
    Every bot connects from the bot machine's one address, so start Login and Gateway with the per-address limits
-   off, or only the first 10 bots get in (see `docs/udp-limits.md`):
+   off, or only the first 10 bots get in, and only the first 20 every 10 seconds get a reply to their connect request
+   (see `docs/udp-limits.md`):
 
    ```bash
-   export Udp__MaxConnectionsPerIp=0 Udp__ConnectRatePerIp=0
+   export Udp__MaxConnectionsPerIp=0 Udp__ConnectRatePerIp=0 Udp__UnverifiedReplyRatePerIp=0
    ```
 2. Start the monitor, which prints the Gateway's CPU and its socket's UDP drops every 5 seconds, with a UTC time stamp:
 

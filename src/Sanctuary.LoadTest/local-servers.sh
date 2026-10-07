@@ -60,6 +60,7 @@ start() {
     # launch defaults.
     export Udp__MaxConnectionsPerIp=0
     export Udp__ConnectRatePerIp=0
+    export Udp__UnverifiedReplyRatePerIp=0
     export WebAPI__RateLimits__LoginPerMinute=100000
     export WebAPI__RateLimits__RegisterPerHour=100000
 

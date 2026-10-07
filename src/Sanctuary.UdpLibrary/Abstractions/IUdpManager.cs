@@ -27,6 +27,8 @@ public interface IUdpManager
 
     void ActualSend(ReadOnlySpan<byte> data, int dataLen, SocketAddress socketAddress);
 
+    bool TryAdmitUnverifiedReply(int replyLength, int requestLength, SocketAddress socketAddress);
+
     void SendPortAlive(SocketAddress socketAddress);
 
     void SetPriority(UdpConnection con, long stamp);

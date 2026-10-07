@@ -209,7 +209,7 @@ public class HardeningTests
         // a connect request from an address that will never answer: nobody is bound to it
         var spoofed = new IPEndPoint(IPAddress.Parse("203.0.113.9"), 5000);
         var name = Encoding.ASCII.GetBytes("Fake");
-        var connect = new byte[14 + name.Length + 1];
+        var connect = new byte[UdpConnection.ConfirmPacketSize];
 
         connect[1] = 1; // Connect
         BinaryPrimitives.WriteInt32BigEndian(connect.AsSpan(2), 3);
@@ -223,7 +223,7 @@ public class HardeningTests
         var spoofedConnection = server.Accepted.Single();
         Assert.AreEqual(Status.Connected, spoofedConnection.Status);
 
-        // a keep-alive and the confirm, which the owner of that address receives and ignores
+        // the confirm, which the owner of that address receives and ignores
         var sentToSpoofed = network.Sent.Count(x => x.To.Equals(spoofed));
 
         var (client, real) = Client(network, server, "10.0.0.2");

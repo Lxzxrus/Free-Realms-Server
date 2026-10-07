@@ -194,6 +194,18 @@ internal sealed class FakeManager : UdpManager<FakeConnection>, IGiveTime
         Accepted.Add((FakeConnection)udpConnection);
         return true;
     }
+
+    /// <summary>What this manager answers a server status request with; null = no reply.</summary>
+    public byte[]? StatusReply { get; set; }
+
+    public override int OnServerStatusRequest(Span<byte> reply)
+    {
+        if (StatusReply is null)
+            return 0;
+
+        StatusReply.CopyTo(reply);
+        return StatusReply.Length;
+    }
 }
 
 internal sealed class FakeConnection : UdpConnection
