@@ -60,6 +60,11 @@ public struct UdpConnectionStatistics
     /// </summary>
     public long CorruptPacketErrors;
 
+    /// <summary>
+    /// the most reliable data that has been waiting for this connection at once (queued plus sent but unacknowledged)
+    /// </summary>
+    public int MaxPendingBytes;
+
     /// These statistics are only valid if clock-sync'ing is enabled (highly recommended) (will be valid on both client and server side).
     /// These statistics are reset by <see cref="UdpConnection{TConnection}.PingStatReset"/> and are negotiated periodically by the clock-sync stuff <see cref="UdpParams.ClockSyncDelay"/>.
 

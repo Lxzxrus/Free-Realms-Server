@@ -176,6 +176,21 @@ public class UdpParams
     public int ReliableOverflowBytes;
 
     /// <summary>
+    /// A connection whose pending reliable data (as for <see cref="ReliableOverflowBytes"/>) stays above
+    /// <see cref="ReliableBacklogBytes"/> for this many milliseconds without a break is disconnected with a
+    /// <see cref="DisconnectReason.ReliableOverflow"/>: it has fallen behind and isn't catching up.  This catches what a byte
+    /// limit can't when a normal burst (entering a zone, say) is bigger than what a lagging connection holds.  0 = off.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int ReliableBacklogTimeout;
+
+    /// <summary>
+    /// See <see cref="ReliableBacklogTimeout"/>.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int ReliableBacklogBytes;
+
+    /// <summary>
     /// How long a connection will hold onto outgoing data in hopes of bundling together future outgoing data in the same
     /// raw packet (specified in milliseconds)
     /// setting this to 0 will cause it to effectively flush at the end of every frame.  This is generally desirable in
@@ -522,6 +537,8 @@ public class UdpParams
         ProcessIcmpErrorsDuringNegotiating = false;
         ConnectAttemptDelay = 1000;
         ReliableOverflowBytes = 0;
+        ReliableBacklogTimeout = 0;
+        ReliableBacklogBytes = 0;
         LingerDelay = 10;
         BindIpAddress = string.Empty;
         UdpDriver = null;

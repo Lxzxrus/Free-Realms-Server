@@ -129,6 +129,9 @@ public class UdpConnection : PriorityQueueMember
     private int FaultCount;
     private UdpClockStamp FaultWindowStart;
 
+    // when the pending reliable data last went over UdpParams.ReliableBacklogBytes (0 = it's under)
+    private UdpClockStamp BacklogStartTime;
+
     // bytes reserved by fragmented packets being reassembled, across all reliable channels (see UdpParams.IncomingFragmentBytesMax)
     internal int IncomingFragmentBytes;
 
@@ -1357,10 +1360,43 @@ public class UdpConnection : PriorityQueueMember
                         nextSchedule = Math.Min(nextSchedule, myNext);
                     }
 
+                    if (totalPendingBytes > ConnectionStats.MaxPendingBytes)
+                        ConnectionStats.MaxPendingBytes = totalPendingBytes;
+
                     if (UdpManager.Params.ReliableOverflowBytes != 0 && totalPendingBytes >= UdpManager.Params.ReliableOverflowBytes)
                     {
+                        UdpManager.Logger.LogWarning("Disconnecting {connection}: it fell behind, with {pending} KiB of reliable data waiting for it (the limit is {limit} KiB).",
+                            this, totalPendingBytes / 1024, UdpManager.Params.ReliableOverflowBytes / 1024);
+
                         InternalDisconnect(0, DisconnectReason.ReliableOverflow);
                         return;
+                    }
+
+                    if (UdpManager.Params.ReliableBacklogTimeout > 0)
+                    {
+                        if (totalPendingBytes <= UdpManager.Params.ReliableBacklogBytes)
+                        {
+                            BacklogStartTime = 0;
+                        }
+                        else if (BacklogStartTime == 0)
+                        {
+                            BacklogStartTime = UdpManager.CachedClock;
+                        }
+                        else
+                        {
+                            var behind = UdpManager.CachedClockElapsed(BacklogStartTime);
+
+                            if (behind >= UdpManager.Params.ReliableBacklogTimeout)
+                            {
+                                UdpManager.Logger.LogWarning("Disconnecting {connection}: it fell behind, with over {limit} KiB of reliable data waiting for it for {seconds} s ({pending} KiB now).",
+                                    this, UdpManager.Params.ReliableBacklogBytes / 1024, behind / 1000, totalPendingBytes / 1024);
+
+                                InternalDisconnect(0, DisconnectReason.ReliableOverflow);
+                                return;
+                            }
+
+                            nextSchedule = Math.Min(nextSchedule, UdpManager.Params.ReliableBacklogTimeout - behind);
+                        }
                     }
 
                     // if we have multi-buffer data

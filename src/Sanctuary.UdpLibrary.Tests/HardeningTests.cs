@@ -368,6 +368,73 @@ public class HardeningTests
         Assert.AreEqual(0, server.Stats.ConnectionFaults, "reported faults never reach the exception guard");
     }
 
+    // ---- Task 10: a connection that falls behind is disconnected instead of queueing without bound ----
+
+    [TestMethod]
+    public void ConnectionThatFallsBehindIsDisconnected()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.ReliableOverflowBytes = 64 * 1024);
+
+        var (lagging, _) = Client(network, server, "10.0.0.2");
+        var (healthy, h) = Client(network, server, "10.0.0.3");
+        var serverLagging = server.Accepted[0];
+        var serverHealthy = server.Accepted[1];
+
+        // the healthy client acknowledges as it goes; the lagging one stops reading (never acknowledges)
+        for (var i = 0; i < 100; i++)
+        {
+            serverHealthy.Send(UdpChannel.Reliable1, Repeat(2, 1024));
+            serverLagging.Send(UdpChannel.Reliable1, Repeat(2, 1024));
+            network.Pump(1, server, healthy);
+        }
+
+        // the backlog is checked when the connection next gets time; with a full window that's its resend timer (at most
+        // ResendDelayCap, 8 s), so a connection can go over the limit by what it is sent in that time
+        network.Pump(900, server, healthy);
+
+        Assert.AreEqual(Status.Disconnected, serverLagging.Status);
+        Assert.AreEqual(DisconnectReason.ReliableOverflow, serverLagging.DisconnectReason);
+
+        Assert.AreEqual(Status.Connected, serverHealthy.Status);
+        Assert.AreEqual(100, h.Received.Count);
+        Assert.IsTrue(serverHealthy.GetStatsValue().MaxPendingBytes > 0);
+    }
+
+    [TestMethod]
+    public void BacklogThatDoesNotDrainDisconnectsButABurstDoesNot()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.ReliableBacklogBytes = 8 * 1024;
+            p.ReliableBacklogTimeout = 5000;
+        });
+
+        var (lagging, _) = Client(network, server, "10.0.0.2");
+        var (healthy, h) = Client(network, server, "10.0.0.3");
+        var serverLagging = server.Accepted[0];
+        var serverHealthy = server.Accepted[1];
+
+        // a burst eight times the threshold, like a zone entry, to both; only the healthy client reads it
+        for (var i = 0; i < 64; i++)
+        {
+            serverHealthy.Send(UdpChannel.Reliable1, Repeat(3, 1024));
+            serverLagging.Send(UdpChannel.Reliable1, Repeat(3, 1024));
+        }
+
+        network.Pump(400, server, healthy);
+
+        Assert.AreEqual(64, h.Received.Count, "the burst drains well inside the timeout");
+        Assert.AreEqual(Status.Connected, serverLagging.Status, "4 s behind is under the 5 s timeout");
+
+        network.Pump(600, server, healthy);
+
+        Assert.AreEqual(Status.Connected, serverHealthy.Status);
+        Assert.AreEqual(Status.Disconnected, serverLagging.Status);
+        Assert.AreEqual(DisconnectReason.ReliableOverflow, serverLagging.DisconnectReason);
+    }
+
     [TestMethod]
     public void PlayerUdpOptionsApplyLaunchDefaults()
     {
@@ -375,11 +442,23 @@ public class HardeningTests
 
         new PlayerUdpOptions().ApplyTo(udpParams);
 
+        Assert.AreEqual(4 * 1024 * 1024, udpParams.IncomingBufferSize, "the size the load test showed was enough for 200 clustered players");
         Assert.AreEqual(64 * 1024, udpParams.IncomingLogicalPacketMax);
         Assert.IsTrue(udpParams.MaxConnectionsPerIp > 0);
         Assert.IsTrue(udpParams.ConnectRatePerIp > 0);
         Assert.IsTrue(udpParams.ConnectRateGlobal > 0);
         Assert.IsTrue(udpParams.HandshakeTimeout > 0);
+        Assert.IsTrue(udpParams.ReliableOverflowBytes > 4400 * 1024, "above the 4.2 MiB a zone entry queues");
+        Assert.IsTrue(udpParams.ReliableBacklogTimeout > 0);
         Assert.IsTrue(udpParams.FaultLimit > 0);
+    }
+}
+
+internal static class ConnectionTestExtensions
+{
+    public static Statistics.UdpConnectionStatistics GetStatsValue(this UdpConnection connection)
+    {
+        connection.GetStats(out var stats);
+        return stats;
     }
 }

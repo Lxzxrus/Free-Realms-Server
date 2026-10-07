@@ -9,6 +9,12 @@ public sealed class PlayerUdpOptions
 {
     public const string Section = "Udp";
 
+    /// <summary>Kernel receive buffer for the socket. Linux caps it at <c>net.core.rmem_max</c>.</summary>
+    public int IncomingBufferSize { get; set; } = 4 * 1024 * 1024;
+
+    /// <summary>Kernel send buffer for the socket. Linux caps it at <c>net.core.wmem_max</c>.</summary>
+    public int OutgoingBufferSize { get; set; } = 4 * 1024 * 1024;
+
     /// <summary>Largest packet a client may send, after reassembly from fragments.</summary>
     public int IncomingLogicalPacketMax { get; set; } = 64 * 1024;
 
@@ -25,12 +31,29 @@ public sealed class PlayerUdpOptions
 
     public int HandshakeTimeout { get; set; } = 10000;
 
+    /// <summary>
+    /// Reliable data that may wait for one connection, sent or not yet sent, before it is disconnected for falling behind.
+    /// Entering a zone queues about 4.2 MiB at once (3.5 MiB of it the coin store's item definitions), so this is a hard
+    /// ceiling on memory per player, well above that, not the limit that catches a connection falling behind.
+    /// </summary>
+    public int ReliableOverflowBytes { get; set; } = 16 * 1024 * 1024;
+
+    /// <summary>
+    /// A connection with more than <see cref="ReliableBacklogBytes"/> waiting for it for this long without a break is
+    /// disconnected. A healthy connection drains a zone entry in seconds, a slow one in well under a minute.
+    /// </summary>
+    public int ReliableBacklogTimeout { get; set; } = 60000;
+
+    public int ReliableBacklogBytes { get; set; } = 512 * 1024;
+
     public int FaultLimit { get; set; } = 5;
 
     public int FaultWindow { get; set; } = 60000;
 
     public void ApplyTo(UdpParams udpParams)
     {
+        udpParams.IncomingBufferSize = IncomingBufferSize;
+        udpParams.OutgoingBufferSize = OutgoingBufferSize;
         udpParams.IncomingLogicalPacketMax = IncomingLogicalPacketMax;
         udpParams.IncomingFragmentBytesMax = IncomingFragmentBytesMax;
         udpParams.MaxConnectionsPerIp = MaxConnectionsPerIp;
@@ -38,6 +61,9 @@ public sealed class PlayerUdpOptions
         udpParams.ConnectRateGlobal = ConnectRateGlobal;
         udpParams.ConnectRateWindow = ConnectRateWindow;
         udpParams.HandshakeTimeout = HandshakeTimeout;
+        udpParams.ReliableOverflowBytes = ReliableOverflowBytes;
+        udpParams.ReliableBacklogTimeout = ReliableBacklogTimeout;
+        udpParams.ReliableBacklogBytes = ReliableBacklogBytes;
         udpParams.FaultLimit = FaultLimit;
         udpParams.FaultWindow = FaultWindow;
     }

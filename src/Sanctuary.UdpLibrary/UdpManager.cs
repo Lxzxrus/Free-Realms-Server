@@ -242,6 +242,39 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
         _socketAddress = new SocketAddress(AddressFamily.InterNetwork);
         _buffer = GC.AllocateArray<byte>(Params.MaxRawPacketSize, true);
+
+        WarnIfSocketBuffersCapped();
+    }
+
+    /// <summary>
+    /// Linux silently caps socket buffers at net.core.rmem_max and wmem_max, and a receive buffer smaller than asked for
+    /// is the first thing to break under load (see docs/performance/baseline.md), so say so at startup.
+    /// </summary>
+    private void WarnIfSocketBuffersCapped()
+    {
+        if (Params.UdpDriver is not null || !OperatingSystem.IsLinux())
+            return;
+
+        WarnIfCapped("net.core.rmem_max", "receive", Params.IncomingBufferSize);
+        WarnIfCapped("net.core.wmem_max", "send", Params.OutgoingBufferSize);
+    }
+
+    private void WarnIfCapped(string setting, string direction, int wanted)
+    {
+        try
+        {
+            var path = "/proc/sys/" + setting.Replace('.', '/');
+
+            if (!int.TryParse(System.IO.File.ReadAllText(path).Trim(), out var limit) || limit >= wanted)
+                return;
+
+            Logger.LogWarning("The {direction} buffer for UDP port {port} is capped at {limit} KiB by {setting}, below the {wanted} KiB asked for. Raise it: sudo sysctl -w {setting}={wantedBytes} (and add it to /etc/sysctl.conf).",
+                direction, Params.Port, limit / 1024, setting, wanted / 1024, setting, wanted);
+        }
+        catch (Exception)
+        {
+            // not readable (a container, say): nothing to report
+        }
     }
 
     protected void CloseSocket()

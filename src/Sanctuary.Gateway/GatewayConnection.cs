@@ -72,7 +72,9 @@ public class GatewayConnection : UdpConnection
             ? OtherSideDisconnectReason
             : DisconnectReason;
 
-        _logger.LogInformation("{connection} disconnected. {reason}", this, reason);
+        GetStats(out var stats);
+
+        _logger.LogInformation("{connection} disconnected. {reason} (most reliable data waiting for it at once: {pending} KiB)", this, reason, stats.MaxPendingBytes / 1024);
 
         // Just in case check if player is null.
         if (Player is null)
