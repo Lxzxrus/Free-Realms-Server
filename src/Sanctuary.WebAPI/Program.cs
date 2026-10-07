@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 using NLog.Extensions.Logging;
 
+using Sanctuary.Core.Configuration;
 using Sanctuary.Core.Extensions;
 using Sanctuary.Database;
 using Sanctuary.WebAPI.Endpoints;
@@ -63,6 +64,15 @@ builder.Logging.AddNLog(nlogConfigFile);
 var app = builder.Build();
 
 #if DEBUG
+const bool isDebugBuild = true;
+#else
+const bool isDebugBuild = false;
+#endif
+
+if (!StartupChecks.Passes(app.Logger, isDebugBuild, StartupChecks.CheckBuild(isDebugBuild, app.Configuration)))
+    return 1;
+
+#if DEBUG
 
 app.UseHttpLogging();
 
@@ -74,3 +84,5 @@ app.MapAuthEndpoints();
 app.MapPortraitEndpoints();
 
 app.Run();
+
+return 0;

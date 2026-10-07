@@ -128,4 +128,20 @@ builder.ConfigureLogging((hostBuilderContext, loggingBuilder) =>
 
 var host = builder.Build();
 
+#if DEBUG
+const bool isDebugBuild = true;
+#else
+const bool isDebugBuild = false;
+#endif
+
+var configuration = host.Services.GetRequiredService<IConfiguration>();
+
+if (!StartupChecks.Passes(host.Services.GetRequiredService<ILogger<Program>>(), isDebugBuild,
+    StartupChecks.CheckBuild(isDebugBuild, configuration)))
+{
+    return 1;
+}
+
 await host.RunAsync();
+
+return 0;
