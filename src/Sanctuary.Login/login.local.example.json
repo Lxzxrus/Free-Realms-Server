@@ -38,12 +38,12 @@
     // "DefaultTitleId": 0,
     // "DefaultProfileId": 1,
 
-    // Coins and station cash a new character starts with.
-    // "StartingCoins": 999999999,
-    // "StartingStationCash": 999999999,
+    // Coins and station cash a new character starts with. Playtests use 999999999 for both.
+    // "StartingCoins": 0,
+    // "StartingStationCash": 0,
 
-    // Give a new character every title and every profile (job).
-    // "UnlockAllTitles": true,
-    // "UnlockAllProfiles": true,
+    // Give a new character every title and every profile (job). Playtests turn both on.
+    // "UnlockAllTitles": false,
+    // "UnlockAllProfiles": false,
   }
 }

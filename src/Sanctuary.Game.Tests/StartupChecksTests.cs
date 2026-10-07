@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -129,7 +128,7 @@ public sealed class StartupChecksTests
     [DataRow("Sanctuary.WebAPI/appsettings.local.example.json")]
     public void ExampleFileParsesAsIsAndWithEverySettingUncommented(string path)
     {
-        var text = File.ReadAllText(Path.Combine(SourceDirectory(), path));
+        var text = ReadSource(path);
         var uncommented = Regex.Replace(text, @"^(\s*)// (""\w+"":)", "$1$2", RegexOptions.Multiline);
 
         Assert.AreNotEqual(text, uncommented);
@@ -137,9 +136,49 @@ public sealed class StartupChecksTests
         var options = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
         using (JsonDocument.Parse(text, options))
-        using (JsonDocument.Parse(uncommented, options))
+        using (var document = JsonDocument.Parse(uncommented, options))
         {
+            // The configuration reader refuses duplicate keys, so no setting may be listed twice.
+            AssertNoDuplicateKeys(document.RootElement);
         }
+    }
+
+    private static void AssertNoDuplicateKeys(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            return;
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var property in element.EnumerateObject())
+        {
+            Assert.IsTrue(names.Add(property.Name), $"\"{property.Name}\" is listed twice.");
+
+            AssertNoDuplicateKeys(property.Value);
+        }
+    }
+
+    [TestMethod]
+    public void TrackedLoginConfigHasLaunchEconomy()
+    {
+        using var document = JsonDocument.Parse(ReadSource("Sanctuary.Login/login.json"));
+        var server = document.RootElement.GetProperty("Server");
+
+        Assert.AreEqual(0, server.GetProperty("StartingCoins").GetInt32());
+        Assert.AreEqual(0, server.GetProperty("StartingStationCash").GetInt32());
+        Assert.IsFalse(server.GetProperty("UnlockAllTitles").GetBoolean());
+        Assert.IsFalse(server.GetProperty("UnlockAllProfiles").GetBoolean());
+    }
+
+    [TestMethod]
+    [DataRow("Sanctuary.WebAPI/appsettings.json")]
+    [DataRow("Sanctuary.WebAPI/appsettings.Development.json")]
+    public void TrackedWebApiConfigDoesNotMakeEveryoneAMember(string path)
+    {
+        using var document = JsonDocument.Parse(ReadSource(path));
+
+        if (document.RootElement.GetProperty("WebAPI").TryGetProperty("MemberByDefault", out var memberByDefault))
+            Assert.IsFalse(memberByDefault.GetBoolean());
     }
 
     [TestMethod]
@@ -147,13 +186,26 @@ public sealed class StartupChecksTests
     [DataRow("Sanctuary.Gateway/gateway.json")]
     public void TrackedConfigHasNoChallenge(string path)
     {
-        var text = File.ReadAllText(Path.Combine(SourceDirectory(), path));
+        var text = ReadSource(path);
 
         Assert.DoesNotContain("LoginGatewayChallenge", text);
     }
 
-    private static string SourceDirectory([CallerFilePath] string thisFile = "")
-        => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, ".."));
+    /// <summary>
+    /// Reads a file under <c>src/</c>, found by walking up from the test output.
+    /// </summary>
+    private static string ReadSource(string path)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, path);
+
+            if (File.Exists(candidate))
+                return File.ReadAllText(candidate);
+        }
+
+        throw new FileNotFoundException($"src/{path} not found above the test output.");
+    }
 
     [TestMethod]
     public void PassesLogsEachFailureAndRefuses()
