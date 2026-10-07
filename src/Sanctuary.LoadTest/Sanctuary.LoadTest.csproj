@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(TargetFramework)</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sanctuary.Core\Sanctuary.Core.csproj" />
+    <ProjectReference Include="..\Sanctuary.Packet\Sanctuary.Packet.csproj" />
+    <ProjectReference Include="..\Sanctuary.UdpLibrary\Sanctuary.UdpLibrary.csproj" />
+  </ItemGroup>
+
+</Project>

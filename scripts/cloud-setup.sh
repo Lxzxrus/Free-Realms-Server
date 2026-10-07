@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Installs what the self-check needs in a Claude Code cloud session: the .NET 10 SDK (src/global.json), the
-# .NET 9 runtime (every project targets net9.0) and a MariaDB for the MySQL test. Runs from the SessionStart hook
-# in .claude/settings.json and does nothing outside cloud sessions. See docs/cloud-environment.md.
+# .NET 9 runtime (every project targets net9.0) and a MariaDB for the MySQL test, plus the ASP.NET Core 9 runtime,
+# which the self-check doesn't need but running Sanctuary.WebAPI does (the load test logs in through it). Runs from
+# the SessionStart hook in .claude/settings.json and does nothing outside cloud sessions. See docs/cloud-environment.md.
 set -u
 
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
@@ -11,12 +12,14 @@ export DOTNET_ROOT PATH="$DOTNET_ROOT:$PATH" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNE
 
 have_sdk() { dotnet --list-sdks 2>/dev/null | grep -q '^10\.'; }
 have_runtime() { dotnet --list-runtimes 2>/dev/null | grep -q 'Microsoft.NETCore.App 9\.'; }
+have_aspnet() { dotnet --list-runtimes 2>/dev/null | grep -q 'Microsoft.AspNetCore.App 9\.'; }
 
-if ! have_sdk || ! have_runtime; then
+if ! have_sdk || ! have_runtime || ! have_aspnet; then
     installer="$(mktemp)"
     if curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$installer"; then
         have_sdk || bash "$installer" --channel 10.0 --install-dir "$DOTNET_ROOT" >/dev/null 2>&1
         have_runtime || bash "$installer" --channel 9.0 --runtime dotnet --install-dir "$DOTNET_ROOT" >/dev/null 2>&1
+        have_aspnet || bash "$installer" --channel 9.0 --runtime aspnetcore --install-dir "$DOTNET_ROOT" >/dev/null 2>&1
     fi
     rm -f "$installer"
 fi
@@ -37,6 +40,7 @@ else
     echo "cloud-setup: .NET is NOT fully installed (SDK 10: $(have_sdk && echo yes || echo no), runtime 9: $(have_runtime && echo yes || echo no))."
     echo "cloud-setup: the environment probably blocks dot.net downloads. Report this to Nate; don't work around it."
 fi
+have_aspnet || echo "cloud-setup: ASP.NET Core 9 runtime is missing, so Sanctuary.WebAPI won't run (the self-check doesn't need it)."
 
 # MySqlTest.IsValidAsync needs the MariaDB that CI runs as a service (build.yml): 127.0.0.1:3306, user/password,
 # database sanctuary_test. Without it the test fails after about a minute of retries; it does not skip. The cloud
