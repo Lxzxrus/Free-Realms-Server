@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Sanctuary.Core.Configuration;
 using Sanctuary.Database;
 using Sanctuary.Game;
+using Sanctuary.Game.Housing;
 using Sanctuary.Packet.Common.Extensions;
 using Sanctuary.Scripting;
 using Sanctuary.UdpLibrary.Enumerations;
@@ -129,6 +131,19 @@ public class GatewayService : BackgroundService
 
             return Task.CompletedTask;
         }
+
+        // Build the creative housing catalog now rather than when the first player opens the house editor.
+        var housingOptions = _serviceProvider.GetRequiredService<IOptions<HousingOptions>>().Value;
+        var creativeFixtures = housingOptions.CreativeMode
+            ? _serviceProvider.GetRequiredService<HousingCreativeCatalog>().Entries.Count
+            : 0;
+
+        _logger.LogInformation(
+            "Housing: creative mode {CreativeMode} ({CreativeFixtures} fixtures, list limit {CreativeCatalogLimit}), free lots {FreeLots}.",
+            housingOptions.CreativeMode ? "on" : "off",
+            creativeFixtures,
+            housingOptions.CreativeCatalogLimit,
+            housingOptions.FreeLots ? "on" : "off");
 
         // Register services on static packet handlers.
         _serviceProvider.ConfigurePacketHandlers();

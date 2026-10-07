@@ -7,12 +7,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
@@ -27,6 +29,7 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
     private static ILogger _logger = null!;
     private static IResourceManager _resourceManager = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
+    private static HousingOptions _housingOptions = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -35,6 +38,7 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
 
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
+        _housingOptions = serviceProvider.GetRequiredService<IOptions<HousingOptions>>().Value;
     }
 
     public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
@@ -111,9 +115,11 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
 
         if (housingZoneDefinition is not null)
         {
-            var houseCost = connection.Player.MembershipStatus == 0
-                ? appStoreBundleDefinition.Price
-                : appStoreBundleDefinition.MembersOnlyPrice;
+            var houseCost = _housingOptions.FreeLots
+                ? 0
+                : connection.Player.MembershipStatus == 0
+                    ? appStoreBundleDefinition.Price
+                    : appStoreBundleDefinition.MembersOnlyPrice;
 
             return PurchaseHouse(
                 connection,
@@ -460,13 +466,16 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
                         return;
                     }
 
-                    var updated = strategyContext.Characters
-                        .Where(character =>
-                            character.Id == characterId &&
-                            character.StationCash >= totalCost)
-                        .ExecuteUpdate(setters => setters.SetProperty(
-                            character => character.StationCash,
-                            character => character.StationCash - totalCost));
+                    // A free lot changes no balance, so only check the character is there.
+                    var updated = totalCost == 0
+                        ? strategyContext.Characters.Count(character => character.Id == characterId)
+                        : strategyContext.Characters
+                            .Where(character =>
+                                character.Id == characterId &&
+                                character.StationCash >= totalCost)
+                            .ExecuteUpdate(setters => setters.SetProperty(
+                                character => character.StationCash,
+                                character => character.StationCash - totalCost));
 
                     if (updated != 1)
                     {

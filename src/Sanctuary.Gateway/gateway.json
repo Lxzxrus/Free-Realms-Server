@@ -11,5 +11,11 @@
     "LoginGatewayAddress": "localhost:20041",
 
     "ShowMemberNagScreen": false
+  },
+
+  "Housing": {
+    "CreativeMode": true,
+    "CreativeCatalogLimit": 0,
+    "FreeLots": true
   }
 }

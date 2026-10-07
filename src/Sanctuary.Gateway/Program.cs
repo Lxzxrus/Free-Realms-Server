@@ -55,6 +55,9 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
         .BindConfiguration(ServerOptions.Section)
         .ValidateOnStart();
 
+    serviceCollection.AddOptions<HousingOptions>()
+        .BindConfiguration(HousingOptions.Section);
+
     // Database
     serviceCollection.AddDatabase(hostBuilderContext.Configuration);
 
@@ -119,6 +122,7 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<IQuestManager, QuestManager>();
     serviceCollection.AddSingleton<IRewardManager, RewardManager>();
     serviceCollection.AddSingleton<IHouseManager, HouseManager>();
+    serviceCollection.AddSingleton<HousingCreativeCatalog>();
     serviceCollection.AddSingleton<TradeOptions>();
     serviceCollection.AddSingleton<ITradeCommitter, TradeCommitter>();
     serviceCollection.AddSingleton<ITradeManager, TradeManager>();
