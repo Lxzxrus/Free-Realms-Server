@@ -182,7 +182,8 @@ Order: 1 is the cost calibration and runs alone. 2 is the priority. 3–5 can ru
   plainly as our server. Don't advertise the old project.
 - **Security:** never store a password; store the session token only if the launcher already does that safely.
   Use HTTPS for WebAPI calls wherever the launcher supports it, and say plainly in the PR what still goes over
-  plain HTTP. Note anything the WebAPI needs for HTTPS at deployment.
+  plain HTTP. Note anything the WebAPI needs for HTTPS at deployment. Task 15 fixed WebAPI's side: follow the
+  launcher contract in `docs/webapi.md` (status codes, `Retry-After`, passing `launchArguments` through unchanged).
 - **Scope:** `launcher/`, its CI build if it fits the existing workflow, and docs. No server changes; if the
   launcher needs one, stop and propose it in the PR.
 - **Check:** the self-check still passes, and the launcher builds for win-x64.
