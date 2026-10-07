@@ -19,9 +19,27 @@ public sealed class ScriptRuntime
 
         _state = LuaState.Create();
 
-        _state.OpenStandardLibraries();
+        OpenSafeLibraries(_state);
 
         logger.LogInformation("Scripting initialized");
+    }
+
+    /// <summary>
+    /// Opens only the libraries a script needs to compute: base, table, string and math.
+    /// <c>os</c>, <c>io</c>, <c>package</c> and <c>debug</c> stay closed, because they reach the
+    /// process, the file system and the interpreter's internals. The base library's
+    /// <c>dofile</c> and <c>loadfile</c> read any path on disk, so they are removed too.
+    /// Scripts are loaded by the server through <see cref="ExecuteFileAsync"/>, not by Lua.
+    /// </summary>
+    internal static void OpenSafeLibraries(LuaState state)
+    {
+        state.OpenBasicLibrary();
+        state.OpenTableLibrary();
+        state.OpenStringLibrary();
+        state.OpenMathLibrary();
+
+        state.Environment["dofile"] = LuaValue.Nil;
+        state.Environment["loadfile"] = LuaValue.Nil;
     }
 
     internal LuaTable CreateEnv()

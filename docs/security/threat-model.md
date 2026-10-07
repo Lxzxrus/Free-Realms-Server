@@ -193,6 +193,11 @@ build. Even in Release it widens the blast radius of a compromised or careless a
 **Fix:** open only the safe Lua libraries (base, table, string, math) and deliberately omit `os` and `io`; keep
 script management Admin-only; fix F1 so Debug cannot grant Admin. Estimate: medium.
 
+**Correction (Task 16, measured):** Lua-CSharp 0.5.5 doesn't implement `os.execute`; it throws "not supported".
+The `os` table it opened still had `exit` (stops the server), `getenv` (reads secrets such as
+`Server__LoginGatewayChallenge`) and `remove`/`rename`, and `io` read and wrote any file the server account can,
+so the severity stands.
+
 ### F12 — Known-vulnerable native dependency (Medium, proven)
 
 `dotnet list package --vulnerable --include-transitive` reports `SQLitePCLRaw.lib.e_sqlite3 2.1.10` as **High**

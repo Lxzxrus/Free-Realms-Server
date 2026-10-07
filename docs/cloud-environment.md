@@ -31,7 +31,7 @@ and creates the same database and user that CI's MariaDB service has, so the tes
 | Microsoft.NETCore.App | 9.0.20 and 10.0.12 | Every project targets `net9.0` |
 | Microsoft.AspNetCore.App | 10.0.12; 9.0.20 since Task 10 | Running `Sanctuary.WebAPI` needs ASP.NET Core 9, which the setup script installs since Task 10 (`load-test-bot`, about 4 s). Login and Gateway need only NETCore 9 |
 | MariaDB | 10.11.14 (Ubuntu package) | CI uses `mariadb:11.6`, and the test sets `VersionString` to `11.6.0-MariaDB`. Migrations apply cleanly on 10.11 anyway |
-| EF Core | 9.0.17 (`Directory.Packages.props`) | |
+| EF Core | 9.0.20 since Task 16 (`Directory.Packages.props`) | Was 9.0.17; bumped to clear F12 |
 | dotnet-ef | Not installed by default | See the housing-merge notes below |
 
 ## Tests
@@ -78,8 +78,8 @@ These are missing but not blocked:
 
 ## Notes for the housing merge (Task 2)
 
-- `dotnet tool install --global dotnet-ef --version 9.0.17` works (3 s). Pin the version: an unpinned install gets
-  10.x, which doesn't match EF Core 9.0.17. Add `$HOME/.dotnet/tools` to `PATH`.
+- `dotnet tool install --global dotnet-ef --version 9.0.20` works (3 s). Pin the version: an unpinned install gets
+  10.x, which doesn't match EF Core 9.0.20. Add `$HOME/.dotnet/tools` to `PATH`.
 - The design-time factories (`SqliteDatabaseFactory`, `MySqlDatabaseFactory`) read `Database:*` from user secrets
   (`UserSecretsId` `osfr-sanctuary`, shared by both projects), not from files in the repo. Without them `dotnet ef`
   fails with `Value cannot be null. (Parameter 'databaseOptions')`. This works, one provider at a time, since the
