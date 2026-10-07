@@ -5,6 +5,10 @@ The code is Sanctuary, the Open Source Free Realms (OSFR) emulator in C#/.NET. `
 work. The repo is private for now. The code is AGPL-3.0, so it goes public, or source is offered to players,
 at launch.
 
+The server is **Evergrove** (presented as *Free Realms Evergrove*). Its core is creative housing with ranked
+plots and a weekly competition, and Station Cash is earned, never bought. **Read `docs/design/evergrove-housing.md`
+before touching housing, voting or Station Cash.**
+
 **Priorities:** housing first, then opening unreleased map zones, then items made by volunteer artists.
 Minigames and more quests wait until there's a lull.
 
