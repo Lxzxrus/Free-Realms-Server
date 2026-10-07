@@ -3,7 +3,7 @@
 *Where the project stands. **Only Nate or his local Claude session edits this file**, after merges. Cloud
 sessions read it but never change it, so parallel PRs can't conflict on it.*
 
-Last updated: 2026-10-08.
+Last updated: 2026-10-09.
 
 ## Merged into `main`
 
@@ -27,6 +27,7 @@ Last updated: 2026-10-08.
 | #16 | 18: status-reflection | Every reply to an unverified sender is no larger than its request and rate-limited (five reflection paths closed); launcher pads its status ping | **No** |
 | #17 | 20: launcher-supply-chain | Launcher updates only from this repo's GitHub Releases (manual workflow on `main`); `FreeRealms.exe` hash pin, which must be filled in before a release | **No** |
 | #18 | 16: defence-in-depth | F11 Lua opens only base/table/string/math (no `os`, `io`, `package`, `debug`, `dofile`, `loadfile`); F12 EF Core 9.0.20, vulnerability scan clean | **No** |
+| #19 | 21: creative-housing | Free, unlimited fixtures (1,706) and free lots, behind settings; creative pieces marked so they never become items; catalog cap setting for the editor | **No** |
 
 ## Direction (2026-10-06)
 
@@ -59,9 +60,9 @@ tasks 17 and 19.
 ## Next
 
 - **Playtest.** Nothing is verified in game yet. Task 11 compiles one ordered plan from every PR's checklist.
-- **Now:** task 21 (creative housing), started on the last $5 of credit and continuing on Nate's plan. Then the
-  playtest, then the phases in `docs/design/evergrove-housing.md`. Specced but not started: 17 (quest turn-in
-  id), 19 (coin store resend). To spec: whole-client file pinning, and forged-packet disconnects.
+- **Now:** the housing playtest (top priority; Claude sets up the servers and secret files on Nate's PC), with
+  task 22 (client pinning) able to run in parallel. The cloud credit is used up; work continues on Nate's plan.
+  Nate also wants help setting up the Discord server.
 - **Before launch:** name decided (Evergrove; confirm the launcher app id), domain bought (`evergrove.fyi` at Porkbun), decide on client
   hosting, fill in the `FreeRealms.exe` hash, and run the playtest. Self-hosting OSFR's asset server comes later,
   with the art pipeline.
@@ -83,4 +84,4 @@ tasks 17 and 19.
 ## Cloud credit
 
 $100 one-time credit, expires 4 November 2026. Measured costs: task 1 ~$2 (including a blocked first attempt),
-task 2 ~$5, tasks 3 and 5 ~$7 together, tasks 4, 6, 7 and 8 ~$8 together, tasks 9-11 plus task 12's first attempt ~$29 together, tasks 13-15 ~$23 together, task 12's launcher ~$11, tasks 18 and 20 ~$8, task 16 ~$2. The last $5 went to task 21.
+task 2 ~$5, tasks 3 and 5 ~$7 together, tasks 4, 6, 7 and 8 ~$8 together, tasks 9-11 plus task 12's first attempt ~$29 together, tasks 13-15 ~$23 together, task 12's launcher ~$11, tasks 18 and 20 ~$8, task 16 ~$2, task 21 the last ~$5. **Credit used up.**

@@ -118,7 +118,7 @@ Station Cash stays the **premium currency**, but it's **earned, never bought**: 
 | Rating | Plain average on `DbHouse.Rating`. Needs: weekly vote-weighted score |
 | Featured house | Top of the directory sort. Needs: last week's confirmed winner |
 | Houses | One per character per lot type; no limit on how many. Needs: personal and ranked plots per account |
-| Fixtures | Bought, consumed when placed, returned when picked up. Task 21 makes them free |
+| Fixtures | **Free (PR #19):** `Housing:CreativeMode` offers all 1,706 placeable fixtures, unlimited; each placed piece records `IsCreative`, so it never returns an item. Wallpapers, floors and lots (`Housing:FreeLots`) are free. Dyeable pieces appear once, in their default colour |
 | Station Cash | A per-character balance with no way to earn it. Needs everything in section 4 |
 | Experience and levels | Not yet. OSFR PR #120 |
 
