@@ -40,7 +40,7 @@ the source goes public at launch. Strictly defensive.
   task 21 (creative housing), then the playtest, then the phases in `docs/design/evergrove-housing.md`. Specced
   but not started: 17 (quest turn-in id), 19 (coin store resend). To spec: whole-client file pinning, and
   forged-packet disconnects (both found by tasks 18 and 20).
-- **Before launch:** name decided (Evergrove; confirm the launcher app id), buy a domain, decide on client
+- **Before launch:** name decided (Evergrove; confirm the launcher app id), domain bought (`evergrove.fyi` at Porkbun), decide on client
   hosting, fill in the `FreeRealms.exe` hash, and run the playtest. Self-hosting OSFR's asset server comes later,
   with the art pipeline.
 - **Security and stability fixes:** tasks 13–17 in `docs/cloud-tasks.md`, from the audit (F1–F13) and the
