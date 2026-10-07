@@ -24,7 +24,8 @@ services:
       dockerfile: Docker/Sanctuary.WebAPI.dockerfile
     restart: unless-stopped
     ports:
-      - "20040:20040"
+      # Loopback only: put a TLS proxy such as Caddy in front (docs/webapi.md). Never expose plain HTTP.
+      - "127.0.0.1:20040:20040"
     volumes: &common-volumes
       - ../../logs:/app/Logs
       - ../../src/Resources:/app/Resources
@@ -36,6 +37,7 @@ services:
       Server__LoginGatewayAddress: sanctuary.login:20041
       Server__ServerAddress: localhost:20260 # replace 'localhost' with your public IP or domain name
       Urls: http://0.0.0.0:20040
+      WebAPI__TrustedProxies__0: 172.16.0.0/12 # Docker's bridge gateway, which loopback connections arrive from
     depends_on:
       sanctuary.mysql:
         condition: service_healthy

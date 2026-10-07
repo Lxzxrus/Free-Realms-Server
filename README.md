@@ -197,6 +197,13 @@ runs from.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+### Public server
+
+WebAPI (accounts, login and portraits) must sit behind HTTPS. [docs/webapi.md](docs/webapi.md) covers running it
+behind Caddy, its rate limits and lockouts, and what a launcher must expect from it.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 <!-- USAGE EXAMPLES -->
 ## Usage
 

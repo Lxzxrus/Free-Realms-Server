@@ -56,9 +56,12 @@ start() {
     export Server__LoginGatewayChallenge="$(openssl rand -base64 32)"
 
     # Every bot connects from this machine's address, so lift the per-address limits a public server keeps
-    # (Udp section, see PlayerUdpOptions). Everything else stays at the launch defaults.
+    # (Udp section, see PlayerUdpOptions; WebAPI's RateLimits, see docs/webapi.md). Everything else stays at the
+    # launch defaults.
     export Udp__MaxConnectionsPerIp=0
     export Udp__ConnectRatePerIp=0
+    export WebAPI__RateLimits__LoginPerMinute=100000
+    export WebAPI__RateLimits__RegisterPerHour=100000
 
     # Login applies the migrations, so it goes first.
     launch Login "$logs/login.log"

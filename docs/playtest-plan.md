@@ -67,7 +67,7 @@ Two clients on the server PC is the simplest setup. `run_client.py` makes the cl
 
 A second PC needs three settings changed from `127.0.0.1` to the server's LAN address first, in the local files
 from S1: `Urls` in `appsettings.local.json`, `Server:ServerAddress` in `gateway.local.json`, and
-`Portrait:UploadUrl` in the WebAPI's `LaunchArguments`. The `*.local.example.json` beside each file shows where
+`WebAPI:PortraitUploadUrl` in `appsettings.local.json`. The `*.local.example.json` beside each file shows where
 each setting goes. Then run `run_client.py -a <server-ip> …` on that PC.
 
 `run_client.py` logs every account in with the password `testtest`. That is a developer shortcut, and Task 12
@@ -219,7 +219,7 @@ would be the client's second lock packet, sub-opcode 22, which nothing handles y
 | W2 | #8.4 | W | Preview a style card, then use one | The preview shows. Using it applies the style and removes one card | – | |
 | W3 | #8.7 | W | Summon a mount, ride, dismount | Each works | No `Failed to deserialize` for mounts | |
 | W4 | #8.8 | W | Open the coin store: buy an item, sell an item. Open the member store (Marketplace) and buy something | Coins go down and up by the right amounts. The items appear and disappear | No `Failed to deserialize` for the coin store or in-game purchases | |
-| W5 | #8.9, #3.2 | W | Open the Fotomat and upload a portrait | The upload succeeds. A correct portrait (70×70 thumbnail, 180×330 image) is accepted | WebAPI: a `POST /image` request with status 200 | |
+| W5 | #8.9, #3.2 | W | Open the Fotomat and upload a portrait | The upload succeeds. A correct portrait (70×70 thumbnail, 180×330 image) is accepted | WebAPI: a `POST /image/<token>` request with status 200, and no `Portrait upload refused` line | |
 | W6 | #8.10 | W | If the client lets you, check a new name and request a name change | The check answers. Cancel the change if you don't want it | No `Failed to deserialize` for name change | |
 | W7 | #8.11 | W | Click an npc and pick a dialog option | The dialog continues | – | |
 | W8 | #4.13 | W | Gather a few collection nodes that aren't quest nodes, such as mushrooms | They drop items as before | – | |
@@ -334,7 +334,7 @@ won't let you close a turn-in window without answering, mark QX1 "n/a" and say s
 | ID | From | Who | Do | Expect | Gateway log | ✓/✗ |
 |---|---|---|---|---|---|---|
 | P1 | #8.12, #3.3 | N | Next to W, use a cake with several spawn effects, then one with a one-shot animation | W sees every spawn effect, and sees the animation switch on and back off | – | |
-| P2 | #3.2 | W | If the Fotomat lets you, upload a portrait with the wrong size in only one dimension | Refused (the old check only refused images where both dimensions were wrong) | WebAPI: `POST /image` with a 4xx status | |
+| P2 | #3.2 | W | If the Fotomat lets you, upload a portrait with the wrong size in only one dimension | Refused (the old check only refused images where both dimensions were wrong) | WebAPI: `POST /image/<token>` with a 4xx status | |
 | P3 | – | W | Log out. Log in as `bantest` (`python run_client.py -l bantest`), create a character and enter the world | Works | – | |
 | P4 | #3.1 | N | `!mod ban <bantest's character name> 10` | N sees "… has been banned until …". bantest is disconnected | Audit line `mod\|Ban\|…`. In Development it goes to the Gateway console and Info log, not `Audit-<date>.log` | |
 | P5 | #3.1, #3.4 | W | `python run_client.py -l bantest` again | The script prints `Failed to login (403)`, then fails on registering (409 Conflict), because the script retries banned logins as new registrations. Nothing reaches character select | WebAPI: `Login failed, account is banned for username: bantest`. The request and response lines show **no body, password or session id** | |

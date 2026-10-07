@@ -54,4 +54,5 @@
   <Project Path="Sanctuary.Scripting/Sanctuary.Scripting.csproj" />
   <Project Path="Sanctuary.Scripting.Tests/Sanctuary.Scripting.Tests.csproj" />
   <Project Path="Sanctuary.WebAPI/Sanctuary.WebAPI.csproj" />
+  <Project Path="Sanctuary.WebAPI.Tests/Sanctuary.WebAPI.Tests.csproj" />
 </Solution>

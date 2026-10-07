@@ -55,8 +55,10 @@ On the Optiplex:
    tells clients the Gateway is at `127.0.0.1:20260`. For the test, start them with:
 
    ```bash
-   # WebAPI: listen on the LAN (Urls overrides appsettings.json)
-   Urls=http://0.0.0.0:20040 dotnet Sanctuary.WebAPI.dll
+   # WebAPI: listen on the LAN (Urls overrides appsettings.json), and let one address log in every bot
+   # (the default limits are per address; docs/webapi.md)
+   Urls=http://0.0.0.0:20040 WebAPI__RateLimits__LoginPerMinute=1000 WebAPI__RateLimits__RegisterPerHour=1000 \
+       dotnet Sanctuary.WebAPI.dll
    # Gateway: hand out the Optiplex's LAN address (or pass --gateway-address to the bot instead)
    Server__ServerAddress=192.168.1.50:20260 dotnet Sanctuary.Gateway.dll
    ```
