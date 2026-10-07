@@ -3,7 +3,7 @@
 *Where the project stands. **Only Nate or his local Claude session edits this file**, after merges. Cloud
 sessions read it but never change it, so parallel PRs can't conflict on it.*
 
-Last updated: 2026-10-07.
+Last updated: 2026-10-08.
 
 ## Merged into `main`
 
@@ -24,6 +24,8 @@ Last updated: 2026-10-07.
 | #14 | 14: udp-hardening | F4 fault isolation, F5 per-IP and size limits, F10 fault counter, 4 MiB buffers, backlog limits (`docs/udp-limits.md`); 200 clustered bots, no drops | **No** |
 | #13 | 15: webapi-hardening | F6 signed `/image/<token>` portraits, F7 rate limits and lockouts, forwarded headers, Caddy/HTTPS doc (`docs/webapi.md`) | **No** |
 | #15 | 12: launcher | OSFR's launcher made ours: no stored passwords, HTTPS-only outside the LAN, path guards. Name, domain and client hosting are placeholders | **No** |
+| #16 | 18: status-reflection | Every reply to an unverified sender is no larger than its request and rate-limited (five reflection paths closed); launcher pads its status ping | **No** |
+| #17 | 20: launcher-supply-chain | Launcher updates only from this repo's GitHub Releases (manual workflow on `main`); `FreeRealms.exe` hash pin, which must be filled in before a release | **No** |
 
 ## Direction (2026-10-06)
 
@@ -34,10 +36,12 @@ the source goes public at launch. Strictly defensive.
 ## Next
 
 - **Playtest.** Nothing is verified in game yet. Task 11 compiles one ordered plan from every PR's checklist.
-- **On the last credit:** tasks 18 (status-reply reflection) and 20 (launcher updates from GitHub Releases), then
-  16 if at least $5 is left. Tasks 17 and 19 later, on Nate's plan.
-- **Before launch:** pick the name (the launcher's app id can't change after release), buy a domain, set real
-  starting coins, decide on client hosting, and run the playtest. Self-hosting OSFR's asset server comes later,
+- **On the last credit:** task 16 (Lua sandbox and dependency patch). After that, work continues on Nate's plan:
+  task 21 (creative housing), then the playtest, then the phases in `docs/design/evergrove-housing.md`. Specced
+  but not started: 17 (quest turn-in id), 19 (coin store resend). To spec: whole-client file pinning, and
+  forged-packet disconnects (both found by tasks 18 and 20).
+- **Before launch:** name decided (Evergrove; confirm the launcher app id), buy a domain, decide on client
+  hosting, fill in the `FreeRealms.exe` hash, and run the playtest. Self-hosting OSFR's asset server comes later,
   with the art pipeline.
 - **Security and stability fixes:** tasks 13–17 in `docs/cloud-tasks.md`, from the audit (F1–F13) and the
   load test. 13–15 are launch blockers. The audit's backdoor review of imported code found nothing deliberate.
@@ -57,4 +61,4 @@ the source goes public at launch. Strictly defensive.
 ## Cloud credit
 
 $100 one-time credit, expires 4 November 2026. Measured costs: task 1 ~$2 (including a blocked first attempt),
-task 2 ~$5, tasks 3 and 5 ~$7 together, tasks 4, 6, 7 and 8 ~$8 together, tasks 9-11 plus task 12's first attempt ~$29 together, tasks 13-15 ~$23 together, task 12's launcher ~$11. $15 left.
+task 2 ~$5, tasks 3 and 5 ~$7 together, tasks 4, 6, 7 and 8 ~$8 together, tasks 9-11 plus task 12's first attempt ~$29 together, tasks 13-15 ~$23 together, task 12's launcher ~$11, tasks 18 and 20 ~$8. $7 left, going to task 16.
