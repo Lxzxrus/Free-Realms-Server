@@ -17,7 +17,7 @@ namespace Sanctuary.Database.MySql.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.17")
+                .HasAnnotation("ProductVersion", "9.0.20")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -405,6 +405,9 @@ namespace Sanctuary.Database.MySql.Migrations
 
                     b.Property<ulong>("HouseId")
                         .HasColumnType("bigint unsigned");
+
+                    b.Property<bool>("IsCreative")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<int>("ItemDefinitionId")
                         .HasColumnType("int");

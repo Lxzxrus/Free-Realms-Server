@@ -14,6 +14,12 @@ public class DbHouseFixture
     public int ItemDefinitionId { get; set; }
     public int TintId { get; set; }
 
+    /// <summary>
+    /// Placed from the creative catalog rather than from inventory. Picking it up never gives an item back, whatever
+    /// <c>Housing:CreativeMode</c> is set to later, so a creative fixture can't become a tradeable item.
+    /// </summary>
+    public bool IsCreative { get; set; }
+
     public float PositionX { get; set; }
     public float PositionY { get; set; }
     public float PositionZ { get; set; }

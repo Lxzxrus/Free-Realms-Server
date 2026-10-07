@@ -11,11 +11,13 @@ using System.Threading.Tasks;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using Sanctuary.Core.Collections;
 using Sanctuary.Core.Extensions;
 using Sanctuary.Core.IO;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Packet;
@@ -31,6 +33,7 @@ public abstract class BaseZone : IZone, IDisposable
 {
     private readonly ILogger _logger;
     protected readonly IResourceManager _resourceManager;
+    private readonly HousingOptions _housingOptions;
     private readonly IZoneManager _zoneManager;
     private readonly ITradeManager _tradeManager;
     private readonly IScriptManager _scriptManager;
@@ -94,6 +97,7 @@ public abstract class BaseZone : IZone, IDisposable
     {
         _zoneDefinition = zoneDefinition;
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _housingOptions = serviceProvider.GetRequiredService<IOptions<HousingOptions>>().Value;
         _zoneManager = serviceProvider.GetRequiredService<IZoneManager>();
         _tradeManager = serviceProvider.GetRequiredService<ITradeManager>();
 
@@ -495,8 +499,14 @@ public abstract class BaseZone : IZone, IDisposable
 
                 var valid = storeBundle.Entries.All(x => _resourceManager.ClientItemDefinitions.ContainsKey(x.MarketingItemId));
 
-                if (valid)
-                    packetInGamePurchaseStoreBundles.Store.Bundles.Add(storeBundle.Id, storeBundle);
+                if (!valid)
+                    continue;
+
+                var sentBundle = containsHouseItem && _housingOptions.FreeLots
+                    ? storeBundle.AsFree()
+                    : storeBundle;
+
+                packetInGamePurchaseStoreBundles.Store.Bundles.Add(storeBundle.Id, sentBundle);
             }
 
             player.SendTunneled(packetInGamePurchaseStoreBundles);

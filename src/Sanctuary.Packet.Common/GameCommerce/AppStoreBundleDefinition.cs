@@ -15,6 +15,23 @@ public class AppStoreBundleDefinition : StoreBundleDefinition
     public int ForceCanPreview { get; set; }
     public int PreviewAnimId { get; set; }
 
+    /// <summary>
+    /// A copy of this bundle with every price set to 0, for something the server gives away. It shares
+    /// <see cref="MarketingBundleDefinition.Entries"/> and <see cref="MarketingBundleDefinition.Image"/> with this one.
+    /// </summary>
+    public AppStoreBundleDefinition AsFree()
+    {
+        var copy = (AppStoreBundleDefinition)MemberwiseClone();
+
+        copy.Price = 0;
+        copy.AltPrice = 0;
+        copy.AltCurrencyPrice = 0;
+        copy.MembersOnlyPrice = 0;
+        copy.SalePrice = 0;
+
+        return copy;
+    }
+
     public override void Serialize(PacketWriter writer)
     {
         base.Serialize(writer);

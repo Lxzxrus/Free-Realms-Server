@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
@@ -36,11 +37,17 @@ public sealed class HousingZoneRuntime : IDisposable
         int ItemDefinitionId,
         int ItemRecordId,
         int TintId,
-        bool HoverActive);
+        bool HoverActive,
+        bool IsCreative)
+    {
+        public HousingFixtureLedger.Source Source => new(ItemDefinitionId, TintId, ItemRecordId, IsCreative);
+    }
 
     private readonly HousingZone _zone;
     private readonly IResourceManager _resourceManager;
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
+    private readonly HousingOptions _options;
+    private readonly HousingCreativeCatalog _creativeCatalog;
     private readonly ILogger _logger;
     private readonly object _mutationLock = new();
     private readonly Dictionary<int, Npc> _actors = [];
@@ -55,6 +62,8 @@ public sealed class HousingZoneRuntime : IDisposable
         _zone = zone;
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
+        _options = serviceProvider.GetRequiredService<IOptions<HousingOptions>>().Value;
+        _creativeCatalog = serviceProvider.GetRequiredService<HousingCreativeCatalog>();
         _logger = serviceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger($"Housing {zone.HouseId}");
     }
@@ -259,6 +268,15 @@ public sealed class HousingZoneRuntime : IDisposable
             if (!CanEdit(player))
                 return;
 
+            // In creative mode the editor lists only the catalog, so only a catalog entry can be placed.
+            if (_options.CreativeMode)
+            {
+                if (_creativeCatalog.TryGetByRecordId(itemRecordId, out var entry))
+                    StartPendingPlacement(player, CreativeSource(entry));
+
+                return;
+            }
+
             using var dbContext = _dbContextFactory.CreateDbContext();
             var characterId = GuidHelper.GetPlayerId(player.Guid);
             var item = dbContext.Items.AsNoTracking().FirstOrDefault(candidate =>
@@ -269,7 +287,7 @@ public sealed class HousingZoneRuntime : IDisposable
             if (item is null || !IsFixtureInventoryItem(item.Definition))
                 return;
 
-            StartPendingPlacement(player, item);
+            StartPendingPlacement(player, InventorySource(item));
         }
     }
 
@@ -293,6 +311,25 @@ public sealed class HousingZoneRuntime : IDisposable
                 return;
             }
 
+            if (_options.CreativeMode)
+            {
+                if (_creativeCatalog.TryGetByRecordOrDefinitionId(itemDefinitionId, out var entry))
+                {
+                    var source = CreativeSource(entry);
+                    var directCreative = new PendingPlacement(
+                        0,
+                        Guid.NewGuid(),
+                        source.ItemDefinitionId,
+                        source.ItemRecordId,
+                        source.TintId,
+                        true,
+                        true);
+                    CommitPlacement(player, directCreative, position, rotation, scale, false);
+                }
+
+                return;
+            }
+
             using var dbContext = _dbContextFactory.CreateDbContext();
             var characterId = GuidHelper.GetPlayerId(player.Guid);
             var item = dbContext.Items
@@ -313,7 +350,8 @@ public sealed class HousingZoneRuntime : IDisposable
                 item.Definition,
                 item.Id,
                 ResolveItemTintId(item.Definition, item.Tint),
-                true);
+                true,
+                false);
             CommitPlacement(player, direct, position, rotation, scale, false);
         }
     }
@@ -398,36 +436,23 @@ public sealed class HousingZoneRuntime : IDisposable
 
             using var dbContext = _dbContextFactory.CreateDbContext();
             var characterId = GuidHelper.GetPlayerId(player.Guid);
-            var fixture = dbContext.HouseFixtures.FirstOrDefault(candidate =>
-                candidate.Id == fixtureId &&
-                candidate.HouseId == _zone.HouseId &&
-                candidate.House.CharacterId == characterId);
-
-            if (fixture is null)
+            if (!HousingFixtureLedger.TryPickup(dbContext, _zone.HouseId, characterId, fixtureId, out var inventoryItem))
                 return;
 
-            var inventoryItem = TryReturnInventoryItem(dbContext, characterId, fixture.ItemDefinitionId, fixture.TintId, 1);
-            if (inventoryItem is null)
-                return;
+            if (inventoryItem is not null)
+                UpdateReturnedInventoryItem(player, inventoryItem);
 
-            dbContext.HouseFixtures.Remove(fixture);
-
-            var house = dbContext.Houses.First(candidate => candidate.Id == _zone.HouseId);
-            house.FurnitureScore = Math.Max(0, house.FurnitureScore - 1);
-            dbContext.SaveChanges();
-
-            UpdateReturnedInventoryItem(player, inventoryItem);
-            RemoveActor(fixture.Id);
+            RemoveActor(fixtureId);
             Broadcast(new HousingPacketRemoveFixture
             {
-                FixtureGuid = GuidHelper.GetFixtureGuid((ulong)fixture.Id)
+                FixtureGuid = GuidHelper.GetFixtureGuid((ulong)fixtureId)
             });
 
             dbContext.ChangeTracker.Clear();
             var refreshedHouse = LoadHouse(dbContext);
             if (refreshedHouse is not null)
             {
-                SendFixtureItemList(player, refreshedHouse);
+                SendFixtureItemListUnlessCreative(player, refreshedHouse);
                 BroadcastHouseInfo(refreshedHouse);
             }
         }
@@ -444,35 +469,15 @@ public sealed class HousingZoneRuntime : IDisposable
 
             using var dbContext = _dbContextFactory.CreateDbContext();
             var characterId = GuidHelper.GetPlayerId(player.Guid);
-            var house = dbContext.Houses
-                .Include(candidate => candidate.Fixtures)
-                .FirstOrDefault(candidate =>
-                    candidate.Id == _zone.HouseId &&
-                    candidate.CharacterId == characterId);
-
-            if (house is null)
-                return;
-
-            var returnedItems = new List<DbItem>();
-            foreach (var group in house.Fixtures.GroupBy(fixture =>
-                         new { fixture.ItemDefinitionId, fixture.TintId }))
-            {
-                var returnedItem = TryReturnInventoryItem(
+            if (!HousingFixtureLedger.TryPickupAll(
                     dbContext,
+                    _zone.HouseId,
                     characterId,
-                    group.Key.ItemDefinitionId,
-                    group.Key.TintId,
-                    group.Count());
-                if (returnedItem is null)
-                    return;
-
-                returnedItems.Add(returnedItem);
+                    out var fixtureIds,
+                    out var returnedItems))
+            {
+                return;
             }
-
-            var fixtureIds = house.Fixtures.Select(fixture => fixture.Id).ToList();
-            dbContext.HouseFixtures.RemoveRange(house.Fixtures);
-            house.FurnitureScore = 0;
-            dbContext.SaveChanges();
 
             foreach (var item in returnedItems)
                 UpdateReturnedInventoryItem(player, item);
@@ -490,7 +495,7 @@ public sealed class HousingZoneRuntime : IDisposable
             var refreshedHouse = LoadHouse(dbContext);
             if (refreshedHouse is not null)
             {
-                SendFixtureItemList(player, refreshedHouse);
+                SendFixtureItemListUnlessCreative(player, refreshedHouse);
                 BroadcastHouseInfo(refreshedHouse);
             }
         }
@@ -569,23 +574,44 @@ public sealed class HousingZoneRuntime : IDisposable
 
             using var dbContext = _dbContextFactory.CreateDbContext();
             var characterId = GuidHelper.GetPlayerId(player.Guid);
-            var item = dbContext.Items.FirstOrDefault(candidate =>
-                candidate.CharacterId == characterId &&
-                candidate.Id == itemRecordOrDefinitionId &&
-                candidate.Count > 0);
-            item ??= dbContext.Items
-                .Where(candidate =>
-                    candidate.CharacterId == characterId &&
-                    candidate.Definition == itemRecordOrDefinitionId &&
-                    candidate.Count > 0)
-                .OrderBy(candidate => candidate.Id)
-                .FirstOrDefault();
 
-            if (item is null ||
-                !_resourceManager.ClientItemDefinitions.TryGetValue(item.Definition, out var definition) ||
+            // In creative mode a wallpaper or floor comes from the catalog and uses nothing up.
+            DbItem? item = null;
+            int itemDefinitionId;
+            int tintId;
+            if (_options.CreativeMode)
+            {
+                if (!_creativeCatalog.TryGetByRecordOrDefinitionId(itemRecordOrDefinitionId, out var entry))
+                    return;
+
+                itemDefinitionId = entry.ItemDefinitionId;
+                tintId = entry.TintId;
+            }
+            else
+            {
+                item = dbContext.Items.FirstOrDefault(candidate =>
+                    candidate.CharacterId == characterId &&
+                    candidate.Id == itemRecordOrDefinitionId &&
+                    candidate.Count > 0);
+                item ??= dbContext.Items
+                    .Where(candidate =>
+                        candidate.CharacterId == characterId &&
+                        candidate.Definition == itemRecordOrDefinitionId &&
+                        candidate.Count > 0)
+                    .OrderBy(candidate => candidate.Id)
+                    .FirstOrDefault();
+
+                if (item is null)
+                    return;
+
+                itemDefinitionId = item.Definition;
+                tintId = item.Tint;
+            }
+
+            if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) ||
                 !HousingPlacementCatalog.IsFixtureCustomization(definition) ||
                 HousingSurfaceCatalog.GetTargetModelIds(_zone.Name, fixtureType).Count == 0 ||
-                HousingSurfaceCatalog.GetTextureOverride(item.Definition).Length == 0)
+                HousingSurfaceCatalog.GetTextureOverride(itemDefinitionId).Length == 0)
             {
                 return;
             }
@@ -603,29 +629,32 @@ public sealed class HousingZoneRuntime : IDisposable
             customizations.Add(new HouseSurfaceCustomization(
                 fixtureGroup,
                 fixtureType,
-                item.Definition,
-                item.Tint));
+                itemDefinitionId,
+                tintId));
             house.CustomizationData = JsonSerializer.Serialize(customizations);
 
-            var sourceItemId = item.Id;
-            var sourceItemCount = item.Count - 1;
-            var itemDefinitionId = item.Definition;
-            var tintId = item.Tint;
-            if (sourceItemCount == 0)
-                dbContext.Items.Remove(item);
-            else
-                item.Count = sourceItemCount;
+            var sourceItemId = item?.Id ?? 0;
+            var sourceItemCount = item is null ? 0 : item.Count - 1;
+            if (item is not null)
+            {
+                if (sourceItemCount == 0)
+                    dbContext.Items.Remove(item);
+                else
+                    item.Count = sourceItemCount;
+            }
 
             dbContext.SaveChanges();
 
-            UpdateConsumedInventoryItem(player, sourceItemId, sourceItemCount);
+            if (item is not null)
+                UpdateConsumedInventoryItem(player, sourceItemId, sourceItemCount);
+
             foreach (var recipient in _zone.Players)
                 SendHouseCustomization(recipient, fixtureGroup, fixtureType, itemDefinitionId, tintId);
 
             dbContext.ChangeTracker.Clear();
             var refreshedHouse = LoadHouse(dbContext);
             if (refreshedHouse is not null)
-                SendFixtureItemList(player, refreshedHouse);
+                SendFixtureItemListUnlessCreative(player, refreshedHouse);
         }
     }
 
@@ -689,7 +718,7 @@ public sealed class HousingZoneRuntime : IDisposable
             using var dbContext = _dbContextFactory.CreateDbContext();
             var house = LoadHouse(dbContext);
             if (house is not null)
-                SendFixtureItemList(player, house);
+                SendFixtureItemListUnlessCreative(player, house);
         }
     }
 
@@ -725,52 +754,18 @@ public sealed class HousingZoneRuntime : IDisposable
                         return;
                     }
 
-                    var characterId = GuidHelper.GetPlayerId(player.Guid);
-                    var house = strategyContext.Houses
-                        .Include(candidate => candidate.Fixtures)
-                        .FirstOrDefault(candidate =>
-                            candidate.Id == _zone.HouseId &&
-                            candidate.CharacterId == characterId);
-
-                    if (house is null || house.Fixtures.Count >= house.MaxFixtureCount)
+                    if (!pending.IsCreative && !IsFixtureInventoryItem(pending.ItemDefinitionId))
                         return;
 
-                    var item = strategyContext.Items.FirstOrDefault(candidate =>
-                        candidate.CharacterId == characterId &&
-                        candidate.Id == pending.ItemRecordId &&
-                        candidate.Definition == pending.ItemDefinitionId &&
-                        candidate.Count > 0);
-
-                    if (item is null || !IsFixtureInventoryItem(item.Definition))
-                        return;
-
-                    sourceItemCount = item.Count - 1;
-                    var fixture = new DbHouseFixture
-                    {
-                        HouseId = house.Id,
-                        PlacementToken = pending.PlacementToken,
-                        ItemDefinitionId = item.Definition,
-                        TintId = ResolveItemTintId(item.Definition, item.Tint),
-                        PositionX = position.X,
-                        PositionY = position.Y,
-                        PositionZ = position.Z,
-                        PositionW = position.W,
-                        RotationX = rotation.X,
-                        RotationY = rotation.Y,
-                        RotationZ = rotation.Z,
-                        RotationW = rotation.W,
-                        Scale = scale,
-                        Created = DateTimeOffset.UtcNow
-                    };
-
-                    if (sourceItemCount == 0)
-                        strategyContext.Items.Remove(item);
-                    else
-                        item.Count = sourceItemCount;
-
-                    house.FurnitureScore++;
-                    strategyContext.HouseFixtures.Add(fixture);
-                    strategyContext.SaveChanges();
+                    HousingFixtureLedger.Place(
+                        strategyContext,
+                        _zone.HouseId,
+                        GuidHelper.GetPlayerId(player.Guid),
+                        pending.PlacementToken,
+                        pending.Source,
+                        position,
+                        rotation,
+                        scale);
                 },
                 () =>
                 {
@@ -785,12 +780,14 @@ public sealed class HousingZoneRuntime : IDisposable
             savedFixture = resultContext.HouseFixtures.AsNoTracking().SingleOrDefault(fixture =>
                 fixture.HouseId == _zone.HouseId &&
                 fixture.PlacementToken == pending.PlacementToken);
-            sourceItemCount = resultContext.Items.AsNoTracking()
-                .Where(item =>
-                    item.CharacterId == GuidHelper.GetPlayerId(player.Guid) &&
-                    item.Id == pending.ItemRecordId)
-                .Select(item => (int?)item.Count)
-                .SingleOrDefault() ?? 0;
+            sourceItemCount = pending.IsCreative
+                ? 0
+                : resultContext.Items.AsNoTracking()
+                    .Where(item =>
+                        item.CharacterId == GuidHelper.GetPlayerId(player.Guid) &&
+                        item.Id == pending.ItemRecordId)
+                    .Select(item => (int?)item.Count)
+                    .SingleOrDefault() ?? 0;
         }
         catch (Exception exception) when (exception is DbUpdateException or RetryLimitExceededException)
         {
@@ -808,7 +805,9 @@ public sealed class HousingZoneRuntime : IDisposable
         if (removePreview)
             RemovePreview(player, pending.FixtureGuid);
 
-        UpdateConsumedInventoryItem(player, pending.ItemRecordId, sourceItemCount);
+        if (!pending.IsCreative)
+            UpdateConsumedInventoryItem(player, pending.ItemRecordId, sourceItemCount);
+
         EnsureActor(savedFixture);
         BroadcastFixtureUpdate(savedFixture, 0);
         var actorGuid = GetActorGuid(savedFixture.Id);
@@ -827,6 +826,18 @@ public sealed class HousingZoneRuntime : IDisposable
         if (refreshedHouse is null)
             return;
 
+        // A creative entry is a stack that never runs out: the next piece is ready to place, as it is after placing
+        // one from a stack of several.
+        if (pending.IsCreative)
+        {
+            BroadcastHouseInfo(refreshedHouse);
+
+            if (refreshedHouse.Fixtures.Count < refreshedHouse.MaxFixtureCount)
+                StartPendingPlacement(player, pending.Source);
+
+            return;
+        }
+
         if (sourceItemCount == 0)
             SendFixtureItemList(player, refreshedHouse);
         BroadcastHouseInfo(refreshedHouse);
@@ -838,11 +849,11 @@ public sealed class HousingZoneRuntime : IDisposable
                 candidate.Id == pending.ItemRecordId &&
                 candidate.Count > 0);
             if (sourceItem is not null)
-                StartPendingPlacement(player, sourceItem);
+                StartPendingPlacement(player, InventorySource(sourceItem));
         }
     }
 
-    private void StartPendingPlacement(Player player, DbItem item)
+    private void StartPendingPlacement(Player player, HousingFixtureLedger.Source source)
     {
         CancelPendingPlacement(player);
 
@@ -851,13 +862,28 @@ public sealed class HousingZoneRuntime : IDisposable
         var pending = new PendingPlacement(
             fixtureGuid,
             Guid.NewGuid(),
-            item.Definition,
-            item.Id,
-            ResolveItemTintId(item.Definition, item.Tint),
-            false);
+            source.ItemDefinitionId,
+            source.ItemRecordId,
+            source.TintId,
+            false,
+            source.IsCreative);
         _pendingPlacements[player.Guid] = pending;
 
-        SendFixtureAsset(player, item.Definition, pending.TintId, true);
+        SendFixtureAsset(player, source.ItemDefinitionId, pending.TintId, true);
+    }
+
+    private HousingFixtureLedger.Source InventorySource(DbItem item)
+    {
+        return new HousingFixtureLedger.Source(
+            item.Definition,
+            ResolveItemTintId(item.Definition, item.Tint),
+            item.Id,
+            false);
+    }
+
+    private static HousingFixtureLedger.Source CreativeSource(HousingCreativeCatalog.Entry entry)
+    {
+        return new HousingFixtureLedger.Source(entry.ItemDefinitionId, entry.TintId, entry.RecordId, true);
     }
 
     private void CancelPendingPlacement(Player player)
@@ -975,6 +1001,16 @@ public sealed class HousingZoneRuntime : IDisposable
         };
     }
 
+    /// <summary>
+    /// For when the player's inventory has changed. In creative mode the list is the catalog, which inventory doesn't
+    /// change, so it isn't sent again.
+    /// </summary>
+    private void SendFixtureItemListUnlessCreative(Player player, DbHouse house)
+    {
+        if (!_options.CreativeMode)
+            SendFixtureItemList(player, house);
+    }
+
     private void SendFixtureItemList(Player player, DbHouse house)
     {
         var packet = new HousingPacketFixtureItemList();
@@ -982,6 +1018,13 @@ public sealed class HousingZoneRuntime : IDisposable
 
         foreach (var fixture in house.Fixtures.OrderBy(candidate => candidate.Id))
             TryAddFixtureDefinition(packet, definitionIds, fixture.ItemDefinitionId);
+
+        if (_options.CreativeMode)
+        {
+            AddCreativeCatalog(packet, definitionIds);
+            player.SendTunneled(packet);
+            return;
+        }
 
         foreach (var item in player.Items
             .Where(item => item.Count > 0 && IsFixtureInventoryItem(item.Definition))
@@ -1013,6 +1056,35 @@ public sealed class HousingZoneRuntime : IDisposable
         player.SendTunneled(packet);
     }
 
+    private void AddCreativeCatalog(HousingPacketFixtureItemList packet, HashSet<int> definitionIds)
+    {
+        var effects = new HashSet<int>();
+        var entries = _options.CreativeCatalogLimit > 0
+            ? _creativeCatalog.Entries.Take(_options.CreativeCatalogLimit)
+            : _creativeCatalog.Entries;
+
+        foreach (var entry in entries)
+        {
+            if (definitionIds.Add(entry.ItemDefinitionId))
+                packet.Definitions.Add(entry.Definition);
+
+            packet.Infos.Add(new FixtureInstanceInfo
+            {
+                FixtureGuid = unchecked((ulong)entry.RecordId),
+                ItemDefinitionId = entry.ItemDefinitionId,
+                CouplingDisplay =
+                {
+                    Id = entry.RecordId,
+                    CompositeEffect = entry.Definition.CompositeEffectId,
+                    EffectType = 0
+                }
+            });
+
+            if (entry.Definition.CompositeEffectId != 0 && effects.Add(entry.Definition.CompositeEffectId))
+                packet.Effects.Add(entry.Definition.CompositeEffectId);
+        }
+    }
+
     private bool TryAddFixtureDefinition(
         HousingPacketFixtureItemList packet,
         HashSet<int> definitionIds,
@@ -1034,36 +1106,7 @@ public sealed class HousingZoneRuntime : IDisposable
 
     private FixtureDefinition? BuildFixtureDefinition(int itemDefinitionId)
     {
-        if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var itemDefinition))
-            return null;
-
-        var isCustomization = HousingPlacementCatalog.IsFixtureCustomization(itemDefinition);
-        var hasPlacement = HousingPlacementCatalog.TryGet(itemDefinitionId, out var placement);
-        var modelId = ResolveFixtureModelId(itemDefinitionId);
-        var assetName = hasPlacement ? placement.AssetName : itemDefinition.ModelName ?? string.Empty;
-
-        if (modelId == 0 &&
-            !isCustomization &&
-            !assetName.EndsWith(".agr", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        return new FixtureDefinition
-        {
-            Id = itemDefinitionId,
-            ItemDefinitionId = itemDefinitionId,
-            Unknown3 = isCustomization
-                ? itemDefinition.Param1
-                : hasPlacement ? placement.PlacementType : 1,
-            ModelId = modelId,
-            Category = itemDefinition.CategoryId.ToString(),
-            LuaCall = string.Empty,
-            Unknown7 = true,
-            CompositeEffectId = itemDefinition.CompositeEffectId,
-            Unknown14 = 1f,
-            Unknown15 = 1f
-        };
+        return HousingFixtureRules.BuildFixtureDefinition(_resourceManager, itemDefinitionId);
     }
 
     private FixtureInstance BuildFixtureInstance(DbHouseFixture fixture, ulong npcGuid)
@@ -1448,58 +1491,6 @@ public sealed class HousingZoneRuntime : IDisposable
         }
     }
 
-    private DbItem? TryReturnInventoryItem(
-        DatabaseContext dbContext,
-        ulong characterId,
-        int itemDefinitionId,
-        int tintId,
-        int count)
-    {
-        if (count <= 0)
-            return null;
-
-        var item = dbContext.Items.FirstOrDefault(candidate =>
-            candidate.CharacterId == characterId &&
-            candidate.Definition == itemDefinitionId &&
-            candidate.Tint == tintId);
-
-        if (item is not null)
-        {
-            var newCount = (long)item.Count + count;
-            if (item.Count < 0 || newCount > int.MaxValue)
-                return null;
-
-            item.Count = (int)newCount;
-            return item;
-        }
-
-        var persistedMaxId = dbContext.Items
-            .Where(candidate => candidate.CharacterId == characterId)
-            .Select(candidate => (int?)candidate.Id)
-            .Max() ?? 0;
-        var pendingMaxId = dbContext.ChangeTracker
-            .Entries<DbItem>()
-            .Where(entry => entry.Entity.CharacterId == characterId)
-            .Select(entry => entry.Entity.Id)
-            .DefaultIfEmpty()
-            .Max();
-        var maxId = Math.Max(persistedMaxId, pendingMaxId);
-        if (maxId == int.MaxValue)
-            return null;
-
-        var nextId = maxId + 1;
-        item = new DbItem
-        {
-            Id = nextId,
-            CharacterId = characterId,
-            Definition = itemDefinitionId,
-            Tint = tintId,
-            Count = count
-        };
-        dbContext.Items.Add(item);
-        return item;
-    }
-
     private void UpdateConsumedInventoryItem(Player player, int itemRecordId, int count)
     {
         var item = player.Items.SingleOrDefault(candidate => candidate.Id == itemRecordId);
@@ -1577,53 +1568,12 @@ public sealed class HousingZoneRuntime : IDisposable
 
     private bool IsFixtureInventoryItem(int itemDefinitionId)
     {
-        if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) ||
-            definition.Type == 16)
-        {
-            return false;
-        }
-
-        if (HousingPlacementCatalog.IsFixtureCustomization(definition) || definition.Type == 29)
-            return true;
-
-        if (definition.Type != 1)
-            return false;
-
-        if (definition.CategoryId is 52 or 53 or 54 or 56 or 57 or 147)
-            return HousingPlacementCatalog.IsFixture(itemDefinitionId) ||
-                (!string.IsNullOrWhiteSpace(definition.ModelName) &&
-                    definition.ModelName.StartsWith("hsg_", StringComparison.OrdinalIgnoreCase));
-
-        return HousingPlacementCatalog.IsFixture(itemDefinitionId);
+        return HousingFixtureRules.IsFixtureInventoryItem(_resourceManager, itemDefinitionId);
     }
 
     private int ResolveItemTintId(int itemDefinitionId, int requestedTintId)
     {
-        if (requestedTintId > 0)
-            return requestedTintId;
-
-        if (_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) &&
-            definition.CategoryId == 147 &&
-            definition.Icon.TintId > 0)
-        {
-            return definition.Icon.TintId;
-        }
-
-        return 0;
-    }
-
-    private int ResolveFixtureModelId(int itemDefinitionId)
-    {
-        if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition))
-            return 0;
-
-        if (!HousingPlacementCatalog.IsFixtureCustomization(definition) && definition.Param1 > 0)
-            return definition.Param1;
-
-        var modelName = HousingPlacementCatalog.TryGet(itemDefinitionId, out var placement)
-            ? placement.AssetName
-            : definition.ModelName;
-        return ResolveModelId(modelName);
+        return HousingFixtureRules.ResolveItemTintId(_resourceManager, itemDefinitionId, requestedTintId);
     }
 
     private int ResolveFixtureActorModelId(int itemDefinitionId)
@@ -1656,15 +1606,7 @@ public sealed class HousingZoneRuntime : IDisposable
 
     private int ResolveModelId(string? modelName)
     {
-        if (string.IsNullOrWhiteSpace(modelName))
-            return 0;
-
-        return _resourceManager.Models.Values
-            .FirstOrDefault(model => string.Equals(
-                model.ModelFileName,
-                modelName,
-                StringComparison.OrdinalIgnoreCase))
-            ?.Id ?? 0;
+        return HousingFixtureRules.ResolveModelId(_resourceManager, modelName);
     }
 
     private bool TryNormalizeTransform(

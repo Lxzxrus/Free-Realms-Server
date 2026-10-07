@@ -39,5 +39,19 @@
     // "LoginGatewayAddress": "localhost:20041",
 
     // "ShowMemberNagScreen": false,
+  },
+
+  // Housing (docs/design/evergrove-housing.md). Read at startup: restart the server after changing these.
+  "Housing": {
+    // Building is free: the editor offers every fixture, and placing or picking one up doesn't touch inventory.
+    // false: fixtures are items bought in the store and used up when placed, as in OSFR.
+    // "CreativeMode": true,
+
+    // Most entries in the editor's creative fixture list; 0 is all of them (about 1,700). Lower it if the editor
+    // struggles with the full list.
+    // "CreativeCatalogLimit": 0,
+
+    // Lots cost nothing.
+    // "FreeLots": true,
   }
 }
