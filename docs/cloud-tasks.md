@@ -253,3 +253,22 @@ check. The load-test bot (`src/Sanctuary.LoadTest`) is available for anything ab
   the wrong quest. Confirm it in the code, then make the server hand in the quest whose window was shown last,
   or otherwise tie each reply to its window, and add tests.
 - **Check:** the self-check. In-game step: playtest step QX1 in `docs/playtest-plan.md`.
+
+## 18. `status-reflection`: the Login status reply can't be used to flood others
+
+- **Task:** task 14 found that the Login server answers a status request from anyone, and the reply is larger
+  than the request. An attacker can forge the sender address and use our server to flood a victim, which can
+  also get the VPS suspended. Find every unauthenticated reply on the Login and Gateway UDP ports, and make each
+  one no larger than the request that caused it, and rate-limited per source address. Or remove it, if the
+  launcher (task 12) and the client don't need it.
+- **Check:** the self-check, plus tests that measure reply size against request size and that the rate limit
+  applies. Say which client or launcher feature depends on the status reply, if any, and confirm it still works.
+
+## 19. `coin-store-once`: stop resending the coin store on every zone entry
+
+- **Task:** task 14 measured about 4.2 MiB queued per player on every zone entry, houses included, of which
+  3.5 MiB is `BaseZone.SendCoinStoreItemList`. Find out whether the client keeps the list across zone changes. If
+  it does, send it once per login. If it doesn't, find a smaller way (for example, only items the client
+  doesn't have). Don't guess: if the client's behaviour can't be confirmed without the game client, make it a
+  setting defaulting to the old behaviour, and list the in-game check for Nate.
+- **Check:** the self-check, plus a load-test run showing the queued bytes per zone entry before and after.
