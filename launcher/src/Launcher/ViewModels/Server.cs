@@ -359,12 +359,63 @@ public partial class Server : ObservableObject
             return;
         }
 
-        Info.ClientDirectoryOverride = folder;
-        Settings.Instance.Save();
+        if (!SetClientDirectoryOverride(folder))
+            return;
 
         _logger.Info("Server '{Name}' now uses the client in {Folder}.", Info.Name, folder);
 
         App.AddNotification(App.GetText("Text.Server.ChooseClientFolder.Chosen", folder), false);
+    }
+
+    /// <summary>Goes back to the launcher's own game folder after <see cref="ChooseClientFolderAsync"/>. Deletes nothing.</summary>
+    [RelayCommand]
+    public void UseLauncherClientFolder()
+    {
+        if (!HasChosenClientFolder)
+            return;
+
+        if (!SetClientDirectoryOverride(null))
+            return;
+
+        _logger.Info("Server '{Name}' now uses the launcher's own client folder.", Info.Name);
+
+        App.AddNotification(App.GetText("Text.Server.UseLauncherClientFolder.Done", ClientDirectory), false);
+    }
+
+    /// <summary>True while the player's own game folder is used instead of the launcher's.</summary>
+    public bool HasChosenClientFolder => !string.IsNullOrEmpty(Info.ClientDirectoryOverride);
+
+    public string UseLauncherClientFolderTooltip => App.GetText("Text.Server.UseLauncherClientFolder.Tooltip", Info.ClientDirectoryOverride ?? string.Empty);
+
+    private bool SetClientDirectoryOverride(string? folder)
+    {
+        // Never while the folder is being checked or repaired, or the game is running from it.
+        if (IsDownloading || Process is not null)
+        {
+            App.AddNotification(App.GetText("Text.Server.ClientFolderBusy"), true);
+            return false;
+        }
+
+        if (string.Equals(Info.ClientDirectoryOverride, folder, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        Info.ClientDirectoryOverride = folder;
+        Settings.Instance.Save();
+
+        // The cache is keyed by file name only, so entries from the other folder must not vouch for this one.
+        try
+        {
+            File.Delete(ClientCheckCachePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Couldn't delete the client check cache.");
+        }
+
+        OnPropertyChanged(nameof(HasChosenClientFolder));
+        OnPropertyChanged(nameof(UseLauncherClientFolderTooltip));
+
+        return true;
     }
 
     private string ClientBaseUrl => string.IsNullOrEmpty(Info.ClientUrl) ? Info.Url : Info.ClientUrl;
@@ -374,10 +425,12 @@ public partial class Server : ObservableObject
         ? Path.Combine(Constants.SavePath, Info.SavePath, "Client")
         : Info.ClientDirectoryOverride;
 
+    private string ClientCheckCachePath => Path.Combine(Constants.SavePath, Info.SavePath, "ClientCheck.cache");
+
     private ClientVerifier CreateClientVerifier() => new(
         ClientPinSet.Official,
         ClientDirectory,
-        Path.Combine(Constants.SavePath, Info.SavePath, "ClientCheck.cache"),
+        ClientCheckCachePath,
         async (relativePath, cancellationToken) =>
         {
             var url = Constants.OfficialClientUrl + string.Join('/', ClientPinSet.Normalize(relativePath).Split('/').Select(Uri.EscapeDataString));

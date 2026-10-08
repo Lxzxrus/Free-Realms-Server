@@ -36,6 +36,12 @@
   <x:String x:Key="Text.Server.ChooseClientFolder.Chosen" xml:space="preserve">The game in this folder will be used:
 {0}
 When you press Play it's checked against the official Free Realms client first: changed or missing files are downloaded again, and program files that aren't part of the official game are moved out of the folder.</x:String>
+  <x:String x:Key="Text.Server.UseLauncherClientFolder.Tooltip" xml:space="preserve">Using your game folder: {0}
+Click to use the launcher's own game folder again (nothing is deleted)</x:String>
+  <x:String x:Key="Text.Server.UseLauncherClientFolder.Done" xml:space="preserve">The launcher's own game folder will be used again:
+{0}
+If the game isn't there yet, Play downloads it (about 850 MB). Your other folder wasn't changed.</x:String>
+  <x:String x:Key="Text.Server.ClientFolderBusy" xml:space="preserve">The game folder can't be changed while the game is being checked, downloaded or played.</x:String>
   <x:String x:Key="Text.Server.DeleteServer.Tooltip" xml:space="preserve">Delete Server</x:String>
 
   <!-- Login -->
