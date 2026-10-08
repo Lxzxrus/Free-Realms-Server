@@ -36,6 +36,15 @@ public class WebAPIOptions
     /// </summary>
     public List<string> TrustedProxies { get; set; } = [];
 
+    /// <summary>The Login server that <c>/status</c> asks, host and UDP port. In Docker Compose, <c>sanctuary.login:20042</c>.</summary>
+    public string StatusLoginServer { get; set; } = "127.0.0.1:20042";
+
+    /// <summary>How long <c>/status</c> waits for the Login server before reporting it offline.</summary>
+    public TimeSpan StatusTimeout { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long one answer from the Login server is reused, so the status page can't flood it.</summary>
+    public TimeSpan StatusCacheDuration { get; set; } = TimeSpan.FromSeconds(10);
+
     public RateLimitOptions RateLimits { get; set; } = new();
 
     public LoginLockoutOptions LoginLockout { get; set; } = new();
@@ -49,6 +58,8 @@ public class RateLimitOptions
     public int RegisterPerHour { get; set; } = 5;
 
     public int ImagePerMinute { get; set; } = 6;
+
+    public int StatusPerMinute { get; set; } = 30;
 }
 
 /// <summary>

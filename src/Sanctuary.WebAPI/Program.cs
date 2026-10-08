@@ -20,6 +20,7 @@ using Sanctuary.Database;
 using Sanctuary.WebAPI.Endpoints;
 using Sanctuary.WebAPI.Options;
 using Sanctuary.WebAPI.Security;
+using Sanctuary.WebAPI.Status;
 
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
@@ -82,6 +83,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(builder.Configuration.GetSec
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<PortraitUploadTokens>();
+builder.Services.AddSingleton<ServerStatusProbe>();
 builder.Services.AddWebAPIRateLimiting(webAPIOptions.RateLimits);
 
 // Database
@@ -133,6 +135,7 @@ app.UseRateLimiter();
 
 app.MapAuthEndpoints();
 app.MapPortraitEndpoints();
+app.MapStatusEndpoints();
 
 app.Run();
 
