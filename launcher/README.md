@@ -95,6 +95,9 @@ for a release when the player clicks the arrows button at the top of the window.
 4. Players download the installer from that release page: `EvergroveLauncher-win-Setup.exe` on Windows,
    `EvergroveLauncher.AppImage` on Linux (both named after `LauncherId`).
 
+To try a release first, tick **Dry run**: it does all of the above but publish, from any branch, and keeps the
+installers for a week as the run's artifacts (the run's page, **Artifacts**), to install and test by hand.
+
 The launcher reads releases without a token, so **updates only work once the repository is public**. While it's
 private, installed launchers can't see the releases: the update button finds nothing or reports an error, and a
 new version has to be installed by hand from the release page or a local `build_*` script. Don't put a token in the launcher to get around

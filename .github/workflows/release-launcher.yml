@@ -2,6 +2,7 @@ name: Launcher release
 
 # Publishes a launcher release to this repository's GitHub Releases, which is where installed launchers look for
 # updates. Run by hand only (Actions > Launcher release > Run workflow), and only from main. See launcher/README.md.
+# A dry run does everything but publish, from any branch, and keeps the installers as the run's artifacts for a week.
 
 on:
   workflow_dispatch:
@@ -10,6 +11,11 @@ on:
         description: 'Version, such as 1.0.0. Must be higher than the last launcher release, or nobody updates.'
         required: true
         type: string
+      dry_run:
+        description: 'Dry run: build and test only, publish nothing. The installers are kept as artifacts of the run.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,6 +26,7 @@ concurrency:
 
 env:
   VERSION: ${{ inputs.version }}
+  DRY_RUN: ${{ inputs.dry_run }}
   # Read by MSBuild as a property: the launcher updates from the repository it was released from.
   UpdateRepositoryUrl: https://github.com/${{ github.repository }}
 
@@ -43,7 +50,7 @@ jobs:
     steps:
     - name: Refuse anything but main
       run: |
-        if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+        if [ "$GITHUB_REF" != "refs/heads/main" ] && [ "$DRY_RUN" != "true" ]; then
           echo "::error::Launcher releases are published from main only, not $GITHUB_REF."
           exit 1
         fi
@@ -94,10 +101,11 @@ jobs:
         name: launcher-${{ matrix.rid }}
         path: launcher/releases/
         if-no-files-found: error
-        retention-days: 1
+        retention-days: ${{ inputs.dry_run && 7 || 1 }}
 
   publish:
     needs: build
+    if: ${{ !inputs.dry_run }}
 
     runs-on: ubuntu-latest
 
