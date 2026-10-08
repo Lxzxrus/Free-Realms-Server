@@ -114,7 +114,25 @@
     <!-- Client Folder -->
     <StackPanel Grid.Row="4"
                 Margin="0,0,15,15"
-                HorizontalAlignment="Right">
+                HorizontalAlignment="Right"
+                Orientation="Horizontal"
+                Spacing="8">
+      <Button Classes="flat primary"
+              Command="{Binding ChooseClientFolderCommand}"
+              CornerRadius="5"
+              ToolTip.Tip="{StaticResource Text.Server.ChooseClientFolder.Tooltip}">
+        <Button.Background>
+          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
+            <GradientStop Offset="0.0" Color="#96B9D9" />
+            <GradientStop Offset="4.0" Color="#202959" />
+            <GradientStop Offset="0.8" Color="#37538C" />
+          </LinearGradientBrush>
+        </Button.Background>
+        <Path Width="16"
+              Height="16"
+              Data="{StaticResource Icons.Add}"
+              Stretch="Fill" />
+      </Button>
       <Button Classes="flat primary"
               Command="{Binding OpenFolderCommand}"
               CornerRadius="5"

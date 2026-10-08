@@ -7,7 +7,9 @@ folder, applies Evergrove's changes and writes the modified files to an output f
   python build.py --client <FreeRealms client folder> --ffdec <ffdec-cli.jar> --out <folder>
                   [--scripts <original UI\ScriptsBase.bin, if the client's copy is already patched>]
 
-Output (copy into <client>\UI\; keep a backup of the original ScriptsBase.bin):
+Output (the launcher applies the mod itself from housing-search.tag; for testing by hand, copy the rest into
+<client>\UI\ and keep a backup of the original ScriptsBase.bin):
+  housing-search.tag                          our compiled script block only (no game code); the launcher embeds it
   housingEditPanel.gfx, housingEditPanel.swf  the Decorate panel with a search button (loose UI files override the packs)
   ScriptsBase.bin                             the UI scripts with the Decorate panel's focus-steal disabled, so the
                                               search box can take keyboard input
@@ -23,8 +25,11 @@ import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 
 PANEL = "housingEditPanel.gfx"
+TAG = "housing-search.tag"
+DO_ACTION = 12
 PANEL_SHA1 = "477f1a674d90947fa88d8d5512694bc95dd587c3"
 SCRIPTS_SHA1 = "18593c20029d96820bc75438777099131de6af46"
 
@@ -70,26 +75,57 @@ def ffdec(jar, *args):
         sys.exit(f"FFDec failed: {result.stdout}{result.stderr}")
 
 
+def swf_tags(body):
+    """Yields (offset, code, header length, data length) for each top-level tag of an uncompressed SWF body."""
+    rect_bits = body[0] >> 3
+    offset = (5 + 4 * rect_bits + 7) // 8 + 4
+    while offset < len(body):
+        header = struct.unpack_from("<H", body, offset)[0]
+        code, length, header_length = header >> 6, header & 0x3F, 2
+        if length == 0x3F:
+            length, header_length = struct.unpack_from("<I", body, offset + 2)[0], 6
+        yield offset, code, header_length, length
+        offset += header_length + length
+        if code == 0:
+            return
+
+
+def insert_after_frame_script(gfx, tag):
+    """The original panel with <tag> (a DoAction tag) inserted straight after its own frame 1 DoAction, which is what
+    the launcher does too: both run in frame 1, ours second, so our functions replace the panel's."""
+    body = zlib.decompress(gfx[8:])
+    end = next(offset + header + length for offset, code, header, length in swf_tags(body) if code == DO_ACTION)
+    length = struct.unpack_from("<I", gfx, 4)[0] + len(tag)
+    return gfx[:4] + struct.pack("<I", length) + zlib.compress(body[:end] + tag + body[end:], 9)
+
+
 def build_panel(client, jar, out):
     original = read_pack_file(client, PANEL)
     if sha1(original) != PANEL_SHA1:
         sys.exit(f"{PANEL} differs from the version this mod was made for; refusing to patch it")
 
+    # Compile evg_search.as on its own, as the panel's only frame script, and keep just that DoAction tag: it holds
+    # our code and nothing of the game's.
     with tempfile.TemporaryDirectory() as tmp:
         source = os.path.join(tmp, PANEL)
+        compiled = os.path.join(tmp, "compiled.gfx")
         with open(source, "wb") as f:
             f.write(original)
-        ffdec(jar, "-export", "script", os.path.join(tmp, "scripts"), source)
-        with open(os.path.join(tmp, "scripts", "scripts", "frame_1", "DoAction.as"), encoding="utf-8") as f:
-            script = f.read()
-        with open(os.path.join(HERE, "evg_search.as"), encoding="utf-8") as f:
-            script += "\n" + f.read()
-        combined = os.path.join(tmp, "DoAction.as")
-        with open(combined, "w", encoding="utf-8") as f:
-            f.write(script)
-        ffdec(jar, "-replace", source, os.path.join(out, PANEL), r"\frame_1\DoAction", combined)
+        ffdec(jar, "-replace", source, compiled, r"\frame_1\DoAction", os.path.join(HERE, "evg_search.as"))
+        with open(compiled, "rb") as f:
+            compiled_gfx = f.read()
 
-    shutil.copyfile(os.path.join(out, PANEL), os.path.join(out, "housingEditPanel.swf"))
+    body = zlib.decompress(compiled_gfx[8:])
+    offset, _, header, length = next(t for t in swf_tags(body) if t[1] == DO_ACTION)
+    tag = body[offset:offset + header + length]
+
+    with open(os.path.join(out, TAG), "wb") as f:
+        f.write(tag)
+
+    panel = insert_after_frame_script(original, tag)
+    for name in ("housingEditPanel.gfx", "housingEditPanel.swf"):
+        with open(os.path.join(out, name), "wb") as f:
+            f.write(panel)
 
 
 def build_scripts(scripts_path, out):

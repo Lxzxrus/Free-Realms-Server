@@ -33,6 +33,12 @@ public sealed class ServerInfo : ObservableObject
     /// </summary>
     public required string SavePath { get; init; }
 
+    /// <summary>
+    /// A game folder the player already had, used instead of downloading the client again. Null for the launcher's
+    /// own client folder. Either way it's checked and repaired against the official client before each launch.
+    /// </summary>
+    public string? ClientDirectoryOverride { get; set; }
+
     public string? Username { get; set; }
     public bool RememberUsername { get; set; }
 }

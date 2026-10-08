@@ -30,6 +30,12 @@
 
   <!-- Server Window -->
   <x:String x:Key="Text.Server.ClientFolder.Tooltip" xml:space="preserve">Open Client Directory</x:String>
+  <x:String x:Key="Text.Server.ChooseClientFolder.Tooltip" xml:space="preserve">Use a Free Realms game folder you already have</x:String>
+  <x:String x:Key="Text.Server.ChooseClientFolder.Title" xml:space="preserve">Choose your Free Realms game folder (the one with FreeRealms.exe)</x:String>
+  <x:String x:Key="Text.Server.ChooseClientFolder.NoGame" xml:space="preserve">That folder has no {0}. Choose the folder the game itself is in.</x:String>
+  <x:String x:Key="Text.Server.ChooseClientFolder.Chosen" xml:space="preserve">The game in this folder will be used:
+{0}
+When you press Play it's checked against the official Free Realms client first: changed or missing files are downloaded again, and program files that aren't part of the official game are moved out of the folder.</x:String>
   <x:String x:Key="Text.Server.DeleteServer.Tooltip" xml:space="preserve">Delete Server</x:String>
 
   <!-- Login -->
@@ -74,6 +80,19 @@
   <x:String x:Key="Text.Server.UnsafeClientManifest" xml:space="preserve">The server's list of game files is invalid, so nothing was downloaded.</x:String>
   <x:String x:Key="Text.Server.PreparingGameFiles" xml:space="preserve">Preparing Game Files: ({0}/{1})</x:String>
   <x:String x:Key="Text.Server.VerifyClientFiles" xml:space="preserve">Verifying Client Files...</x:String>
+  <x:String x:Key="Text.Server.CheckingGameFiles" xml:space="preserve">Checking game files... {0}/{1}</x:String>
+  <x:String x:Key="Text.Server.RepairingGameFiles" xml:space="preserve">Downloading official game files... {0}/{1}</x:String>
+  <x:String x:Key="Text.Server.RepairFailed" xml:space="preserve">{0} game file(s) couldn't be downloaded from the official Free Realms client, so the game wasn't started. Check your internet connection and try again:
+{1}</x:String>
+  <x:String x:Key="Text.Server.UnofficialCodeMoved" xml:space="preserve">{0} file(s) in your game folder that the game could run weren't part of the official Free Realms client, so they were moved out of the way to:
+{1}</x:String>
+  <x:String x:Key="Text.Server.UnofficialCodeStuck" xml:space="preserve">These files in your game folder aren't part of the official Free Realms client, and couldn't be moved out of the way. The game wasn't started. Close anything using them, or delete them, and try again:
+{0}</x:String>
+  <x:String x:Key="Text.Server.ModsFailed" xml:space="preserve">Evergrove's additions to the game (such as the building search) couldn't be added, so the game starts without them:
+{0}</x:String>
+  <x:String x:Key="Text.Server.CheckFailed" xml:space="preserve">The game files couldn't be checked, so the game wasn't started. Try again; if it keeps happening, look in the launcher's log.</x:String>
+  <x:String x:Key="Text.Server.CodeCheckFailed" xml:space="preserve">Some of the game's program files changed since they were last checked, so the game wasn't started. Press Play again to check and repair them.</x:String>
+  <x:String x:Key="Text.Server.ServerCodeRefused" xml:space="preserve">The server offered program files for your game folder. Servers may only add game data, so those files weren't downloaded.</x:String>
   <x:String x:Key="Text.ServerStatus" xml:space="preserve">Server Status: </x:String>
   <x:String x:Key="Text.ServerStatus.Online" xml:space="preserve">Online</x:String>
   <x:String x:Key="Text.ServerStatus.Locked" xml:space="preserve">Locked</x:String>

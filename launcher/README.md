@@ -7,18 +7,18 @@ It is a fork of the **Open Source Free Realms launcher** (https://github.com/Ope
 imported at commit `e6a2674`), by the OSFR team and its contributors. Like the original, it is licensed under the
 GNU AGPL v3: see [LICENSE](LICENSE).
 
-## Placeholders to decide before release
+## Release settings
 
-| What | Placeholder | Where to change it |
+| What | Value | Where to change it |
 |---|---|---|
-| Launcher name (window title, installer) | `ServerName Launcher` | `LauncherTitle` in [src/Directory.Build.props](src/Directory.Build.props) |
-| Authors (installer) | `ServerName team` | `LauncherAuthors`, same file |
-| App id: the settings folder and the installer id. **Can't change once players have it installed** | `ServerNameLauncher` | `LauncherId`, same file |
-| Server address | `https://play.example.com` | `DefaultServerUrl`, same file |
-| SHA-256 of `FreeRealms.exe`. **Empty: the launcher starts no game until it's set** | empty | `ClientExecutableSha256`, same file (see [the client pin](#the-client-pin)) |
+| Launcher name (window title, installer) | `Free Realms Evergrove` | `LauncherTitle` in [src/Directory.Build.props](src/Directory.Build.props) |
+| Authors (installer) | `Evergrove team` | `LauncherAuthors`, same file |
+| App id: the settings folder and the installer id. **Can't change once players have it installed** | `EvergroveLauncher` | `LauncherId`, same file |
+| Server address | `https://play.evergrove.fyi` | `DefaultServerUrl`, same file |
+| SHA-256 of `FreeRealms.exe`. **Empty: the launcher starts no game until it's set** | the official client's, `26cc1c52…` (must match `ClientPins.txt`) | `ClientExecutableSha256`, same file (see [the client pin](#the-client-pin)) |
 | Where launcher updates come from | `https://github.com/Lxzxrus/Free-Realms-Server` | `UpdateRepositoryUrl`, same file. The release workflow sets it to the repository it runs in |
-| Server name and description shown in the launcher | `ServerName` | [server/servermanifest.xml](server/servermanifest.xml), on the server |
-| Where players download the game client | `https://files.example.com` | `<ClientUrl>` in [server/servermanifest.xml](server/servermanifest.xml) |
+| Server name and description shown in the launcher | `Free Realms Evergrove` | [server/servermanifest.xml](server/servermanifest.xml), on the server |
+| Where players download the game client | The official OSFR client, repaired against the pins (no `<ClientUrl>`) | `OfficialClientUrl` in `Helpers/Constants.cs` |
 
 Any of the build properties can be overridden for one build, on the command line or as an environment variable:
 
@@ -92,8 +92,8 @@ for a release when the player clicks the arrows button at the top of the window.
 3. The workflow refuses to run from any other branch, refuses a version that isn't `x.y.z`, and refuses to build
    while `ClientExecutableSha256` is empty. It runs the launcher's tests, builds Windows (x64) and Linux (x64)
    with the `build_*` scripts, and publishes the GitHub release `launcher-v1.0.0` holding both.
-4. Players download the installer from that release page: `ServerNameLauncher-win-Setup.exe` on Windows,
-   `ServerNameLauncher.AppImage` on Linux (both named after `LauncherId`).
+4. Players download the installer from that release page: `EvergroveLauncher-win-Setup.exe` on Windows,
+   `EvergroveLauncher.AppImage` on Linux (both named after `LauncherId`).
 
 The launcher reads releases without a token, so **updates only work once the repository is public**. While it's
 private, installed launchers can't see the releases: the update button finds nothing or reports an error, and a
@@ -132,9 +132,38 @@ Paste the 64 hex digits in (case doesn't matter). It isn't a secret. What the la
   fingerprint, so it can't check FreeRealms.exe and won't start the game."* For a local test build, pass it on the
   command line instead: `-p:ClientExecutableSha256=<hash>`.
 
-The pin covers the executable only. A server's client manifest can still deliver other files, including DLLs
-that `FreeRealms.exe` loads from its own folder, so the pin doesn't stop a malicious server on its own. Pinning the
-whole client is a separate task.
+## The whole client is pinned
+
+Many players reuse a game folder that came from someone else's distribution, and `FreeRealms.exe` loads DLLs and
+sound plugins from its own folder, so pinning the executable alone isn't enough. The launcher carries the SHA-256
+and size of **every file of the official Open Source Free Realms client** ([src/Launcher/ClientPins.txt](src/Launcher/ClientPins.txt),
+embedded in the launcher, 1,788 files).
+
+What happens when a player presses **Play** (see `ClientVerifier`):
+
+1. Every pinned file is checked (*"Checking game files... 120/1788"*). Code (`.exe`, `.dll`, the Miles plugins
+   `.asi` and `.flt`, scripts) is hashed every time; the big data files only when their size or write time changed
+   since they last passed. A full first check of the 852 MB client takes about 2 seconds, later ones about 0.1.
+2. Code files that aren't part of the official client (a proxy `dinput8.dll`, an extra plugin) are moved to
+   `<launcher data>/<server>/Quarantine/<date>/`, keeping their paths, and the player is told where. If one can't be
+   moved, the game isn't started.
+3. Missing or changed files are downloaded from the official client (`https://opensourcefreerealms.com/client/`,
+   *"Downloading official game files..."*), written beside the target and moved into place only when they match their
+   pin. If any can't be repaired, the game isn't started.
+4. Only then is the server's own `clientmanifest.xml` used, and it can only **add data files**: it can't replace a
+   pinned file, and it can't add code (*"The server offered program files for your game folder..."*).
+5. Right before the game starts, `FreeRealms.exe` and every code file are hashed again.
+
+Downloads send `Accept: */*`: without it, Cloudflare in front of the official download injects its analytics script
+into HTML files (the client's `loading.html`), which then fail their pins.
+
+**Returning players** can point the launcher at the game folder they already have (the **+** button beside the
+folder button) instead of downloading 852 MB. That folder gets the same check and repair.
+
+**Refreshing the list** when OSFR changes its client: `cd launcher/tools`, then
+`dotnet run make-client-pins.cs -- --client <a client folder>`. Every file is first confirmed against OSFR's
+`clientmanifest.xml` (size and XXHash64); local copies that match are reused, anything else is downloaded. Update
+`ClientExecutableSha256` to the new `FreeRealms.exe` line (a test checks they agree).
 
 ## Changes from OSFR's launcher
 

@@ -3,19 +3,19 @@
     The launcher's identity and its default server, in one place. Override any of them at build time,
     for example: dotnet publish -p:DefaultServerUrl=http://192.168.1.20:8080
 
-    PLACEHOLDERS: the name, the id and the domain below are not decided yet. The id names the settings folder
-    and the installer's app id, so it can't change once players have installed the launcher.
+    Decided 2026-10-07: Free Realms Evergrove at play.evergrove.fyi. The id names the settings folder and the
+    installer's app id, so it must never change now that players will install the launcher.
   -->
   <PropertyGroup>
     <!-- Shown in the window title, the installer and the HTTP User-Agent. -->
-    <LauncherTitle Condition="'$(LauncherTitle)' == ''">ServerName Launcher</LauncherTitle>
-    <LauncherAuthors Condition="'$(LauncherAuthors)' == ''">ServerName team</LauncherAuthors>
+    <LauncherTitle Condition="'$(LauncherTitle)' == ''">Free Realms Evergrove</LauncherTitle>
+    <LauncherAuthors Condition="'$(LauncherAuthors)' == ''">Evergrove team</LauncherAuthors>
 
     <!-- Settings folder under the user's local app data, and Velopack's app id. Letters and digits only. -->
-    <LauncherId Condition="'$(LauncherId)' == ''">ServerNameLauncher</LauncherId>
+    <LauncherId Condition="'$(LauncherId)' == ''">EvergroveLauncher</LauncherId>
 
     <!-- The server added on first run. It must serve servermanifest.xml (see launcher/server/README.md). -->
-    <DefaultServerUrl Condition="'$(DefaultServerUrl)' == ''">https://play.example.com</DefaultServerUrl>
+    <DefaultServerUrl Condition="'$(DefaultServerUrl)' == ''">https://play.evergrove.fyi</DefaultServerUrl>
 
     <!-- Launcher updates come from this repository's GitHub Releases, never from the game server, so a break-in on
          the server can't push a launcher to players. Must be https://github.com/{owner}/{repository}, and the
@@ -26,7 +26,8 @@
     <!-- SHA-256 of the game client's FreeRealms.exe, as 64 hex digits (sha256sum FreeRealms.exe, or
          Get-FileHash FreeRealms.exe in PowerShell). The launcher refuses to start any other FreeRealms.exe and never
          keeps one a server's client manifest sends that doesn't match. While it's empty the launcher starts no game
-         at all, and the release workflow refuses to build. -->
-    <ClientExecutableSha256 Condition="'$(ClientExecutableSha256)' == ''"></ClientExecutableSha256>
+         at all, and the release workflow refuses to build. It must equal FreeRealms.exe's line in Launcher/ClientPins.txt
+         (the official OSFR client); a test checks that. -->
+    <ClientExecutableSha256 Condition="'$(ClientExecutableSha256)' == ''">26cc1c522a45e71fb57882da515f65bac45c8c8b8c7e740c0cea81c52a733351</ClientExecutableSha256>
   </PropertyGroup>
 </Project>

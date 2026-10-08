@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -69,6 +70,9 @@ public partial class Server : ObservableObject
 
     // Set when the server's client manifest offered a FreeRealms.exe that failed the pin.
     private volatile bool _refusedClientExecutable;
+
+    // Set when the server's client manifest listed a code file, which servers may not add.
+    private volatile bool _refusedServerCode;
 
     public Server()
     {
@@ -240,6 +244,15 @@ public partial class Server : ObservableObject
             return;
         }
 
+        // The official client comes first: every file pinned, repaired from the official download, and code that
+        // isn't part of it moved out. A server's own file list can only add data files on top.
+        if (!await EnsureOfficialClientAsync())
+        {
+            StatusMessage = string.Empty;
+
+            return;
+        }
+
         if (!string.IsNullOrEmpty(Info.Url))
         {
             var (found, clientManifest) = await GetClientManifestAsync();
@@ -323,9 +336,134 @@ public partial class Server : ObservableObject
             App.AddNotification("Unable to open server directory.", true);
     }
 
+    /// <summary>
+    /// Lets a returning player use the game folder they already have instead of downloading the client again. The
+    /// folder is checked and repaired against the official client on the next Play, like the launcher's own.
+    /// </summary>
+    [RelayCommand]
+    public async Task ChooseClientFolderAsync()
+    {
+        var folders = await App.GetWindow().StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = App.GetText("Text.Server.ChooseClientFolder.Title"),
+            AllowMultiple = false
+        });
+
+        var folder = folders.Count == 0 ? null : folders[0].TryGetLocalPath();
+        if (string.IsNullOrEmpty(folder))
+            return;
+
+        if (!File.Exists(Path.Combine(folder, Constants.ClientExecutableName)))
+        {
+            App.AddNotification(App.GetText("Text.Server.ChooseClientFolder.NoGame", Constants.ClientExecutableName), true);
+            return;
+        }
+
+        Info.ClientDirectoryOverride = folder;
+        Settings.Instance.Save();
+
+        _logger.Info("Server '{Name}' now uses the client in {Folder}.", Info.Name, folder);
+
+        App.AddNotification(App.GetText("Text.Server.ChooseClientFolder.Chosen", folder), false);
+    }
+
     private string ClientBaseUrl => string.IsNullOrEmpty(Info.ClientUrl) ? Info.Url : Info.ClientUrl;
 
-    private string ClientDirectory => Path.Combine(Constants.SavePath, Info.SavePath, "Client");
+    /// <summary>The game folder: the launcher's own, or one the player chose. Checked, repaired and started from here.</summary>
+    public string ClientDirectory => string.IsNullOrEmpty(Info.ClientDirectoryOverride)
+        ? Path.Combine(Constants.SavePath, Info.SavePath, "Client")
+        : Info.ClientDirectoryOverride;
+
+    private ClientVerifier CreateClientVerifier() => new(
+        ClientPinSet.Official,
+        ClientDirectory,
+        Path.Combine(Constants.SavePath, Info.SavePath, "ClientCheck.cache"),
+        async (relativePath, cancellationToken) =>
+        {
+            var url = Constants.OfficialClientUrl + string.Join('/', ClientPinSet.Normalize(relativePath).Split('/').Select(Uri.EscapeDataString));
+            var response = await HttpHelper.DownloadHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            response.EnsureSuccessStatusCode();
+
+            return await response.Content.ReadAsStreamAsync(cancellationToken);
+        },
+        ClientMods.AcceptedVariants);
+
+    /// <summary>
+    /// Checks the client folder against the official client, repairs what's missing or changed from the official
+    /// download, and moves code that isn't part of the official client into the quarantine folder. False when the
+    /// game mustn't be started; the reason has been shown.
+    /// </summary>
+    private async Task<bool> EnsureOfficialClientAsync()
+    {
+        var verifier = CreateClientVerifier();
+
+        IsDownloading = true;
+
+        try
+        {
+            var check = await verifier.CheckAsync(new Progress<(int Done, int Total)>(p =>
+                StatusMessage = App.GetText("Text.Server.CheckingGameFiles", p.Done, p.Total)));
+
+            if (check.UnknownCode.Count > 0)
+            {
+                var quarantine = Path.Combine(Constants.SavePath, Info.SavePath, Constants.QuarantineDirectory,
+                    DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture));
+                var stuck = verifier.Quarantine(check.UnknownCode, quarantine);
+
+                _logger.Warn("Moved {Count} unofficial code file(s) out of {Directory}: {Files}.",
+                    check.UnknownCode.Count - stuck.Count, ClientDirectory, string.Join(", ", check.UnknownCode));
+
+                if (stuck.Count > 0)
+                {
+                    App.AddNotification(App.GetText("Text.Server.UnofficialCodeStuck", string.Join(Environment.NewLine, stuck.Take(10))), true);
+
+                    return false;
+                }
+
+                App.AddNotification(App.GetText("Text.Server.UnofficialCodeMoved", check.UnknownCode.Count, quarantine), false);
+            }
+
+            if (check.Bad.Count > 0)
+            {
+                _logger.Info("Repairing {Count} client file(s) from the official download.", check.Bad.Count);
+
+                var failed = await verifier.RepairAsync(check.Bad, new Progress<(int Done, int Total)>(p =>
+                    StatusMessage = App.GetText("Text.Server.RepairingGameFiles", p.Done, p.Total)));
+
+                if (failed.Count > 0)
+                {
+                    _logger.Error("Couldn't repair: {Files}.", string.Join(", ", failed.Select(pin => pin.Path)));
+
+                    App.AddNotification(App.GetText("Text.Server.RepairFailed", failed.Count, string.Join(Environment.NewLine, failed.Take(10).Select(pin => pin.Path))), true);
+
+                    return false;
+                }
+            }
+
+            // Evergrove's client additions, made from the files just verified. The game runs without them if they fail.
+            if (!ClientMods.TryApply(ClientDirectory, ClientPinSet.Official, out var modError))
+            {
+                _logger.Warn("Couldn't apply the client mods: {Error}", modError);
+
+                App.AddNotification(App.GetText("Text.Server.ModsFailed", modError), false);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Checking the client in {Directory} failed.", ClientDirectory);
+
+            App.AddNotification(App.GetText("Text.Server.CheckFailed"), true);
+
+            return false;
+        }
+        finally
+        {
+            IsDownloading = false;
+        }
+    }
 
     /// <summary>
     /// Checks FreeRealms.exe against the pin (see <see cref="ClientPin"/>) and tells the player why it won't be
@@ -338,7 +476,20 @@ public partial class Server : ObservableObject
         var result = await ClientPin.CheckFileAsync(executablePath, Constants.ClientExecutableSha256);
 
         if (result == ClientPinResult.Match)
-            return true;
+        {
+            // The executable alone isn't enough: it loads DLLs and plugins from its folder.
+            var code = await CreateClientVerifier().CheckCodeAsync();
+
+            if (code.IsClean)
+                return true;
+
+            _logger.Error("Not starting the game for server '{Name}': changed code {Bad}, unofficial code {Unknown}.", Info.Name,
+                string.Join(", ", code.Bad.Select(pin => pin.Path)), string.Join(", ", code.UnknownCode));
+
+            App.AddNotification(App.GetText("Text.Server.CodeCheckFailed"), true);
+
+            return false;
+        }
 
         _logger.Error("Not starting {Path} for server '{Name}': {Result}.", executablePath, Info.Name, result);
 
@@ -405,6 +556,8 @@ public partial class Server : ObservableObject
 
         List<LocalFile> filesToDownload;
 
+        _refusedServerCode = false;
+
         try
         {
             filesToDownload = await GetFilesToDownloadAsync(clientManifest.RootFolder);
@@ -417,6 +570,9 @@ public partial class Server : ObservableObject
 
             return false;
         }
+
+        if (_refusedServerCode)
+            App.AddNotification(App.GetText("Text.Server.ServerCodeRefused"), true);
 
         if (filesToDownload.Count == 0)
         {
@@ -598,6 +754,21 @@ public partial class Server : ObservableObject
         {
             if (!PathHelper.TryGetPathInside(ClientDirectory, path, file.Name, out var filePath))
                 throw new InvalidDataException($"Client manifest file '{Path.Combine(path, file.Name)}' is outside the client folder.");
+
+            var relativePath = Path.Combine(path, file.Name);
+
+            // The official files are checked and repaired against the pins, never from a server.
+            if (ClientPinSet.Official.TryGet(relativePath, out _))
+                continue;
+
+            // A server may add data files, never code: the game would load it.
+            if (ClientCodeFiles.IsCode(file.Name))
+            {
+                _logger.Error("Refusing {Path} from the server's client manifest: servers can't add code files.", relativePath);
+
+                _refusedServerCode = true;
+                continue;
+            }
 
             if (await ClientPin.IsPinnedClientInPlaceAsync(ClientDirectory, filePath, Constants.ClientExecutableSha256))
                 continue;
