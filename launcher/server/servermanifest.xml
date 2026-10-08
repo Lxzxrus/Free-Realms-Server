@@ -1,20 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   What the launcher reads from <server URL>/servermanifest.xml. See README.md in this folder.
-  PLACEHOLDERS: the name, play.example.com and files.example.com are not decided yet.
 -->
 <ServerManifest version="2">
-  <Name>ServerName</Name>
+  <Name>Free Realms Evergrove</Name>
   <!-- Markdown, shown on the launcher's server page. Links open in the browser. -->
-  <Description>Welcome! Register with the button under the login form, then press Play.</Description>
+  <Description>**Welcome to Free Realms Evergrove!** Creative housing with 1,700+ free building pieces, free lots, and friends to visit.
+
+New here? Register with the button under the login form, then press **Play**. The first Play downloads the official Free Realms game (about 850 MB) unless you choose a game folder you already have with the **+** button.</Description>
 
   <!-- WebAPI, behind Caddy (docs/webapi.md). Must be https:// unless it's on the local network. -->
-  <WebApiUrl>https://play.example.com/</WebApiUrl>
+  <WebApiUrl>https://play.evergrove.fyi/</WebApiUrl>
 
   <!-- The Login server: host and UDP port. -->
-  <LoginServer>play.example.com:20042</LoginServer>
+  <LoginServer>play.evergrove.fyi:20042</LoginServer>
 
-  <!-- Optional. Where clientmanifest.xml and client/ are served. Leave it out to serve them from the server URL;
-       if neither has clientmanifest.xml, players put their own copy of the client in the launcher's folder. -->
-  <ClientUrl>https://files.example.com</ClientUrl>
+  <!-- No ClientUrl: the launcher downloads and repairs the game from the official OSFR client itself (see
+       launcher/README.md, "The whole client is pinned"), so this server hosts no client. A ClientUrl serving a
+       clientmanifest.xml could only add data files on top. -->
 </ServerManifest>

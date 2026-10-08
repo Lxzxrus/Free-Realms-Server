@@ -1,6 +1,6 @@
 # Example Caddy configuration: docs/webapi.md's, plus the files the launcher fetches.
-# PLACEHOLDERS: play.example.com, and /srv/launcher for the folder holding servermanifest.xml.
-play.example.com {
+# /srv/launcher holds servermanifest.xml.
+play.evergrove.fyi {
 	# The launcher's server manifest. Launcher updates are not served from here: they come from GitHub Releases.
 	handle /servermanifest.xml {
 		root * /srv/launcher

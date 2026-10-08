@@ -21,8 +21,8 @@ players. If an older setup still serves `/srv/launcher/` releases under `/launch
    description. Remove `<ClientUrl>` if the game files aren't hosted anywhere yet.
 3. Use [Caddyfile](Caddyfile) instead of the one in `docs/webapi.md`: it's the same, plus `servermanifest.xml`.
    Then `systemctl reload caddy`.
-4. Check from any machine: `curl https://play.example.com/servermanifest.xml` shows the file, and
-   `curl -X POST https://play.example.com/login -H 'content-type: application/json' -d '{"username":"x","password":"y"}'`
+4. Check from any machine: `curl https://play.evergrove.fyi/servermanifest.xml` shows the file, and
+   `curl -X POST https://play.evergrove.fyi/login -H 'content-type: application/json' -d '{"username":"x","password":"y"}'`
    answers `401`.
 
 ## Testing on the local network (the Optiplex)
