@@ -528,6 +528,9 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
         {
             response.Result = result;
             connection.SendTunneled(response);
+
+            // Most often refused because the lot is already owned; resend the list so "My Houses" shows it.
+            ClientHousingPacketRequestPlayerHousesHandler.SendHouseList(connection);
             return true;
         }
 

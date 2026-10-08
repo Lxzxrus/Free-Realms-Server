@@ -7,7 +7,11 @@ public class HousingPacketZoneData : BaseHousingPacket, ISerializablePacket
 {
     public new const short OpCode = 45;
 
-    public bool IsPreview;
+    /// <summary>
+    /// Whether this player may decorate the house. The client shows "Click to Decorate" only when this is set
+    /// (it calls <c>Housing:SetIsInInstance(true, CanEdit)</c>, FreeRealms.exe 0xac37a1).
+    /// </summary>
+    public bool CanEdit;
 
     private bool Unused = default;
 
@@ -25,7 +29,7 @@ public class HousingPacketZoneData : BaseHousingPacket, ISerializablePacket
 
         Write(writer);
 
-        writer.Write(IsPreview);
+        writer.Write(CanEdit);
         writer.Write(Unused);
         writer.Write(HeadSize);
 

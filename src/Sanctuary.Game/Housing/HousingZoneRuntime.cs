@@ -53,6 +53,7 @@ public sealed class HousingZoneRuntime : IDisposable
     private readonly Dictionary<int, Npc> _actors = [];
     private readonly Dictionary<ulong, PendingPlacement> _pendingPlacements = [];
     private readonly HashSet<ulong> _editors = [];
+    private readonly HashSet<ulong> _creativeInventoryShown = [];
     private bool _disposed;
 
     private static long _nextPreviewId = 10_000_000_000;
@@ -110,7 +111,7 @@ public sealed class HousingZoneRuntime : IDisposable
 
             player.SendTunneled(new HousingPacketZoneData
             {
-                IsPreview = false,
+                CanEdit = IsOwner(player),
                 HeadSize = 10,
                 InstanceInfo = instanceInfo
             });
@@ -150,6 +151,7 @@ public sealed class HousingZoneRuntime : IDisposable
         {
             _editors.Remove(player.Guid);
             _pendingPlacements.Remove(player.Guid);
+            HideCreativeInventory(player);
         }
     }
 
@@ -162,6 +164,7 @@ public sealed class HousingZoneRuntime : IDisposable
 
             _disposed = true;
             _editors.Clear();
+            _creativeInventoryShown.Clear();
             _pendingPlacements.Clear();
             _actors.Clear();
         }
@@ -178,11 +181,15 @@ public sealed class HousingZoneRuntime : IDisposable
             }
 
             if (inEditMode)
+            {
                 _editors.Add(player.Guid);
+                ShowCreativeInventory(player);
+            }
             else
             {
                 _editors.Remove(player.Guid);
                 CancelPendingPlacement(player);
+                HideCreativeInventory(player);
             }
 
             using var dbContext = _dbContextFactory.CreateDbContext();
@@ -208,6 +215,7 @@ public sealed class HousingZoneRuntime : IDisposable
                 return;
 
             _editors.Add(player.Guid);
+            ShowCreativeInventory(player);
 
             using var dbContext = _dbContextFactory.CreateDbContext();
             var house = LoadHouse(dbContext);
@@ -1056,14 +1064,63 @@ public sealed class HousingZoneRuntime : IDisposable
         player.SendTunneled(packet);
     }
 
+    // The editor's tray lists only what is in the player's inventory (Housing.lua PopulateItems reads
+    // BaseClient.InventoryItemsData for the selected category); it ignores HousingPacketFixtureItemList. So while the owner
+    // decorates, the catalog is shown as client-side inventory items whose ids are catalog record ids. They are never added
+    // to player.Items or the database, so nothing outside the house editor can use, trade or sell them.
+    private void ShowCreativeInventory(Player player)
+    {
+        if (!_options.CreativeMode || !_creativeInventoryShown.Add(player.Guid))
+            return;
+
+        foreach (var entry in CreativeEntries())
+        {
+            if (!_resourceManager.ClientItemDefinitions.TryGetValue(entry.ItemDefinitionId, out var definition))
+                continue;
+
+            var item = new ClientItem
+            {
+                Id = entry.RecordId,
+                Definition = entry.ItemDefinitionId,
+                Tint = entry.TintId,
+                Count = 1
+            };
+
+            using var writer = new PacketWriter();
+            item.Serialize(writer);
+            definition.Serialize(writer);
+            player.SendTunneled(new ClientUpdatePacketItemAdd
+            {
+                Payload = writer.Buffer
+            });
+        }
+    }
+
+    private void HideCreativeInventory(Player player)
+    {
+        if (!_creativeInventoryShown.Remove(player.Guid))
+            return;
+
+        foreach (var entry in CreativeEntries())
+        {
+            player.SendTunneled(new ClientUpdatePacketItemDelete
+            {
+                ItemGuid = entry.RecordId
+            });
+        }
+    }
+
+    private IEnumerable<HousingCreativeCatalog.Entry> CreativeEntries()
+    {
+        return _options.CreativeCatalogLimit > 0
+            ? _creativeCatalog.Entries.Take(_options.CreativeCatalogLimit)
+            : _creativeCatalog.Entries;
+    }
+
     private void AddCreativeCatalog(HousingPacketFixtureItemList packet, HashSet<int> definitionIds)
     {
         var effects = new HashSet<int>();
-        var entries = _options.CreativeCatalogLimit > 0
-            ? _creativeCatalog.Entries.Take(_options.CreativeCatalogLimit)
-            : _creativeCatalog.Entries;
-
-        foreach (var entry in entries)
+        foreach (var entry in CreativeEntries())
         {
             if (definitionIds.Add(entry.ItemDefinitionId))
                 packet.Definitions.Add(entry.Definition);

@@ -58,12 +58,14 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
             .Where(house =>
                 house.CharacterId == characterId &&
                 supportedZoneDefinitionIds.Contains(house.ZoneDefinitionId))
-            .OrderBy(house => house.Id)
             .Select(house => new
             {
                 House = house,
                 FixtureCount = house.Fixtures.Count
             })
+            .ToList()
+            // SQLite can't sort by ulong in SQL, so sort after loading.
+            .OrderBy(entry => entry.House.Id)
             .ToList();
         var packet = new HousingPacketInstanceList
         {

@@ -60,7 +60,6 @@ public class PlayerHousingInstanceInfo : ISerializableType
 
         writer.Write(Description);
         writer.Write(KeywordList);
-        writer.Write(Unknown21);
 
         writer.Write(Rating);
         writer.Write(Votes);
@@ -69,6 +68,11 @@ public class PlayerHousingInstanceInfo : ISerializableType
         writer.Write(CanVote);
 
         writer.Write(FactoryPlotId);
+
+        // The client reads this string after FactoryPlotId, not after KeywordList (FreeRealms.exe 0xab018a). Out of
+        // order, a non-empty value makes the client misread the rest and drop the whole packet, so inside a house
+        // HousingPacketZoneData was ignored and "Click to Decorate" never appeared.
+        writer.Write(Unknown21);
 
         writer.Write(WhenCreated);
     }
