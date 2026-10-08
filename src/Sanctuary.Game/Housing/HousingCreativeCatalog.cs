@@ -27,9 +27,26 @@ public sealed class HousingCreativeCatalog : IDisposable
 {
     public const int RecordIdBase = 0x4000_0000;
 
-    public sealed record Entry(int ItemDefinitionId, int TintId, FixtureDefinition Definition)
+    // A record id is RecordIdBase | dye << DyeShift | item definition id. Item definition ids fit in 20 bits (the
+    // largest is about 900,000) and dye tint ids in 9, so a dyed variant gets its own id without any stored state.
+    private const int DyeShift = 20;
+    private const int MaxDefinitionId = (1 << DyeShift) - 1;
+    private const int MaxDyeTintId = (1 << 9) - 1;
+
+    /// <param name="Dye">A dye tint the player chose for this entry, 0 for the definition's own tint.</param>
+    public sealed record Entry(int ItemDefinitionId, int TintId, FixtureDefinition Definition, int Dye = 0)
     {
-        public int RecordId => RecordIdBase + ItemDefinitionId;
+        public int RecordId => RecordIdBase | Dye << DyeShift | ItemDefinitionId;
+
+        /// <summary>
+        /// This entry in another dye tint. <paramref name="dyeTintId"/> 0 gives the definition's own tint.
+        /// </summary>
+        public Entry WithDye(int dyeTintId, int defaultTintId)
+        {
+            return dyeTintId is > 0 and <= MaxDyeTintId
+                ? this with { Dye = dyeTintId, TintId = dyeTintId }
+                : this with { Dye = 0, TintId = defaultTintId };
+        }
     }
 
     private sealed record Snapshot(IReadOnlyList<Entry> Entries, IReadOnlyDictionary<int, Entry> ByDefinitionId);
@@ -67,7 +84,18 @@ public sealed class HousingCreativeCatalog : IDisposable
             return false;
         }
 
-        return TryGetByDefinitionId(itemRecordId - RecordIdBase, out entry);
+        var definitionId = itemRecordId & MaxDefinitionId;
+        var dye = (itemRecordId - RecordIdBase) >> DyeShift;
+        if (dye > MaxDyeTintId || !TryGetByDefinitionId(definitionId, out entry))
+        {
+            entry = null!;
+            return false;
+        }
+
+        if (dye != 0)
+            entry = entry.WithDye(dye, entry.TintId);
+
+        return true;
     }
 
     /// <summary>
@@ -113,7 +141,7 @@ public sealed class HousingCreativeCatalog : IDisposable
         foreach (var itemDefinitionId in _resourceManager.ClientItemDefinitions.Keys.OrderBy(id => id))
         {
             if (itemDefinitionId <= 0 ||
-                itemDefinitionId > int.MaxValue - RecordIdBase ||
+                itemDefinitionId > MaxDefinitionId ||
                 !HousingFixtureRules.IsFixtureInventoryItem(_resourceManager, itemDefinitionId))
             {
                 continue;

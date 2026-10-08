@@ -93,6 +93,27 @@ public sealed class HousingCreativeCatalogTests
     }
 
     [TestMethod]
+    public void DyedRecordIds_CarryTheDyeAndStayDistinct()
+    {
+        Assert.IsTrue(_catalog.TryGetByDefinitionId(Chair, out var chair));
+        const int Mahogany = 229;
+
+        var dyed = chair.WithDye(Mahogany, chair.TintId);
+        Assert.AreNotEqual(chair.RecordId, dyed.RecordId);
+        Assert.IsTrue(HousingCreativeCatalog.IsCreativeRecordId(dyed.RecordId));
+
+        Assert.IsTrue(_catalog.TryGetByRecordId(dyed.RecordId, out var found));
+        Assert.AreEqual(Chair, found.ItemDefinitionId);
+        Assert.AreEqual(Mahogany, found.TintId);
+        Assert.AreEqual(dyed.RecordId, found.RecordId);
+
+        // Undyed ids from before dyes existed still decode to the definition's own tint.
+        Assert.IsTrue(_catalog.TryGetByRecordId(HousingCreativeCatalog.RecordIdBase + Chair, out var plain));
+        Assert.AreEqual(chair.TintId, plain.TintId);
+        Assert.AreEqual(0, plain.Dye);
+    }
+
+    [TestMethod]
     public void RecordOrDefinitionId_AcceptsBoth()
     {
         Assert.IsTrue(_catalog.TryGetByRecordOrDefinitionId(Wallpaper, out var byDefinition));

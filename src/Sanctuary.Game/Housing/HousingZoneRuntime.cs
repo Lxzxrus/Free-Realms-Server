@@ -53,7 +53,13 @@ public sealed class HousingZoneRuntime : IDisposable
     private readonly Dictionary<int, Npc> _actors = [];
     private readonly Dictionary<ulong, PendingPlacement> _pendingPlacements = [];
     private readonly HashSet<ulong> _editors = [];
-    private readonly HashSet<ulong> _creativeInventoryShown = [];
+    private readonly Dictionary<ulong, List<int>> _creativeInventoryShown = [];
+    private readonly Dictionary<ulong, CreativeView> _creativeViews = [];
+
+    /// <summary>
+    /// What a player's creative tray shows: entries whose names contain every term, dyed with <see cref="Dye"/>.
+    /// </summary>
+    private sealed record CreativeView(string[] Terms, int Dye);
     private bool _disposed;
 
     private static long _nextPreviewId = 10_000_000_000;
@@ -152,6 +158,7 @@ public sealed class HousingZoneRuntime : IDisposable
             _editors.Remove(player.Guid);
             _pendingPlacements.Remove(player.Guid);
             HideCreativeInventory(player);
+            _creativeViews.Remove(player.Guid);
         }
     }
 
@@ -165,6 +172,7 @@ public sealed class HousingZoneRuntime : IDisposable
             _disposed = true;
             _editors.Clear();
             _creativeInventoryShown.Clear();
+            _creativeViews.Clear();
             _pendingPlacements.Clear();
             _actors.Clear();
         }
@@ -1070,10 +1078,11 @@ public sealed class HousingZoneRuntime : IDisposable
     // to player.Items or the database, so nothing outside the house editor can use, trade or sell them.
     private void ShowCreativeInventory(Player player)
     {
-        if (!_options.CreativeMode || !_creativeInventoryShown.Add(player.Guid))
+        if (!_options.CreativeMode || _creativeInventoryShown.ContainsKey(player.Guid))
             return;
 
-        foreach (var entry in CreativeEntries())
+        var shown = new List<int>();
+        foreach (var entry in VisibleCreativeEntries(player))
         {
             if (!_resourceManager.ClientItemDefinitions.TryGetValue(entry.ItemDefinitionId, out var definition))
                 continue;
@@ -1093,21 +1102,77 @@ public sealed class HousingZoneRuntime : IDisposable
             {
                 Payload = writer.Buffer
             });
+            shown.Add(entry.RecordId);
         }
+
+        _creativeInventoryShown[player.Guid] = shown;
     }
 
     private void HideCreativeInventory(Player player)
     {
-        if (!_creativeInventoryShown.Remove(player.Guid))
+        if (!_creativeInventoryShown.Remove(player.Guid, out var shown))
             return;
 
-        foreach (var entry in CreativeEntries())
+        foreach (var recordId in shown)
         {
             player.SendTunneled(new ClientUpdatePacketItemDelete
             {
-                ItemGuid = entry.RecordId
+                ItemGuid = recordId
             });
         }
+    }
+
+    /// <summary>
+    /// Narrows the owner's creative tray to entries matching every term, optionally dyed. No terms and no dye shows
+    /// everything again. Returns how many entries match, or -1 if the player can't decorate here.
+    /// </summary>
+    public int SetCreativeView(Player player, string[] terms, int dyeTintId)
+    {
+        lock (_mutationLock)
+        {
+            if (_disposed || !_options.CreativeMode || !IsOwner(player))
+                return -1;
+
+            var view = new CreativeView(terms.Select(term => term.ToLowerInvariant()).ToArray(), dyeTintId);
+            if (view.Terms.Length == 0 && view.Dye == 0)
+                _creativeViews.Remove(player.Guid);
+            else
+                _creativeViews[player.Guid] = view;
+
+            if (_creativeInventoryShown.ContainsKey(player.Guid))
+            {
+                HideCreativeInventory(player);
+                ShowCreativeInventory(player);
+            }
+
+            return VisibleCreativeEntries(player).Count();
+        }
+    }
+
+    private IEnumerable<HousingCreativeCatalog.Entry> VisibleCreativeEntries(Player player)
+    {
+        if (!_creativeViews.TryGetValue(player.Guid, out var view))
+            return CreativeEntries();
+
+        return CreativeEntries()
+            .Where(entry => _resourceManager.ClientItemDefinitions.TryGetValue(entry.ItemDefinitionId, out var definition) &&
+                MatchesAll(definition, view.Terms))
+            .Select(entry => view.Dye != 0 &&
+                    _resourceManager.ClientItemDefinitions.TryGetValue(entry.ItemDefinitionId, out var definition) &&
+                    HousingDyeTints.IsDyeable(definition)
+                ? entry.WithDye(view.Dye, entry.TintId)
+                : entry);
+    }
+
+    private static bool MatchesAll(ClientItemDefinition definition, string[] terms)
+    {
+        if (terms.Length == 0)
+            return true;
+
+        // The server has no localized item names; the definition's comment, model and texture name carry the words
+        // players search for ("Standard Picnic Table", "hsg_table_picnic_01", "human-picnictable-L1").
+        var text = $"{definition.Comment} {definition.ModelName} {definition.TextureAlias}".ToLowerInvariant();
+        return terms.All(text.Contains);
     }
 
     private IEnumerable<HousingCreativeCatalog.Entry> CreativeEntries()
