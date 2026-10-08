@@ -123,12 +123,14 @@ public static class PacketChatHandler
                         packet.Message
                     );
 
-                    foreach (var zonePlayer in connection.Player.Zone.Players)
+                    // Server-wide, not just the sender's zone: each house is its own zone, so a zone-only shout never
+                    // reached a player in a house, and Evergrove's population is small enough for one shared channel.
+                    foreach (var onlinePlayer in _zoneManager.Zones.SelectMany(zone => zone.Players))
                     {
-                        if (zonePlayer.Ignores.Any(x => x.Guid == connection.Player.Guid))
+                        if (onlinePlayer.Ignores.Any(x => x.Guid == connection.Player.Guid))
                             continue;
 
-                        zonePlayer.SendTunneled(packet);
+                        onlinePlayer.SendTunneled(packet);
                     }
                 }
                 break;

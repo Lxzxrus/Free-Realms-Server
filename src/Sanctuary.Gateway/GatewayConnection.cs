@@ -564,8 +564,10 @@ public class GatewayConnection : UdpConnection
         dbCharacter.ChatBubbleBackgroundColor = Player.ChatBubbleBackgroundColor;
         dbCharacter.ChatBubbleSize = Player.ChatBubbleSize;
 
-        if (dbContext.SaveChanges() <= 0)
-            _logger.LogError("Failed to save character data to database");
+        // SaveChanges returns the rows changed. Zero means nothing changed since the last save (a quick relog, or
+        // logging out inside a house), not a failure; a real failure throws.
+        if (dbContext.SaveChanges() == 0)
+            _logger.LogDebug("No character changes to save for {Character}.", dbCharacter.Id);
     }
 
     public void SendInitializationParameters()
