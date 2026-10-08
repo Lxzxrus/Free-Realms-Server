@@ -15,6 +15,14 @@ public static class Constants
     public const string ClientExecutableName = "FreeRealms.exe";
     public const string DirectXDownloadUrl = "https://www.microsoft.com/download/details.aspx?id=35";
 
+    /// <summary>
+    /// The official Open Source Free Realms client download. Missing or changed client files are repaired from here, and
+    /// written only if they match <see cref="ClientPinSet.Official"/>.
+    /// </summary>
+    public const string OfficialClientUrl = "https://opensourcefreerealms.com/client/";
+
+    public const string QuarantineDirectory = "Quarantine";
+
     // Set at build time in launcher/src/Directory.Build.props.
     public static readonly string Title = GetMetadata("LauncherTitle");
     public static readonly string Id = GetMetadata("LauncherId");

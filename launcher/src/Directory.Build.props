@@ -26,7 +26,8 @@
     <!-- SHA-256 of the game client's FreeRealms.exe, as 64 hex digits (sha256sum FreeRealms.exe, or
          Get-FileHash FreeRealms.exe in PowerShell). The launcher refuses to start any other FreeRealms.exe and never
          keeps one a server's client manifest sends that doesn't match. While it's empty the launcher starts no game
-         at all, and the release workflow refuses to build. -->
-    <ClientExecutableSha256 Condition="'$(ClientExecutableSha256)' == ''"></ClientExecutableSha256>
+         at all, and the release workflow refuses to build. It must equal FreeRealms.exe's line in Launcher/ClientPins.txt
+         (the official OSFR client); a test checks that. -->
+    <ClientExecutableSha256 Condition="'$(ClientExecutableSha256)' == ''">26cc1c522a45e71fb57882da515f65bac45c8c8b8c7e740c0cea81c52a733351</ClientExecutableSha256>
   </PropertyGroup>
 </Project>

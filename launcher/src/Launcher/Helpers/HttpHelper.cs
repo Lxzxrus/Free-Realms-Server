@@ -61,6 +61,10 @@ public static class HttpHelper
 
         httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
 
+        // Without it, Cloudflare (in front of the official client download) injects its analytics script into HTML
+        // files, which then no longer match their pins.
+        httpClient.DefaultRequestHeaders.Accept.ParseAdd("*/*");
+
         return httpClient;
     }
 
