@@ -134,6 +134,23 @@
               Stretch="Fill" />
       </Button>
       <Button Classes="flat primary"
+              Command="{Binding UseLauncherClientFolderCommand}"
+              CornerRadius="5"
+              IsVisible="{Binding HasChosenClientFolder}"
+              ToolTip.Tip="{Binding UseLauncherClientFolderTooltip}">
+        <Button.Background>
+          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
+            <GradientStop Offset="0.0" Color="#96B9D9" />
+            <GradientStop Offset="4.0" Color="#202959" />
+            <GradientStop Offset="0.8" Color="#37538C" />
+          </LinearGradientBrush>
+        </Button.Background>
+        <Path Width="16"
+              Height="16"
+              Data="{StaticResource Icons.Home}"
+              Stretch="Fill" />
+      </Button>
+      <Button Classes="flat primary"
               Command="{Binding OpenFolderCommand}"
               CornerRadius="5"
               ToolTip.Tip="{StaticResource Text.Server.ClientFolder.Tooltip}">
