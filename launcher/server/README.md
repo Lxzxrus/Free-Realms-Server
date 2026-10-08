@@ -8,6 +8,7 @@ files and web server configuration.
 | `<server URL>/servermanifest.xml` | Name, description, WebAPI address, Login server address | Yes |
 | `<WebApiUrl>/login`, `/register` | WebAPI, normally behind Caddy (see `docs/webapi.md`) | Yes |
 | UDP `<Login server>` (port 20042) | Status ping and login | Yes |
+| `http://<server>/assets/...` | The assets the game streams while playing (see `tools/asset-mirror`), plain HTTP because the client can't do HTTPS | Only if WebAPI's `LaunchArguments` point there |
 | `<ClientUrl or server URL>/clientmanifest.xml` and `/client/...` | The game files, so the launcher can download and check them | No: without it players supply their own client |
 
 Launcher updates are not hosted here. They come from the repository's GitHub Releases (see

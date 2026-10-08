@@ -46,7 +46,7 @@ environment variables with `__` for `:` (for example `WebAPI__RateLimits__LoginP
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `LaunchArguments` | asset server | Arguments handed to the client. **Must not** contain `Portrait:UploadUrl`; WebAPI refuses to start if it does |
+| `LaunchArguments` | OSFR's asset server | Arguments handed to the client. **Must not** contain `Portrait:UploadUrl`; WebAPI refuses to start if it does. `AssetDelivery:IndirectServerAddress` is where the game streams assets from while playing; a public server should host its own copy (`tools/asset-mirror`) rather than trust a third party's |
 | `PortraitUploadUrl` | `http://127.0.0.1:20040/image` | Public URL of the portrait endpoint, with no token. Empty turns portrait uploads off |
 | `PortraitUploadTokenLifetime` | `1.00:00:00` | How long a login's upload token works |
 | `PortraitMaxRequestBytes` | `1048576` | Largest upload request |
