@@ -21,7 +21,13 @@ internal sealed class Program
     [STAThread]
     internal static void Main(string[] args)
     {
+        // Before anything reads the settings or opens the log.
+        var moved = DataFolder.MoveFromOldFolder(Constants.InstallDirectory, Constants.SavePath);
+
         SetupNLog();
+
+        if (moved is not null)
+            LogManager.GetCurrentClassLogger().Info(moved);
 
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
@@ -56,7 +62,6 @@ internal sealed class Program
         config.AddRule(LogLevel.Debug, LogLevel.Fatal, debuggerTarget);
 #endif
 
-        // Beside the launcher, not the current directory: started from a shell in C:\Windows\System32, the log ended up there.
         var logsDir = Constants.LogsDirectory;
         if (!Directory.Exists(logsDir))
         {

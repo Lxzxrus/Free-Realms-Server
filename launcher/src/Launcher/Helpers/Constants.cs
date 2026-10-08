@@ -40,13 +40,23 @@ public static class Constants
     /// </summary>
     public static readonly string ClientExecutableSha256 = GetMetadata("ClientExecutableSha256", required: false);
 
-    public static readonly string LogsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
-
     // Create: without it, a missing folder (a fresh Linux account has no ~/.local/share) comes back as "", and
     // settings and the client would land in whatever directory the launcher was started from.
-    public static readonly string SavePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create),
-                Id);
+    private static readonly string LocalAppData =
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.Create);
+
+    /// <summary>
+    /// Settings, servers and their game folders. Not <see cref="InstallDirectory"/>: that one belongs to Velopack, and
+    /// uninstalling deletes it (see <see cref="DataFolder"/>).
+    /// </summary>
+    public static readonly string SavePath = Path.Combine(LocalAppData, Id + "Data");
+
+    /// <summary>Where Velopack installs the launcher on Windows, and where its data used to be kept.</summary>
+    public static readonly string InstallDirectory = Path.Combine(LocalAppData, Id);
+
+    // With the data, not beside the launcher: an update replaces the launcher's folder, and started from a shell in
+    // C:\Windows\System32 the log would end up there.
+    public static readonly string LogsDirectory = Path.Combine(SavePath, "logs");
 
     private static string GetMetadata(string key, bool required = true)
     {

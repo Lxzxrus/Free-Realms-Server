@@ -191,6 +191,11 @@ folder button) instead of downloading 852 MB. That folder gets the same check an
   URL. Older manifests without it still work.
 - **Settings folder fix:** if the local app-data folder doesn't exist yet (a fresh Linux account has no
   `~/.local/share`), OSFR's launcher wrote its settings and the whole client into the current directory.
+- **Data apart from the install:** settings, servers, game folders and the log live in
+  `%LocalAppData%\<LauncherId>Data` (`~/.local/share/...` on Linux), not in `%LocalAppData%\<LauncherId>`, which
+  is Velopack's install folder. OSFR's launcher kept them in the install folder: the installer took a launcher
+  that had only been run for an existing install, and uninstalling removes that folder, with every downloaded game in it. The
+  first start moves an old folder's settings and servers over (`Helpers/DataFolder.cs`).
 - **Font:** OSFR bundled Maiandra GD, a commercial Microsoft font that can't be redistributed. The launcher now
   uses Inter, which Avalonia ships.
 - Error notifications stay 8 seconds instead of 3, and the missing `Text.Main.Info` text that info notifications
