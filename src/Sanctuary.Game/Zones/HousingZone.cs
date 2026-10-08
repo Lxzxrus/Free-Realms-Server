@@ -3,6 +3,7 @@ using System;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions.Zones;
+using Sanctuary.Packet;
 
 namespace Sanctuary.Game.Zones;
 
@@ -42,6 +43,10 @@ public sealed class HousingZone : BaseZone
     {
         Runtime.SendInitialData(player);
         base.OnClientIsReady(player);
+
+        // Quest targets live in the world, not in a house: without this the "Active Quest!" arrow keeps chasing a
+        // target that isn't in the zone. Re-entering the world sends the target again.
+        player.SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
 
         SendShopData(player);
     }
