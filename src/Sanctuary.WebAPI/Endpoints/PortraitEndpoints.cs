@@ -21,6 +21,7 @@ using Sanctuary.WebAPI.Options;
 using Sanctuary.WebAPI.Security;
 
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -38,6 +39,18 @@ public static class PortraitEndpoints
 
     private static ILogger _logger = null!;
     private readonly static ConcurrentDictionary<string, SemaphoreSlim> _fileLocks = [];
+
+    // Portraits are PNG only, so uploads are read with the PNG codec alone: any other format is refused as unknown before
+    // a decoder for it runs, and metadata (ICC profiles, EXIF, text) is never parsed. ImageSharp's default configuration
+    // would parse TIFF, ICC profiles and more from an uploaded file. As of 3.1.12 that leaves none of its open advisories
+    // reachable from an upload: GHSA-j9gm-c75j-xc9q and GHSA-jjfr-hcj7-qf5w (TIFF encoder), GHSA-wmxv-xphr-5c9g (BigTIFF
+    // decoder), GHSA-j3p4-wp97-rph4 (histogram equalization, unused) and GHSA-gwg2-r3hj-4w44 (ICC profile parsing).
+    // The fixes ship only in ImageSharp 4, which needs a Six Labors license key to build.
+    private static readonly DecoderOptions PngOnly = new()
+    {
+        Configuration = new Configuration(new PngConfigurationModule()),
+        SkipMetadata = true
+    };
 
     public static void MapPortraitEndpoints(this WebApplication app)
     {
@@ -264,7 +277,7 @@ public static class PortraitEndpoints
             using var stream = file.OpenReadStream();
 
             // Read the header first, so a small file claiming huge dimensions is refused before it is decoded.
-            var info = await Image.IdentifyAsync(stream, cancellationToken);
+            var info = await Image.IdentifyAsync(PngOnly, stream, cancellationToken);
 
             if (info.Metadata.DecodedImageFormat is not PngFormat)
             {
@@ -282,7 +295,7 @@ public static class PortraitEndpoints
 
             stream.Position = 0;
 
-            images.Add((fileName, await Image.LoadAsync<Rgba32>(stream, cancellationToken)));
+            images.Add((fileName, await Image.LoadAsync<Rgba32>(PngOnly, stream, cancellationToken)));
 
             return null;
         }
