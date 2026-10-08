@@ -8,7 +8,7 @@
   <p>
     <a href="https://github.com/Lxzxrus/Free-Realms-Server/releases/latest"><strong>Download the launcher</strong></a>
     ·
-    <a href="DISCORD_INVITE_URL">Discord</a>
+    <a href="https://discord.gg/5kX5hh7skx">Discord</a>
     ·
     <a href="https://github.com/Lxzxrus/Free-Realms-Server/issues">Report a bug</a>
   </p>
@@ -98,7 +98,12 @@ Evergrove stands on other people's work, all published under the AGPL:
 - **JadenY**: the quest system, from Sulphural's fork.
 - Everyone who contributed to Sanctuary upstream; the git history credits each of them.
 
-Developed by Nate with Claude (Anthropic's AI) as a coding partner; commits say which.
+## How it's made
+
+Evergrove is developed openly with AI. Nate runs the project: he decides what gets built, tests every change in the
+game client with playtesters, and merges it. Claude, Anthropic's AI, writes most of the code and documentation
+under that direction, from reverse-engineering the 2009 client to the server fixes. Every commit Claude made says
+so in a `Co-Authored-By: Claude` line, and pull requests say what was checked in the game and what wasn't.
 
 ## License
 

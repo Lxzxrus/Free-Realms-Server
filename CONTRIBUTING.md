@@ -26,4 +26,5 @@ answers for it in review.
 
 ## Security
 
-Please don't open public issues for security problems; contact the maintainer privately first.
+Please don't open public issues for security problems. Send a direct message to Nate on the
+[Discord server](https://discord.gg/5kX5hh7skx) instead, and give it time to be fixed before telling anyone else.
