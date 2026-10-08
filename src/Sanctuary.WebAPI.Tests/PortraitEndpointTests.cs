@@ -233,6 +233,25 @@ public class PortraitEndpointTests
     }
 
     [TestMethod]
+    [DataRow(new byte[] { 0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00 }, DisplayName = "TIFF")]
+    [DataRow(new byte[] { 0x49, 0x49, 0x2B, 0x00, 0x08, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, DisplayName = "BigTIFF")]
+    [DataRow(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00 }, DisplayName = "JPEG")]
+    [DataRow(new byte[] { 0x42, 0x4D, 0x3A, 0x00, 0x00, 0x00 }, DisplayName = "BMP")]
+    public async Task OtherImageFormatsAreRefusedWithoutBeingDecoded(byte[] header)
+    {
+        // Uploads are read with the PNG codec alone, so a TIFF (where ImageSharp's open advisories are) never reaches
+        // a TIFF decoder.
+        using var host = new WebAPIHost();
+        var seed = await host.StartAsync();
+
+        var path = await host.GetPortraitUploadPathAsync("alice");
+
+        using var response = await PostAsync(host, path, seed.AliceCharacterGuid.ToString(), Thumbnail, header);
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [TestMethod]
     public async Task StorageStaysAtTwoFilesPerCharacter()
     {
         using var host = new WebAPIHost();
