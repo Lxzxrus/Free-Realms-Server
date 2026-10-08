@@ -34,6 +34,8 @@
     <EmbeddedResource Include="Models\*.xsd" />
     <!-- The official client's files and hashes (launcher/tools/make-client-pins.cs). Embedded, so it ships inside the signed-by-hash launcher, not as a file a player or server could swap. -->
     <EmbeddedResource Include="ClientPins.txt" LogicalName="Launcher.ClientPins.txt" />
+    <!-- Evergrove's client additions: our own compiled code only (tools/client-mods/). -->
+    <EmbeddedResource Include="Mods\housing-search.tag" LogicalName="Launcher.Mods.housing-search.tag" />
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 

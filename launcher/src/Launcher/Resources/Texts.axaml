@@ -88,6 +88,8 @@ When you press Play it's checked against the official Free Realms client first: 
 {1}</x:String>
   <x:String x:Key="Text.Server.UnofficialCodeStuck" xml:space="preserve">These files in your game folder aren't part of the official Free Realms client, and couldn't be moved out of the way. The game wasn't started. Close anything using them, or delete them, and try again:
 {0}</x:String>
+  <x:String x:Key="Text.Server.ModsFailed" xml:space="preserve">Evergrove's additions to the game (such as the building search) couldn't be added, so the game starts without them:
+{0}</x:String>
   <x:String x:Key="Text.Server.CheckFailed" xml:space="preserve">The game files couldn't be checked, so the game wasn't started. Try again; if it keeps happening, look in the launcher's log.</x:String>
   <x:String x:Key="Text.Server.CodeCheckFailed" xml:space="preserve">Some of the game's program files changed since they were last checked, so the game wasn't started. Press Play again to check and repair them.</x:String>
   <x:String x:Key="Text.Server.ServerCodeRefused" xml:space="preserve">The server offered program files for your game folder. Servers may only add game data, so those files weren't downloaded.</x:String>

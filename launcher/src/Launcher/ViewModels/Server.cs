@@ -385,7 +385,8 @@ public partial class Server : ObservableObject
             response.EnsureSuccessStatusCode();
 
             return await response.Content.ReadAsStreamAsync(cancellationToken);
-        });
+        },
+        ClientMods.AcceptedVariants);
 
     /// <summary>
     /// Checks the client folder against the official client, repairs what's missing or changed from the official
@@ -437,6 +438,14 @@ public partial class Server : ObservableObject
 
                     return false;
                 }
+            }
+
+            // Evergrove's client additions, made from the files just verified. The game runs without them if they fail.
+            if (!ClientMods.TryApply(ClientDirectory, ClientPinSet.Official, out var modError))
+            {
+                _logger.Warn("Couldn't apply the client mods: {Error}", modError);
+
+                App.AddNotification(App.GetText("Text.Server.ModsFailed", modError), false);
             }
 
             return true;

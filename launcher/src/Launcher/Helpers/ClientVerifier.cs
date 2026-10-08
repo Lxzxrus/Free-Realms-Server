@@ -35,14 +35,28 @@ public sealed class ClientVerifier
     private readonly string _clientDirectory;
     private readonly string _cachePath;
     private readonly FetchOfficialFile _fetch;
+    private readonly IReadOnlyDictionary<string, string> _acceptedVariants;
 
-    public ClientVerifier(ClientPinSet pins, string clientDirectory, string cachePath, FetchOfficialFile fetch)
+    /// <param name="acceptedVariants">
+    /// By pinned path, one more hash the file may have because one of our client mods changed it (see
+    /// <see cref="ClientMods.AcceptedVariants"/>). Never a code file.
+    /// </param>
+    public ClientVerifier(ClientPinSet pins, string clientDirectory, string cachePath, FetchOfficialFile fetch,
+        IReadOnlyDictionary<string, string>? acceptedVariants = null)
     {
         _pins = pins;
         _clientDirectory = Path.GetFullPath(clientDirectory);
         _cachePath = cachePath;
         _fetch = fetch;
+        _acceptedVariants = acceptedVariants ?? new Dictionary<string, string>();
+
+        if (_acceptedVariants.Keys.Any(ClientCodeFiles.IsCode))
+            throw new ArgumentException("A code file can't have an accepted variant.", nameof(acceptedVariants));
     }
+
+    private bool IsAccepted(ClientFilePin pin, string sha256)
+        => sha256 == pin.Sha256 ||
+           _acceptedVariants.TryGetValue(ClientPinSet.Normalize(pin.Path), out var variant) && sha256 == variant;
 
     /// <summary>Checks every pinned file and looks for code files that aren't pinned.</summary>
     public Task<ClientCheckResult> CheckAsync(IProgress<(int Done, int Total)>? progress = null, CancellationToken cancellationToken = default)
@@ -128,6 +142,7 @@ public sealed class ClientVerifier
         var path = FullPath(pin.Path);
         var info = new FileInfo(path);
 
+        // A variant has the official size: our mods change bytes, never lengths.
         if (!info.Exists || info.Length != pin.Size)
             return false;
 
@@ -137,7 +152,7 @@ public sealed class ClientVerifier
         // Code is always hashed: a cache entry is only as trustworthy as the file times, which anyone can set.
         if (!ClientCodeFiles.IsCode(pin.Path) &&
             cache.TryGetValue(key, out var entry) &&
-            entry.Size == info.Length && entry.WriteTicks == stamp && entry.Sha256 == pin.Sha256)
+            entry.Size == info.Length && entry.WriteTicks == stamp && IsAccepted(pin, entry.Sha256))
         {
             return true;
         }
@@ -153,7 +168,7 @@ public sealed class ClientVerifier
             return false;
         }
 
-        if (actual != pin.Sha256)
+        if (!IsAccepted(pin, actual))
         {
             cache.Remove(key);
             return false;
