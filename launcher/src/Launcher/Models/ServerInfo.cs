@@ -29,9 +29,10 @@ public sealed class ServerInfo : ObservableObject
     public string? ClientUrl { get; set; }
 
     /// <summary>
-    /// This is generated once the server is added.
+    /// The server's folder, relative to the data folder (<c>Servers\&lt;name&gt;</c>), made when the server is added.
+    /// Checked on load by <see cref="Helpers.DataFolder.ToServerPath"/>.
     /// </summary>
-    public required string SavePath { get; init; }
+    public required string SavePath { get; set; }
 
     /// <summary>
     /// A game folder the player already had, used instead of downloading the client again. Null for the launcher's

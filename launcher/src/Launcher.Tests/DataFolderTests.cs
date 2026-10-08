@@ -81,6 +81,48 @@ public class DataFolderTests
     }
 
     [TestMethod]
+    public void OldFullServerPathsPointIntoTheDataFolder()
+    {
+        // What the settings of a launcher run before the move held, and the installed launcher then downloaded into.
+        var old = Path.Combine(_old, Constants.ServersDirectory, "Free Realms Evergrove");
+
+        Assert.AreEqual(Path.Combine(Constants.ServersDirectory, "Free Realms Evergrove"), DataFolder.ToServerPath(old, _new, _old));
+    }
+
+    [TestMethod]
+    public void ServerPathsInTheDataFolderBecomeRelative()
+    {
+        var full = Path.Combine(_new, Constants.ServersDirectory, "Free Realms Evergrove_1");
+        var relative = Path.Combine(Constants.ServersDirectory, "Free Realms Evergrove_1");
+
+        Assert.AreEqual(relative, DataFolder.ToServerPath(full, _new, _old));
+        Assert.AreEqual(relative, DataFolder.ToServerPath(relative, _new, _old), "already relative: unchanged");
+    }
+
+    [TestMethod]
+    [DataRow("..")]
+    [DataRow("Servers/../..")]
+    [DataRow("Servers/../../Windows")]
+    [DataRow("Servers")]
+    [DataRow("Servers/a/b")]
+    [DataRow("")]
+    public void ServerPathsNeverLeaveTheServersFolder(string savePath)
+    {
+        var result = DataFolder.ToServerPath(savePath, _new, _old);
+        var resolved = Path.GetFullPath(Path.Combine(_new, result));
+
+        Assert.AreEqual(Path.GetFullPath(Path.Combine(_new, Constants.ServersDirectory)), Path.GetDirectoryName(resolved), result);
+    }
+
+    [TestMethod]
+    public void FullPathsElsewhereKeepOnlyTheirName()
+    {
+        var elsewhere = Path.Combine(_root, "Somewhere", "My Server");
+
+        Assert.AreEqual(Path.Combine(Constants.ServersDirectory, "My Server"), DataFolder.ToServerPath(elsewhere, _new, _old));
+    }
+
+    [TestMethod]
     public void TheDataFolderIsNotTheInstallFolder()
     {
         Assert.AreNotEqual(Path.GetFullPath(Constants.InstallDirectory), Path.GetFullPath(Constants.SavePath));

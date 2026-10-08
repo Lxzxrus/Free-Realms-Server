@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 
+using Launcher.Extensions;
+
 namespace Launcher.Helpers;
 
 /// <summary>
@@ -43,5 +45,45 @@ public static class DataFolder
         {
             return $"Couldn't move the launcher's settings and servers from {oldDirectory} to {newDirectory}: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// A server's folder as kept in the settings: relative to the data folder (<c>Servers\&lt;name&gt;</c>), and
+    /// always inside its servers folder. Settings used to keep full paths, which still pointed into
+    /// <paramref name="oldDirectory"/> after the move; those, and anything that would leave the servers folder (the
+    /// launcher deletes and quarantines files in it), become a folder of that name in the servers folder.
+    /// </summary>
+    public static string ToServerPath(string savePath, string dataDirectory, string oldDirectory)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var serversDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(dataDirectory, Constants.ServersDirectory)));
+
+        var candidate = savePath;
+
+        if (Path.IsPathRooted(savePath))
+        {
+            var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(savePath));
+
+            foreach (var root in new[] { dataDirectory, oldDirectory })
+            {
+                var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+
+                if (full.StartsWith(fullRoot, comparison))
+                {
+                    candidate = full[fullRoot.Length..];
+                    break;
+                }
+            }
+        }
+
+        var resolved = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(dataDirectory, candidate)));
+        var parent = Path.GetDirectoryName(resolved);
+
+        if (parent is not null && string.Equals(parent, serversDirectory, comparison))
+            return Path.Combine(Constants.ServersDirectory, Path.GetFileName(resolved));
+
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(savePath)).ToValidDirectoryName();
+
+        return Path.Combine(Constants.ServersDirectory, string.IsNullOrWhiteSpace(name) || name is "." or ".." ? "Server" : name);
     }
 }

@@ -49,6 +49,24 @@ public partial class Settings : ObservableObject
             return new Settings();
         }
 
+        // Older settings kept each server's folder as a full path, which pointed into the old data folder.
+        var changed = false;
+
+        foreach (var info in settings.ServerInfoList)
+        {
+            var serverPath = DataFolder.ToServerPath(info.SavePath, Constants.SavePath, Constants.InstallDirectory);
+
+            if (serverPath != info.SavePath)
+            {
+                _logger.Info("Server '{Name}' folder: '{Old}' is now '{New}'.", info.Name, info.SavePath, serverPath);
+                info.SavePath = serverPath;
+                changed = true;
+            }
+        }
+
+        if (changed && !XmlHelper.TrySerialize(settings, _savePath))
+            _logger.Error("Failed to serialize and save settings to '{Path}'.", _savePath);
+
         return settings;
     }
 
