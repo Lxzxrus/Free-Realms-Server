@@ -51,8 +51,10 @@ environment variables with `__` for `:` (for example `WebAPI__RateLimits__LoginP
 | `PortraitUploadTokenLifetime` | `1.00:00:00` | How long a login's upload token works |
 | `PortraitMaxRequestBytes` | `1048576` | Largest upload request |
 | `ImagesDirectory` | `Images` | Where portraits are kept, one folder per character guid. The Gateway reads `Images/` from its own working directory, so the two must point at the same place |
+| `StatusLoginServer` | `127.0.0.1:20042` | The Login server that `/status` and `/status.json` ask, as the launcher does. `sanctuary.login:20042` in Docker Compose |
+| `StatusTimeout` / `StatusCacheDuration` | `00:00:02` / `00:00:10` | How long `/status` waits for Login, and how long one answer is reused so the page can't flood Login |
 | `TrustedProxies` | loopback | Extra proxy addresses or CIDR ranges whose `X-Forwarded-For` is believed, for example `172.16.0.0/12` for Docker |
-| `RateLimits:LoginPerMinute` / `RegisterPerHour` / `ImagePerMinute` | 10 / 5 / 6 | Per-address request limits |
+| `RateLimits:LoginPerMinute` / `RegisterPerHour` / `ImagePerMinute` / `StatusPerMinute` | 10 / 5 / 6 / 30 | Per-address request limits |
 | `LoginLockout:FailuresPerAddress` | 5 | Failures before one address is locked out of one account |
 | `LoginLockout:BaseLockout` / `MaxLockout` | `00:01:00` / `00:15:00` | First lockout, and the cap it doubles up to |
 | `LoginLockout:ForgetFailuresAfter` | `01:00:00` | An address's failure count resets after this long without a failure |

@@ -17,6 +17,7 @@ public static class RateLimiting
     public const string LoginPolicy = "login";
     public const string RegisterPolicy = "register";
     public const string ImagePolicy = "image";
+    public const string StatusPolicy = "status";
 
     /// <summary>
     /// Per-address fixed windows for each endpoint. Rejections are 429 with a <c>Retry-After</c> in seconds.
@@ -38,6 +39,7 @@ public static class RateLimiting
             options.AddPolicy(LoginPolicy, context => PerAddress(context, limits.LoginPerMinute, TimeSpan.FromMinutes(1)));
             options.AddPolicy(RegisterPolicy, context => PerAddress(context, limits.RegisterPerHour, TimeSpan.FromHours(1)));
             options.AddPolicy(ImagePolicy, context => PerAddress(context, limits.ImagePerMinute, TimeSpan.FromMinutes(1)));
+            options.AddPolicy(StatusPolicy, context => PerAddress(context, limits.StatusPerMinute, TimeSpan.FromMinutes(1)));
         });
     }
 
