@@ -41,6 +41,14 @@ written last. At the end:
 - `MISSING.txt`: assets in the manifest the source doesn't have (404). The client asks for them anyway; OSFR's
   server lacks some housing pieces, for example `hsg_chair_throne_01.dds.z`.
 - `BAD.txt`: assets that failed the check. They aren't kept.
+- `FAILED.txt`: assets that couldn't be downloaded (network errors). A rerun retries them.
+- `SKIPPED-CODE.txt`: programs in the manifest, never copied or served. OSFR's manifest lists `PlayClient.exe` and
+  three installer DLLs, leftovers of SOE's.
+
+Names are URL-encoded: 703 of them have spaces or characters like `^ & ( ) ' ! +` (`Bear Vinegolem.gfx`).
+
+To run it again (to resume, or to retry `FAILED.txt`), clear the finished unit first:
+`sudo systemctl reset-failed evergrove-asset-mirror`, then the same `systemd-run` line.
 
 The copy trusts the source's manifest at the moment it's made. After that nothing changes unless it's run again on
 purpose, and `SHA256SUMS` shows what changed if it is.

@@ -25,11 +25,16 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zlib
 
 USER_AGENT = "EvergroveAssetMirror/1.0 (+https://play.evergrove.fyi)"
 MAGIC = bytes.fromhex("a1b2c3d4")
+
+# The launcher's ClientCodeFiles, plus a few more: files that run as code rather than being read as data.
+CODE_EXTENSIONS = {".exe", ".dll", ".asi", ".flt", ".m3d", ".mix", ".bat", ".cmd", ".com", ".scr", ".ps1", ".vbs",
+                   ".js", ".sys", ".ocx", ".cpl", ".msi", ".lua", ".luac", ".py", ".jar"}
 
 
 def s32(value):
@@ -115,7 +120,7 @@ def main():
     if manifest_text is None or zlib.crc32(manifest_text) != want_crc or len(manifest_text) != want_length:
         sys.exit("The manifest doesn't match manifest.crc.")
 
-    entries = []
+    entries, skipped = [], []
     for line in manifest_text.decode("latin-1").splitlines():
         if not line.strip():
             continue
@@ -123,16 +128,20 @@ def main():
         # Names become file names: nothing that could leave the folder. (".dma.z" is a real asset.)
         if not name or name in (".", "..") or any(c in name for c in "/\\:\0") or name.endswith(".part"):
             sys.exit(f"Refusing an unsafe asset name: {name!r}")
+        # Never serve programs. The manifest lists PlayClient.exe and three installer DLLs, leftovers of SOE's.
+        if os.path.splitext(name[:-2] if name.endswith(".z") else name)[1].lower() in CODE_EXTENSIONS:
+            skipped.append(name)
+            continue
         entries.append((name, int(crc), int(size)))
 
     if args.limit:
         entries = entries[:args.limit]
 
-    print(f"{len(entries)} assets, {sum(e[2] for e in entries) / 1e9:.2f} GB", flush=True)
+    print(f"{len(entries)} assets, {sum(e[2] for e in entries) / 1e9:.2f} GB; skipped {len(skipped)} programs", flush=True)
 
     lock = threading.Lock()
-    counts = {"kept": 0, "downloaded": 0, "missing": 0, "bad": 0}
-    missing, bad = [], []
+    counts = {"kept": 0, "downloaded": 0, "missing": 0, "bad": 0, "failed": 0}
+    lists = {"missing": [], "bad": [], "failed": []}
     started = time.time()
 
     def mirror(entry):
@@ -144,7 +153,13 @@ def main():
                 if is_valid(name, file.read(), crc, size):
                     return "kept", name
 
-        data = fetch("%s/%03u/%s?%u" % (source, folder_of(name), name, crc))
+        # 703 names have spaces or other characters a URL can't carry as is ("Bear Vinegolem.gfx").
+        url = "%s/%03u/%s?%u" % (source, folder_of(name), urllib.parse.quote(name, safe=""), crc)
+        try:
+            data = fetch(url)
+        except Exception as error:
+            print(f"Failed: {name}: {error}", flush=True)
+            return "failed", name
         if data is None:
             return "missing", name
         if not is_valid(name, data, crc, size):
@@ -157,10 +172,8 @@ def main():
         for done, (result, name) in enumerate(pool.map(mirror, entries), 1):
             with lock:
                 counts[result] += 1
-                if result == "missing":
-                    missing.append(name)
-                elif result == "bad":
-                    bad.append(name)
+                if result in lists:
+                    lists[result].append(name)
             if done % 2000 == 0 or done == len(entries):
                 print(f"{done}/{len(entries)} {counts} {time.time() - started:.0f}s", flush=True)
 
@@ -168,22 +181,23 @@ def main():
     write_atomically(os.path.join(destination, "manifest.txt.z"), manifest_z)
     write_atomically(os.path.join(destination, "manifest.crc"), manifest_crc)
 
-    with open(os.path.join(destination, "MISSING.txt"), "w") as file:
-        file.write("".join(n + "\n" for n in sorted(missing)))
-    with open(os.path.join(destination, "BAD.txt"), "w") as file:
-        file.write("".join(n + "\n" for n in sorted(bad)))
+    lists["skipped"] = skipped
+    reports = {"missing": "MISSING.txt", "bad": "BAD.txt", "failed": "FAILED.txt", "skipped": "SKIPPED-CODE.txt"}
+    for result, report in reports.items():
+        with open(os.path.join(destination, report), "w") as file:
+            file.write("".join(n + "\n" for n in sorted(lists[result])))
 
     sums = []
     for root, _, files in os.walk(destination):
         for file_name in files:
-            if file_name in ("SHA256SUMS", "MISSING.txt", "BAD.txt") or file_name.endswith(".part"):
+            if file_name in ("SHA256SUMS", *reports.values()) or file_name.endswith(".part"):
                 continue
             full = os.path.join(root, file_name)
             with open(full, "rb") as file:
                 sums.append(f"{hashlib.sha256(file.read()).hexdigest()}  {os.path.relpath(full, destination).replace(os.sep, "/")}\n")
     write_atomically(os.path.join(destination, "SHA256SUMS"), "".join(sorted(sums, key=lambda s: s[66:])).encode())
 
-    print(f"Done: {counts}. Missing at the source: {len(missing)}, failed checks: {len(bad)}.", flush=True)
+    print(f"Done: {counts}. A rerun retries what failed.", flush=True)
 
 
 if __name__ == "__main__":
