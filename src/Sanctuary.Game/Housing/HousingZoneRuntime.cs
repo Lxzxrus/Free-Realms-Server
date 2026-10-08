@@ -1361,7 +1361,10 @@ public sealed class HousingZoneRuntime : IDisposable
         actor.TextureAlias = itemDefinition.TextureAlias ?? string.Empty;
         actor.TintAlias = itemDefinition.TintAlias ?? string.Empty;
         actor.HideNamePlate = true;
-        actor.IsInteractable = false;
+        // The client marks an actor as a selectable house fixture only when it is interactable with an interact range
+        // of 0 (FreeRealms.exe 0x92f84b-0x92f88a sets entity flag 4). Otherwise the editor can't pick it up, move or
+        // rotate it, and a click becomes an ordinary NPC interaction.
+        actor.IsInteractable = true;
         actor.InteractRange = 0;
         actor.Visible = true;
         actor.MovementType = 0;
