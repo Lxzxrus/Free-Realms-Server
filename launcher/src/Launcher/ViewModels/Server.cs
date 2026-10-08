@@ -369,7 +369,8 @@ public partial class Server : ObservableObject
 
     private string ClientBaseUrl => string.IsNullOrEmpty(Info.ClientUrl) ? Info.Url : Info.ClientUrl;
 
-    private string ClientDirectory => string.IsNullOrEmpty(Info.ClientDirectoryOverride)
+    /// <summary>The game folder: the launcher's own, or one the player chose. Checked, repaired and started from here.</summary>
+    public string ClientDirectory => string.IsNullOrEmpty(Info.ClientDirectoryOverride)
         ? Path.Combine(Constants.SavePath, Info.SavePath, "Client")
         : Info.ClientDirectoryOverride;
 

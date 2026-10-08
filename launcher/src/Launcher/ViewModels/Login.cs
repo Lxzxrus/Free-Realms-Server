@@ -129,7 +129,8 @@ public partial class Login : Popup
 
         var arguments = LaunchArguments.Build(_server.Info.LoginServer, sessionId, Settings.Instance.Locale.ToString(), serverArguments);
 
-        var workingDirectory = Path.Combine(Constants.SavePath, _server.Info.SavePath, "Client");
+        // The folder that was checked, which may be one the player chose (ClientDirectoryOverride).
+        var workingDirectory = _server.ClientDirectory;
         var executablePath = Path.Combine(workingDirectory, Constants.ClientExecutableName);
 
         // Checked again here, right before starting it: the folder can change while the login popup is open.

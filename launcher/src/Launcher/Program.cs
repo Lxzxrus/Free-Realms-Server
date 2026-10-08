@@ -56,8 +56,8 @@ internal sealed class Program
         config.AddRule(LogLevel.Debug, LogLevel.Fatal, debuggerTarget);
 #endif
 
-        // Ensure logs directory exists
-        var logsDir = Path.Combine(Directory.GetCurrentDirectory(), "logs");
+        // Beside the launcher, not the current directory: started from a shell in C:\Windows\System32, the log ended up there.
+        var logsDir = Constants.LogsDirectory;
         if (!Directory.Exists(logsDir))
         {
             Directory.CreateDirectory(logsDir);
