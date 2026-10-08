@@ -55,12 +55,26 @@ purpose, and `SHA256SUMS` shows what changed if it is.
 
 ## Serving it
 
-[launcher/server/Caddyfile](../../launcher/server/Caddyfile) serves `/srv/assets` at `http://<domain>/assets/` over
-plain HTTP, because the client has no HTTPS, and redirects everything else on port 80 to HTTPS. Then point WebAPI
-at it, for example in the VPS's `docker-compose.override.yml`:
+**nginx, not Caddy.** The client puts asset names into its request line without encoding them (FreeRealms.exe
+joins the address and path with `%s%s` and sends `GET %s HTTP/1.1`; its URL-escaping function is never called), and
+703 names have spaces: `GET /assets/513/Bear Vinegolem.gfx?2613667368 HTTP/1.1`. Go's HTTP server, so Caddy, answers
+that with 400. nginx, like the Cloudflare front of OSFR's server, reads the space as part of the path.
+
+[nginx-assets.conf](nginx-assets.conf) serves `/srv/assets` read-only on port 8080, plain HTTP because the client
+has no HTTPS; Caddy keeps 80 and 443 as before.
+
+```bash
+sudo apt-get install -y nginx
+sudo rm /etc/nginx/sites-enabled/default
+sudo install -m 644 nginx-assets.conf /etc/nginx/sites-enabled/evergrove-assets.conf
+sudo nginx -t && sudo systemctl restart nginx
+sudo ufw allow 8080/tcp comment 'Game asset downloads (nginx)'
+```
+
+Then point WebAPI at it, for example in the VPS's `docker-compose.override.yml`:
 
 ```yaml
-WebAPI__LaunchArguments: "AssetDelivery:IndirectServerAddress=http://play.evergrove.fyi/assets"
+WebAPI__LaunchArguments: "AssetDelivery:IndirectServerAddress=http://play.evergrove.fyi:8080/assets"
 ```
 
 Players pick it up at their next login.
