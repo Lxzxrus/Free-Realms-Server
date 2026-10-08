@@ -1,5 +1,5 @@
 # Example Caddy configuration: docs/webapi.md's, plus the files the launcher fetches.
-# /srv/launcher holds servermanifest.xml.
+# /srv/launcher holds servermanifest.xml; /srv/assets the game's streamed assets (tools/asset-mirror).
 play.evergrove.fyi {
 	# The launcher's server manifest. Launcher updates are not served from here: they come from GitHub Releases.
 	handle /servermanifest.xml {
@@ -10,5 +10,19 @@ play.evergrove.fyi {
 	# Everything else is WebAPI: /login, /register, /image/<token>.
 	handle {
 		reverse_proxy 127.0.0.1:20040
+	}
+}
+
+# The game client streams assets over plain HTTP: it can't do HTTPS. Only that frozen copy is served without TLS;
+# everything else is redirected. WebAPI's LaunchArguments point the client here:
+# AssetDelivery:IndirectServerAddress=http://play.evergrove.fyi/assets
+http://play.evergrove.fyi {
+	handle /assets/* {
+		root * /srv
+		file_server
+	}
+
+	handle {
+		redir https://{host}{uri} permanent
 	}
 }
