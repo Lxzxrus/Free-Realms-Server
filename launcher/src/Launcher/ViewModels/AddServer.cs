@@ -156,7 +156,8 @@ public partial class AddServer : Popup
                 {
                     // Found a unique name, create the directory.
                     Directory.CreateDirectory(candidatePath);
-                    path = candidatePath;
+                    // Relative to the data folder (DataFolder.ToServerPath), so it survives the data folder moving.
+                    path = Path.Combine(Constants.ServersDirectory, currentName);
                     return true;
                 }
                 // If the directory exists, append a counter and try again.
