@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Core.Helpers;
 using Sanctuary.Game;
 using Sanctuary.Packet;
 using Sanctuary.UdpLibrary;
@@ -26,6 +29,15 @@ public class GatewayServer : UdpManager<GatewayConnection>
         _logger.LogInformation("{connection} connected.", udpConnection);
 
         return true;
+    }
+
+    /// <summary>The characters of the players in the game, for the Login server after it reconnects.</summary>
+    public List<ulong> OnlineCharacterIds()
+    {
+        return ConnectionList
+            .Where(connection => connection.Player is not null)
+            .Select(connection => GuidHelper.GetPlayerId(connection.Player.Guid))
+            .ToList();
     }
 
     public void OnStarted()

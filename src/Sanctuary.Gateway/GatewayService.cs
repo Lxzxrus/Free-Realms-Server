@@ -20,6 +20,9 @@ namespace Sanctuary.Gateway;
 
 public class GatewayService : BackgroundService
 {
+    private static readonly TimeSpan MinLoginReconnectDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaxLoginReconnectDelay = TimeSpan.FromSeconds(30);
+
     private readonly ILogger _logger;
     private readonly LoginClient _client;
     private readonly GatewayServer _server;
@@ -165,14 +168,63 @@ public class GatewayService : BackgroundService
 
         _server.OnStarted();
 
-        // Main server loop.
+        // Main server loop. It used to end when the Login connection did (a Login restart), leaving a process that
+        // looked up but served nobody. Now players stay connected and the Gateway reconnects; new logins wait for it.
+        var loginConnected = false;
+        var reconnectDelay = MinLoginReconnectDelay;
+        var reconnectAt = 0L;
+
         try
         {
-            while (!cancellationToken.IsCancellationRequested && clientConnection.Status != Status.Disconnected)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 var hadData = false;
                 hadData |= _server.GiveTime();
                 hadData |= _client.GiveTime();
+
+                if (clientConnection.Status == Status.Connected)
+                {
+                    if (!loginConnected)
+                    {
+                        loginConnected = true;
+                        reconnectDelay = MinLoginReconnectDelay;
+
+                        // Login keeps its own list of who is online here, to refuse a second login of the same
+                        // character. A new connection starts that list empty.
+                        var online = _server.OnlineCharacterIds();
+
+                        foreach (var id in online)
+                            _client.SendCharacterLogin(id);
+
+                        if (online.Count > 0)
+                            _logger.LogInformation("Told the Login server about {Count} players already online.", online.Count);
+                    }
+                }
+                else if (clientConnection.Status == Status.Disconnected)
+                {
+                    var now = Environment.TickCount64;
+
+                    if (loginConnected)
+                    {
+                        loginConnected = false;
+                        reconnectAt = now + (long)reconnectDelay.TotalMilliseconds;
+
+                        _logger.LogWarning("Lost the Login server. Players stay connected; reconnecting in {Delay}s.", reconnectDelay.TotalSeconds);
+                    }
+                    else if (reconnectAt == 0)
+                    {
+                        reconnectAt = now + (long)reconnectDelay.TotalMilliseconds;
+                    }
+                    else if (now >= reconnectAt)
+                    {
+                        reconnectAt = 0;
+                        reconnectDelay = TimeSpan.FromTicks(Math.Min(reconnectDelay.Ticks * 2, MaxLoginReconnectDelay.Ticks));
+
+                        clientConnection = _client.EstablishConnection(_options.LoginGatewayAddress) ?? clientConnection;
+
+                        _logger.LogInformation("Reconnecting to the Login server at {Address}.", _options.LoginGatewayAddress);
+                    }
+                }
 
                 if (!hadData)
                     Thread.Sleep(1);
