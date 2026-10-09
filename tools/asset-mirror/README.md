@@ -55,21 +55,27 @@ purpose, and `SHA256SUMS` shows what changed if it is.
 
 ## Serving it
 
-**nginx, not Caddy.** The client puts asset names into its request line without encoding them (FreeRealms.exe
-joins the address and path with `%s%s` and sends `GET %s HTTP/1.1`; its URL-escaping function is never called), and
-703 names have spaces: `GET /assets/513/Bear Vinegolem.gfx?2613667368 HTTP/1.1`. Go's HTTP server, so Caddy, answers
-that with 400. nginx, like the Cloudflare front of OSFR's server, reads the space as part of the path.
+**Its own small server, not Caddy or nginx.** The client puts asset names into its request line without encoding them
+(FreeRealms.exe joins the address and path with `%s%s` and sends `GET %s HTTP/1.1`; its URL-escaping function is
+never called), and 479 of the copied assets have spaces: `GET /assets/010/Grave Elemental_Teeth Chatter_4.mp3.z?123
+HTTP/1.1`. Go's HTTP server, so Caddy, and current nginx both answer that with 400 (tested). Only the Cloudflare front
+of OSFR's server accepted it.
 
-[nginx-assets.conf](nginx-assets.conf) serves `/srv/assets` read-only on port 8080, plain HTTP because the client
-has no HTTPS; Caddy keeps 80 and 443 as before.
+[evergrove-asset-server.py](evergrove-asset-server.py) reads the request line the same way: the method up to the
+first space, the version after the last, the target in between. It serves only the files listed in `SHA256SUMS`,
+looked up in a table by URL, so a request never becomes a filesystem path. GET and HEAD only, no bodies, bounded
+requests, timeouts, connection caps per address and in total, no per-request logging, and files streamed from disk.
+Plain HTTP on port 8080, because the client has no HTTPS; Caddy keeps 80 and 443.
 
 ```bash
-sudo apt-get install -y nginx
-sudo rm /etc/nginx/sites-enabled/default
-sudo install -m 644 nginx-assets.conf /etc/nginx/sites-enabled/evergrove-assets.conf
-sudo nginx -t && sudo systemctl restart nginx
-sudo ufw allow 8080/tcp comment 'Game asset downloads (nginx)'
+sudo install -m 755 evergrove-asset-server.py /usr/local/sbin/evergrove-asset-server
+sudo install -m 644 evergrove-asset-server.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now evergrove-asset-server
+sudo ufw allow 8080/tcp comment 'Game asset downloads'
 ```
+
+It runs as `evg-assets` with read-only access to `/srv/assets` and little else (see the unit). After the copy changes,
+`sudo systemctl reload evergrove-asset-server` rereads the file list.
 
 Then point WebAPI at it, for example in the VPS's `docker-compose.override.yml`:
 
@@ -77,4 +83,5 @@ Then point WebAPI at it, for example in the VPS's `docker-compose.override.yml`:
 WebAPI__LaunchArguments: "AssetDelivery:IndirectServerAddress=http://play.evergrove.fyi:8080/assets"
 ```
 
-Players pick it up at their next login.
+Players pick it up at their next login. A test session on 2026-10-08 fetched 2,114 assets from it with the address's
+`:8080` port; every "not found" was an asset OSFR's server lacks too.

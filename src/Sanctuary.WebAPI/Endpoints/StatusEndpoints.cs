@@ -10,7 +10,7 @@ using Sanctuary.WebAPI.Status;
 namespace Sanctuary.WebAPI.Endpoints;
 
 /// <summary>
-/// Public server status: <c>/status.json</c> for monitors (UptimeRobot looks for <c>"status":"online"</c>), and
+/// Public server status: <c>/status.json</c> for monitors (200 when players can play, 503 otherwise), and
 /// <c>/status</c>, a page that shows it to people. Both say only what the launcher already shows anyone.
 /// </summary>
 public static class StatusEndpoints
@@ -27,6 +27,8 @@ public static class StatusEndpoints
 
         context.Response.Headers.CacheControl = "no-store";
 
+        // 503 unless players can play, so a plain HTTP monitor sees a game outage too, not only WebAPI's. The body is
+        // the same either way, for the status page and keyword monitors.
         return Results.Json(new
         {
             status = status.Status,
@@ -34,7 +36,7 @@ public static class StatusEndpoints
             locked = status.Locked,
             players = status.Players,
             checkedAt = status.CheckedAt
-        });
+        }, statusCode: status.Status == "online" ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable);
     }
 
     private static IResult StatusPage(HttpContext context)
