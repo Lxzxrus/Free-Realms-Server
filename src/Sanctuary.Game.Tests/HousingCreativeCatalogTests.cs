@@ -111,22 +111,52 @@ public sealed class HousingCreativeCatalogTests
     [TestMethod]
     public void DyedRecordIds_CarryTheDyeAndStayDistinct()
     {
-        Assert.IsTrue(_catalog.TryGetByDefinitionId(Chair, out var chair));
+        const int Ramp = 900;
         const int Mahogany = 229;
+        AddModel(5002, "hsg_ramp_01.adr");
+        AddItem(Ramp, type: 1, category: 53, model: "hsg_ramp_01.adr", iconTint: 227, isTintable: true);
+        Assert.IsTrue(SpinWait.SpinUntil(() => _catalog.TryGetByDefinitionId(Ramp, out _), TimeSpan.FromSeconds(5)));
+        Assert.IsTrue(_catalog.TryGetByDefinitionId(Ramp, out var ramp));
+        Assert.IsTrue(ramp.IsDyeable);
 
-        var dyed = chair.WithDye(Mahogany, chair.TintId);
-        Assert.AreNotEqual(chair.RecordId, dyed.RecordId);
+        var dyed = ramp.WithPalette(new HousingPalette(Mahogany, false));
+        Assert.AreNotEqual(ramp.RecordId, dyed.RecordId);
+        Assert.AreEqual(Mahogany, dyed.TintId);
         Assert.IsTrue(HousingCreativeCatalog.IsCreativeRecordId(dyed.RecordId));
 
         Assert.IsTrue(_catalog.TryGetByRecordId(dyed.RecordId, out var found));
-        Assert.AreEqual(Chair, found.ItemDefinitionId);
+        Assert.AreEqual(Ramp, found.ItemDefinitionId);
         Assert.AreEqual(Mahogany, found.TintId);
         Assert.AreEqual(dyed.RecordId, found.RecordId);
 
         // Undyed ids from before dyes existed still decode to the definition's own tint.
-        Assert.IsTrue(_catalog.TryGetByRecordId(HousingCreativeCatalog.RecordIdBase + Chair, out var plain));
-        Assert.AreEqual(chair.TintId, plain.TintId);
+        Assert.IsTrue(_catalog.TryGetByRecordId(HousingCreativeCatalog.RecordIdBase + Ramp, out var plain));
+        Assert.AreEqual(227, plain.TintId);
         Assert.AreEqual(0, plain.Dye);
+    }
+
+    [TestMethod]
+    public void EveryRecordIdCarriesThePalette_ButOnlyDyeablePartsTakeTheColour()
+    {
+        // The colour bar reads the palette back from whatever the tray shows, so a chair that can't be dyed carries it
+        // too, and keeps its own colour.
+        const int Mahogany = 229;
+        Assert.IsTrue(_catalog.TryGetByDefinitionId(Chair, out var chair));
+        Assert.IsFalse(chair.IsDyeable);
+
+        var shown = chair.WithPalette(new HousingPalette(Mahogany, true));
+        Assert.AreEqual(chair.TintId, shown.TintId);
+        Assert.AreNotEqual(chair.RecordId, shown.RecordId);
+
+        Assert.IsTrue(_catalog.TryGetByRecordId(shown.RecordId, out var found));
+        Assert.AreEqual(Chair, found.ItemDefinitionId);
+        Assert.AreEqual(Mahogany, found.Dye);
+        Assert.IsTrue(found.Brush);
+        Assert.AreEqual(chair.TintId, found.TintId);
+        Assert.AreEqual(shown.RecordId, found.RecordId);
+
+        // The id layout the client mod decodes: base | brush << 29 | dye << 20 | definition.
+        Assert.AreEqual(HousingCreativeCatalog.RecordIdBase | 1 << 29 | Mahogany << 20 | Chair, shown.RecordId);
     }
 
     [TestMethod]

@@ -1,6 +1,6 @@
 // Evergrove: search for the housing Decorate panel (housingEditPanel). Appended to the panel's frame 1 script by
-// build.py, so the game's own code stays untouched; the functions below replace the panel's AddItem, ResetItems and
-// onClick, because in ActionScript 2 the later definition of a function wins.
+// build.py, together with evg_colours.as, so the game's own code stays untouched; the functions below replace the
+// panel's AddItem, ResetItems and onClick, because in ActionScript 2 the later definition of a function wins.
 //
 // A round button with a magnifying glass, left of the first category button, opens a search box. Typing filters the
 // current tab's items by name and description; the query stays applied when another tab opens.
@@ -15,6 +15,7 @@ function AddItem(guid, iconId, name, desc, quantity, memberOnly, tint)
    item.MemberOnly = memberOnly;
    item.tintValue = tint;
    evgAllItems.push(item);
+   evgNoteGuid(guid);
    if(evgMatches(item))
    {
       noItems_mc._visible = false;
@@ -25,6 +26,7 @@ function ResetItems()
 {
    noItems_mc._visible = true;
    evgAllItems = new Array();
+   evgSeen = false;
    items_mc.resetItems();
 }
 function onClick(btn)
@@ -36,6 +38,10 @@ function onClick(btn)
    else if(btn == evgSearchBtn)
    {
       evgToggleSearch();
+   }
+   else if(btn == evgPaletteBtn)
+   {
+      evgTogglePalette();
    }
 }
 function evgMatches(item)
@@ -103,6 +109,7 @@ function evgCreateSearch()
    }
    evgSearchBtn.addListener(this);
    evgSearchBtn.setCallback("evgSearch");
+   evgSearchBtn.setToolTip("Search");
    evgDrawMagnifier();
 }
 function evgDrawMagnifier()
