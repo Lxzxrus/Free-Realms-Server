@@ -17,6 +17,7 @@ using Sanctuary.Core.IO;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -57,9 +58,13 @@ public sealed class HousingZoneRuntime : IDisposable
     private readonly Dictionary<ulong, CreativeView> _creativeViews = [];
 
     /// <summary>
-    /// What a player's creative tray shows: entries whose names contain every term, dyed with <see cref="Dye"/>.
+    /// What a player's creative tray shows: entries whose names contain every term, in the colours of
+    /// <see cref="Palette"/>, which also holds the paint brush.
     /// </summary>
-    private sealed record CreativeView(string[] Terms, int Dye);
+    private sealed record CreativeView(string[] Terms, HousingPalette Palette)
+    {
+        public bool IsDefault => Terms.Length == 0 && Palette == HousingPalette.None;
+    }
     private bool _disposed;
 
     private static long _nextPreviewId = 10_000_000_000;
@@ -198,6 +203,11 @@ public sealed class HousingZoneRuntime : IDisposable
                 _editors.Remove(player.Guid);
                 CancelPendingPlacement(player);
                 HideCreativeInventory(player);
+
+                // The brush goes down when decorating stops, so a later edit never paints by surprise. The tray, shown
+                // again on the next edit, tells the colour bar.
+                if (_creativeViews.TryGetValue(player.Guid, out var view) && view.Palette.Brush)
+                    SetView(player, view with { Palette = view.Palette with { Brush = false } });
             }
 
             using var dbContext = _dbContextFactory.CreateDbContext();
@@ -284,10 +294,13 @@ public sealed class HousingZoneRuntime : IDisposable
             if (!CanEdit(player))
                 return;
 
-            // In creative mode the editor lists only the catalog, so only a catalog entry can be placed.
+            // In creative mode the editor lists only the catalog, so only a catalog entry can be placed. A colour bar
+            // swatch arrives as a tray click too.
             if (_options.CreativeMode)
             {
-                if (_creativeCatalog.TryGetByRecordId(itemRecordId, out var entry))
+                if (HousingPalette.TryParseCommand(itemRecordId, out var palette))
+                    SetPalette(player, palette);
+                else if (_creativeCatalog.TryGetByRecordId(itemRecordId, out var entry))
                     StartPendingPlacement(player, CreativeSource(entry));
 
                 return;
@@ -554,10 +567,18 @@ public sealed class HousingZoneRuntime : IDisposable
             fixture.RotationW = rotation.W;
             fixture.Scale = scale;
 
-            if (customization.TintId > 0)
+            var oldTintId = ResolveItemTintId(fixture.ItemDefinitionId, fixture.TintId);
+            if (TryGetBrush(player, fixture.ItemDefinitionId, out var brushDye))
+                fixture.TintId = ResolveItemTintId(fixture.ItemDefinitionId, brushDye);
+            else if (customization.TintId > 0)
                 fixture.TintId = ResolveItemTintId(fixture.ItemDefinitionId, customization.TintId);
 
             dbContext.SaveChanges();
+
+            // A placed part keeps the tint it was spawned with, so a repainted one is spawned again, which also sends
+            // the update below to its owner.
+            if (ResolveItemTintId(fixture.ItemDefinitionId, fixture.TintId) != oldTintId)
+                RemoveActor(fixture.Id);
 
             var actorExisted = _actors.ContainsKey(fixture.Id);
             UpdateActor(fixture);
@@ -582,6 +603,13 @@ public sealed class HousingZoneRuntime : IDisposable
         {
             if (!CanEdit(player))
                 return;
+
+            // On the Wall, Floor and Roof tabs the game sends a tray click here, colour bar swatches included.
+            if (_options.CreativeMode && HousingPalette.TryParseCommand(itemRecordOrDefinitionId, out var palette))
+            {
+                SetPalette(player, palette);
+                return;
+            }
 
             fixtureGroup = NormalizeSelector(fixtureGroup);
             fixtureType = NormalizeSelector(fixtureType);
@@ -1133,20 +1161,73 @@ public sealed class HousingZoneRuntime : IDisposable
             if (_disposed || !_options.CreativeMode || !IsOwner(player))
                 return -1;
 
-            var view = new CreativeView(terms.Select(term => term.ToLowerInvariant()).ToArray(), dyeTintId);
-            if (view.Terms.Length == 0 && view.Dye == 0)
-                _creativeViews.Remove(player.Guid);
-            else
-                _creativeViews[player.Guid] = view;
-
-            if (_creativeInventoryShown.ContainsKey(player.Guid))
-            {
-                HideCreativeInventory(player);
-                ShowCreativeInventory(player);
-            }
+            var palette = _creativeViews.TryGetValue(player.Guid, out var view) ? view.Palette : HousingPalette.None;
+            SetView(player, new CreativeView(
+                terms.Select(term => term.ToLowerInvariant()).ToArray(),
+                palette with { Dye = dyeTintId }));
 
             return VisibleCreativeEntries(player).Count();
         }
+    }
+
+    /// <summary>
+    /// Sets the owner's colour for new parts and their paint brush, from a click on the Decorate panel's colour bar.
+    /// </summary>
+    private void SetPalette(Player player, HousingPalette palette)
+    {
+        if (_disposed || !IsOwner(player))
+            return;
+
+        var view = _creativeViews.GetValueOrDefault(player.Guid) ?? new CreativeView([], HousingPalette.None);
+        if (view.Palette == palette)
+            return;
+
+        SetView(player, view with { Palette = palette });
+
+        if (palette.Brush && (!view.Palette.Brush || palette.Dye != view.Palette.Dye))
+        {
+            ChatHelper.SendSystemMessage(player, palette.Dye == 0
+                ? "Paint brush on: move or turn a part to give it back its own colour."
+                : $"Paint brush on: move or turn a part to paint it {palette.ColourName}.");
+        }
+        else if (!palette.Brush && view.Palette.Brush)
+        {
+            ChatHelper.SendSystemMessage(player, "Paint brush off.");
+        }
+    }
+
+    private void SetView(Player player, CreativeView view)
+    {
+        if (view.IsDefault)
+            _creativeViews.Remove(player.Guid);
+        else
+            _creativeViews[player.Guid] = view;
+
+        if (_creativeInventoryShown.ContainsKey(player.Guid))
+        {
+            HideCreativeInventory(player);
+            ShowCreativeInventory(player);
+        }
+    }
+
+    /// <summary>
+    /// The dye the owner's paint brush gives <paramref name="itemDefinitionId"/>, if the brush is on and the part
+    /// takes a dye. 0 is the part's own colour.
+    /// </summary>
+    private bool TryGetBrush(Player player, int itemDefinitionId, out int dye)
+    {
+        dye = 0;
+        if (!_options.CreativeMode ||
+            !_creativeViews.TryGetValue(player.Guid, out var view) ||
+            !view.Palette.Brush ||
+            !_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) ||
+            !HousingDyeTints.IsDyeable(definition))
+        {
+            return false;
+        }
+
+        dye = view.Palette.Dye;
+        return true;
     }
 
     private IEnumerable<HousingCreativeCatalog.Entry> VisibleCreativeEntries(Player player)
@@ -1157,11 +1238,7 @@ public sealed class HousingZoneRuntime : IDisposable
         return CreativeEntries()
             .Where(entry => _resourceManager.ClientItemDefinitions.TryGetValue(entry.ItemDefinitionId, out var definition) &&
                 MatchesAll(definition, view.Terms))
-            .Select(entry => view.Dye != 0 &&
-                    _resourceManager.ClientItemDefinitions.TryGetValue(entry.ItemDefinitionId, out var definition) &&
-                    HousingDyeTints.IsDyeable(definition)
-                ? entry.WithDye(view.Dye, entry.TintId)
-                : entry);
+            .Select(entry => entry.WithPalette(view.Palette));
     }
 
     private static bool MatchesAll(ClientItemDefinition definition, string[] terms)

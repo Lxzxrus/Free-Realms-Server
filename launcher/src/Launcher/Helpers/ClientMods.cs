@@ -17,8 +17,8 @@ namespace Launcher.Helpers;
 public static class ClientMods
 {
     /// <summary>
-    /// The housing Decorate panel gets a search button: our compiled frame script, inserted after the panel's own, so
-    /// our AddItem, ResetItems and onClick replace the panel's.
+    /// The housing Decorate panel gets search and colour buttons: our compiled frame script, inserted after the panel's
+    /// own, so our AddItem, ResetItems, DisplayItems and onClick replace the panel's.
     /// </summary>
     private const string PanelName = "housingEditPanel.gfx";
     private const string PanelOriginalSha256 = "4bbe2a4ed39f6bd1446df1b42c9ec8bd29d471a27c2b87bc4c3c7a2339c1999b";
@@ -92,7 +92,7 @@ public static class ClientMods
             ?? throw new InvalidDataException($"{PanelName} wasn't found in the game's packs.");
 
         if (Sha256(original) != PanelOriginalSha256)
-            throw new InvalidDataException($"{PanelName} isn't the version the search mod was made for.");
+            throw new InvalidDataException($"{PanelName} isn't the version the Decorate mod was made for.");
 
         var panel = InsertAfterFrameScript(original, LoadResource("Launcher.Mods.housing-search.tag"));
 

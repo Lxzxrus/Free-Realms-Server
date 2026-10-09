@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-r"""Builds the Evergrove housing search mod from a player's own Free Realms client.
+r"""Builds the Evergrove housing Decorate mod (search and colour bar) from a player's own Free Realms client.
 
 No game file is stored in this repository: the script reads the original panel and UI scripts from the client
 folder, applies Evergrove's changes and writes the modified files to an output folder.
@@ -10,7 +10,8 @@ folder, applies Evergrove's changes and writes the modified files to an output f
 Output (the launcher applies the mod itself from housing-search.tag; for testing by hand, copy the rest into
 <client>\UI\ and keep a backup of the original ScriptsBase.bin):
   housing-search.tag                          our compiled script block only (no game code); the launcher embeds it
-  housingEditPanel.gfx, housingEditPanel.swf  the Decorate panel with a search button (loose UI files override the packs)
+  housingEditPanel.gfx, housingEditPanel.swf  the Decorate panel with search and colour buttons (loose UI files
+                                              override the packs)
   ScriptsBase.bin                             the UI scripts with the Decorate panel's focus-steal disabled, so the
                                               search box can take keyboard input
 
@@ -40,6 +41,9 @@ LUA_ORIGINAL_FIRST = 0x000000C5
 LUA_RETURN = 0x0080001E
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# Compiled as one frame script, in this order: evg_colours.as places its button beside evg_search.as's.
+SOURCES = ("evg_search.as", "evg_colours.as")
 
 
 def sha1(data):
@@ -104,14 +108,19 @@ def build_panel(client, jar, out):
     if sha1(original) != PANEL_SHA1:
         sys.exit(f"{PANEL} differs from the version this mod was made for; refusing to patch it")
 
-    # Compile evg_search.as on its own, as the panel's only frame script, and keep just that DoAction tag: it holds
+    # Compile our scripts on their own, as the panel's only frame script, and keep just that DoAction tag: it holds
     # our code and nothing of the game's.
     with tempfile.TemporaryDirectory() as tmp:
         source = os.path.join(tmp, PANEL)
         compiled = os.path.join(tmp, "compiled.gfx")
+        script = os.path.join(tmp, "evg.as")
         with open(source, "wb") as f:
             f.write(original)
-        ffdec(jar, "-replace", source, compiled, r"\frame_1\DoAction", os.path.join(HERE, "evg_search.as"))
+        with open(script, "w", encoding="utf-8") as f:
+            for name in SOURCES:
+                with open(os.path.join(HERE, name), encoding="utf-8") as part:
+                    f.write(part.read())
+        ffdec(jar, "-replace", source, compiled, r"\frame_1\DoAction", script)
         with open(compiled, "rb") as f:
             compiled_gfx = f.read()
 
@@ -151,7 +160,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     build_panel(args.client, args.ffdec, args.out)
     build_scripts(args.scripts or os.path.join(args.client, "UI", "ScriptsBase.bin"), args.out)
-    print(f"Built the housing search mod in {args.out}")
+    print(f"Built the housing Decorate mod in {args.out}")
 
 
 if __name__ == "__main__":

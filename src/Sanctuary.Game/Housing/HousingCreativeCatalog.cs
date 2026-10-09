@@ -27,25 +27,37 @@ public sealed class HousingCreativeCatalog : IDisposable
 {
     public const int RecordIdBase = 0x4000_0000;
 
-    // A record id is RecordIdBase | dye << DyeShift | item definition id. Item definition ids fit in 20 bits (the
-    // largest is about 900,000) and dye tint ids in 9, so a dyed variant gets its own id without any stored state.
+    // A record id is RecordIdBase | brush << 29 | dye << 20 | item definition id. Item definition ids fit in 20 bits (the
+    // largest is about 900,000) and dye tint ids in 9. Every entry carries the owner's palette, dyeable or not, so the
+    // Decorate panel's colour bar can read it back from any tray item, and a dyed variant gets its own id without any
+    // stored state.
     private const int DyeShift = 20;
+    private const int BrushFlag = 1 << 29;
     private const int MaxDefinitionId = (1 << DyeShift) - 1;
     private const int MaxDyeTintId = (1 << 9) - 1;
 
-    /// <param name="Dye">A dye tint the player chose for this entry, 0 for the definition's own tint.</param>
-    public sealed record Entry(int ItemDefinitionId, int TintId, FixtureDefinition Definition, int Dye = 0)
+    /// <param name="DefaultTintId">The definition's own tint.</param>
+    /// <param name="IsDyeable">Whether a dye changes its colour (<see cref="HousingDyeTints.IsDyeable"/>).</param>
+    public sealed record Entry(int ItemDefinitionId, int DefaultTintId, FixtureDefinition Definition, bool IsDyeable = false)
     {
-        public int RecordId => RecordIdBase | Dye << DyeShift | ItemDefinitionId;
+        /// <summary>The owner's dye when the entry was shown, 0 for none. It colours the entry only if it is dyeable.</summary>
+        public int Dye { get; init; }
 
-        /// <summary>
-        /// This entry in another dye tint. <paramref name="dyeTintId"/> 0 gives the definition's own tint.
-        /// </summary>
-        public Entry WithDye(int dyeTintId, int defaultTintId)
+        /// <summary>Whether the owner's paint brush was on when the entry was shown.</summary>
+        public bool Brush { get; init; }
+
+        public int TintId => IsDyeable && Dye > 0 ? Dye : DefaultTintId;
+
+        public int RecordId => RecordIdBase | (Brush ? BrushFlag : 0) | Dye << DyeShift | ItemDefinitionId;
+
+        /// <summary>This entry as shown to an owner with <paramref name="palette"/>.</summary>
+        public Entry WithPalette(HousingPalette palette)
         {
-            return dyeTintId is > 0 and <= MaxDyeTintId
-                ? this with { Dye = dyeTintId, TintId = dyeTintId }
-                : this with { Dye = 0, TintId = defaultTintId };
+            return this with
+            {
+                Dye = palette.Dye is > 0 and <= MaxDyeTintId ? palette.Dye : 0,
+                Brush = palette.Brush
+            };
         }
     }
 
@@ -85,16 +97,14 @@ public sealed class HousingCreativeCatalog : IDisposable
         }
 
         var definitionId = itemRecordId & MaxDefinitionId;
-        var dye = (itemRecordId - RecordIdBase) >> DyeShift;
+        var dye = (itemRecordId & ~BrushFlag & ~RecordIdBase) >> DyeShift;
         if (dye > MaxDyeTintId || !TryGetByDefinitionId(definitionId, out entry))
         {
             entry = null!;
             return false;
         }
 
-        if (dye != 0)
-            entry = entry.WithDye(dye, entry.TintId);
-
+        entry = entry.WithPalette(new HousingPalette(dye, (itemRecordId & BrushFlag) != 0));
         return true;
     }
 
@@ -148,13 +158,17 @@ public sealed class HousingCreativeCatalog : IDisposable
             }
 
             var definition = HousingFixtureRules.BuildFixtureDefinition(_resourceManager, itemDefinitionId);
-            if (definition is null)
+            if (definition is null ||
+                !_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var itemDefinition))
+            {
                 continue;
+            }
 
             entries.Add(new Entry(
                 itemDefinitionId,
                 HousingFixtureRules.ResolveItemTintId(_resourceManager, itemDefinitionId, 0),
-                definition));
+                definition,
+                HousingDyeTints.IsDyeable(itemDefinition)));
         }
 
         return new Snapshot(entries, entries.ToDictionary(entry => entry.ItemDefinitionId));
