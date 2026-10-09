@@ -38,8 +38,10 @@ public static class HousingFixtureRules
         if (requestedTintId > 0)
             return requestedTintId;
 
+        // A dyeable item's own colour is its icon's tint. Without it the client draws a dye-mask texture (Brick Ramp,
+        // Toy Ramp...) in its raw pink. Shop items always arrived with a tint chosen at purchase; creative ones don't.
         if (resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) &&
-            definition.CategoryId == 147 &&
+            (definition.CategoryId == 147 || definition.IsTintable) &&
             definition.Icon.TintId > 0)
         {
             return definition.Icon.TintId;

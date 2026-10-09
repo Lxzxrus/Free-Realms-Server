@@ -67,6 +67,22 @@ public sealed class HousingCreativeCatalogTests
     }
 
     [TestMethod]
+    public void DyeableItemsDefaultToTheirIconsTint()
+    {
+        // Brick Ramp and friends: dyeable, category 4, their colour only in the icon's tint. With tint 0 the client
+        // drew their dye-mask texture in raw pink.
+        AddItem(900, type: 1, category: 4, model: "ramp.adr", iconTint: 227, isTintable: true);
+        AddItem(901, type: 1, category: 57, model: "archway.adr", isTintable: true);
+        AddItem(902, type: 1, category: 4, model: "statue.adr", iconTint: 249);
+
+        Assert.AreEqual(227, HousingFixtureRules.ResolveItemTintId(_resourceManager, 900, 0));
+        Assert.AreEqual(254, HousingFixtureRules.ResolveItemTintId(_resourceManager, 900, 254), "a chosen dye wins");
+        Assert.AreEqual(0, HousingFixtureRules.ResolveItemTintId(_resourceManager, 901, 0), "no icon tint: its natural look");
+        Assert.AreEqual(0, HousingFixtureRules.ResolveItemTintId(_resourceManager, 902, 0), "not dyeable: no tint");
+        Assert.AreEqual(237, HousingFixtureRules.ResolveItemTintId(_resourceManager, YellowBlock, 0));
+    }
+
+    [TestMethod]
     public void Catalog_OffersEachColourVariantInItsOwnTint()
     {
         Assert.IsTrue(_catalog.TryGetByDefinitionId(YellowBlock, out var yellow));
@@ -178,7 +194,7 @@ public sealed class HousingCreativeCatalogTests
         });
     }
 
-    private void AddItem(int id, int type, int category, string model, int param1 = 0, int iconTint = 0)
+    private void AddItem(int id, int type, int category, string model, int param1 = 0, int iconTint = 0, bool isTintable = false)
     {
         _resourceManager.ClientItemDefinitions.TryAdd(id, new ClientItemDefinition
         {
@@ -187,6 +203,8 @@ public sealed class HousingCreativeCatalogTests
             CategoryId = category,
             ModelName = model,
             Param1 = param1,
+            IsTintable = isTintable,
+            TintAlias = isTintable || category == 147 ? "dyetint" : string.Empty,
             Icon = new IconData { TintId = iconTint }
         });
     }
