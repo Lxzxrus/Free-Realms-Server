@@ -69,11 +69,12 @@ public class StatusEndpointTests
         ["WebAPI:RateLimits:StatusPerMinute"] = "1000",
     });
 
-    private static async Task<JsonElement> GetStatusAsync(WebAPIHost host)
+    private static async Task<JsonElement> GetStatusAsync(WebAPIHost host, HttpStatusCode expected = HttpStatusCode.OK)
     {
         using var response = await host.CreateClient(WebAPIHost.DefaultAddress).GetAsync("/status.json");
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        // 503 unless players can play, so a plain HTTP monitor sees a game outage.
+        Assert.AreEqual(expected, response.StatusCode);
         Assert.AreEqual("no-store", response.Headers.CacheControl?.ToString());
 
         return await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -100,7 +101,7 @@ public class StatusEndpointTests
         using var host = Host(login.Address);
         await host.StartAsync();
 
-        Assert.AreEqual("locked", (await GetStatusAsync(host)).GetProperty("status").GetString());
+        Assert.AreEqual("locked", (await GetStatusAsync(host, HttpStatusCode.ServiceUnavailable)).GetProperty("status").GetString());
     }
 
     [TestMethod]
@@ -110,7 +111,7 @@ public class StatusEndpointTests
         using var host = Host(login.Address);
         await host.StartAsync();
 
-        Assert.AreEqual("offline", (await GetStatusAsync(host)).GetProperty("status").GetString());
+        Assert.AreEqual("offline", (await GetStatusAsync(host, HttpStatusCode.ServiceUnavailable)).GetProperty("status").GetString());
     }
 
     [TestMethod]
@@ -124,7 +125,7 @@ public class StatusEndpointTests
         using var host = Host(address);
         await host.StartAsync();
 
-        var status = await GetStatusAsync(host);
+        var status = await GetStatusAsync(host, HttpStatusCode.ServiceUnavailable);
 
         Assert.AreEqual("offline", status.GetProperty("status").GetString());
         Assert.AreEqual(0, status.GetProperty("players").GetInt32());

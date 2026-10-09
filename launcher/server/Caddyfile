@@ -1,6 +1,6 @@
 # Example Caddy configuration: docs/webapi.md's, plus the files the launcher fetches.
-# /srv/launcher holds servermanifest.xml. The game's streamed assets are served by nginx on port 8080
-# (tools/asset-mirror/nginx-assets.conf): Caddy can't read the client's unencoded spaces.
+# /srv/launcher holds servermanifest.xml. The game's streamed assets are served on port 8080
+# (tools/asset-mirror/evergrove-asset-server.py): Caddy can't read the client's unencoded spaces.
 play.evergrove.fyi {
 	# The launcher's server manifest. Launcher updates are not served from here: they come from GitHub Releases.
 	handle /servermanifest.xml {
