@@ -118,6 +118,56 @@ public class ClientModsTests
             new Dictionary<string, string> { ["FreeRealms.exe"] = new string('0', 64) }));
     }
 
+    private static byte[] Patch(params (int Offset, int Length, string Inserted)[] edits)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(Encoding.ASCII.GetBytes("EVGP"));
+        stream.Write(BitConverter.GetBytes(edits.Length));
+        foreach (var (offset, length, inserted) in edits)
+        {
+            stream.Write(BitConverter.GetBytes(offset));
+            stream.Write(BitConverter.GetBytes(length));
+            stream.Write(BitConverter.GetBytes(inserted.Length));
+            stream.Write(Encoding.ASCII.GetBytes(inserted));
+        }
+
+        return stream.ToArray();
+    }
+
+    [TestMethod]
+    public void ScriptPatch_InsertsAndReplacesAtOriginalOffsets()
+    {
+        var original = Encoding.ASCII.GetBytes("0123456789");
+
+        // As lua_patch.py writes them: an insertion where code ends and a count replaced where the constants begin,
+        // at the same offset, listed in either order.
+        var patched = ClientMods.ApplyPatch(original, Patch((4, 2, "AB"), (4, 0, "xyz"), (9, 1, "!"), (0, 0, "<")));
+
+        Assert.AreEqual("<0123xyzAB678!", Encoding.ASCII.GetString(patched));
+    }
+
+    [TestMethod]
+    public void ScriptPatch_ThatDoesntFit_IsRefused()
+    {
+        var original = Encoding.ASCII.GetBytes("0123456789");
+
+        Assert.ThrowsExactly<InvalidDataException>(() => ClientMods.ApplyPatch(original, Patch((8, 4, "x"))));
+        Assert.ThrowsExactly<InvalidDataException>(() => ClientMods.ApplyPatch(original, Patch((2, 4, "x"), (4, 1, "y"))));
+        Assert.ThrowsExactly<InvalidDataException>(() => ClientMods.ApplyPatch(original, Encoding.ASCII.GetBytes("EVGX\0\0\0\0")));
+        Assert.ThrowsExactly<InvalidDataException>(() => ClientMods.ApplyPatch(original, Patch((1, 0, "x"))[..^1]));
+    }
+
+    [TestMethod]
+    public void EmbeddedScriptPatch_IsReadable()
+    {
+        using var stream = typeof(ClientMods).Assembly.GetManifestResourceStream("Launcher.Mods.scripts.patch");
+        Assert.IsNotNull(stream);
+
+        var header = new byte[4];
+        stream.ReadExactly(header);
+        Assert.AreEqual("EVGP", Encoding.ASCII.GetString(header));
+    }
+
     [TestMethod]
     public void ModdedScripts_IsAnAcceptedVariantOfTheOfficialPin()
     {

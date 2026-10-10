@@ -55,6 +55,22 @@ public sealed class HousingPaletteTests
     }
 
     [TestMethod]
+    public void PaintCommands_AreNegatedFixtureGuids()
+    {
+        // A part's Paint button sends "-" .. its fixture guid (fixture id << 4 | 3).
+        Assert.IsTrue(HousingPalette.TryParsePaintCommand(-1235, out var fixtureGuid));
+        Assert.AreEqual(1235UL, fixtureGuid);
+
+        Assert.IsFalse(HousingPalette.TryParsePaintCommand(0, out _));
+        Assert.IsFalse(HousingPalette.TryParsePaintCommand(1235, out _));
+        Assert.IsFalse(HousingPalette.TryParsePaintCommand(new HousingPalette(Rubyburst, false).CommandId, out _));
+        Assert.IsFalse(HousingPalette.TryParseCommand(-1235, out _), "a paint command is no palette command");
+
+        Assert.IsTrue(HousingPalette.TryParsePaintCommand(int.MinValue, out var largest));
+        Assert.AreEqual(2147483648UL, largest);
+    }
+
+    [TestMethod]
     public void ColourNames_ReadAsTheGameWritesThem()
     {
         Assert.AreEqual("Rubyburst", new HousingPalette(Rubyburst, false).ColourName);

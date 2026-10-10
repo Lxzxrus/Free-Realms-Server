@@ -41,6 +41,17 @@ public readonly record struct HousingPalette(int Dye, bool Brush)
         return true;
     }
 
+    /// <summary>
+    /// The placed part a Paint click asks to paint, if <paramref name="id"/> is one. A placed part's menu has a Paint
+    /// button (client mod, lua_patch.py) that sends the selected part's fixture guid, negated, as a placement request,
+    /// which no item or catalog id can be.
+    /// </summary>
+    public static bool TryParsePaintCommand(int id, out ulong fixtureGuid)
+    {
+        fixtureGuid = id < 0 ? (ulong)-(long)id : 0;
+        return id < 0;
+    }
+
     /// <summary>The colour's name as players see it: "Rubyburst", or "each part's own colour" for none.</summary>
     public string ColourName => HousingDyeTints.Names.TryGetValue(Dye, out var name)
         ? char.ToUpperInvariant(name[0]) + name[1..]
