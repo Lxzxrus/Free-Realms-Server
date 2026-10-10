@@ -1217,10 +1217,26 @@ public sealed class HousingZoneRuntime : IDisposable
         fixture.TintId = tintId;
         dbContext.SaveChanges();
 
-        // The actor keeps its guid (the client ignores an add for a guid it still has); the fixture update and its
-        // asset recolour the part in place, for its owner too. The actor's tint is for players who arrive later.
+        // The fixture update recolours the part in place; the actor keeps its guid (the client ignores an add for a
+        // guid it still has), and its tint is for players who arrive later. A fixture asset starts the client's
+        // placement flow in Decorate (FreeRealms.exe 0xac7f40: a copy of the part on the cursor), so a decorator gets
+        // the update alone; anyone else gets the asset too, as on entering the house.
         UpdateActor(fixture);
-        BroadcastFixtureUpdate(fixture, 0);
+        var paintedGuid = GuidHelper.GetFixtureGuid((ulong)fixture.Id);
+        foreach (var recipient in _zone.Players)
+        {
+            SendFixtureUpdate(
+                recipient,
+                paintedGuid,
+                GetActorGuid(fixture.Id),
+                fixture.ItemDefinitionId,
+                0,
+                fixture.TintId,
+                GetPosition(fixture),
+                GetHousingRotation(fixture),
+                fixture.Scale,
+                !_editors.Contains(recipient.Guid));
+        }
     }
 
     private void SetView(Player player, CreativeView view)
