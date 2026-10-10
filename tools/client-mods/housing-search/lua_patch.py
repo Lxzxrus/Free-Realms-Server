@@ -7,7 +7,7 @@ launcher, which applies it to the player's verified file (ClientMods.ApplyScript
 Changes:
 - Housing.lua, the Decorate panel's OnFocus handler: its first instruction becomes RETURN, so the panel keeps
   keyboard focus and the search box can be typed in.
-- Housing.lua, MakeHousingRadialMenu: a placed part's menu gets a fifth button, Paint (the game's palette icon).
+- Housing.lua, MakeHousingRadialMenu: a placed part's menu gets a fifth button, Paint (the wall paint icon).
 - Housing.lua, OnRadialMenuClick: Paint calls House.PlaceFixture("-" .. currentItemGuid). House.PlaceFixture sends
   the server a placement request for that id with no checks (FreeRealms.exe 0xc0b710 -> 0xac4200); the server reads
   a negative id as "paint this part" in the colour chosen on the colour bar (HousingPalette.TryParsePaintCommand).
@@ -27,7 +27,9 @@ RK_CONSTANT = 256
 
 # A tray click and a radial button both reach Lua as numbers; ours is clear of the game's INTERACTION_* values.
 PAINT_EVENT_ID = 4242.0
-PALETTE_ICON_ID = 40653.0  # icon_palette_64.dds, the size the menu's other icons use
+# icon_hsg_cust_wall_plainpaint_01_64.dds (Standard Wall Paint), in the 64 size the menu's other icons use. The game's
+# icon_palette (40653) isn't among the assets the server can stream.
+PAINT_ICON_ID = 29204.0
 
 FOCUS_SOURCE, FOCUS_LINE = "@Housing.lua", 1026
 MENU_SOURCE, MENU_LINE = "@Housing.lua", 881
@@ -227,7 +229,7 @@ def menu_edit(root):
     edit.emit(abx(OP_GETGLOBAL, 4, edit.k("HousingRadialMenu")))
     edit.emit(abc(OP_SELF, 4, 4, edit.rk("setButton")))
     edit.emit(abx(OP_LOADK, 6, edit.k(4.0)))                           # button index
-    edit.emit(abx(OP_LOADK, 7, edit.k(PALETTE_ICON_ID)))
+    edit.emit(abx(OP_LOADK, 7, edit.k(PAINT_ICON_ID)))
     edit.emit(abx(OP_LOADK, 8, edit.k("Paint")))
     edit.emit(abx(OP_LOADK, 9, edit.k(PAINT_EVENT_ID)))
     edit.emit(abc(OP_LOADBOOL, 10, 0, 0))                              # false: the menu closes after a click

@@ -29,7 +29,7 @@ public static class ClientMods
     /// panel keeps keyboard focus, so its search box can be typed in, and a placed part's menu gets a Paint button.
     /// </summary>
     public const string ScriptsPath = "UI/ScriptsBase.bin";
-    public const string ScriptsModdedSha256 = "6c9e1979e088c76d3a270f05fac701348f1d7f6351526be2758d4cef4e8b2468";
+    public const string ScriptsModdedSha256 = "280f351c294f81a8f573ac4d59cd59ac05ca610c906db7c2278199a4ea3c0825";
 
     private const int DoActionTag = 12;
 
