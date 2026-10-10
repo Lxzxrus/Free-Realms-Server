@@ -59,7 +59,7 @@ public sealed class HousingZoneRuntime : IDisposable
 
     /// <summary>
     /// What a player's creative tray shows: entries whose names contain every term, in the colours of
-    /// <see cref="Palette"/>, which also holds the paint brush.
+    /// <see cref="Palette"/>.
     /// </summary>
     private sealed record CreativeView(string[] Terms, HousingPalette Palette)
     {
@@ -1158,34 +1158,24 @@ public sealed class HousingZoneRuntime : IDisposable
             if (_disposed || !_options.CreativeMode || !IsOwner(player))
                 return -1;
 
-            var palette = _creativeViews.TryGetValue(player.Guid, out var view) ? view.Palette : HousingPalette.None;
             SetView(player, new CreativeView(
                 terms.Select(term => term.ToLowerInvariant()).ToArray(),
-                palette with { Dye = dyeTintId }));
+                new HousingPalette(dyeTintId)));
 
             return VisibleCreativeEntries(player).Count();
         }
     }
 
     /// <summary>
-    /// Sets the owner's colour for new parts and their paint brush, from a click on the Decorate panel's colour bar.
+    /// Sets the owner's colour, for new parts and for Paint, from a click on the Decorate panel's colour bar.
     /// </summary>
     private void SetPalette(Player player, HousingPalette palette)
     {
         if (_disposed || !IsOwner(player))
             return;
 
-        // The brush switch in launcher 1.0.2's colour bar is retired: placed parts are to be painted from their own
-        // menu. Asking for it changes nothing, and the tray, sent again without it, unticks the switch.
-        var askedForBrush = palette.Brush;
-        if (askedForBrush)
-        {
-            ChatHelper.SendSystemMessage(player, "The paint brush is being reworked. For now, pick a colour before placing parts.");
-            palette = palette with { Brush = false };
-        }
-
         var view = _creativeViews.GetValueOrDefault(player.Guid) ?? new CreativeView([], HousingPalette.None);
-        if (view.Palette == palette && !askedForBrush)
+        if (view.Palette == palette)
             return;
 
         SetView(player, view with { Palette = palette });

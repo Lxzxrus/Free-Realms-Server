@@ -16,9 +16,8 @@ public sealed class HousingPaletteTests
         foreach (var palette in new[]
                  {
                      HousingPalette.None,
-                     new HousingPalette(Rubyburst, false),
-                     new HousingPalette(Darkmatter, true),
-                     new HousingPalette(0, true)
+                     new HousingPalette(Rubyburst),
+                     new HousingPalette(Darkmatter)
                  })
         {
             Assert.IsTrue(HousingPalette.TryParseCommand(palette.CommandId, out var parsed));
@@ -31,7 +30,15 @@ public sealed class HousingPaletteTests
     {
         // tools/client-mods/housing-search/evg_colours.as builds these numbers itself.
         Assert.AreEqual(1056964608, HousingPalette.None.CommandId);
-        Assert.AreEqual(1056964608 + 512 + Rubyburst, new HousingPalette(Rubyburst, true).CommandId);
+        Assert.AreEqual(1056964608 + Rubyburst, new HousingPalette(Rubyburst).CommandId);
+    }
+
+    [TestMethod]
+    public void RetiredBrushSwitch_IsNoCommand()
+    {
+        // Launchers 1.0.2 and 1.0.3 sent the paint brush switch as bit 9 of a colour command.
+        Assert.IsFalse(HousingPalette.TryParseCommand(HousingPalette.CommandIdBase + 512 + Rubyburst, out _));
+        Assert.IsFalse(HousingPalette.TryParseCommand(HousingPalette.CommandIdBase + 512, out _));
     }
 
     [TestMethod]
@@ -50,8 +57,8 @@ public sealed class HousingPaletteTests
         Assert.IsFalse(HousingPalette.TryParseCommand(HousingCreativeCatalog.RecordIdBase, out _));
         Assert.IsFalse(HousingPalette.TryParseCommand(-1, out _));
 
-        Assert.IsTrue(new HousingPalette(Darkmatter, true).CommandId < HousingCreativeCatalog.RecordIdBase);
-        Assert.IsFalse(HousingCreativeCatalog.IsCreativeRecordId(new HousingPalette(Darkmatter, true).CommandId));
+        Assert.IsTrue(new HousingPalette(Darkmatter).CommandId < HousingCreativeCatalog.RecordIdBase);
+        Assert.IsFalse(HousingCreativeCatalog.IsCreativeRecordId(new HousingPalette(Darkmatter).CommandId));
     }
 
     [TestMethod]
@@ -63,7 +70,7 @@ public sealed class HousingPaletteTests
 
         Assert.IsFalse(HousingPalette.TryParsePaintCommand(0, out _));
         Assert.IsFalse(HousingPalette.TryParsePaintCommand(1235, out _));
-        Assert.IsFalse(HousingPalette.TryParsePaintCommand(new HousingPalette(Rubyburst, false).CommandId, out _));
+        Assert.IsFalse(HousingPalette.TryParsePaintCommand(new HousingPalette(Rubyburst).CommandId, out _));
         Assert.IsFalse(HousingPalette.TryParseCommand(-1235, out _), "a paint command is no palette command");
 
         Assert.IsTrue(HousingPalette.TryParsePaintCommand(int.MinValue, out var largest));
@@ -73,7 +80,7 @@ public sealed class HousingPaletteTests
     [TestMethod]
     public void ColourNames_ReadAsTheGameWritesThem()
     {
-        Assert.AreEqual("Rubyburst", new HousingPalette(Rubyburst, false).ColourName);
+        Assert.AreEqual("Rubyburst", new HousingPalette(Rubyburst).ColourName);
         Assert.AreEqual("each part's own colour", HousingPalette.None.ColourName);
     }
 }
