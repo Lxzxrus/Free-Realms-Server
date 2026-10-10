@@ -67,6 +67,13 @@ public sealed class HousingZoneRuntime : IDisposable
     }
     private bool _disposed;
 
+    // A repainted part's new actor gets a guid of its own (the client ignores an add for a guid it still has): a
+    // fixture guid for a made-up id from here up, above any real fixture id and small enough that the guid still fits
+    // the 32-bit id a Paint click sends. The client may send it back for the part, so it maps to the fixture.
+    private const int FirstActorAliasId = 100_000_000;
+    private int _nextActorAliasId = FirstActorAliasId;
+    private readonly Dictionary<ulong, int> _actorAliases = [];
+
     private static long _nextPreviewId = 10_000_000_000;
 
     public HousingZoneRuntime(HousingZone zone, IServiceProvider serviceProvider)
@@ -180,6 +187,7 @@ public sealed class HousingZoneRuntime : IDisposable
             _creativeViews.Clear();
             _pendingPlacements.Clear();
             _actors.Clear();
+            _actorAliases.Clear();
         }
     }
 
@@ -457,7 +465,7 @@ public sealed class HousingZoneRuntime : IDisposable
                 return;
             }
 
-            if (!TryGetFixtureId(fixtureGuid, out var fixtureId))
+            if (!TryResolveFixtureId(fixtureGuid, out var fixtureId))
                 return;
 
             using var dbContext = _dbContextFactory.CreateDbContext();
@@ -538,7 +546,7 @@ public sealed class HousingZoneRuntime : IDisposable
         lock (_mutationLock)
         {
             if (!CanEdit(player) ||
-                !TryGetFixtureId(fixtureGuid, out var fixtureId) ||
+                !TryResolveFixtureId(fixtureGuid, out var fixtureId) ||
                 !TryNormalizeTransform(position, rotation, scale, out position, out rotation, out scale))
             {
                 return;
@@ -1189,7 +1197,7 @@ public sealed class HousingZoneRuntime : IDisposable
     /// </summary>
     private void PaintFixture(Player player, ulong fixtureGuid)
     {
-        if (!TryGetFixtureId(fixtureGuid, out var fixtureId))
+        if (!TryResolveFixtureId(fixtureGuid, out var fixtureId))
             return;
 
         using var dbContext = _dbContextFactory.CreateDbContext();
@@ -1217,18 +1225,23 @@ public sealed class HousingZoneRuntime : IDisposable
         fixture.TintId = tintId;
         dbContext.SaveChanges();
 
-        // The fixture update recolours the part in place; the actor keeps its guid (the client ignores an add for a
-        // guid it still has), and its tint is for players who arrive later. A fixture asset starts the client's
-        // placement flow in Decorate (FreeRealms.exe 0xac7f40: a copy of the part on the cursor), so a decorator gets
-        // the update alone; anyone else gets the asset too, as on entering the house.
-        UpdateActor(fixture);
+        // The client draws a part's tint when its actor is added, and a fixture update doesn't redraw it. So the part
+        // is removed and added again, as picking it up and placing it would: the fixture goes (FreeRealms.exe
+        // 0xabae70 removes it at once), the actor is replaced by one with a new guid, and the fixture update links
+        // them. A fixture asset would start the client's placement flow in Decorate (0xac7f40: a copy of the part on
+        // the cursor), so a decorator gets the update alone; anyone else gets the asset too, as on entering the house.
         var paintedGuid = GuidHelper.GetFixtureGuid((ulong)fixture.Id);
+        Broadcast(new HousingPacketRemoveFixture { FixtureGuid = paintedGuid });
+        RemoveActor(fixture.Id);
+        EnsureActor(fixture, replacement: true);
+
+        var actorGuid = GetActorGuid(fixture.Id);
         foreach (var recipient in _zone.Players)
         {
             SendFixtureUpdate(
                 recipient,
                 paintedGuid,
-                GetActorGuid(fixture.Id),
+                actorGuid,
                 fixture.ItemDefinitionId,
                 0,
                 fixture.TintId,
@@ -1236,6 +1249,16 @@ public sealed class HousingZoneRuntime : IDisposable
                 GetHousingRotation(fixture),
                 fixture.Scale,
                 !_editors.Contains(recipient.Guid));
+        }
+
+        if (actorGuid != 0)
+        {
+            Broadcast(new HousingPacketUpdateFixturePosition
+            {
+                FixtureActorGuid = actorGuid,
+                Position = GetPosition(fixture),
+                Rotation = GetHousingRotation(fixture)
+            });
         }
     }
 
@@ -1505,7 +1528,7 @@ public sealed class HousingZoneRuntime : IDisposable
         }
     }
 
-    private void EnsureActor(DbHouseFixture fixture)
+    private void EnsureActor(DbHouseFixture fixture, bool replacement = false)
     {
         if (_actors.TryGetValue(fixture.Id, out var existing))
         {
@@ -1515,11 +1538,28 @@ public sealed class HousingZoneRuntime : IDisposable
 
         var modelId = ResolveFixtureActorModelId(fixture.ItemDefinitionId);
         if (modelId == 0 ||
-            !_resourceManager.ClientItemDefinitions.TryGetValue(fixture.ItemDefinitionId, out var itemDefinition) ||
-            !_zone.TryCreateNpc(GuidHelper.GetFixtureGuid((ulong)fixture.Id), out var actor))
+            !_resourceManager.ClientItemDefinitions.TryGetValue(fixture.ItemDefinitionId, out var itemDefinition))
         {
             return;
         }
+
+        Npc? actor = null;
+        if (!replacement)
+        {
+            _zone.TryCreateNpc(GuidHelper.GetFixtureGuid((ulong)fixture.Id), out actor);
+        }
+        else
+        {
+            for (var attempt = 0; actor is null && attempt < 4; attempt++)
+            {
+                var aliasGuid = GuidHelper.GetFixtureGuid((ulong)_nextActorAliasId++);
+                if (_zone.TryCreateNpc(aliasGuid, out actor))
+                    _actorAliases[aliasGuid] = fixture.Id;
+            }
+        }
+
+        if (actor is null)
+            return;
 
         actor.Name = string.Empty;
         actor.ModelId = modelId;
@@ -1558,6 +1598,8 @@ public sealed class HousingZoneRuntime : IDisposable
     {
         if (!_actors.Remove(fixtureId, out var actor))
             return;
+
+        _actorAliases.Remove(actor.Guid);
 
         _zone.UpdateEntityZoneTile(actor, actor.ZoneTile, ZoneTile.Empty);
         _zone.TryRemoveNpc(actor.Guid);
@@ -1940,6 +1982,12 @@ public sealed class HousingZoneRuntime : IDisposable
         return MathF.Abs(position.X) <= 0.001f &&
             MathF.Abs(position.Y) <= 0.001f &&
             MathF.Abs(position.Z) <= 0.001f;
+    }
+
+    /// <summary>The fixture a guid from the client names: its own guid, or a repainted part's actor guid.</summary>
+    private bool TryResolveFixtureId(ulong fixtureGuid, out int fixtureId)
+    {
+        return _actorAliases.TryGetValue(fixtureGuid, out fixtureId) || TryGetFixtureId(fixtureGuid, out fixtureId);
     }
 
     private static bool TryGetFixtureId(ulong fixtureGuid, out int fixtureId)
