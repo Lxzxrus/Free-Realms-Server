@@ -20,7 +20,8 @@ The part's menu is built by `Housing.lua` (`MakeHousingRadialMenu`) and its clic
 sends the server a placement request for the negated fixture guid, unchecked by the client, and the server reads a
 negative id as "paint this part" (`HousingPalette.TryParsePaintCommand`). The patch adds code at the end of each
 function and changes one jump to reach it, so no existing jump moves; every byte it carries is ours. It was checked by
-loading the patched chunk in Lua 5.1 (whose loader verifies the bytecode) and running both functions against stubs.
+loading the patched chunk in Lua 5.1 (whose loader verifies the bytecode) and running both functions against stubs:
+`check_scripts.py` does both (needs `pip install lupa`).
 
 ## How the colours reach the server
 
