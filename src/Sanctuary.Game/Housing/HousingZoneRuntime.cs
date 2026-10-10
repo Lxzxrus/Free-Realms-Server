@@ -67,6 +67,16 @@ public sealed class HousingZoneRuntime : IDisposable
     }
     private bool _disposed;
 
+    // While the owner's paint brush is on, every placed part's actor has an interact range (see EnsureActor), so a click
+    // in Decorate is an interaction the brush takes instead of a selection.
+    private bool _painting;
+
+    // An actor that replaces another gets a new guid: the client ignores an add for a guid it still has, and it removes
+    // an entity a moment after it is told to, so a remove and an add with the same guid in a row change nothing.
+    private uint _actorGeneration;
+
+    private const int PaintInteractRange = 100;
+
     private static long _nextPreviewId = 10_000_000_000;
 
     public HousingZoneRuntime(HousingZone zone, IServiceProvider serviceProvider)
@@ -164,6 +174,9 @@ public sealed class HousingZoneRuntime : IDisposable
             _pendingPlacements.Remove(player.Guid);
             HideCreativeInventory(player);
             _creativeViews.Remove(player.Guid);
+
+            if (IsOwner(player))
+                SetPainting(false);
         }
     }
 
@@ -209,7 +222,7 @@ public sealed class HousingZoneRuntime : IDisposable
                 if (_creativeViews.TryGetValue(player.Guid, out var view) && view.Palette.Brush)
                 {
                     SetView(player, view with { Palette = view.Palette with { Brush = false } });
-                    SendActorsTo(player, false);
+                    SetPainting(false);
                 }
             }
 
@@ -860,10 +873,6 @@ public sealed class HousingZoneRuntime : IDisposable
             });
         }
 
-        // Placed with the brush on: the new part can be painted by a click straight away, like the rest.
-        if (IsPainting(player) && _actors.TryGetValue(savedFixture.Id, out var placedActor))
-            SendActorTo(player, placedActor, true);
-
         using var refreshContext = _dbContextFactory.CreateDbContext();
         var refreshedHouse = LoadHouse(refreshContext);
         if (refreshedHouse is null)
@@ -1183,19 +1192,7 @@ public sealed class HousingZoneRuntime : IDisposable
 
         SetView(player, view with { Palette = palette });
 
-        if (palette.Brush != view.Palette.Brush)
-        {
-            SendActorsTo(player, palette.Brush);
-
-            // Back to selecting and moving: the parts were sent again, so the editor needs them again too.
-            if (!palette.Brush && _editors.Contains(player.Guid))
-            {
-                using var dbContext = _dbContextFactory.CreateDbContext();
-                var house = LoadHouse(dbContext);
-                if (house is not null)
-                    SendPersistedFixtureUpdates(player, house);
-            }
-        }
+        SetPainting(palette.Brush);
 
         if (palette.Brush && (!view.Palette.Brush || palette.Dye != view.Palette.Dye))
         {
@@ -1251,45 +1248,50 @@ public sealed class HousingZoneRuntime : IDisposable
             fixture.TintId = tintId;
             dbContext.SaveChanges();
 
-            // A placed part keeps the tint it was added with, so everyone gets it again in its new colour.
-            ApplyActorState(actor, fixture);
+            // A placed part keeps the tint its actor was added with, so the actor is replaced. The painter gets no
+            // fixture asset: while painting, their editor isn't told about the parts.
             foreach (var recipient in _zone.Players)
             {
-                SendFixtureAsset(recipient, fixture.ItemDefinitionId, tintId, false);
-                SendActorTo(recipient, actor, IsPainting(recipient));
+                if (recipient.Guid != player.Guid)
+                    SendFixtureAsset(recipient, fixture.ItemDefinitionId, tintId, false);
             }
 
+            ReplaceActor(fixture);
             return true;
         }
     }
 
-    // A placed part's actor has interact range 0, which makes a click in Decorate select it (EnsureActor). While the
-    // owner's brush is on, their copies get a range, so a click is an ordinary interaction instead
-    // (CommandPacketInteractRequest), which TryPaint takes: nothing is picked up or moved.
-    private const int PaintInteractRange = 100;
-
-    private bool IsPainting(Player player)
+    /// <summary>
+    /// Turns paint mode on or off: every placed part's actor is replaced by one that a click in Decorate paints, or
+    /// one that a click selects. Back to selecting, the editors are told about the parts again, as on entering
+    /// Decorate, since their actors changed.
+    /// </summary>
+    private void SetPainting(bool painting)
     {
-        return _creativeViews.TryGetValue(player.Guid, out var view) && view.Palette.Brush;
-    }
-
-    private void SendActorsTo(Player player, bool painting)
-    {
-        foreach (var actor in _actors.Values)
-            SendActorTo(player, actor, painting);
-    }
-
-    private static void SendActorTo(Player player, Npc actor, bool painting)
-    {
-        if (!actor.VisiblePlayers.ContainsKey(player.Guid))
+        if (_painting == painting || _disposed)
             return;
 
-        var packet = actor.GetAddNpcPacket();
-        if (painting)
-            packet.InteractRange = PaintInteractRange;
+        _painting = painting;
 
-        player.SendTunneled(new PlayerUpdatePacketRemovePlayer { Guid = actor.Guid });
-        player.SendTunneled(packet);
+        using var dbContext = _dbContextFactory.CreateDbContext();
+        var house = LoadHouse(dbContext);
+        if (house is null)
+            return;
+
+        foreach (var fixture in house.Fixtures.OrderBy(candidate => candidate.Id))
+            ReplaceActor(fixture);
+
+        if (painting)
+            return;
+
+        foreach (var editor in _zone.Players.Where(candidate => _editors.Contains(candidate.Guid)))
+            SendPersistedFixtureUpdates(editor, house);
+    }
+
+    private void ReplaceActor(DbHouseFixture fixture)
+    {
+        RemoveActor(fixture.Id);
+        EnsureActor(fixture, replacement: true);
     }
 
     private void SetView(Player player, CreativeView view)
@@ -1564,7 +1566,7 @@ public sealed class HousingZoneRuntime : IDisposable
         }
     }
 
-    private void EnsureActor(DbHouseFixture fixture)
+    private void EnsureActor(DbHouseFixture fixture, bool replacement = false)
     {
         if (_actors.TryGetValue(fixture.Id, out var existing))
         {
@@ -1574,11 +1576,22 @@ public sealed class HousingZoneRuntime : IDisposable
 
         var modelId = ResolveFixtureActorModelId(fixture.ItemDefinitionId);
         if (modelId == 0 ||
-            !_resourceManager.ClientItemDefinitions.TryGetValue(fixture.ItemDefinitionId, out var itemDefinition) ||
-            !_zone.TryCreateNpc(GuidHelper.GetFixtureGuid((ulong)fixture.Id), out var actor))
+            !_resourceManager.ClientItemDefinitions.TryGetValue(fixture.ItemDefinitionId, out var itemDefinition))
         {
             return;
         }
+
+        // A first actor's guid is the fixture's own. A replacement's carries a generation above the fixture id's 32
+        // bits, which TryGetFixtureId ignores, so a guid the client sends back still names the fixture.
+        Npc? actor = null;
+        for (var attempt = 0; actor is null && attempt < 4; attempt++)
+        {
+            var generation = replacement || attempt > 0 ? ++_actorGeneration : 0;
+            _zone.TryCreateNpc(GuidHelper.GetFixtureGuid((uint)fixture.Id | (ulong)generation << 32), out actor);
+        }
+
+        if (actor is null)
+            return;
 
         actor.Name = string.Empty;
         actor.ModelId = modelId;
@@ -1587,9 +1600,9 @@ public sealed class HousingZoneRuntime : IDisposable
         actor.HideNamePlate = true;
         // The client marks an actor as a selectable house fixture only when it is interactable with an interact range
         // of 0 (FreeRealms.exe 0x92f84b-0x92f88a sets entity flag 4). Otherwise the editor can't pick it up, move or
-        // rotate it, and a click becomes an ordinary NPC interaction.
+        // rotate it, and a click becomes an ordinary NPC interaction, which is what the paint brush wants.
         actor.IsInteractable = true;
-        actor.InteractRange = 0;
+        actor.InteractRange = _painting ? PaintInteractRange : 0;
         actor.Visible = true;
         actor.MovementType = 0;
         actor.Speed = 0f;
@@ -2014,6 +2027,8 @@ public sealed class HousingZoneRuntime : IDisposable
             rawId = fixtureGuid;
         }
 
+        // A replacement actor's guid carries a generation above the fixture id (EnsureActor).
+        rawId &= uint.MaxValue;
         if (rawId == 0 || rawId > int.MaxValue)
             return false;
 
