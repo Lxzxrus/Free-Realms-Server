@@ -27,12 +27,11 @@ public sealed class HousingCreativeCatalog : IDisposable
 {
     public const int RecordIdBase = 0x4000_0000;
 
-    // A record id is RecordIdBase | brush << 29 | dye << 20 | item definition id. Item definition ids fit in 20 bits (the
+    // A record id is RecordIdBase | dye << 20 | item definition id. Item definition ids fit in 20 bits (the
     // largest is about 900,000) and dye tint ids in 9. Every entry carries the owner's palette, dyeable or not, so the
     // Decorate panel's colour bar can read it back from any tray item, and a dyed variant gets its own id without any
     // stored state.
     private const int DyeShift = 20;
-    private const int BrushFlag = 1 << 29;
     private const int MaxDefinitionId = (1 << DyeShift) - 1;
     private const int MaxDyeTintId = (1 << 9) - 1;
 
@@ -43,21 +42,14 @@ public sealed class HousingCreativeCatalog : IDisposable
         /// <summary>The owner's dye when the entry was shown, 0 for none. It colours the entry only if it is dyeable.</summary>
         public int Dye { get; init; }
 
-        /// <summary>Whether the owner's paint brush was on when the entry was shown.</summary>
-        public bool Brush { get; init; }
-
         public int TintId => IsDyeable && Dye > 0 ? Dye : DefaultTintId;
 
-        public int RecordId => RecordIdBase | (Brush ? BrushFlag : 0) | Dye << DyeShift | ItemDefinitionId;
+        public int RecordId => RecordIdBase | Dye << DyeShift | ItemDefinitionId;
 
         /// <summary>This entry as shown to an owner with <paramref name="palette"/>.</summary>
         public Entry WithPalette(HousingPalette palette)
         {
-            return this with
-            {
-                Dye = palette.Dye is > 0 and <= MaxDyeTintId ? palette.Dye : 0,
-                Brush = palette.Brush
-            };
+            return this with { Dye = palette.Dye is > 0 and <= MaxDyeTintId ? palette.Dye : 0 };
         }
     }
 
@@ -97,14 +89,14 @@ public sealed class HousingCreativeCatalog : IDisposable
         }
 
         var definitionId = itemRecordId & MaxDefinitionId;
-        var dye = (itemRecordId & ~BrushFlag & ~RecordIdBase) >> DyeShift;
+        var dye = (itemRecordId - RecordIdBase) >> DyeShift;
         if (dye > MaxDyeTintId || !TryGetByDefinitionId(definitionId, out entry))
         {
             entry = null!;
             return false;
         }
 
-        entry = entry.WithPalette(new HousingPalette(dye, (itemRecordId & BrushFlag) != 0));
+        entry = entry.WithPalette(new HousingPalette(dye));
         return true;
     }
 

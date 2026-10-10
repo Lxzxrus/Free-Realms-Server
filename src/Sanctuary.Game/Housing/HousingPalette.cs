@@ -1,8 +1,8 @@
 namespace Sanctuary.Game.Housing;
 
 /// <summary>
-/// A decorator's colour choice in creative mode: the dye new building parts come in (0 for each part's own colour) and
-/// whether the paint brush is on, which gives a placed part that colour when the owner moves or turns it.
+/// A decorator's colour choice in creative mode: the dye new building parts come in, and that the Paint button of a
+/// placed part's menu gives it (0 for each part's own colour).
 /// </summary>
 /// <remarks>
 /// The colour bar of the Decorate panel (client mod, tools/client-mods/housing-search) sets it. A panel can only tell the
@@ -10,7 +10,7 @@ namespace Sanctuary.Game.Housing;
 /// server reads the click back as the palette. The panel learns the current palette from the creative tray, whose
 /// record ids carry it (<see cref="HousingCreativeCatalog.Entry.RecordId"/>).
 /// </remarks>
-public readonly record struct HousingPalette(int Dye, bool Brush)
+public readonly record struct HousingPalette(int Dye)
 {
     /// <summary>
     /// Command ids sit below <see cref="HousingCreativeCatalog.RecordIdBase"/> and far above any inventory record id.
@@ -18,26 +18,24 @@ public readonly record struct HousingPalette(int Dye, bool Brush)
     /// </summary>
     public const int CommandIdBase = 0x3F00_0000;
 
-    private const int BrushFlag = 1 << 9;
+    // Dye tint ids fit in 9 bits. Launchers 1.0.2 and 1.0.3 also sent a retired paint brush switch as bit 9; those ids
+    // aren't commands, so the switch does nothing.
+    private const int MaxDye = (1 << 9) - 1;
 
     public static HousingPalette None => default;
 
-    public int CommandId => CommandIdBase | (Brush ? BrushFlag : 0) | Dye;
+    public int CommandId => CommandIdBase | Dye;
 
     /// <summary>The palette a colour bar click asks for, if <paramref name="id"/> is one. Only the game's dye colours count.</summary>
     public static bool TryParseCommand(int id, out HousingPalette palette)
     {
         palette = None;
 
-        var value = id - CommandIdBase;
-        if (value is < 0 or >= BrushFlag * 2)
+        var dye = id - CommandIdBase;
+        if (dye is < 0 or > MaxDye || (dye != 0 && !HousingDyeTints.Names.ContainsKey(dye)))
             return false;
 
-        var dye = value & (BrushFlag - 1);
-        if (dye != 0 && !HousingDyeTints.Names.ContainsKey(dye))
-            return false;
-
-        palette = new HousingPalette(dye, (value & BrushFlag) != 0);
+        palette = new HousingPalette(dye);
         return true;
     }
 

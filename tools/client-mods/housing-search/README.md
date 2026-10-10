@@ -26,8 +26,7 @@ loading the patched chunk in Lua 5.1 (whose loader verifies the bytecode) and ru
 ## How the colours reach the server
 
 A panel can only tell the game which tray item was clicked (`itemSelected(<id>)`), which reaches the server as a
-placement request. So a swatch sends a made-up id, `0x3F000000 + 512 (brush on) + the dye's tint id` (0 for own
-colours), and the server reads it as the choice (`HousingPalette.TryParseCommand`). The server then shows the tray
+placement request. So a swatch sends a made-up id, `0x3F000000 + the dye's tint id` (0 for own colours), and the server reads it as the choice (`HousingPalette.TryParseCommand`). The server then shows the tray
 again, and every creative tray id carries the choice (`0x40000000 | dye << 20 | item`), so the bar shows
 what the server has, whoever set it. On the Wall, Floor and Roof tabs the game sends the click as a wallpaper
 request instead, and the server reads it the same way. The swatch colours are the game's own (`Resources/Tints.xml`,

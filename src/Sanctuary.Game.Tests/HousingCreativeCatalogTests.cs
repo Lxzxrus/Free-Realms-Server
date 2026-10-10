@@ -119,7 +119,7 @@ public sealed class HousingCreativeCatalogTests
         Assert.IsTrue(_catalog.TryGetByDefinitionId(Ramp, out var ramp));
         Assert.IsTrue(ramp.IsDyeable);
 
-        var dyed = ramp.WithPalette(new HousingPalette(Mahogany, false));
+        var dyed = ramp.WithPalette(new HousingPalette(Mahogany));
         Assert.AreNotEqual(ramp.RecordId, dyed.RecordId);
         Assert.AreEqual(Mahogany, dyed.TintId);
         Assert.IsTrue(HousingCreativeCatalog.IsCreativeRecordId(dyed.RecordId));
@@ -144,19 +144,18 @@ public sealed class HousingCreativeCatalogTests
         Assert.IsTrue(_catalog.TryGetByDefinitionId(Chair, out var chair));
         Assert.IsFalse(chair.IsDyeable);
 
-        var shown = chair.WithPalette(new HousingPalette(Mahogany, true));
+        var shown = chair.WithPalette(new HousingPalette(Mahogany));
         Assert.AreEqual(chair.TintId, shown.TintId);
         Assert.AreNotEqual(chair.RecordId, shown.RecordId);
 
         Assert.IsTrue(_catalog.TryGetByRecordId(shown.RecordId, out var found));
         Assert.AreEqual(Chair, found.ItemDefinitionId);
         Assert.AreEqual(Mahogany, found.Dye);
-        Assert.IsTrue(found.Brush);
         Assert.AreEqual(chair.TintId, found.TintId);
         Assert.AreEqual(shown.RecordId, found.RecordId);
 
-        // The id layout the client mod decodes: base | brush << 29 | dye << 20 | definition.
-        Assert.AreEqual(HousingCreativeCatalog.RecordIdBase | 1 << 29 | Mahogany << 20 | Chair, shown.RecordId);
+        // The id layout the client mod decodes: base | dye << 20 | definition.
+        Assert.AreEqual(HousingCreativeCatalog.RecordIdBase | Mahogany << 20 | Chair, shown.RecordId);
     }
 
     [TestMethod]
