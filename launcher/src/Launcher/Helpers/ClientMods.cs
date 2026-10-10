@@ -25,14 +25,11 @@ public static class ClientMods
     private static readonly string[] PanelOutputs = ["UI/housingEditPanel.gfx", "UI/housingEditPanel.swf"];
 
     /// <summary>
-    /// Housing.lua's Main_wndHousingEditPanel_swfHousingEditPanel_OnFocus hands keyboard focus straight back to the
-    /// game, so nothing can be typed in the panel; its first instruction becomes its own final RETURN.
+    /// The UI scripts get our edits from scripts.patch (tools/client-mods/housing-search/lua_patch.py): the Decorate
+    /// panel keeps keyboard focus, so its search box can be typed in, and a placed part's menu gets a Paint button.
     /// </summary>
     public const string ScriptsPath = "UI/ScriptsBase.bin";
-    public const string ScriptsModdedSha256 = "801cb78f57bd164f457fad504851d50d9fd292349db8cb2600759d777c5aaaf4";
-    private const int FocusPatchOffset = 1642906;
-    private const uint LuaFirstInstruction = 0x000000C5;
-    private const uint LuaReturn = 0x0080001E;
+    public const string ScriptsModdedSha256 = "6c9e1979e088c76d3a270f05fac701348f1d7f6351526be2758d4cef4e8b2468";
 
     private const int DoActionTag = 12;
 
@@ -75,15 +72,68 @@ public static class ClientMods
         if (!pins.TryGet(ScriptsPath, out var pin) || sha != pin.Sha256)
             throw new InvalidDataException($"{ScriptsPath} isn't the official file, so it wasn't modified.");
 
-        if (BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(FocusPatchOffset)) != LuaFirstInstruction)
-            throw new InvalidDataException($"{ScriptsPath} doesn't have the expected script at the patch offset.");
+        var patched = ApplyPatch(data, LoadResource("Launcher.Mods.scripts.patch"));
 
-        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(FocusPatchOffset), LuaReturn);
-
-        if (Sha256(data) != ScriptsModdedSha256)
+        if (Sha256(patched) != ScriptsModdedSha256)
             throw new InvalidDataException($"Patching {ScriptsPath} gave an unexpected result.");
 
-        WriteAtomically(path, data);
+        WriteAtomically(path, patched);
+    }
+
+    /// <summary>
+    /// <paramref name="original"/> with the edits of a patch made by lua_patch.py: "EVGP", a count, then per edit its
+    /// offset in the original, the number of bytes it replaces there, and the bytes it puts in their place.
+    /// </summary>
+    public static byte[] ApplyPatch(byte[] original, byte[] patch)
+    {
+        if (patch.Length < 8 || Encoding.ASCII.GetString(patch, 0, 4) != "EVGP")
+            throw new InvalidDataException("Not a script patch.");
+
+        var count = BinaryPrimitives.ReadInt32LittleEndian(patch.AsSpan(4));
+        var edits = new List<(int Offset, int Length, ReadOnlyMemory<byte> Inserted)>(count);
+        var position = 8;
+
+        for (var i = 0; i < count; i++)
+        {
+            if (position + 12 > patch.Length)
+                throw new InvalidDataException("The script patch is cut short.");
+
+            var offset = BinaryPrimitives.ReadInt32LittleEndian(patch.AsSpan(position));
+            var length = BinaryPrimitives.ReadInt32LittleEndian(patch.AsSpan(position + 4));
+            var insertedLength = BinaryPrimitives.ReadInt32LittleEndian(patch.AsSpan(position + 8));
+            position += 12;
+
+            if (offset < 0 || length < 0 || insertedLength < 0 || offset + length > original.Length ||
+                position + insertedLength > patch.Length)
+            {
+                throw new InvalidDataException("The script patch doesn't fit the file.");
+            }
+
+            edits.Add((offset, length, patch.AsMemory(position, insertedLength)));
+            position += insertedLength;
+        }
+
+        if (position != patch.Length)
+            throw new InvalidDataException("The script patch has bytes left over.");
+
+        // In file order, each edit after the previous one's end; at one offset an insertion comes before the
+        // replacement that starts there.
+        var ordered = edits.OrderBy(edit => edit.Offset).ThenBy(edit => edit.Length).ToList();
+        using var output = new MemoryStream(original.Length + ordered.Sum(edit => edit.Inserted.Length));
+        var copied = 0;
+
+        foreach (var (offset, length, inserted) in ordered)
+        {
+            if (offset < copied)
+                throw new InvalidDataException("The script patch's edits overlap.");
+
+            output.Write(original, copied, offset - copied);
+            output.Write(inserted.Span);
+            copied = offset + length;
+        }
+
+        output.Write(original, copied, original.Length - copied);
+        return output.ToArray();
     }
 
     private static void ApplyPanel(string clientDirectory)

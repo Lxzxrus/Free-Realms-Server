@@ -36,6 +36,7 @@
     <EmbeddedResource Include="ClientPins.txt" LogicalName="Launcher.ClientPins.txt" />
     <!-- Evergrove's client additions: our own compiled code only (tools/client-mods/). -->
     <EmbeddedResource Include="Mods\housing-search.tag" LogicalName="Launcher.Mods.housing-search.tag" />
+    <EmbeddedResource Include="Mods\scripts.patch" LogicalName="Launcher.Mods.scripts.patch" />
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 

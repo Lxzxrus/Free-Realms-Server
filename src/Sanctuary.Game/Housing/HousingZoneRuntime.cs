@@ -293,7 +293,9 @@ public sealed class HousingZoneRuntime : IDisposable
             // swatch arrives as a tray click too.
             if (_options.CreativeMode)
             {
-                if (HousingPalette.TryParseCommand(itemRecordId, out var palette))
+                if (HousingPalette.TryParsePaintCommand(itemRecordId, out var paintedFixtureGuid))
+                    PaintFixture(player, paintedFixtureGuid);
+                else if (HousingPalette.TryParseCommand(itemRecordId, out var palette))
                     SetPalette(player, palette);
                 else if (_creativeCatalog.TryGetByRecordId(itemRecordId, out var entry))
                     StartPendingPlacement(player, CreativeSource(entry));
@@ -1179,6 +1181,46 @@ public sealed class HousingZoneRuntime : IDisposable
             return;
 
         SetView(player, view with { Palette = palette });
+    }
+
+    /// <summary>
+    /// Paints a placed part in the owner's colour from the colour bar (each part's own colour if none is chosen), from
+    /// the Paint button of the part's menu.
+    /// </summary>
+    private void PaintFixture(Player player, ulong fixtureGuid)
+    {
+        if (!TryGetFixtureId(fixtureGuid, out var fixtureId))
+            return;
+
+        using var dbContext = _dbContextFactory.CreateDbContext();
+        var characterId = GuidHelper.GetPlayerId(player.Guid);
+        var fixture = dbContext.HouseFixtures.FirstOrDefault(candidate =>
+            candidate.Id == fixtureId &&
+            candidate.HouseId == _zone.HouseId &&
+            candidate.House.CharacterId == characterId);
+
+        if (fixture is null)
+            return;
+
+        if (!_resourceManager.ClientItemDefinitions.TryGetValue(fixture.ItemDefinitionId, out var definition) ||
+            !HousingDyeTints.IsDyeable(definition))
+        {
+            ChatHelper.SendSystemMessage(player, "That part can't be painted.");
+            return;
+        }
+
+        var dye = _creativeViews.TryGetValue(player.Guid, out var view) ? view.Palette.Dye : 0;
+        var tintId = ResolveItemTintId(fixture.ItemDefinitionId, dye);
+        if (ResolveItemTintId(fixture.ItemDefinitionId, fixture.TintId) == tintId)
+            return;
+
+        fixture.TintId = tintId;
+        dbContext.SaveChanges();
+
+        // The actor keeps its guid (the client ignores an add for a guid it still has); the fixture update and its
+        // asset recolour the part in place, for its owner too. The actor's tint is for players who arrive later.
+        UpdateActor(fixture);
+        BroadcastFixtureUpdate(fixture, 0);
     }
 
     private void SetView(Player player, CreativeView view)

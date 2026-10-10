@@ -10,10 +10,11 @@ folder, applies Evergrove's changes and writes the modified files to an output f
 Output (the launcher applies the mod itself from housing-search.tag; for testing by hand, copy the rest into
 <client>\UI\ and keep a backup of the original ScriptsBase.bin):
   housing-search.tag                          our compiled script block only (no game code); the launcher embeds it
+  scripts.patch                               our edits to UI\ScriptsBase.bin only (lua_patch.py); the launcher embeds it
   housingEditPanel.gfx, housingEditPanel.swf  the Decorate panel with search and colour buttons (loose UI files
                                               override the packs)
-  ScriptsBase.bin                             the UI scripts with the Decorate panel's focus-steal disabled, so the
-                                              search box can take keyboard input
+  ScriptsBase.bin                             the UI scripts with scripts.patch applied: the Decorate panel keeps
+                                              keyboard focus, and a placed part's menu has a Paint button
 
 Needs Java for JPEXS FFDec (https://github.com/jindrapetrik/jpexs-decompiler).
 """
@@ -28,17 +29,16 @@ import sys
 import tempfile
 import zlib
 
+import lua_patch
+
 PANEL = "housingEditPanel.gfx"
 TAG = "housing-search.tag"
 DO_ACTION = 12
 PANEL_SHA1 = "477f1a674d90947fa88d8d5512694bc95dd587c3"
 SCRIPTS_SHA1 = "18593c20029d96820bc75438777099131de6af46"
 
-# Housing.lua's Main_wndHousingEditPanel_swfHousingEditPanel_OnFocus hands keyboard focus back to the game window
-# whenever the panel gets it. Replacing its first instruction with its own final RETURN makes it do nothing.
-FOCUS_PATCH_OFFSET = 1642906
-LUA_ORIGINAL_FIRST = 0x000000C5
-LUA_RETURN = 0x0080001E
+# The UI script changes (lua_patch.py) are written as scripts.patch, our edits only, which the launcher applies.
+SCRIPTS_PATCH = "scripts.patch"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -139,14 +139,16 @@ def build_panel(client, jar, out):
 
 def build_scripts(scripts_path, out):
     with open(scripts_path, "rb") as f:
-        data = bytearray(f.read())
-    if sha1(data) != SCRIPTS_SHA1:
+        original = f.read()
+    if sha1(original) != SCRIPTS_SHA1:
         sys.exit("UI/ScriptsBase.bin differs from the version this mod was made for (already patched?); refusing")
-    if struct.unpack_from("<I", data, FOCUS_PATCH_OFFSET)[0] != LUA_ORIGINAL_FIRST:
-        sys.exit("unexpected bytecode at the focus patch offset; refusing")
-    struct.pack_into("<I", data, FOCUS_PATCH_OFFSET, LUA_RETURN)
+    edits = lua_patch.make_patch(original)
+    patched = lua_patch.apply_patch(original, edits)
+    with open(os.path.join(out, SCRIPTS_PATCH), "wb") as f:
+        f.write(lua_patch.serialize_patch(edits))
     with open(os.path.join(out, "ScriptsBase.bin"), "wb") as f:
-        f.write(data)
+        f.write(patched)
+    print(f"ScriptsBase.bin patched: SHA-256 {hashlib.sha256(patched).hexdigest()} (ClientMods.ScriptsModdedSha256)")
 
 
 def main():
