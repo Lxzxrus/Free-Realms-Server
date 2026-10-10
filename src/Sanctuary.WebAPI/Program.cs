@@ -65,14 +65,14 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     if (webAPIOptions.TrustedProxies.Count > 0)
     {
         options.KnownProxies.Clear();
-        options.KnownNetworks.Clear();
+        options.KnownIPNetworks.Clear();
 
         foreach (var proxy in webAPIOptions.TrustedProxies)
         {
             if (IPAddress.TryParse(proxy, out var address))
                 options.KnownProxies.Add(address);
             else if (System.Net.IPNetwork.TryParse(proxy, out var network))
-                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(network.BaseAddress, network.PrefixLength));
+                options.KnownIPNetworks.Add(network);
         }
     }
 });

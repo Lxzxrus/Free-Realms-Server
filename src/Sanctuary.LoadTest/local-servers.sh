@@ -6,7 +6,7 @@
 #   ./local-servers.sh start [log-dir]    build, create the database if needed, start all three
 #   ./local-servers.sh stop               stop them
 #
-# Needs: the .NET 10 SDK, the .NET 9 and ASP.NET Core 9 runtimes, and a MariaDB on 127.0.0.1:3306 where
+# Needs: the .NET 10 SDK and a MariaDB on 127.0.0.1:3306 where
 # `mariadb` can connect as an administrator (as root in a cloud session). Database, user and password can be
 # changed with LOADTEST_DB, LOADTEST_DB_USER and LOADTEST_DB_PASSWORD.
 set -euo pipefail
@@ -77,7 +77,7 @@ start() {
 }
 
 launch() {
-    (cd "$src/Sanctuary.$1/bin/Release/net9.0" && exec nohup dotnet "Sanctuary.$1.dll" >"$2" 2>&1 </dev/null) &
+    (cd "$src/Sanctuary.$1/bin/Release/net10.0" && exec nohup dotnet "Sanctuary.$1.dll" >"$2" 2>&1 </dev/null) &
 }
 
 wait_for() {

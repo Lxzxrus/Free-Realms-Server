@@ -19,7 +19,7 @@ cd src && dotnet restore && dotnet build --no-restore && dotnet test --no-build
 ```
 
 This is what CI runs (`.github/workflows/build.yml`). A task isn't done until it passes. Needs the .NET 10
-SDK, the .NET 9 runtime and a running MariaDB (the MySQL test fails, not skips, without one), which
+SDK and a running MariaDB (the MySQL test fails, not skips, without one), which
 `scripts/cloud-setup.sh` installs and starts in cloud sessions. Measurements and quirks: `docs/cloud-environment.md`.
 
 ## Running locally

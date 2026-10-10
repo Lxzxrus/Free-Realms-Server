@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 WORKDIR /app
 EXPOSE 20042
 EXPOSE 20041
@@ -14,5 +14,5 @@ RUN dotnet build "Sanctuary.Database.Sqlite/Sanctuary.Database.Sqlite.csproj" -c
 FROM base AS final
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /app
-COPY --from=build /src/**/bin/$BUILD_CONFIGURATION/net9.0 .
+COPY --from=build /src/**/bin/$BUILD_CONFIGURATION/net10.0 .
 ENTRYPOINT ["dotnet", "Sanctuary.Login.dll"]

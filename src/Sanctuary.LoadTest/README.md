@@ -32,7 +32,7 @@ Results for the cloud VM are in [`docs/performance/baseline.md`](../../docs/perf
 ```bash
 cd src/Sanctuary.LoadTest
 ./local-servers.sh start          # Release build; WebAPI, Login and Gateway on a database of their own
-dotnet bin/Release/net9.0/Sanctuary.LoadTest.dll run --password '<any password>' --report results.md
+dotnet bin/Release/net10.0/Sanctuary.LoadTest.dll run --password '<any password>' --report results.md
 ./local-servers.sh stop
 ```
 
@@ -85,7 +85,7 @@ On the Optiplex:
 On the bot machine:
 
 ```bash
-dotnet src/Sanctuary.LoadTest/bin/Release/net9.0/Sanctuary.LoadTest.dll run \
+dotnet src/Sanctuary.LoadTest/bin/Release/net10.0/Sanctuary.LoadTest.dll run \
     --host 192.168.1.50 --password '<a password for the bot accounts>' --report optiplex.md
 ```
 
