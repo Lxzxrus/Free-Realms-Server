@@ -1,12 +1,13 @@
 # Housing search and colours (client mod)
 
-Adds two round buttons to the top left of the housing Decorate panel:
+Adds two round buttons to the top left of the housing Decorate panel, colours first, then search:
 
 - **Search** (magnifying glass) opens a search box that filters the current tab's building parts by name as you type.
   Requested in the LAN playtest of 2026-10-07; verified in game by Nate.
 - **Colours** (four squares) opens a box of the game's 38 dye colours, plus "own colours" (white with a red slash),
-  and a **Paint brush** switch. A colour recolours the tray's dyeable parts, so new parts come in it; with the brush
-  on, a placed part you move or turn takes the colour too. A white dot on the button means the brush is on. The brush
+  and a **Paint brush** switch. A colour recolours the tray's dyeable parts, so new parts come in it. With the brush
+  on, clicking a placed part paints it instead of picking it up (the server gives the owner's copies of the parts an
+  interact range, so a click becomes an interaction). A white dot on the button means the brush is on. The brush
   switches itself off when you leave Decorate.
 
 This is a **client** mod. Players get it through the Evergrove launcher. Search works on its own; the colours need
