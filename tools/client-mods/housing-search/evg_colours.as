@@ -1,6 +1,6 @@
 // Evergrove: a colour bar for the housing Decorate panel (housingEditPanel), built into the same script block as
-// evg_search.as. A round button with a palette, right of the search button, opens a box of the game's 38 dye colours
-// and a paint brush switch.
+// evg_search.as. A round button with a palette, left of the search button, opens a box of the game's 38 dye colours
+// and a paint brush switch. With the brush on, the server makes a click on a placed part paint it.
 //
 // The panel can only tell the game which tray item was clicked, so a swatch sends itemSelected(<command id>) and the
 // server reads that id as the colour choice (HousingPalette.CommandId: 0x3F000000 + 512 for the brush + the dye tint
@@ -9,7 +9,7 @@
 // what the server has, whoever changed it.
 function evgCreatePalette()
 {
-   evgPaletteBtn = attachMovie("circleButton","evgPaletteBtn",902,{_x:evgButtonX + evgButtonSize + 6,_y:evgButtonY});
+   evgPaletteBtn = attachMovie("circleButton","evgPaletteBtn",902,{_x:evgButtonX - evgButtonSize - 6,_y:evgButtonY});
    if(evgPaletteBtn._width > 0)
    {
       evgPaletteBtn._xscale = evgPaletteBtn._yscale = evgButtonSize / evgPaletteBtn._width * 100;
@@ -94,7 +94,7 @@ function evgCreatePalette()
 
    evgBrushRadio = evgPalette.attachMovie("radioButtonWText","evgBrush",500,{_x:evgPad,_y:gridY + rows * evgPitch + 4});
    evgBrushRadio.setText("Paint brush");
-   evgBrushRadio.setToolTip("When on, a part you move or turn takes this colour");
+   evgBrushRadio.setToolTip("When on, click a placed part to paint it");
    evgBrushRadio.addListener(evgBrushListener);
 
    evgPalette._visible = false;

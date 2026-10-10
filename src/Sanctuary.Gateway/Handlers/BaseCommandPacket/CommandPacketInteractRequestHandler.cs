@@ -15,6 +15,7 @@ using Sanctuary.Game;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -53,6 +54,10 @@ public static class CommandPacketInteractRequestHandler
 
         if (entity is CollectionNode collectionNode)
             return HandleCollectionNode(connection, collectionNode);
+
+        // A click on a placed house part while its owner's paint brush is on.
+        if (connection.Player.Zone is HousingZone house && house.Runtime.TryPaint(connection.Player, packet.Guid))
+            return true;
 
 
         if (entity is Npc npc && _questManager.IsQuestNpc(npc.Guid))

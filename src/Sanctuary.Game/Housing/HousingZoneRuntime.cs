@@ -207,7 +207,10 @@ public sealed class HousingZoneRuntime : IDisposable
                 // The brush goes down when decorating stops, so a later edit never paints by surprise. The tray, shown
                 // again on the next edit, tells the colour bar.
                 if (_creativeViews.TryGetValue(player.Guid, out var view) && view.Palette.Brush)
+                {
                     SetView(player, view with { Palette = view.Palette with { Brush = false } });
+                    SendActorsTo(player, false);
+                }
             }
 
             using var dbContext = _dbContextFactory.CreateDbContext();
@@ -567,18 +570,10 @@ public sealed class HousingZoneRuntime : IDisposable
             fixture.RotationW = rotation.W;
             fixture.Scale = scale;
 
-            var oldTintId = ResolveItemTintId(fixture.ItemDefinitionId, fixture.TintId);
-            if (TryGetBrush(player, fixture.ItemDefinitionId, out var brushDye))
-                fixture.TintId = ResolveItemTintId(fixture.ItemDefinitionId, brushDye);
-            else if (customization.TintId > 0)
+            if (customization.TintId > 0)
                 fixture.TintId = ResolveItemTintId(fixture.ItemDefinitionId, customization.TintId);
 
             dbContext.SaveChanges();
-
-            // A placed part keeps the tint it was spawned with, so a repainted one is spawned again, which also sends
-            // the update below to its owner.
-            if (ResolveItemTintId(fixture.ItemDefinitionId, fixture.TintId) != oldTintId)
-                RemoveActor(fixture.Id);
 
             var actorExisted = _actors.ContainsKey(fixture.Id);
             UpdateActor(fixture);
@@ -864,6 +859,10 @@ public sealed class HousingZoneRuntime : IDisposable
                 Rotation = GetHousingRotation(savedFixture)
             });
         }
+
+        // Placed with the brush on: the new part can be painted by a click straight away, like the rest.
+        if (IsPainting(player) && _actors.TryGetValue(savedFixture.Id, out var placedActor))
+            SendActorTo(player, placedActor, true);
 
         using var refreshContext = _dbContextFactory.CreateDbContext();
         var refreshedHouse = LoadHouse(refreshContext);
@@ -1184,16 +1183,113 @@ public sealed class HousingZoneRuntime : IDisposable
 
         SetView(player, view with { Palette = palette });
 
+        if (palette.Brush != view.Palette.Brush)
+        {
+            SendActorsTo(player, palette.Brush);
+
+            // Back to selecting and moving: the parts were sent again, so the editor needs them again too.
+            if (!palette.Brush && _editors.Contains(player.Guid))
+            {
+                using var dbContext = _dbContextFactory.CreateDbContext();
+                var house = LoadHouse(dbContext);
+                if (house is not null)
+                    SendPersistedFixtureUpdates(player, house);
+            }
+        }
+
         if (palette.Brush && (!view.Palette.Brush || palette.Dye != view.Palette.Dye))
         {
             ChatHelper.SendSystemMessage(player, palette.Dye == 0
-                ? "Paint brush on: move or turn a part to give it back its own colour."
-                : $"Paint brush on: move or turn a part to paint it {palette.ColourName}.");
+                ? "Paint brush on: click a part to give it back its own colour."
+                : $"Paint brush on: click a part to paint it {palette.ColourName}.");
         }
         else if (!palette.Brush && view.Palette.Brush)
         {
             ChatHelper.SendSystemMessage(player, "Paint brush off.");
         }
+    }
+
+    /// <summary>
+    /// Paints the placed part whose actor is <paramref name="actorGuid"/> in the owner's brush colour, if the owner's
+    /// brush is on. False when this isn't a brush click, so the click is handled as usual.
+    /// </summary>
+    public bool TryPaint(Player player, ulong actorGuid)
+    {
+        lock (_mutationLock)
+        {
+            if (!CanEdit(player) ||
+                !_creativeViews.TryGetValue(player.Guid, out var view) ||
+                !view.Palette.Brush)
+            {
+                return false;
+            }
+
+            var (fixtureId, actor) = _actors.FirstOrDefault(pair => pair.Value.Guid == actorGuid);
+            if (actor is null)
+                return false;
+
+            using var dbContext = _dbContextFactory.CreateDbContext();
+            var characterId = GuidHelper.GetPlayerId(player.Guid);
+            var fixture = dbContext.HouseFixtures.FirstOrDefault(candidate =>
+                candidate.Id == fixtureId &&
+                candidate.HouseId == _zone.HouseId &&
+                candidate.House.CharacterId == characterId);
+
+            if (fixture is null)
+                return true;
+
+            if (!IsDyeable(fixture.ItemDefinitionId))
+            {
+                ChatHelper.SendSystemMessage(player, "That part can't be painted.");
+                return true;
+            }
+
+            var tintId = ResolveItemTintId(fixture.ItemDefinitionId, view.Palette.Dye);
+            if (ResolveItemTintId(fixture.ItemDefinitionId, fixture.TintId) == tintId)
+                return true;
+
+            fixture.TintId = tintId;
+            dbContext.SaveChanges();
+
+            // A placed part keeps the tint it was added with, so everyone gets it again in its new colour.
+            ApplyActorState(actor, fixture);
+            foreach (var recipient in _zone.Players)
+            {
+                SendFixtureAsset(recipient, fixture.ItemDefinitionId, tintId, false);
+                SendActorTo(recipient, actor, IsPainting(recipient));
+            }
+
+            return true;
+        }
+    }
+
+    // A placed part's actor has interact range 0, which makes a click in Decorate select it (EnsureActor). While the
+    // owner's brush is on, their copies get a range, so a click is an ordinary interaction instead
+    // (CommandPacketInteractRequest), which TryPaint takes: nothing is picked up or moved.
+    private const int PaintInteractRange = 100;
+
+    private bool IsPainting(Player player)
+    {
+        return _creativeViews.TryGetValue(player.Guid, out var view) && view.Palette.Brush;
+    }
+
+    private void SendActorsTo(Player player, bool painting)
+    {
+        foreach (var actor in _actors.Values)
+            SendActorTo(player, actor, painting);
+    }
+
+    private static void SendActorTo(Player player, Npc actor, bool painting)
+    {
+        if (!actor.VisiblePlayers.ContainsKey(player.Guid))
+            return;
+
+        var packet = actor.GetAddNpcPacket();
+        if (painting)
+            packet.InteractRange = PaintInteractRange;
+
+        player.SendTunneled(new PlayerUpdatePacketRemovePlayer { Guid = actor.Guid });
+        player.SendTunneled(packet);
     }
 
     private void SetView(Player player, CreativeView view)
@@ -1210,24 +1306,10 @@ public sealed class HousingZoneRuntime : IDisposable
         }
     }
 
-    /// <summary>
-    /// The dye the owner's paint brush gives <paramref name="itemDefinitionId"/>, if the brush is on and the part
-    /// takes a dye. 0 is the part's own colour.
-    /// </summary>
-    private bool TryGetBrush(Player player, int itemDefinitionId, out int dye)
+    private bool IsDyeable(int itemDefinitionId)
     {
-        dye = 0;
-        if (!_options.CreativeMode ||
-            !_creativeViews.TryGetValue(player.Guid, out var view) ||
-            !view.Palette.Brush ||
-            !_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) ||
-            !HousingDyeTints.IsDyeable(definition))
-        {
-            return false;
-        }
-
-        dye = view.Palette.Dye;
-        return true;
+        return _resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) &&
+            HousingDyeTints.IsDyeable(definition);
     }
 
     private IEnumerable<HousingCreativeCatalog.Entry> VisibleCreativeEntries(Player player)
