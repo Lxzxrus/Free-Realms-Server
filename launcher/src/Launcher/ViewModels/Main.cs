@@ -84,6 +84,10 @@ public partial class Main : ObservableObject
 
             _ = AddServer.TryAddServerAsync(Constants.DefaultServerUrl);
         }
+
+        // Players don't think to press the update button, so the launcher checks each time it starts. A new release
+        // downloads and restarts the launcher; the button still checks again later.
+        CheckForUpdatesCommand.Execute(null);
     }
 
     [RelayCommand]
