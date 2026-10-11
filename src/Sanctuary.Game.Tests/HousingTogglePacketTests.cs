@@ -27,9 +27,15 @@ public sealed class HousingTogglePacketTests
     [TestMethod]
     public void SubOpCodes_MatchTheClient()
     {
-        Assert.AreEqual(11, ClientHousingPacketToggleLocked.OpCode);
-        Assert.AreEqual(12, ClientHousingPacketToggleFloraAllowed.OpCode);
-        Assert.AreEqual(13, ClientHousingPacketTogglePetAutospawn.OpCode);
+        // As one list: comparing two constants trips MSTEST0025, which takes it for an assert that can never pass.
+        short[] subOpCodes =
+        [
+            ClientHousingPacketToggleLocked.OpCode,
+            ClientHousingPacketToggleFloraAllowed.OpCode,
+            ClientHousingPacketTogglePetAutospawn.OpCode
+        ];
+
+        CollectionAssert.AreEqual(new short[] { 11, 12, 13 }, subOpCodes);
     }
 
     [TestMethod]
