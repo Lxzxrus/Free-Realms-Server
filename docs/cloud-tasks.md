@@ -328,3 +328,97 @@ check. The load-test bot (`src/Sanctuary.LoadTest`) is available for anything ab
   server-added `.dll` or `.exe` is refused), and a win-x64 build.
 - **Deliverable:** a PR explaining how the hash list is made and refreshed, and what a player sees while their
   client is checked or repaired.
+
+---
+
+## Content scouting (tasks 23–25)
+
+Players compare Evergrove with the former FreeRealms-Legacy server, which shows far more content but publishes none of
+it. Before building, find out what others have already made in the open. These three tasks are **research only**:
+each one searches, reads and ranks, then writes a report. They can run in parallel. Nate runs them with Fable.
+
+**Rules for all three:**
+
+- **Only add your report**, `docs/research/<topic>-scout.md`. Change nothing under `src/`, `launcher/`, `tools/` or
+  `scripts/`. The self-check must still pass.
+- **Where to look:** GitHub and GitLab, starting with the 39 forks of `Open-Source-Free-Realms/Sanctuary` and that
+  repo's open and closed PRs and branches. Then other Free Realms projects, emulators for SOE's other ForgeLight
+  games (Clone Wars Adventures shares Free Realms' engine and much of its protocol; PlanetSide 2 and H1Z1 emulators
+  such as h1emu share packet families), Free Realms wikis, the Wayback Machine, and community posts and videos that
+  show how a feature behaved. Also this repo's `import/*` branches.
+- **Licences decide what we can use.** Record every source's licence. Code may be ported only from licences
+  compatible with our AGPL-3.0: AGPL, GPL-3.0, LGPL, MIT, BSD, Apache-2.0, or public domain. Mark a source with no
+  licence "reference only". Never use the former owner's closed work: his website, launcher, "Legacy Studio" or
+  anything else he hasn't published under a licence. His public AGPL repositories are fine; say so when you use one.
+- **Hands off:** don't download or run any binary; read source and documents only. Don't open issues or PRs on other
+  repositories, contact anyone, or create accounts.
+- **No game client here:** the client isn't in the repo, and must not be fetched. When a finding depends on client
+  data (asset names, the string table, UI scripts), write it as a question in "Check in the client" for Nate's local
+  session.
+- **Be exact:** link every claim. Say when something is unverified, and when a repo is a stub or abandoned work in
+  progress rather than working code.
+- **Stop** when the sources are exhausted or after about three hours of searching. Port nothing.
+
+**Report shape:**
+
+1. **Summary:** the five best finds, ranked by value to players against effort to bring in.
+2. **Findings:** a table of name, link, licence, last activity, what it holds, its state (working, work in progress,
+   stub), what porting it would take, effort (S/M/L) and value to players (low/medium/high).
+3. **Recommended first step:** one PR-sized piece of work that ships something players can see, with what it needs
+   and how Nate would test it in game.
+4. **Dead ends:** what you checked and ruled out, so nobody checks it again.
+5. **Check in the client:** questions only the game client can answer.
+
+**Deliverable:** a PR titled `Task N: <name>` that adds the report.
+
+## 23. `quests-scout`: what exists for quests
+
+- **What we have:** a quest engine (JadenY's, from Sulphural's fork), 19 working quests in `src/Resources/Quests.json`
+  and 5 parked in `Quests.disabled.json` because no zone spawns their npcs (`src/Resources/QUESTS.md`). The loader
+  checks quest links and reloads the file while the server runs. Quests list experience rewards, but the server has
+  no experience or level system.
+- **Known leads, so start from them:** upstream PR #120 (ImAlko, experience and level-ups, mergeable), PR #123
+  (amuralle, collection reward bundles for quests) and PR #130 (Sulphural, quest definitions). The former owner's
+  public `raisingkaines/FreeRealms-Legacy` has only our own quest data model.
+- **The big unknown is text.** Quest titles, objectives and dialogue are numeric string ids that the client looks up.
+  The client's string table holds the original quest text, but how its row ids map to the ids the protocol sends is
+  unsolved. Look hard for anyone who has solved it, documented it, or found a way to show custom text.
+- **Find:** public quest data from the live game (questlines, givers, objectives, rewards, npc spawns per zone),
+  packet captures or logs, and other quest implementations in Sanctuary forks or sibling emulators. Then say which
+  questlines we could bring back first with the engine we have, and what each one is missing (npcs, collect
+  goals, zones).
+
+## 24. `minigames-scout`: what exists for minigames
+
+- **What we have:** no minigame code at all.
+- **Known leads, so start from them:** upstream branch `minigame` (EDITz, work in progress, about 138 commits behind
+  `main`). It has activity list and join, matchmaking queues, minigame start, payload and end packets, and a 7,400-line
+  `ClientActivityDefinitions.json`. Upstream PR #31 (edenfps) adds a fishing minigame (3,900 lines, conflicting, last
+  touched in July). `edenfps/Sanctuary` holds reverted "racing + minigame" merges.
+- **Find:**
+  - **Every Free Realms minigame**, grouped by how much the server must do. Some are Flash games played inside the
+    client that need only start, end and reward packets; others need the server to simulate or referee. Rank the
+    cheapest to bring back first.
+  - **The minigame protocol:** packet layouts, flows and reward handling, from any source.
+  - **Working minigame servers** in sibling emulators, especially Clone Wars Adventures, whose minigames share Free
+    Realms' system.
+  - **What the `minigame` branch and the fishing PR actually do:** read the code, and say what works and what doesn't.
+
+## 25. `housing-scout`: more houses, more plots, more to build with
+
+- **What we have:** creative housing (free, unlimited building with 1,706 catalog fixtures, colours and Paint, a house
+  directory and ratings). `src/Resources/Houses.json` defines 31 houses, but only two have zone files and can be
+  entered: the Seaside Cliffs empty lot and the Blackspore Swamp house (`src/Resources/Zones/`). Some dyeable fixtures
+  show as dark silhouettes, because their main icon is missing from the client's packs. The design is
+  `docs/design/evergrove-housing.md`. The asset mirror is `tools/asset-mirror/`.
+- **Known leads, so start from them:** `AlchemyDevelopment/Sanctuary` is 3 commits ahead of upstream with "housing:
+  lot data, entry, fixtures and surface finishes". Our housing came from `import/housing-full-archive` (raisingkaines'
+  public AGPL fork), so check whether his public forks have anything newer.
+- **Find:**
+  - **The other 29 houses:** what a working house zone needs (compare the two zone files with their entries in
+    `Houses.json`), and where spawn points, build areas and placement data for them could come from: forks, data
+    dumps, wikis, screenshots or videos.
+  - **More plots:** how neighbourhoods and plot instancing worked in Free Realms, and whether any project has it.
+  - **Missing build items:** fixtures or placeable items the original game had that the catalog lacks, and any public
+    source for the missing icons.
+  - Rank which houses could be made enterable first.
