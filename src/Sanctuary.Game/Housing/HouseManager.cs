@@ -9,6 +9,7 @@ using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Game.Zones;
 
@@ -123,6 +124,27 @@ public sealed class HouseManager : IHouseManager
             rotation);
     }
 
+    public int SendOutLockedOutVisitors(HousingZone zone)
+    {
+        if (zone.OwnerId is not ulong ownerId)
+            return 0;
+
+        // A snapshot: leaving the house takes each visitor out of the zone's player list.
+        var visitors = zone.Players
+            .Where(player => !HouseAccess.MayBeInLockedHouse(player.Guid, player.Friends, ownerId))
+            .ToList();
+
+        foreach (var visitor in visitors)
+        {
+            ChatHelper.SendSystemMessage(visitor, "The owner locked this house, so you've been sent back outside.");
+
+            if (!LeaveHouse(visitor))
+                _logger.LogWarning("Failed to send {Player} out of locked house {HouseId}.", visitor.Name.FullName, zone.HouseId);
+        }
+
+        return visitors.Count;
+    }
+
     private EnterHouseResult EnterHouse(Player player, DbHouse? house)
     {
         if (house is null || !IsAvailableHouse(house.ZoneDefinitionId))
@@ -134,7 +156,7 @@ public sealed class HouseManager : IHouseManager
         var playerId = GuidHelper.GetPlayerId(player.Guid);
 
         var isOwner = playerId == house.CharacterId;
-        var isFriend = player.Friends.Any(friend => friend.Guid == GuidHelper.GetPlayerGuid(house.CharacterId));
+        var isFriend = HouseAccess.IsOwnersFriend(player.Friends, house.CharacterId);
 
         if (!isOwner &&
             ((house.IsMembersOnly && player.MembershipStatus == 0) ||

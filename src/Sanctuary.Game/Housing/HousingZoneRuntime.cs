@@ -257,12 +257,13 @@ public sealed class HousingZoneRuntime : IDisposable
         }
     }
 
-    public void ToggleSetting(Player player, HouseSetting setting)
+    /// <returns>The setting's new value, or <c>null</c> if nothing changed.</returns>
+    public bool? ToggleSetting(Player player, HouseSetting setting)
     {
         lock (_mutationLock)
         {
             if (_disposed || !ReferenceEquals(player.Zone, _zone))
-                return;
+                return null;
 
             using var dbContext = _dbContextFactory.CreateDbContext();
 
@@ -274,12 +275,12 @@ public sealed class HousingZoneRuntime : IDisposable
                 if (unchangedHouse is not null)
                     SendHouseInfo(player, unchangedHouse);
 
-                return;
+                return null;
             }
 
             var value = HouseSettings.Toggle(dbContext, _zone.HouseId, ownerId, setting);
             if (value is null)
-                return;
+                return null;
 
             _logger.LogInformation("{Player} set {Setting} to {Value}.", player.Name.FullName, setting, value);
 
@@ -287,6 +288,8 @@ public sealed class HousingZoneRuntime : IDisposable
             var refreshedHouse = LoadHouse(dbContext);
             if (refreshedHouse is not null)
                 BroadcastHouseInfo(refreshedHouse);
+
+            return value;
         }
     }
 
