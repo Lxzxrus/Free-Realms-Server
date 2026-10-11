@@ -1,7 +1,5 @@
-﻿using System.Linq;
-
-using Sanctuary.Game.Entities;
-using Sanctuary.Packet;
+﻿using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet.Common;
 
 namespace Sanctuary.Game.Interactions;
@@ -22,32 +20,6 @@ public class AddFriendInteraction : IInteraction
         if (other is not Player otherPlayer)
             return;
 
-        if (otherPlayer.Guid == player.Guid)
-            return;
-
-        if (otherPlayer.Ignores.Any(x => x.Guid == player.Guid))
-            return;
-
-        if (otherPlayer.Friends.Any(x => x.Guid == player.Guid))
-            return;
-
-        if (!otherPlayer.IncomingFriendRequests.TryAdd(player.Guid))
-            return;
-
-        var friendMessagePacket = new FriendMessagePacket();
-
-        friendMessagePacket.Type = FriendMessageType.FriendAddRequested;
-
-        friendMessagePacket.Guid = otherPlayer.Guid;
-        friendMessagePacket.Name = otherPlayer.Name;
-
-        player.SendTunneled(friendMessagePacket);
-
-        var commandPacketConfirmFriendRequest = new CommandPacketConfirmFriendRequest();
-
-        commandPacketConfirmFriendRequest.Guid = player.Guid;
-        commandPacketConfirmFriendRequest.Name = player.Name;
-
-        otherPlayer.SendTunneled(commandPacketConfirmFriendRequest);
+        FriendRequests.Send(player, otherPlayer);
     }
 }
