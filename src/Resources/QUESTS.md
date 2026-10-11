@@ -4,8 +4,11 @@ Quests are entirely data-driven: everything from goals to rewards to NPC gating 
 [`Quests.json`](Quests.json). Adding a quest means adding a JSON entry - no C# code changes
 required.
 
-`Quests.json` is loaded once at startup by `QuestDefinitionCollection.Load` (called from
-`ResourceManager`) into `src/Sanctuary.Game/Resources/Definitions/QuestDefinition.cs` /
+`Quests.json` is loaded at startup, and again whenever the file changes while the server runs, by
+`QuestDefinitionCollection.Load` (called from `ResourceManager`). A reload replaces every quest at once.
+If the file is broken (a quest with no goals, the same `QuestId` twice, or a link to a quest that isn't
+in the file), the server refuses it and logs why: at startup it won't start, and on a reload it keeps
+the quests it had. Quests are loaded into `src/Sanctuary.Game/Resources/Definitions/QuestDefinition.cs` /
 `QuestGoal.cs` - read those two files for the authoritative field list. This doc is a guide for
 using them, not a substitute.
 
@@ -130,8 +133,9 @@ collect quests can skip the call entirely and it's harmless either way.
   both directions. Used for the two race-specific "Introduce Yourself" quests (`2563`/`2564`) so a
   player only ever gets one. Abandoning a quest clears it from the player's quest state, which lifts
   the exclusion automatically.
-- The loader doesn't check these ids either. `ShippedQuests_ReferenceOnlyShippedQuests` fails the
-  tests if any of them names a quest that isn't in `Quests.json`.
+- The loader refuses the file if any of these ids names a quest that isn't in `Quests.json`, and
+  logs each one (`Quest 3011's PrerequisiteQuestId is quest 3010, which isn't in ...`). The tests
+  check the shipped file the same way.
 
 ## Disabled quests
 

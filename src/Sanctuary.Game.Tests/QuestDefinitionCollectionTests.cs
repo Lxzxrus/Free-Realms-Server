@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -111,15 +112,119 @@ public sealed class QuestDefinitionCollectionTests
         }
     }
 
+    private static string WriteQuestFile(string json)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"quests-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, json);
+        return path;
+    }
+
+    private static string Quest(int id, string extra = "") =>
+        $$"""{ "QuestId": {{id}}, "Goals": [ { "NameId": {{id}}1 } ]{{extra}} }""";
+
+    [TestMethod]
+    [DataRow(@", ""NextQuestId"": 99", "NextQuestId")]
+    [DataRow(@", ""PrerequisiteQuestId"": 99", "PrerequisiteQuestId")]
+    [DataRow(@", ""ExcludesQuestIds"": [ 2, 99 ]", "ExcludesQuestIds")]
+    public void LinkToMissingQuest_RefusesTheFile(string link, string field)
+    {
+        var path = WriteQuestFile($"[ {Quest(1, link)}, {Quest(2)} ]");
+
+        try
+        {
+            Assert.IsFalse(new QuestDefinitionCollection(NullLogger.Instance).Load(path), $"A {field} naming a missing quest loaded.");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void SameQuestTwice_RefusesTheFile()
+    {
+        var path = WriteQuestFile($"[ {Quest(1)}, {Quest(1)} ]");
+
+        try
+        {
+            Assert.IsFalse(new QuestDefinitionCollection(NullLogger.Instance).Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void Reload_ReplacesTheQuests()
+    {
+        var path = WriteQuestFile($$"""[ {{Quest(1, @", ""GiverGuid"": 500, ""NextQuestId"": 2")}}, {{Quest(2)}} ]""");
+
+        try
+        {
+            var quests = LoadQuests(path);
+
+            File.WriteAllText(path, $$"""[ {{Quest(3, @", ""GiverGuid"": 600")}} ]""");
+            Assert.IsTrue(quests.Load(path));
+
+            CollectionAssert.AreEquivalent(new[] { 3 }, quests.Quests.Keys.ToArray());
+            Assert.IsFalse(quests.ByGiver.ContainsKey(500), "The old quest's giver is still indexed.");
+            Assert.IsTrue(quests.ByGiver.ContainsKey(600));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void BrokenReload_KeepsTheLoadedQuests()
+    {
+        var path = WriteQuestFile($$"""[ {{Quest(1, @", ""GiverGuid"": 500")}} ]""");
+
+        try
+        {
+            var quests = LoadQuests(path);
+
+            File.WriteAllText(path, $$"""[ {{Quest(3, @", ""NextQuestId"": 99")}} ]""");
+            Assert.IsFalse(quests.Load(path));
+
+            CollectionAssert.AreEquivalent(new[] { 1 }, quests.Quests.Keys.ToArray());
+            Assert.IsTrue(quests.ByGiver.ContainsKey(500));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [TestMethod]
     public void DisabledQuests_StayLoadableAndOutOfTheShippedFile()
     {
-        var shipped = LoadQuests(FindShippedQuests());
-        var disabled = LoadQuests(FindSourceFile("Resources", "Quests.disabled.json"));
+        // Disabled quests are parked, and link to shipped ones, so they're checked the way they'd come back: moved
+        // into Quests.json, the two files must load as one.
+        var shippedJson = JsonNode.Parse(File.ReadAllText(FindShippedQuests()))!.AsArray();
+        var disabledJson = JsonNode.Parse(File.ReadAllText(FindSourceFile("Resources", "Quests.disabled.json")))!.AsArray();
 
-        Assert.IsTrue(disabled.Quests.Count > 0);
+        Assert.IsTrue(disabledJson.Count > 0);
 
-        foreach (var questId in disabled.Quests.Keys)
-            Assert.IsFalse(shipped.Quests.ContainsKey(questId), $"Quest {questId} is in both Quests.json and Quests.disabled.json.");
+        var shippedIds = shippedJson.Select(quest => (int)quest!["QuestId"]!).ToHashSet();
+        foreach (var quest in disabledJson)
+        {
+            var questId = (int)quest!["QuestId"]!;
+            Assert.IsFalse(shippedIds.Contains(questId), $"Quest {questId} is in both Quests.json and Quests.disabled.json.");
+        }
+
+        var combined = new JsonArray([.. shippedJson.Select(quest => quest!.DeepClone()), .. disabledJson.Select(quest => quest!.DeepClone())]);
+        var path = WriteQuestFile(combined.ToJsonString());
+
+        try
+        {
+            Assert.AreEqual(shippedJson.Count + disabledJson.Count, LoadQuests(path).Quests.Count);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 }

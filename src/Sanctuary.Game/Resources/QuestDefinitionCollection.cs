@@ -14,10 +14,19 @@ public class QuestDefinitionCollection
 {
     private readonly ILogger _logger;
 
-    public ConcurrentDictionary<int, QuestDefinition> Quests { get; } = new();
+    // The quests and their npc indexes, replaced as one when the file is (re)loaded, so a reload never leaves a mix
+    // of old and new quests, and a broken file leaves the loaded quests as they were.
+    private sealed record Index(
+        ConcurrentDictionary<int, QuestDefinition> Quests,
+        ConcurrentDictionary<ulong, List<int>> ByGiver,
+        ConcurrentDictionary<ulong, List<int>> ByTarget);
 
-    public ConcurrentDictionary<ulong, List<int>> ByGiver { get; } = new();
-    public ConcurrentDictionary<ulong, List<int>> ByTarget { get; } = new();
+    private volatile Index _index = new(new(), new(), new());
+
+    public ConcurrentDictionary<int, QuestDefinition> Quests => _index.Quests;
+
+    public ConcurrentDictionary<ulong, List<int>> ByGiver => _index.ByGiver;
+    public ConcurrentDictionary<ulong, List<int>> ByTarget => _index.ByTarget;
 
     public QuestDefinitionCollection(ILogger logger)
     {
@@ -99,6 +108,8 @@ public class QuestDefinitionCollection
                 return false;
             }
 
+            var index = new Index(new(), new(), new());
+
             foreach (var entry in entries)
             {
                 if (entry.Goals.Count == 0)
@@ -107,22 +118,27 @@ public class QuestDefinitionCollection
                     return false;
                 }
 
-                if (!Quests.TryAdd(entry.QuestId, entry))
+                if (!index.Quests.TryAdd(entry.QuestId, entry))
                 {
-                    _logger.LogWarning("Failed to add entry. {id} \"{file}\"", entry.QuestId, filePath);
-                    continue;
+                    _logger.LogError("Quest {id} is in the file twice. \"{file}\"", entry.QuestId, filePath);
+                    return false;
                 }
 
                 if (entry.GiverGuid != 0)
-                    ByGiver.GetOrAdd(entry.GiverGuid, _ => []).Add(entry.QuestId);
+                    index.ByGiver.GetOrAdd(entry.GiverGuid, _ => []).Add(entry.QuestId);
 
                 if (entry.TargetGuid != 0)
-                    ByTarget.GetOrAdd(entry.TargetGuid, _ => []).Add(entry.QuestId);
+                    index.ByTarget.GetOrAdd(entry.TargetGuid, _ => []).Add(entry.QuestId);
 
-                IndexGoals(entry, filePath);
+                IndexGoals(index, entry, filePath);
             }
 
-            _logger.LogInformation("Loaded {count} quest definitions from \"{file}\".", Quests.Count, filePath);
+            if (!HasOnlyKnownQuestLinks(index, filePath))
+                return false;
+
+            _index = index;
+
+            _logger.LogInformation("Loaded {count} quest definitions from \"{file}\".", index.Quests.Count, filePath);
         }
         catch (Exception ex)
         {
@@ -133,7 +149,39 @@ public class QuestDefinitionCollection
         return true;
     }
 
-    private void IndexGoals(QuestDefinition quest, string filePath)
+    /// <summary>
+    /// A quest that names a prerequisite, next or excluded quest the file doesn't have can't be offered or chained
+    /// as written, so the whole file is refused, naming every broken link.
+    /// </summary>
+    private bool HasOnlyKnownQuestLinks(Index index, string filePath)
+    {
+        var valid = true;
+
+        foreach (var quest in index.Quests.Values)
+        {
+            foreach (var (field, linkedId) in QuestLinks(quest))
+            {
+                if (linkedId == 0 || index.Quests.ContainsKey(linkedId))
+                    continue;
+
+                _logger.LogError("Quest {id}'s {field} is quest {linkedId}, which isn't in \"{file}\".", quest.QuestId, field, linkedId, filePath);
+                valid = false;
+            }
+        }
+
+        return valid;
+    }
+
+    private static IEnumerable<(string Field, int QuestId)> QuestLinks(QuestDefinition quest)
+    {
+        yield return (nameof(QuestDefinition.PrerequisiteQuestId), quest.PrerequisiteQuestId);
+        yield return (nameof(QuestDefinition.NextQuestId), quest.NextQuestId);
+
+        foreach (var excluded in quest.ExcludesQuestIds)
+            yield return (nameof(QuestDefinition.ExcludesQuestIds), excluded);
+    }
+
+    private void IndexGoals(Index index, QuestDefinition quest, string filePath)
     {
         var goalNameIds = new HashSet<int>();
 
@@ -141,7 +189,7 @@ public class QuestDefinitionCollection
         {
             foreach (var targetGuid in goal.AllTalkTargetGuids())
             {
-                var questIds = ByTarget.GetOrAdd(targetGuid, _ => []);
+                var questIds = index.ByTarget.GetOrAdd(targetGuid, _ => []);
 
                 if (!questIds.Contains(quest.QuestId))
                     questIds.Add(quest.QuestId);
