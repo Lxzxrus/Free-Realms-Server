@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -162,6 +163,23 @@ public class StatusEndpointTests
         Assert.AreEqual("text/html", response.Content.Headers.ContentType?.MediaType);
         StringAssert.Contains(await response.Content.ReadAsStringAsync(), "status.json");
         Assert.IsTrue(response.Headers.Contains("Content-Security-Policy"));
+    }
+
+    [TestMethod]
+    [DataRow("/status.json", true, HttpStatusCode.OK)]
+    [DataRow("/status.json", false, HttpStatusCode.ServiceUnavailable)]
+    [DataRow("/status", true, HttpStatusCode.OK)]
+    public async Task HeadGetsTheSameAnswerAsGet(string path, bool online, HttpStatusCode expected)
+    {
+        // Uptime monitors check with HEAD; it must not be a 405, and an outage must still show as one.
+        using var login = new FakeLoginServer(online: online, locked: false, players: 0);
+        using var host = Host(login.Address);
+        await host.StartAsync();
+
+        using var request = new HttpRequestMessage(HttpMethod.Head, path);
+        using var response = await host.CreateClient(WebAPIHost.DefaultAddress).SendAsync(request);
+
+        Assert.AreEqual(expected, response.StatusCode);
     }
 
     [TestMethod]
