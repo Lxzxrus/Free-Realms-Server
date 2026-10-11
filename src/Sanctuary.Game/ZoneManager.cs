@@ -38,6 +38,14 @@ public class ZoneManager : IZoneManager
 
     private readonly object _playerTransitionLock = new();
 
+    /// <summary>
+    /// How long a house stays loaded after its last player leaves. A relog, or a quick trip out and back, finds the
+    /// house still there instead of loading it from the database again.
+    /// </summary>
+    public static readonly TimeSpan EmptyHouseGrace = TimeSpan.FromMinutes(1);
+
+    private readonly EmptyZoneGrace _emptyZoneGrace = new();
+
     public ZoneManager(
         ILoggerFactory loggerFactory,
         IResourceManager resourceManager,
@@ -217,6 +225,27 @@ public class ZoneManager : IZoneManager
         if (isStartingZone)
             return;
 
+        if (zone is HousingZone)
+        {
+            if (!zone.IsEmpty)
+                return;
+
+            // Close it once the grace period is over, if nobody has come in (or left again since) by then.
+            var ticket = _emptyZoneGrace.Begin(zone);
+            _ = Task.Delay(EmptyHouseGrace).ContinueWith(_ =>
+            {
+                if (_emptyZoneGrace.End(zone, ticket))
+                    EvictNowIfEmpty(zone);
+            }, TaskScheduler.Default);
+
+            return;
+        }
+
+        EvictNowIfEmpty(zone);
+    }
+
+    private void EvictNowIfEmpty(IZone zone)
+    {
         bool removed;
 
         lock (_playerTransitionLock)
@@ -226,8 +255,17 @@ public class ZoneManager : IZoneManager
             removed = zone.IsEmpty && TryRemoveZoneInstance(zone);
         }
 
-        if (removed)
+        if (!removed)
+            return;
+
+        try
+        {
             zone.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to close zone '{name}' ({id})", zone.Name, zone.Id);
+        }
     }
 
 
