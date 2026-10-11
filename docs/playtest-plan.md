@@ -78,7 +78,7 @@ replaces it with a real launcher.
 | ID | From | Who | Do | Expect | Gateway log | ✓/✗ |
 |---|---|---|---|---|---|---|
 | S1 | – | N | Create the three local settings files below, then build: `cd src && dotnet build -c Debug`. The build copies the files next to each server. WebAPI needs the ASP.NET Core 9 runtime installed | Build succeeds | – | |
-| S2 | – | N | Fresh database: delete your old SQLite file, or pick a new path. In each of the three server terminals, set the variables below, then start **Login** from `src/Sanctuary.Login/bin/Debug/net9.0`, **Gateway** from `src/Sanctuary.Gateway/bin/Debug/net9.0` and **WebAPI** from `src/Sanctuary.WebAPI/bin/Debug/net9.0`, in that order. Each runs as `./Sanctuary.<Name>` (or `.exe` on Windows) | Login applies migrations to the empty file and listens on 20042. Gateway listens on 20260 and connects to Login. WebAPI listens on 20040 | Gateway: `Loaded 19 quest definitions`, `Activated 40 collection node(s) across 7 pool(s)`, `Loaded 7 interactions`, `Loaded 12 chat command(s)`, `GatewayServer started and is listening on port '20260'`, `127.0.0.1:20041 connected`. No WARN or ERROR apart from the `DEBUG BUILD` banner each server prints first. A `Refusing to start` line names the setting S1's files are missing | |
+| S2 | – | N | Fresh database: delete your old SQLite file, or pick a new path. In each of the three server terminals, set the variables below, then start **Login** from `src/Sanctuary.Login/bin/Debug/net10.0`, **Gateway** from `src/Sanctuary.Gateway/bin/Debug/net10.0` and **WebAPI** from `src/Sanctuary.WebAPI/bin/Debug/net10.0`, in that order. Each runs as `./Sanctuary.<Name>` (or `.exe` on Windows) | Login applies migrations to the empty file and listens on 20042. Gateway listens on 20260 and connects to Login. WebAPI listens on 20040 | Gateway: `Loaded 19 quest definitions`, `Activated 40 collection node(s) across 7 pool(s)`, `Loaded 7 interactions`, `Loaded 12 chat command(s)`, `GatewayServer started and is listening on port '20260'`, `127.0.0.1:20041 connected`. No WARN or ERROR apart from the `DEBUG BUILD` banner each server prints first. A `Refusing to start` line names the setting S1's files are missing | |
 | S3 | – | N | Register three accounts (commands below): `nate`, `wife`, `bantest`, all with password `testtest` | Each `curl` prints HTTP 200 | WebAPI: one `POST /register` line each | |
 | S4 | – | N | Check the three rows exist: `sqlite3 <db> "SELECT Id, Username, IsMember, MaxCharacters FROM Users;"` | 3 rows, `IsMember` 1 (`MemberByDefault` in `appsettings.local.json`), `MaxCharacters` 10 | – | |
 | S5 | – | N | Make `nate` an admin: `sqlite3 <db> "UPDATE Users SET IsAdmin = 1 WHERE Username = 'nate';"` | 1 row changed | – | |
@@ -155,7 +155,7 @@ launch. Trades are written in a serializable transaction, and the two databases 
 
 ### Logs
 
-- The Gateway console shows everything. The same lines go to `src/Sanctuary.Gateway/bin/Debug/net9.0/Logs/`:
+- The Gateway console shows everything. The same lines go to `src/Sanctuary.Gateway/bin/Debug/net10.0/Logs/`:
   `Sanctuary.Gateway-Info-<date>.log` (Trace and Info) and `Sanctuary.Gateway-Error-<date>.log` (WARN and above).
   Login and WebAPI have the same pair in their own `Logs/` folders.
 - **At the end of every part, open the Gateway's Error log** and copy any new lines into that part's notes.

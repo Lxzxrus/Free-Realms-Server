@@ -51,7 +51,7 @@ from Open Source Free Realms.
 cd src && dotnet restore && dotnet build --no-restore && dotnet test --no-build
 ```
 
-You need the .NET 10 SDK and the .NET 9 runtime; the MySQL test needs a running MariaDB.
+You need the .NET 10 SDK; the MySQL test needs a running MariaDB.
 
 ### Local settings
 
