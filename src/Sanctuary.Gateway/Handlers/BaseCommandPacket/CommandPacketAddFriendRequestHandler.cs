@@ -41,6 +41,9 @@ public static class CommandPacketAddFriendRequestHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(CommandPacketAddFriendRequest), packet);
 
+        if (string.IsNullOrWhiteSpace(packet.Name))
+            return true;
+
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var dbCharacter = dbContext.Characters.FirstOrDefault(x => x.FullName == packet.Name);

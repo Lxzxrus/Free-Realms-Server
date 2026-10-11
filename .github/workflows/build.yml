@@ -53,6 +53,11 @@ jobs:
     - name: Test
       run: dotnet test --no-build --verbosity normal
 
+    # The servers' Docker images build Release, and some checks only fail there (ImageSharp 4's license check only
+    # warns in Debug). Build it too, so that fails here instead of during a deploy.
+    - name: Build Release
+      run: dotnet build --no-restore -c Release
+
   launcher:
 
     runs-on: ubuntu-latest
