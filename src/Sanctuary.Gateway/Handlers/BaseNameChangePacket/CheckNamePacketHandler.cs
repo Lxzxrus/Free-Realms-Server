@@ -50,10 +50,12 @@ public static class CheckNamePacketHandler
         // TODO: Check if we have the item that let's us change name.
         if (packet.Token)
         {
-            // While the rename cooldown runs, the player has no rename to use, and is told when they will.
+            // While the rename cooldown runs, renaming is unavailable, and the chat says until when. Not MissingItem:
+            // the client answers that with its paid "Buy Name" window, offering to sell a rename for Station Cash.
+            // ServiceUnavailable is "Name change service is unavailable." in the client's strings.
             if (CharacterRenameCooldown(connection, packet) is TimeSpan cooldown)
             {
-                checkNameResponsePacket.Result = CheckNameResponse.MissingItem;
+                checkNameResponsePacket.Result = CheckNameResponse.ServiceUnavailable;
                 ChatHelper.SendSystemMessage(connection.Player, RenameCooldown.Message(cooldown));
             }
             else

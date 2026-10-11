@@ -119,7 +119,7 @@ public static class ChangeNameRequestPacketHandler
         if (cooldown > TimeSpan.Zero)
         {
             ChatHelper.SendSystemMessage(connection.Player, RenameCooldown.Message(cooldown));
-            return ChangeNameResponse.MissingItem;
+            return ChangeNameResponse.ServiceUnavailable;
         }
 
         var taken = dbContext.Characters.Any(x => x.FirstName == packet.Name.FirstName && x.LastName == packet.Name.LastName);
