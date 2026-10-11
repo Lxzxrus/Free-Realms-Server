@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -45,44 +46,20 @@ public static class CommandPacketAddFriendRequestHandler
         var dbCharacter = dbContext.Characters.FirstOrDefault(x => x.FullName == packet.Name);
 
         if (dbCharacter is null)
+        {
+            ChatHelper.SendSystemMessage(connection.Player, FriendRequests.NoSuchPlayer(packet.Name));
             return true;
+        }
 
         var targetGuid = GuidHelper.GetPlayerGuid(dbCharacter.Id);
 
         if (!_zoneManager.TryGetPlayer(targetGuid, out var player))
         {
-            // TODO: Implement proper "friend target offline"
-
+            ChatHelper.SendSystemMessage(connection.Player, FriendRequests.Offline(dbCharacter.FullName ?? packet.Name));
             return true;
         }
 
-        if (player.Guid == connection.Player.Guid)
-            return true;
-
-        if (player.Ignores.Any(x => x.Guid == connection.Player.Guid))
-            return true;
-
-        if (player.Friends.Any(x => x.Guid == connection.Player.Guid))
-            return true;
-
-        if (!player.IncomingFriendRequests.TryAdd(connection.Player.Guid))
-            return true;
-
-        var friendMessagePacket = new FriendMessagePacket();
-
-        friendMessagePacket.Type = FriendMessageType.FriendAddRequested;
-
-        friendMessagePacket.Guid = player.Guid;
-        friendMessagePacket.Name = player.Name;
-
-        connection.SendTunneled(friendMessagePacket);
-
-        var commandPacketConfirmFriendRequest = new CommandPacketConfirmFriendRequest();
-
-        commandPacketConfirmFriendRequest.Guid = connection.Player.Guid;
-        commandPacketConfirmFriendRequest.Name = connection.Player.Name;
-
-        player.SendTunneled(commandPacketConfirmFriendRequest);
+        FriendRequests.Send(connection.Player, player);
 
         return true;
     }
