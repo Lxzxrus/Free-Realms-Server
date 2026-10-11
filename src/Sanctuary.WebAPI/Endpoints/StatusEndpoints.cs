@@ -15,10 +15,14 @@ namespace Sanctuary.WebAPI.Endpoints;
 /// </summary>
 public static class StatusEndpoints
 {
+    // HEAD too: uptime monitors such as UptimeRobot check with HEAD first, and treated the 405 it got as a failed check,
+    // retrying with GET. A HEAD answer has the same status code and headers, without the body.
+    private static readonly string[] GetOrHead = [HttpMethods.Get, HttpMethods.Head];
+
     public static void MapStatusEndpoints(this WebApplication app)
     {
-        app.MapGet("/status.json", StatusJsonAsync).RequireRateLimiting(RateLimiting.StatusPolicy);
-        app.MapGet("/status", StatusPage).RequireRateLimiting(RateLimiting.StatusPolicy);
+        app.MapMethods("/status.json", GetOrHead, StatusJsonAsync).RequireRateLimiting(RateLimiting.StatusPolicy);
+        app.MapMethods("/status", GetOrHead, StatusPage).RequireRateLimiting(RateLimiting.StatusPolicy);
     }
 
     private static async Task<IResult> StatusJsonAsync(HttpContext context, ServerStatusProbe probe, CancellationToken cancellationToken)
