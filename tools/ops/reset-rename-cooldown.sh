@@ -1,6 +1,6 @@
 #!/bin/sh
 # Lets a character rename again now, by clearing its rename cooldown (RenameCooldown in Sanctuary.Game), for example
-# after a typo in a new name. The same as `/mod resetrename <name>` in game.
+# after a typo in a new name. The same as `!mod resetrename <name>` in game chat.
 #
 # On the server:  sudo sh /opt/evergrove/app/tools/ops/reset-rename-cooldown.sh "First Last"
 #

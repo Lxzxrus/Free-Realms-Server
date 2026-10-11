@@ -4,7 +4,7 @@ namespace Sanctuary.Game.Helpers;
 
 /// <summary>
 /// A character can be renamed once every <see cref="Length"/>, so a rename can't be used to slip away from a report
-/// or to pass as someone else for a while. Mods and admins can lift it (<c>/mod resetrename</c>), for example after a
+/// or to pass as someone else for a while. Mods and admins can lift it (<c>!mod resetrename</c>), for example after a
 /// typo, and so can tools/ops/reset-rename-cooldown.sh on the server.
 /// </summary>
 public static class RenameCooldown
