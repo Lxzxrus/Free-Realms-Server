@@ -31,7 +31,19 @@
     <PackageVersion Include="Refit" Version="13.1.0" />
     <PackageVersion Include="Refit.HttpClientFactory" Version="13.1.0" />
     <PackageVersion Include="Sep" Version="0.15.0" />
-    <PackageVersion Include="SixLabors.ImageSharp" Version="4.1.3" />
+    <!-- Stay on 3.x: ImageSharp 4 refuses to build in Release without a paid Six Labors license key (Debug builds only
+         warn, so tests and CI pass while the Docker build fails). -->
+    <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageVersion Include="ZLibDotNet" Version="0.1.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- ImageSharp 3.1.12 advisories, reviewed 2026-10-11: none is reachable from a portrait upload, which decodes PNG
+         only and skips metadata (see PortraitEndpoints.PngOnly). The fixes ship only in 4.x (above). Listed one by
+         one, so a new advisory still shows up in the build. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j3p4-wp97-rph4" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
   </ItemGroup>
 </Project>
