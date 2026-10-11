@@ -17,9 +17,9 @@ public class ModChatCommand : IChatCommand
 
     public string KeyWord => "mod";
 
-    public string Usage => "ban|mute <player> <minutes> | unban|unmute <player>";
+    public string Usage => "ban|mute <player> <minutes> | unban|unmute|resetrename <player>";
 
-    public string Description => "Moderation command for banning, muting, unbanning, or unmuting players.";
+    public string Description => "Moderation command for banning, muting, unbanning, or unmuting players, and for letting a player rename again now.";
 
     public ChatCommandRole RequiredRole => ChatCommandRole.Mod;
 
@@ -54,6 +54,8 @@ public class ModChatCommand : IChatCommand
                 return Unban(invoker, args);
             case "unmute":
                 return Unmute(invoker, args);
+            case "resetrename":
+                return ResetRename(invoker, args);
             default:
                 return false;
         }
@@ -214,6 +216,36 @@ public class ModChatCommand : IChatCommand
         LogAction(invoker, "Mute", targetName, $"Until: {muteUntilTime:u}");
 
         ChatHelper.SendSystemMessage(invoker, $"{targetName} has been muted until {muteUntilTime:u}.");
+        return true;
+    }
+
+    /// <summary>Lifts the rename cooldown (<see cref="RenameCooldown"/>), e.g. after a typo. Works on yourself too.</summary>
+    private bool ResetRename(Player invoker, string[] args)
+    {
+        if (args.Length < 1)
+            return false;
+
+        string targetName = string.Join(' ', args);
+
+        using DatabaseContext dbContext = _dbContextFactory.CreateDbContext();
+
+        if (!IsSelfTarget(invoker, targetName) && !TryResolveTarget(invoker, dbContext, targetName, out _))
+            return false;
+
+        var updated = dbContext.Characters
+            .Where(character => character.FullName == targetName)
+            .ExecuteUpdate(character => character
+                .SetProperty(c => c.LastRenamed, (DateTimeOffset?)null));
+
+        if (updated == 0)
+        {
+            ChatHelper.SendSystemMessage(invoker, $"No player named \"{targetName}\" was found.");
+            return true;
+        }
+
+        LogAction(invoker, "ResetRename", targetName);
+
+        ChatHelper.SendSystemMessage(invoker, $"{targetName} can rename now.");
         return true;
     }
 

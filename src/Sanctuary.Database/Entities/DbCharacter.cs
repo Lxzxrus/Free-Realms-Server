@@ -59,6 +59,7 @@ public class DbCharacter
 
     public DateTimeOffset Created { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastLogin { get; set; }
+    public DateTimeOffset? LastRenamed { get; set; }
 
     public ulong? GuildMemberId { get; set; }
     public DbGuildMember? GuildMember { get; set; }
