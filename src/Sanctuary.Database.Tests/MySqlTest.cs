@@ -18,7 +18,7 @@ public class MySqlTest : DatabaseTestBase
         {
             ["Database:Provider"] = "MySql",
             ["Database:ConnectionString"] = "server=127.0.0.1;port=3306;uid=user;pwd=password;database=sanctuary_test",
-            ["Database:VersionString"] = "11.6.0-MariaDB"
+            ["Database:VersionString"] = "11.4.13-MariaDB"
         });
     }
 

@@ -29,7 +29,7 @@ The MySQL provider also supports MariaDB.
 {
   "Database": {
     "Provider": "MySql",
-    "VersionString": "11.6.2-MariaDB",
+    "VersionString": "11.4.13-MariaDB",
     "ConnectionString": "Server=myServerAddress;Database=myDataBase;Uid=myUsername;Pwd=myPassword;"
   }
 }
