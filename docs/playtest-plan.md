@@ -209,7 +209,9 @@ one player. Both lists take about 45 minutes.
 
 **If a toggle logs nothing** in H10: look for `Failed to deserialize ClientHousingPacketToggleLocked` (the client
 sends a payload the packet doesn't expect), or an `unhandled packet` warning whose `Data` contains `7F001600`. That
-would be the client's second lock packet, sub-opcode 22, which nothing handles yet. Note which one you see.
+would be housing sub-opcode 22, which nothing handles. The game's UI never sends it: it comes from `House.LockHouse`,
+which no UI script or panel calls (checked in the client, 2026-10-11), so it would mean a modified client. Note which
+one you see.
 
 ### W: solo packet sweep
 

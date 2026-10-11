@@ -40,6 +40,8 @@ internal sealed class WebAPIHost : WebApplicationFactory<Program>
 
     public string ImagesDirectory => Path.Combine(Root, "Images");
 
+    private string ConnectionString => $"Data Source={Path.Combine(Root, "test.db")}";
+
     public TestTimeProvider Time { get; } = new();
 
     public WebAPIHost(Dictionary<string, string?>? settings = null)
@@ -52,7 +54,7 @@ internal sealed class WebAPIHost : WebApplicationFactory<Program>
             // Tests run Debug builds, which refuse to start without this. The test host has no network listener.
             ["AllowDebugBuild"] = "true",
             ["Database:Provider"] = "Sqlite",
-            ["Database:ConnectionString"] = $"Data Source={Path.Combine(Root, "test.db")}",
+            ["Database:ConnectionString"] = ConnectionString,
             ["WebAPI:LaunchArguments"] = "AssetDelivery:IndirectServerAddress=http://assets.example",
             ["WebAPI:PortraitUploadUrl"] = "https://play.example/image",
             ["WebAPI:ImagesDirectory"] = ImagesDirectory,
@@ -152,7 +154,10 @@ internal sealed class WebAPIHost : WebApplicationFactory<Program>
         if (!disposing)
             return;
 
-        SqliteConnection.ClearAllPools();
+        // Only this host's pool: tests run in parallel, and ClearAllPools closed other tests' connections mid-query
+        // (ObjectDisposedException on SQLitePCL.sqlite3, a different test each time).
+        using (var connection = new SqliteConnection(ConnectionString))
+            SqliteConnection.ClearPool(connection);
 
         try
         {
