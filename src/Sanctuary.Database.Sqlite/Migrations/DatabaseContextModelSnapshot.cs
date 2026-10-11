@@ -126,6 +126,9 @@ namespace Sanctuary.Database.Sqlite.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("LastRenamed")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("MembershipStatus")
                         .HasColumnType("INTEGER");
 

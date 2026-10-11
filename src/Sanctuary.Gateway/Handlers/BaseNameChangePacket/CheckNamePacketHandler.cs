@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Gateway.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -49,7 +50,16 @@ public static class CheckNamePacketHandler
         // TODO: Check if we have the item that let's us change name.
         if (packet.Token)
         {
-            checkNameResponsePacket.Result = CheckNameResponse.FoundItem;
+            // While the rename cooldown runs, the player has no rename to use, and is told when they will.
+            if (CharacterRenameCooldown(connection, packet) is TimeSpan cooldown)
+            {
+                checkNameResponsePacket.Result = CheckNameResponse.MissingItem;
+                ChatHelper.SendSystemMessage(connection.Player, RenameCooldown.Message(cooldown));
+            }
+            else
+            {
+                checkNameResponsePacket.Result = CheckNameResponse.FoundItem;
+            }
 
             connection.SendTunneled(checkNameResponsePacket);
 
@@ -68,6 +78,24 @@ public static class CheckNamePacketHandler
         connection.SendTunneled(checkNameResponsePacket);
 
         return true;
+    }
+
+    /// <summary>The time left before the player's character may be renamed, or <c>null</c> if it may be now.</summary>
+    private static TimeSpan? CharacterRenameCooldown(GatewayConnection connection, CheckNamePacket packet)
+    {
+        if (packet.Type != NameChangeType.Character)
+            return null;
+
+        using var dbContext = _dbContextFactory.CreateDbContext();
+
+        var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
+        var lastRenamed = dbContext.Characters
+            .Where(character => character.Id == characterId)
+            .Select(character => character.LastRenamed)
+            .FirstOrDefault();
+
+        var remaining = RenameCooldown.Remaining(lastRenamed, DateTimeOffset.UtcNow);
+        return remaining > TimeSpan.Zero ? remaining : null;
     }
 
     private static CheckNameResponse OnCheckCharacterName(GatewayConnection connection, CheckNamePacket packet)

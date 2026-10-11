@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Gateway.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -113,12 +114,21 @@ public static class ChangeNameRequestPacketHandler
         if (dbCharacter is null)
             return ChangeNameResponse.Error;
 
+        var now = DateTimeOffset.UtcNow;
+        var cooldown = RenameCooldown.Remaining(dbCharacter.LastRenamed, now);
+        if (cooldown > TimeSpan.Zero)
+        {
+            ChatHelper.SendSystemMessage(connection.Player, RenameCooldown.Message(cooldown));
+            return ChangeNameResponse.MissingItem;
+        }
+
         var taken = dbContext.Characters.Any(x => x.FirstName == packet.Name.FirstName && x.LastName == packet.Name.LastName);
         if (taken)
             return ChangeNameResponse.Error;
 
         dbCharacter.FirstName = packet.Name.FirstName;
         dbCharacter.LastName = packet.Name.LastName;
+        dbCharacter.LastRenamed = now;
 
         if (dbContext.SaveChanges() <= 0)
             return ChangeNameResponse.Error;
