@@ -23,14 +23,13 @@ public static class TakeMeThereRequestPacketHandler
         _questManager = serviceProvider.GetRequiredService<IQuestManager>();
     }
 
-    public static bool HandlePacket(GatewayConnection connection, Span<byte> data)
+    /// <summary>
+    /// Reached through <see cref="PacketClientLuaMetricsHandler"/>, which reads the request: it is one of the
+    /// client's Lua metrics events, and every other event shares its opcode.
+    /// </summary>
+    public static bool HandlePacket(GatewayConnection connection, TakeMeThereRequestPacket request)
     {
-        if (!TakeMeThereRequestPacket.TryDeserialize(data, out var request))
-        {
-            _logger.LogError("Failed to deserialize {packet}. ( {data} )", nameof(TakeMeThereRequestPacket),
-                Convert.ToHexString(data.Length > 256 ? data[..256] : data));
-            return false;
-        }
+        _logger.LogTrace("Received {packet} {name}.", nameof(TakeMeThereRequestPacket), request.ActionName);
 
         var player = connection.Player;
 
