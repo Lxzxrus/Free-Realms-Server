@@ -288,3 +288,65 @@ Sanctuary `main` at `3fff847`, `minigame` at `6fcdf6b`; PR heads #31 (`70c664b`)
 `fishing` `70c664b`; cillow19 `soccer` `10d6192`; brennengreen `feat/minigame-combat-quest-protocol` `33ecdd5`;
 bigmommlors `farming-prototype` `17b5a4c`; raisingkaines `trading-card-game` `961b0a3`; datah4zard `minigame`
 `c9ebad6`; CoderA05 `minigames-*` `4f5c7ea`; soir20/oxide `ca3b50e`; OpenSourceFreeRealms `ace6a82`.
+
+## 9. Answers from the client (local session, 2026-10-12)
+
+Checked against the 2014 client on Nate's PC by reading its packs and data files, and decompiling `game_wheel.gfx`
+with JPEXS FFDec. Nothing from the client is committed; this section only describes what's there.
+
+**1. Which Flash files are the minigames?** All in the client's packs (`Assets_manifest.txt`), as `.gfx` with a
+matching `.swf`: `game_wheel` (the daily wheel), `game_mining`, `game_smelting`, `game_cooking`, `game_forging`,
+`game_mailsorting`, `game_hidden` (EDITz's Mining Practice launch used this one), `game_mahjongmatch`,
+`game_artifact`, `game_farming`, `game_music`, `game_sword`, `game_halloween`, `game_chess`, `game_checkers`,
+`towerdefense`, most with a `*_tutorial` or `tutorial_*` file. Shared screens: `MinigameStartScreen`,
+`MinigameEndStageScreen`, `MinigameDetail`, `MinigameTitleBar`, `minigameTutorial`, `minigameLevel`, the
+`minigameStatus*Pane` files, `game_backdrop`, and the post-game prize wheel `LootWheelOfAwesomeness`.
+
+**2. What does the wheel Flash say?** The same vocabulary as oxide. All Flash games share SOE's framework
+(`com.sonyonline.game.SoeGameFramework`, `SoeClient`, `SoeInterfaceFreeRealms`), which sends through
+`fscommand("FR_event", "SendMsg(...)")`. The wheel's own messages and arguments, from its client and server
+classes:
+
+| Direction | Message | Arguments |
+|---|---|---|
+| S→C | `OnWheelDataMsg` | id, type, slots, wheelStringID, msgStringID |
+| S→C | `OnItemDataMsg` | itemIconID, tooltipID, quantity, itemNameID, index, tintAlias (one per slot: the prize shown there) |
+| S→C | `OnItemDataCompleteMsg` | spinCount |
+| S→C | `OnWheelUpdateMsg` | id, spins, consecutiveTimes, timeUntilNextSpin |
+| S→C | `OnServerReadyMsg` | none |
+| C→S | `OnWheelSpinRequestMsg` | wheelID |
+| S→C | `OnSpinInfoMsg` | desiredCategory (the slot index to land on) |
+| C→S | `OnWheelStopMsg` | wheelID |
+| S→C | `OnRewardInfoMsg` | itemIconID, tooltipID, quantity, itemNameID, rewardMsgStringID, tintId |
+| C→S | `OnChangeWheelRequestMsg` | wheelID (the client can page between several wheels) |
+| S→C | `OnWheelChangedMsg` | wheelID |
+
+The framework's common messages, for every Flash game: from the client `FRServer_Connect`,
+`FRServer_ReadyForGameData`, `OnStartGameMsg`, `FRServer_StatUpdate` (stage, stat, count), `FRServer_Pause`,
+`FRServer_RoundTransitionPause`, `FRServer_CompleteLevel`, `FRServer_StopLevel` (level, …),
+`FRServer_ScoreIncrement`, `FRServer_ScoreSet`, `FRServer_GameQuit` (score), `FRServer_GameWon` (score, quantity),
+`FRServer_GameLost` (score), `FRServer_GameOver`, `FRServer_GameClose`; to the client `OnLevelInitMsg`,
+`OnLevelEventMsg`, `OnNextLevelMsg`, `OnStopLevelMsg`, `OnGameStoppedMsg`, `OnGameWonMsg`, `OnGameLostMsg`,
+`OnActiveMsg`.
+
+**The wheel's Flash file carries SOE's own test server** (`Wheel.WheelGameServer`), a precise reference for the
+flow: on start it sends, per wheel, `OnWheelDataMsg` then `OnWheelUpdateMsg` (spins left, consecutive days 1, time
+until next spin 0). On `OnWheelSpinRequestMsg` with spins left it answers `OnSpinInfoMsg` with a slot index (random
+in the test server), and with none left it refuses ("client hacking"). On `OnWheelStopMsg` it sends
+`OnRewardInfoMsg`. On `OnChangeWheelRequestMsg` it switches wheel if that wheel has spins. The live game's prize
+tables (`MicroGameWheel.txt`, `MicroGameWheelCategory.txt` and `MicroGameWheelSlots.txt`: wheels with start and end
+dates, categories with reward sets, slots) were server data and **are not in the client**, so Evergrove designs its
+own prizes.
+
+**3. `MiniGameData.txt`:** yes, in `Resources/`, 783 games with columns ID, TYPE, NAME_ID, DESCRIPTION_ID, ICON_ID,
+DIFFICULTY, MEMBERS_ONLY, SHORTCUT, MIN/MAX_PLAYERS, START_SOUND_DEFINITION, PRELOAD_FILE, LEADERBOARD_ID. Alongside
+it: `MiniGameTypeData.txt` (22 types; types 3, 8, 9, 14, 16 and 23 are flagged IS_FLASH, type 22 IS_MICRO),
+`MiniGameGroupData.txt` (20 groups: background swf, stage progression, purchase item/bundle) and
+`MiniGameGroupLinks.txt` (610 links: group, parent game, linked game, stage number). It doesn't name the `.gfx`
+file of each game; that comes from the server (`MiniGameInfo`, EDITz's `Unknown13`).
+
+**6. String ids:** not checked. The client looks numeric string ids up itself, and the quest ids we already send
+show as text in game, so a populated Games menu will answer it.
+
+**Still for Nate in game:** 4 (does the Games menu open on `main`, and does clicking hang the client), 5 (the
+fishing holes in the points-of-interest list), 7 (does the client grey out members-only games by itself).
