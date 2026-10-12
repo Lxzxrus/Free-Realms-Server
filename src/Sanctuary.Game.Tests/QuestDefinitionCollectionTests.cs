@@ -64,6 +64,17 @@ public sealed class QuestDefinitionCollectionTests
     }
 
     [TestMethod]
+    public void ShippedConversations_HaveNoProblems()
+    {
+        var problems = LoadQuests(FindShippedQuests()).Quests.Values
+            .SelectMany(quest => quest.Goals.SelectMany(goal => goal.ConversationProblems()
+                .Select(problem => $"Quest {quest.QuestId}, goal {goal.NameId}: {problem}")))
+            .ToList();
+
+        Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
+    }
+
+    [TestMethod]
     public void ShippedQuests_LoadAndIndexEveryGiver()
     {
         var quests = LoadQuests(FindShippedQuests());

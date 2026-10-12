@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -69,61 +70,98 @@ public static class QuestDialogue
         });
     }
 
-    public static void Begin(Player player, IReadOnlyList<QuestDialogueLine> lines, ulong npcGuid)
+    /// <summary>
+    /// Starts a conversation with an NPC, replacing any other. <paramref name="onFinished"/> runs once its last line is
+    /// answered (at once when there are no lines), never if the player walks off or it's replaced.
+    /// </summary>
+    public static void Begin(Player player, IReadOnlyList<QuestDialogueLine> lines, ulong npcGuid, Action? onFinished = null)
     {
-        player.PendingDialogue.Clear();
+        player.Conversation = null;
 
         if (lines.Count == 0)
+        {
+            onFinished?.Invoke();
             return;
+        }
 
-        player.PendingDialogueNpcGuid = npcGuid;
+        var conversation = new QuestConversation(lines, npcGuid, onFinished);
+        player.Conversation = conversation;
 
-        for (var i = 1; i < lines.Count; i++)
-            player.PendingDialogue.Enqueue(lines[i]);
-
-        Show(player, lines[0], npcGuid, isLastTurn: lines.Count == 1);
+        Show(player, conversation);
     }
 
-    public static bool TryAdvance(Player player)
+    /// <summary>
+    /// Answers the line on screen with the response the player picked. Returns false when there is nothing more to
+    /// show; the caller closes the dialog and then runs <paramref name="onFinished"/>, if the conversation finished
+    /// rather than being abandoned.
+    /// </summary>
+    public static bool TryAdvance(Player player, int responseId, out Action? onFinished)
     {
-        if (player.PendingDialogue.Count == 0)
+        onFinished = null;
+
+        var conversation = player.Conversation;
+        if (conversation is null)
         {
-            player.PendingDialogueNpcGuid = 0;
             StopTalkAnimation(player);
             return false;
         }
 
-        var line = player.PendingDialogue.Dequeue();
+        var step = conversation.Answer(responseId);
+        if (step == QuestConversationStep.Next)
+        {
+            Show(player, conversation);
+            return true;
+        }
 
-        Show(player, line, player.PendingDialogueNpcGuid, isLastTurn: player.PendingDialogue.Count == 0);
-        return true;
+        if (step == QuestConversationStep.Finished)
+            onFinished = conversation.OnFinished;
+
+        Clear(player);
+        return false;
     }
 
     public static void Clear(Player player)
     {
-        player.PendingDialogue.Clear();
-        player.PendingDialogueNpcGuid = 0;
+        player.Conversation = null;
         StopTalkAnimation(player);
     }
 
-    private static void Show(Player player, QuestDialogueLine line, ulong npcGuid, bool isLastTurn)
+    private static void Show(Player player, QuestConversation conversation)
     {
+        var line = conversation.Current;
+
         var dialog = new CommandPacketShowDialog
         {
             DialogueTextId = line.TextId,
-            NpcGuid = npcGuid,
+            NpcGuid = conversation.NpcGuid,
             CameraFocusParam = 1f,
         };
 
-        dialog.Responses.Add(new CommandPacketShowDialog.Response
+        if (line.Choices.Count > 0)
         {
-            Id = 1,
-            LabelTextId = line.ResponseTextId != 0 ? line.ResponseTextId : YouGotItTextId,
-            Param1 = isLastTurn ? LeaveImageId : PlusImageId,
-            Param2 = GreenButtonImageSet,
-        });
+            for (var i = 0; i < line.Choices.Count; i++)
+            {
+                dialog.Responses.Add(new CommandPacketShowDialog.Response
+                {
+                    Id = i + 1,
+                    LabelTextId = line.Choices[i].ResponseTextId,
+                    Param1 = PlusImageId,
+                    Param2 = GreenButtonImageSet,
+                });
+            }
+        }
+        else
+        {
+            dialog.Responses.Add(new CommandPacketShowDialog.Response
+            {
+                Id = 1,
+                LabelTextId = line.ResponseTextId != 0 ? line.ResponseTextId : YouGotItTextId,
+                Param1 = conversation.IsLastLine ? LeaveImageId : PlusImageId,
+                Param2 = GreenButtonImageSet,
+            });
+        }
 
-        PlayTalkAnimation(player, npcGuid);
+        PlayTalkAnimation(player, conversation.NpcGuid);
 
         player.SendTunneled(dialog);
     }

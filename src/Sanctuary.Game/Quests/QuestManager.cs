@@ -118,10 +118,28 @@ public sealed class QuestManager : IQuestManager
         if (!AdvancesHere(player, quest, npc, out var goalIndex))
             return;
 
-        if (quest.Goals[goalIndex].IsCountedTalk)
+        var goal = quest.Goals[goalIndex];
+
+        if (goal.IsCountedTalk)
+        {
             TryCreditCountedTalk(player, quest, goalIndex, npc);
+        }
+        else if (goal.CompleteAfterDialogue)
+        {
+            // The step is done only once the conversation is, and only if the player is still on it then.
+            QuestDialogue.Begin(player, goal.ConversationFor(npc.Guid), npc.Guid, () =>
+            {
+                if (player.Quests.TryGetValue(quest.QuestId, out var completed) && !completed
+                    && AdvancesHere(player, quest, npc, out var stillOn) && stillOn == goalIndex)
+                {
+                    CompleteGoal(player, quest, goalIndex, npc.Guid, playDialogue: false);
+                }
+            });
+        }
         else
+        {
             CompleteGoal(player, quest, goalIndex, npc.Guid);
+        }
     }
 
     public void OnNpcInteract(Player player, Npc npc)
@@ -386,10 +404,14 @@ public sealed class QuestManager : IQuestManager
             player.SendTunneled(new AdventurersJournalQuestUpdatePacket { QuestStates = states });
     }
 
+    /// <summary>
+    /// Re-sends the marker of every NPC the quest involves, not only its giver and target: each step's NPC gains its
+    /// "?" when that step starts and loses it when the step is done.
+    /// </summary>
     private void RefreshQuestNotifications(Player player, QuestDefinition quest)
     {
-        RefreshQuestNotification(player, quest.GiverGuid);
-        RefreshQuestNotification(player, quest.TargetGuid);
+        foreach (var npcGuid in quest.NpcGuids())
+            RefreshQuestNotification(player, npcGuid);
 
         foreach (var excludedId in quest.ExcludesQuestIds)
         {
@@ -602,7 +624,7 @@ public sealed class QuestManager : IQuestManager
 
         return nearest;
     }
-    private void CompleteGoal(Player player, QuestDefinition quest, int goalIndex, ulong spokenBy = 0)
+    private void CompleteGoal(Player player, QuestDefinition quest, int goalIndex, ulong spokenBy = 0, bool playDialogue = true)
     {
         var goals = quest.Goals;
 
@@ -631,6 +653,13 @@ public sealed class QuestManager : IQuestManager
             return;
         }
 
+        RefreshQuestNotifications(player, quest);
+
+        // From one place to the next, the minimap kept the first place's name (Ariel, 2026-10-12: Touring Seaside's
+        // Koodini step to the Boardwalk). Clearing the target first makes the client redraw it with the new name.
+        if (goals[goalIndex].Type == QuestGoalType.ReachLocation && goals[done].Type == QuestGoalType.ReachLocation)
+            player.SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
+
         player.SendTunneled(new QuestObjectiveAddedPacket
         {
             QuestId = quest.QuestId,
@@ -642,7 +671,7 @@ public sealed class QuestManager : IQuestManager
         SendObjectiveForGoal(player, quest, done);
 
         var completedGoal = goals[goalIndex];
-        if (completedGoal.Type == QuestGoalType.TalkToNpc)
+        if (playDialogue && completedGoal.Type == QuestGoalType.TalkToNpc)
         {
             var speaker = spokenBy != 0 ? spokenBy : GoalTargetGuid(quest, goalIndex);
 
@@ -756,13 +785,7 @@ public sealed class QuestManager : IQuestManager
         });
     }
 
-    private static ulong GoalTargetGuid(QuestDefinition quest, int goalIndex)
-    {
-        var goals = quest.Goals;
-        if (goalIndex >= 0 && goalIndex < goals.Count && goals[goalIndex].TargetGuid != 0)
-            return goals[goalIndex].TargetGuid;
-        return quest.TargetGuid;
-    }
+    private static ulong GoalTargetGuid(QuestDefinition quest, int goalIndex) => quest.GoalTargetGuid(goalIndex);
 
     private ulong ResolveGoalTargetGuid(Player player, QuestDefinition quest, int goalIndex)
     {
