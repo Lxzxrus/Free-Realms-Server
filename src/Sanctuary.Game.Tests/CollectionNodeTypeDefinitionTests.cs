@@ -58,18 +58,18 @@ public sealed class CollectionNodeTypeDefinitionTests
     }
 
     [TestMethod]
-    public void Load_ReadsCoinOnlyType()
+    public void Load_ReadsNamedTypeWithoutDrops()
     {
+        // Exploration coins: the node's name comes from NameId and it drops nothing; its spawn names a collection entry.
         var path = Path.Combine(Path.GetTempPath(), $"collection-node-types-{Guid.NewGuid():N}.json");
         File.WriteAllText(path,
-            "[{\"Key\":\"Coin\",\"Name\":\"Coin\",\"NameId\":386170,\"ModelId\":816,\"DropTable\":[],\"Coins\":10}]");
+            "[{\"Key\":\"Coin\",\"Name\":\"Coin\",\"NameId\":386170,\"ModelId\":816,\"DropTable\":[]}]");
 
         try
         {
             var definitions = new CollectionNodeTypeDefinitionCollection(NullLogger.Instance);
 
             Assert.IsTrue(definitions.Load(path));
-            Assert.AreEqual(10, definitions["coin"].Coins);
             Assert.AreEqual(386170, definitions["coin"].NameId);
             Assert.IsFalse(definitions["coin"].HasDrop);
         }
@@ -80,13 +80,10 @@ public sealed class CollectionNodeTypeDefinitionTests
     }
 
     [TestMethod]
-    [DataRow("\"DropTable\":[{\"ItemDefinitionId\":1001,\"Weight\":1}],\"Coins\":10")]
-    [DataRow("\"DropTable\":[],\"Coins\":-1")]
-    [DataRow("\"DropTable\":[],\"NameId\":-1")]
-    public void Load_RejectsInvalidCoinType(string fields)
+    public void Load_RejectsNegativeNameId()
     {
         var path = Path.Combine(Path.GetTempPath(), $"collection-node-types-{Guid.NewGuid():N}.json");
-        File.WriteAllText(path, "[{\"Key\":\"test\",\"Name\":\"Test\",\"ModelId\":1," + fields + "}]");
+        File.WriteAllText(path, "[{\"Key\":\"test\",\"Name\":\"Test\",\"ModelId\":1,\"DropTable\":[],\"NameId\":-1}]");
 
         try
         {

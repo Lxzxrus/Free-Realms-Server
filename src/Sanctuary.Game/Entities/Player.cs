@@ -76,6 +76,12 @@ public sealed class Player : ClientPcData, IEntity
 
     public HashSet<ulong> TalkedQuestNpcs { get; } = new();
 
+    /// <summary>
+    /// Collection entries this character picked up directly (exploration coins). Loaded at login and kept in step
+    /// with the CharacterCollectionEntries table. Read on the zone thread when nodes come into view.
+    /// </summary>
+    public ConcurrentSet<int> CollectedCollectionEntries { get; } = [];
+
     public QuestConversation? Conversation { get; set; }
 
     public ulong TalkingNpcGuid { get; set; }
@@ -505,6 +511,9 @@ public sealed class Player : ClientPcData, IEntity
 
     public void OnAddVisibleNpcs(params IEnumerable<Npc> npcs)
     {
+        // A collection node this character has already collected is not shown to them at all.
+        npcs = npcs.Where(npc => npc is not CollectionNode node || !node.IsCollectedBy(this)).ToArray();
+
         foreach (var npc in npcs)
         {
             if (npc is Mount)
@@ -620,7 +629,8 @@ public sealed class Player : ClientPcData, IEntity
     {
         foreach (var npc in npcs)
         {
-            if (npc is Mount)
+            // Mounts and already-collected nodes were never sent, so there is nothing to remove.
+            if (npc is Mount || !VisibleNpcs.ContainsKey(npc.Guid))
                 continue;
 
             SendTunneled(new PlayerUpdatePacketRemovePlayer { Guid = npc.Guid });

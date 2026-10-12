@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -12,8 +12,10 @@ using Sanctuary.Core.IO;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
+using Sanctuary.Game.Collections;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Quests;
+using Sanctuary.Game.Resources;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -78,40 +80,117 @@ public static class CommandPacketInteractRequestHandler
         if (distanceSquared > node.InteractRange * node.InteractRange)
             return true;
 
+        if (node.SpawnDefinition.HasCollectionEntry)
+            return HandleCollectionEntryNode(connection, node);
+
         if (!node.TryReserve())
             return true;
 
+        if (!node.TypeDefinition.HasDrop)
+        {
+            // A node that exists for a quest's Collect goal (homework, ore): nothing to give, so just gather it.
+            node.CompleteCollection();
+            _questManager.OnCollectionNodeGathered(connection.Player, node);
+            return true;
+        }
+
+        return HandleItemDropNode(connection, node);
+    }
+
+    /// <summary>
+    /// An exploration coin: ticks one entry of its collection for this character, once, and then disappears for
+    /// this character only. Nothing is paid; finishing the collection grants its reward items.
+    /// </summary>
+    private static bool HandleCollectionEntryNode(GatewayConnection connection, CollectionNode node)
+    {
+        var player = connection.Player;
+        var entryId = node.SpawnDefinition.CollectionEntryId;
+
+        if (!_resourceManager.Collections.TryGetEntry(entryId, out var match))
+        {
+            _logger.LogWarning("Collection node {nodeId} ({type}) names unknown collection entry {entryId}.",
+                node.SpawnDefinition.Id, node.TypeDefinition.Key, entryId);
+            return true;
+        }
+
+        var definition = match.Definition;
+        var progress = CollectionProgress.From(player);
+        var collectionWasStarted = definition.IsStarted(progress);
+
+        // The set is the live one on the player, so adding here also claims the entry against a second click
+        // before the database answers.
+        if (!player.CollectedCollectionEntries.TryAdd(entryId))
+            return true;
+
+        var grantedRewards = new List<GrantedItem>();
+        var completed = false;
+
+        try
+        {
+            using var dbContext = _dbContextFactory.CreateDbContext();
+            var dbCharacter = dbContext.Characters
+                .Include(character => character.Items)
+                .SingleOrDefault(character => character.Id == player.CharacterId);
+
+            if (dbCharacter is null)
+            {
+                player.CollectedCollectionEntries.TryRemove(entryId);
+                return true;
+            }
+
+            dbCharacter.CollectionEntries.Add(new DbCharacterCollectionEntry { EntryId = entryId });
+
+            // The progress now includes the entry, so this is "complete after this pickup".
+            completed = definition.IsComplete(progress);
+
+            if (completed)
+                grantedRewards = GrantRewardItems(dbCharacter, definition);
+
+            dbContext.SaveChanges();
+        }
+        catch (DbUpdateException ex)
+        {
+            // Already stored for this character (a relog raced the click, or two clicks landed together). The
+            // in-memory set is right either way; just stop showing the coin.
+            _logger.LogDebug(ex, "Collection entry {entryId} was already stored for character {characterId}.",
+                entryId, player.CharacterId);
+            node.HideFromCollector(player);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            player.CollectedCollectionEntries.TryRemove(entryId);
+            _logger.LogError(ex, "Failed to collect node {nodeId} ({type}) for entry {entryId}.",
+                node.SpawnDefinition.Id, node.TypeDefinition.Key, entryId);
+            return false;
+        }
+
+        foreach (var granted in grantedRewards)
+            SendItemToClient(connection, granted);
+
+        node.HideFromCollector(player);
+
+        _questManager.OnCollectionNodeGathered(player, node);
+
+        if (!collectionWasStarted)
+            SendCollectionStart(connection, definition, progress);
+
+        SendCollectionEntryUpdate(connection, definition, match.Entry, match.Index);
+
+        if (completed)
+            SendCollectionCompleted(connection, definition, grantedRewards, node.Guid);
+
+        return true;
+    }
+
+    private static bool HandleItemDropNode(GatewayConnection connection, CollectionNode node)
+    {
+        var player = connection.Player;
         var rewardPersisted = false;
         var nodeCompleted = false;
 
         try
         {
-            if (!node.TypeDefinition.HasDrop)
-            {
-                var coins = node.TypeDefinition.Coins;
-
-                if (coins > 0)
-                {
-                    if (!TryGrantCoins(connection.Player, coins))
-                    {
-                        node.Release();
-                        return true;
-                    }
-
-                    rewardPersisted = true;
-                }
-
-                node.CompleteCollection();
-                nodeCompleted = true;
-
-                _questManager.OnCollectionNodeGathered(connection.Player, node);
-
-                if (coins > 0)
-                    SendCoinReward(connection, coins);
-
-                return true;
-            }
-
             var drop = node.TypeDefinition.Table.SelectRandom();
             var itemDefinitionId = drop.ItemDefinitionId;
 
@@ -123,20 +202,15 @@ public static class CommandPacketInteractRequestHandler
                 return true;
             }
 
-            var ownedItemDefinitionIds = connection.Player.Items
-                .Select(item => item.Definition)
-                .ToHashSet();
-            var collectionMatch = FindCollectionEntry(itemDefinitionId);
-            var collectionWasStarted = collectionMatch is not null &&
-                collectionMatch.Value.Definition.IsStarted(ownedItemDefinitionIds);
-            var collectionEntryWasCollected = ownedItemDefinitionIds.Contains(itemDefinitionId);
-
-            var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
+            var progress = CollectionProgress.From(player);
+            var hasEntry = _resourceManager.Collections.TryGetEntryByItem(itemDefinitionId, out var match);
+            var collectionWasStarted = hasEntry && match.Definition.IsStarted(progress);
+            var collectionEntryWasCollected = hasEntry && match.Entry.IsCollected(progress);
 
             using var dbContext = _dbContextFactory.CreateDbContext();
             var dbCharacter = dbContext.Characters
                 .Include(character => character.Items)
-                .SingleOrDefault(character => character.Id == characterId);
+                .SingleOrDefault(character => character.Id == player.CharacterId);
 
             if (dbCharacter is null)
             {
@@ -144,24 +218,14 @@ public static class CommandPacketInteractRequestHandler
                 return true;
             }
 
-            var dbItem = dbCharacter.Items.SingleOrDefault(item => item.Definition == itemDefinitionId && item.Tint == 0);
+            var dropped = AddItemToCharacter(dbCharacter, itemDefinition, tint: 0);
 
-            if (dbItem is null)
-            {
-                dbItem = new DbItem
-                {
-                    Id = dbCharacter.Items.Select(item => item.Id).DefaultIfEmpty(0).Max() + 1,
-                    Definition = itemDefinitionId,
-                    Count = 1,
-                    Tint = 0
-                };
-
-                dbCharacter.Items.Add(dbItem);
-            }
-            else
-            {
-                dbItem.Count++;
-            }
+            // The owned set is the live one from the player, but the client item is only added below; count the
+            // drop in by hand to see whether it finishes the collection.
+            var ownedAfter = new HashSet<int>(progress.OwnedItemDefinitionIds) { itemDefinitionId };
+            var progressAfter = progress with { OwnedItemDefinitionIds = ownedAfter };
+            var completed = hasEntry && !collectionEntryWasCollected && match.Definition.IsComplete(progressAfter);
+            var grantedRewards = completed ? GrantRewardItems(dbCharacter, match.Definition) : [];
 
             if (dbContext.SaveChanges() <= 0)
             {
@@ -171,51 +235,25 @@ public static class CommandPacketInteractRequestHandler
 
             rewardPersisted = true;
 
-            var clientItem = connection.Player.Items.SingleOrDefault(item =>
-                item.Definition == itemDefinitionId && item.Tint == 0);
+            var clientItem = SendItemToClient(connection, dropped);
 
-            if (clientItem is null)
-            {
-                clientItem = new ClientItem
-                {
-                    Id = dbItem.Id,
-                    Definition = dbItem.Definition,
-                    Count = dbItem.Count,
-                    Tint = dbItem.Tint
-                };
-
-                connection.Player.Items.Add(clientItem);
-
-                using var writer = new PacketWriter();
-                clientItem.Serialize(writer);
-                itemDefinition.Serialize(writer);
-
-                connection.SendTunneled(new ClientUpdatePacketItemAdd { Payload = writer.Buffer });
-            }
-            else
-            {
-                clientItem.Count = dbItem.Count;
-                connection.SendTunneled(new ClientUpdatePacketItemUpdate
-                {
-                    ItemGuid = clientItem.Id,
-                    Count = clientItem.Count
-                });
-            }
-
-            ownedItemDefinitionIds.Add(itemDefinitionId);
+            foreach (var granted in grantedRewards)
+                SendItemToClient(connection, granted);
 
             node.CompleteCollection();
             nodeCompleted = true;
 
-            _questManager.OnCollectionNodeGathered(connection.Player, node);
+            _questManager.OnCollectionNodeGathered(player, node);
 
-            if (collectionMatch is not null && !collectionEntryWasCollected)
+            if (hasEntry && !collectionEntryWasCollected)
             {
                 if (!collectionWasStarted)
-                    SendCollectionStart(connection, collectionMatch.Value.Definition, ownedItemDefinitionIds);
+                    SendCollectionStart(connection, match.Definition, progressAfter);
 
-                SendCollectionEntryUpdate(connection, collectionMatch.Value.Definition,
-                    collectionMatch.Value.Entry, collectionMatch.Value.Index);
+                SendCollectionEntryUpdate(connection, match.Definition, match.Entry, match.Index);
+
+                if (completed)
+                    SendCollectionCompleted(connection, match.Definition, grantedRewards, node.Guid);
             }
             else
             {
@@ -237,60 +275,108 @@ public static class CommandPacketInteractRequestHandler
         }
     }
 
-    private static bool TryGrantCoins(Player player, int coins)
+    private readonly record struct GrantedItem(DbItem Item, ClientItemDefinition Definition, bool Created);
+
+    /// <summary>
+    /// Adds one of the item to the character's rows (not yet saved): a new row, or one more on the stack.
+    /// </summary>
+    private static GrantedItem AddItemToCharacter(DbCharacter dbCharacter, ClientItemDefinition itemDefinition, int tint)
     {
-        var characterId = GuidHelper.GetPlayerId(player.Guid);
+        var dbItem = dbCharacter.Items.SingleOrDefault(item => item.Definition == itemDefinition.Id && item.Tint == tint);
 
-        using var dbContext = _dbContextFactory.CreateDbContext();
-        var dbCharacter = dbContext.Characters.SingleOrDefault(character => character.Id == characterId);
-
-        if (dbCharacter is null)
-            return false;
-
-        dbCharacter.Coins = (int)Math.Min((long)dbCharacter.Coins + coins, int.MaxValue);
-
-        if (dbContext.SaveChanges() <= 0)
-            return false;
-
-        player.Coins = dbCharacter.Coins;
-        player.SendTunneled(new ClientUpdatePacketCoinCount { Coins = dbCharacter.Coins });
-
-        return true;
-    }
-
-    private static void SendCoinReward(GatewayConnection connection, int coins)
-    {
-        // The same coin celebration the quest turn-in sends (QuestManager.GrantReward).
-        var packet = new RewardBundlePacket();
-        packet.RewardBundle.Success = false;
-        packet.RewardBundle.Unknown1 = coins;
-        packet.RewardBundle.Unknown3 = 0;
-        packet.RewardBundle.IconId = -1;
-        packet.RewardBundle.NameId = -1;
-
-        connection.SendTunneled(packet);
-    }
-
-    private static CollectionEntryMatch? FindCollectionEntry(int itemDefinitionId)
-    {
-        foreach (var definition in _resourceManager.Collections.Values)
+        if (dbItem is not null)
         {
-            for (var index = 0; index < definition.Entries.Count; index++)
-            {
-                var entry = definition.Entries[index];
-
-                if (entry.ItemDefinitionId == itemDefinitionId)
-                    return new CollectionEntryMatch(definition, entry, index);
-            }
+            dbItem.Count++;
+            return new GrantedItem(dbItem, itemDefinition, Created: false);
         }
 
-        return null;
+        dbItem = new DbItem
+        {
+            Id = dbCharacter.Items.Select(item => item.Id).DefaultIfEmpty(0).Max() + 1,
+            Definition = itemDefinition.Id,
+            Count = 1,
+            Tint = tint
+        };
+
+        dbCharacter.Items.Add(dbItem);
+
+        return new GrantedItem(dbItem, itemDefinition, Created: true);
+    }
+
+    /// <summary>
+    /// The collection's reward items, added to the character's rows (not yet saved). Coins and experience in a
+    /// collection's reward are not paid: the economy is a later task.
+    /// </summary>
+    private static List<GrantedItem> GrantRewardItems(DbCharacter dbCharacter, CollectionDefinition definition)
+    {
+        var granted = new List<GrantedItem>();
+
+        foreach (var itemDefinitionId in definition.RewardItemIds)
+        {
+            if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var itemDefinition))
+            {
+                _logger.LogError("Collection {collectionId} rewards unknown item definition {itemDefinitionId}.",
+                    definition.Id, itemDefinitionId);
+                continue;
+            }
+
+            // The same tint rule as a quest reward.
+            var tint = itemDefinition.IsTintable ? 0 : itemDefinition.Icon.TintId;
+            granted.Add(AddItemToCharacter(dbCharacter, itemDefinition, tint));
+        }
+
+        return granted;
+    }
+
+    /// <summary>
+    /// Mirrors a saved item row into the player's inventory and tells the client.
+    /// </summary>
+    private static ClientItem SendItemToClient(GatewayConnection connection, GrantedItem granted)
+    {
+        var dbItem = granted.Item;
+        var clientItem = connection.Player.Items.SingleOrDefault(item =>
+            item.Definition == dbItem.Definition && item.Tint == dbItem.Tint);
+
+        if (clientItem is null)
+        {
+            clientItem = new ClientItem
+            {
+                Id = dbItem.Id,
+                Definition = dbItem.Definition,
+                Count = dbItem.Count,
+                Tint = dbItem.Tint
+            };
+
+            connection.Player.Items.Add(clientItem);
+
+            using var writer = new PacketWriter();
+            clientItem.Serialize(writer);
+            granted.Definition.Serialize(writer);
+
+            connection.SendTunneled(new ClientUpdatePacketItemAdd { Payload = writer.Buffer });
+        }
+        else
+        {
+            clientItem.Count = dbItem.Count;
+            connection.SendTunneled(new ClientUpdatePacketItemUpdate
+            {
+                ItemGuid = clientItem.Id,
+                Count = clientItem.Count
+            });
+        }
+
+        return clientItem;
+    }
+
+    private static ClientItemDefinition? LookupItemDefinition(int itemDefinitionId)
+    {
+        return _resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) ? definition : null;
     }
 
     private static void SendCollectionStart(GatewayConnection connection, CollectionDefinition definition,
-        IReadOnlySet<int> ownedItemDefinitionIds)
+        CollectionProgress progress)
     {
-        var collection = definition.CreateClientCollection(connection.Player.Guid, ownedItemDefinitionIds);
+        var collection = definition.CreateClientCollection(connection.Player.Guid, progress, LookupItemDefinition);
 
         using var writer = new PacketWriter();
         collection.Serialize(writer);
@@ -314,6 +400,36 @@ public static class CommandPacketInteractRequestHandler
             Unknown = entry.Unknown,
             Collected = entry.Collected
         });
+    }
+
+    /// <summary>
+    /// The reward celebration for a finished collection: the collection's reward bundle, with the item guids the
+    /// character just received, the way the quest turn-in and the pickup toast use the same packet.
+    /// </summary>
+    private static void SendCollectionCompleted(GatewayConnection connection, CollectionDefinition definition,
+        IReadOnlyList<GrantedItem> grantedRewards, ulong sourceGuid)
+    {
+        var packet = new RewardBundlePacket();
+        var bundle = packet.RewardBundle;
+
+        bundle.Success = true;
+        bundle.SourceGuid = sourceGuid;
+        bundle.PlayerGuid = connection.Player.Guid;
+
+        definition.FillRewardBundle(bundle, LookupItemDefinition);
+
+        foreach (var entry in bundle.Entries.OfType<RewardBundleEntryItem>())
+        {
+            var granted = grantedRewards.FirstOrDefault(candidate => candidate.Item.Definition == entry.DefinitionId);
+
+            if (granted.Item is null)
+                continue;
+
+            entry.Tint = granted.Item.Tint;
+            entry.ItemGuid = granted.Item.Id;
+        }
+
+        connection.SendTunneled(packet);
     }
 
     private static void SendCollectionRewardToast(GatewayConnection connection, ClientItem clientItem,
@@ -340,9 +456,4 @@ public static class CommandPacketInteractRequestHandler
 
         connection.SendTunneled(packet);
     }
-
-    private readonly record struct CollectionEntryMatch(
-        CollectionDefinition Definition,
-        CollectionEntryDefinition Entry,
-        int Index);
 }

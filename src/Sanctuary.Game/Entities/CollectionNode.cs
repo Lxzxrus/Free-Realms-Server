@@ -22,6 +22,16 @@ public sealed class CollectionNode : Npc
         SpawnDefinition = spawnDefinition;
     }
 
+    /// <summary>
+    /// True when this node ticks a collection entry the player already has. Such a node is never shown to that
+    /// player and does nothing if clicked.
+    /// </summary>
+    public bool IsCollectedBy(Player player)
+    {
+        return SpawnDefinition.HasCollectionEntry &&
+            player.CollectedCollectionEntries.Contains(SpawnDefinition.CollectionEntryId);
+    }
+
     public bool TryReserve()
     {
         return Interlocked.CompareExchange(ref _reserved, 1, 0) == 0;
@@ -35,6 +45,19 @@ public sealed class CollectionNode : Npc
     public void CompleteCollection()
     {
         Zone.CompleteCollectionNode(this);
+    }
+
+    /// <summary>
+    /// Removes the node from one player's view with the pickup animation, leaving it in the zone for everyone else.
+    /// </summary>
+    public void HideFromCollector(Player player)
+    {
+        player.OnRemoveVisibleNpcGracefully(this,
+            animate: true,
+            delay: 0,
+            effectDelay: 0,
+            compositeEffectId: 0,
+            duration: 1000);
     }
 
     internal void DisposeAfterCollection()

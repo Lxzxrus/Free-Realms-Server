@@ -4,6 +4,15 @@ using Sanctuary.Core.IO;
 
 namespace Sanctuary.Packet.Common;
 
+/// <summary>
+/// One collection as the client receives it in the login burst and in <c>ClientUpdatePacketCollectionStart</c>.
+/// </summary>
+/// <remarks>
+/// Layout from the 253 collections in the 2014 <c>SendSelf</c> capture (<c>possible_character_data.pcapng</c>):
+/// the header, one <see cref="RewardBundleBase"/> (the same payload as the reward packets, with per-entry tails that
+/// depend on the entry type), one more int, then the entries. <see cref="RewardBundleBase.Unknown1"/> is the coin
+/// reward there and <see cref="RewardBundleBase.Unknown3"/> is 15 in every row.
+/// </remarks>
 public sealed class ClientCollection : ISerializableType
 {
     public int Id;
@@ -13,40 +22,27 @@ public sealed class ClientCollection : ISerializableType
     public int IconId;
     public int IconTintId;
 
-    // Defaults retain the values observed in the captured Briarwood collection row.
     public int Unknown1 = 1;
-    public bool IsVisible = true;
-    public int HeaderMetadata;
-    public int Unknown2;
-    public int Unknown3;
-    public int Unknown4 = 15;
-    public int Unknown5;
-    public int Unknown6;
-    public float Unknown7 = 1f;
-    public int Unknown8;
-    public int Unknown9;
-    public int Unknown10;
-    public int Unknown11;
 
-    public ulong PlayerGuid;
+    public RewardBundleBase Reward { get; } = new()
+    {
+        Success = true,
+        Unknown3 = 15
+    };
 
-    public int RewardIconId = 3901;
-    public int RewardCurrencyIconId = 2416;
-    public int Unknown12 = 1;
-    public int Unknown13 = 3;
-    public bool Unknown14;
-    public int RewardIconId2 = 3901;
-    public int Unknown15;
-    public int RewardCurrencyIconId2 = 2416;
-    public int RewardPoints = 50;
-    public int RewardMetadata;
-    public int Unknown16;
-    public int Unknown17;
-    public int Unknown18;
-    public bool Unknown19;
-    public int Unknown20 = 5604;
+    /// <summary>
+    /// Follows the reward bundle in every captured row (5604 for the Briarwood mushrooms, 5301 to 5314 for the Rare
+    /// Exploration collections). Probably a string id for the reward line; the client shows the window either way.
+    /// </summary>
+    public int RewardTextId;
 
     public List<ClientCollectionEntry> Entries = [];
+
+    public ulong PlayerGuid
+    {
+        get => Reward.PlayerGuid;
+        set => Reward.PlayerGuid = value;
+    }
 
     public void Serialize(PacketWriter writer)
     {
@@ -58,36 +54,10 @@ public sealed class ClientCollection : ISerializableType
         writer.Write(IconTintId);
 
         writer.Write(Unknown1);
-        writer.Write(IsVisible);
-        writer.Write(HeaderMetadata);
-        writer.Write(Unknown2);
-        writer.Write(Unknown3);
-        writer.Write(Unknown4);
-        writer.Write(Unknown5);
-        writer.Write(Unknown6);
-        writer.Write(Unknown7);
-        writer.Write(Unknown8);
-        writer.Write(Unknown9);
-        writer.Write(Unknown10);
-        writer.Write(Unknown11);
 
-        writer.Write(PlayerGuid);
+        Reward.Serialize(writer);
 
-        writer.Write(RewardIconId);
-        writer.Write(RewardCurrencyIconId);
-        writer.Write(Unknown12);
-        writer.Write(Unknown13);
-        writer.Write(Unknown14);
-        writer.Write(RewardIconId2);
-        writer.Write(Unknown15);
-        writer.Write(RewardCurrencyIconId2);
-        writer.Write(RewardPoints);
-        writer.Write(RewardMetadata);
-        writer.Write(Unknown16);
-        writer.Write(Unknown17);
-        writer.Write(Unknown18);
-        writer.Write(Unknown19);
-        writer.Write(Unknown20);
+        writer.Write(RewardTextId);
 
         writer.Write(Entries);
     }

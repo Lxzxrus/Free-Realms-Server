@@ -17,6 +17,7 @@ using Sanctuary.Core.IO;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
+using Sanctuary.Game.Collections;
 using Sanctuary.Game.Entities;
 using Sanctuary.Gateway.Handlers;
 using Sanctuary.Packet;
@@ -275,6 +276,9 @@ public class GatewayConnection : UdpConnection
             if (dbQuest.GoalCount > 0)
                 Player.QuestCollectProgress[dbQuest.QuestId] = dbQuest.GoalCount;
         }
+
+        foreach (var dbEntry in dbCharacter.CollectionEntries)
+            Player.CollectedCollectionEntries.TryAdd(dbEntry.EntryId);
 
         Player.Birthday = dbCharacter.Created;
         Player.PlayTime = dbCharacter.PlayTime;
@@ -629,19 +633,19 @@ public class GatewayConnection : UdpConnection
 
     public void SendSelfToClient()
     {
-        var ownedItemDefinitionIds = Player.Items
-            .Select(item => item.Definition)
-            .ToHashSet();
-
-        // TODO: Include persisted non-inventory progress here when direct collections such as
-        // adventure coins have a database representation.
-        Player.Collections = _resourceManager.Collections.CreateClientCollections(Player.Guid, ownedItemDefinitionIds);
+        Player.Collections = _resourceManager.Collections.CreateClientCollections(Player.Guid,
+            CollectionProgress.From(Player), LookupItemDefinition);
 
         var packetSendSelfToClient = new PacketSendSelfToClient();
 
         packetSendSelfToClient.Payload = Player.Serialize();
 
         SendTunneled(packetSendSelfToClient);
+    }
+
+    private ClientItemDefinition? LookupItemDefinition(int itemDefinitionId)
+    {
+        return _resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) ? definition : null;
     }
 
     public void SendFriendOffline()

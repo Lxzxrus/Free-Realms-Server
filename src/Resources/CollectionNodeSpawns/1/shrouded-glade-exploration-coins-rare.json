@@ -1,6 +1,7 @@
 [
   {
     "Id": 2123,
+    "CollectionEntryId": 1942,
     "Position": [
       -71.29139,
       51.34807,
@@ -10,6 +11,7 @@
   },
   {
     "Id": 2130,
+    "CollectionEntryId": 1972,
     "Position": [
       52.59516,
       38.97359,
@@ -19,6 +21,7 @@
   },
   {
     "Id": 2131,
+    "CollectionEntryId": 1973,
     "Position": [
       18.40032,
       54.02306,

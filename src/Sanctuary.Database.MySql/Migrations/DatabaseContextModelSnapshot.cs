@@ -197,6 +197,24 @@ namespace Sanctuary.Database.MySql.Migrations
                     b.ToTable("Characters");
                 });
 
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterCollectionEntry", b =>
+                {
+                    b.Property<int>("EntryId")
+                        .HasColumnType("int");
+
+                    b.Property<ulong>("CharacterId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("EntryId", "CharacterId");
+
+                    b.HasIndex("CharacterId");
+
+                    b.ToTable("CharacterCollectionEntries");
+                });
+
             modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterQuest", b =>
                 {
                     b.Property<int>("QuestId")
@@ -699,6 +717,17 @@ namespace Sanctuary.Database.MySql.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterCollectionEntry", b =>
+                {
+                    b.HasOne("Sanctuary.Database.Entities.DbCharacter", "Character")
+                        .WithMany("CollectionEntries")
+                        .HasForeignKey("CharacterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Character");
+                });
+
             modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterQuest", b =>
                 {
                     b.HasOne("Sanctuary.Database.Entities.DbCharacter", "Character")
@@ -838,6 +867,8 @@ namespace Sanctuary.Database.MySql.Migrations
 
             modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacter", b =>
                 {
+                    b.Navigation("CollectionEntries");
+
                     b.Navigation("Friends");
 
                     b.Navigation("Houses");
