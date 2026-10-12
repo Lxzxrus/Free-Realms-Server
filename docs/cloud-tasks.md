@@ -491,3 +491,43 @@ Found in the 2026-10-12 playtest; both show as errors in the live Gateway log.
 - **Scope:** collection nodes and their tests. Don't change quest definitions.
 - **Deliverable:** a PR (or a report, if the fix is out of reach) with the in-game check: click a Rare
   Exploration Coin in Seaside; it disappears, the reward lands, and it respawns later.
+
+## 29. `exploration-collections`: Rare coins fill their region's collection *(Fable)*
+
+- **Why:** task 28 (PR #66) made the 118 Rare and Elite Exploration Coins pickable, paying placeholder coins. In the
+  game they paid none. Each coin is a named entry ("Seaspray Hideaway", "Under the Boardwalk") in its region's
+  "Rare Exploration" collection, and finishing a region's collection gives clothing, for example Seaside's
+  Traveler's Boots and Shrouded Glade's Seeker's Hat and Seeker's Backpack. The wiki's list of every region, entry
+  and reward: <https://freerealms.fandom.com/wiki/Exploration_(Collections)> (CC-BY-SA; use it to match names to
+  ids, don't copy its text into the repo). **Nate's decision (2026-10-12): coins fill the collection only, and pay no
+  coins.** Amounts and the economy come later, as their own task.
+- **What we have:** collections are item based. `src/Resources/Collections.json` holds one collection; an entry
+  is an `ItemDefinitionId`, and a player has collected it when they own that item.
+  `CommandPacketInteractRequestHandler.HandleCollectionNode` already ticks an entry off (start and add packets) when
+  a pickup drops an entry's item; `GatewayConnection` builds the collections at login. There is no completion
+  reward yet. The coin pools, types and spawns are in `src/Resources/CollectionNode*.json` from PR #66.
+- **Where the data is:** in order of trust:
+  1. The 2014 captures (archived OpenSourceFreeRealms `ofrserver/Packets`; decoding notes in
+     `docs/research/quests-scout.md` section 3). The `SendSelf` burst (`possible_character_data.pcapng`) carries the
+     captured character's collections with ids, name ids, icons and entry items.
+  2. `src/Resources/ClientItemDefinitions.json`, which should contain the coin entry items and reward clothing.
+  3. Client strings, which turn the wiki's names into ids (`tools/client-strings/strings.py`; the client isn't in
+     the cloud, so ask in the PR for anything only the client has).
+- **Task:**
+  1. Add the nine regions' Rare Exploration collections (Blackspore, Briarwood, Merry Vale, Sanctuary, Seaside,
+     Shrouded Glade, Snowhill, Wugachug and the four Wilds quarters; reconcile these 12 with PR #66's 9 coin regions
+     and 18 pools). Elite coins: find out what they were and say what you did with them.
+  2. Each coin's node drops its own entry item, so every coin is a distinct entry. Match each spawn to its entry
+     by name and position, and list in the PR any coin you couldn't match.
+  3. A coin only counts once per character. A coin already collected by this player gives nothing more; say in
+     the PR how it behaves for them (hidden, or picked up with no effect), given the client.
+  4. Completing a collection grants its reward items once, with the reward packets the client expects, and survives
+     a relog. Reuse the quest reward code where it fits.
+  5. Remove the placeholder coin payout from the coin types.
+- **Scope:** collections, the coin nodes and their tests. Not the walk-to-spot exploration that gives Adventurer
+  XP (a later task), not the "Explorer" collections made of whole regions, and no economy changes.
+- **Deliverable:** a PR with the data's source for every collection, the unmatched list, and the in-game check:
+  - Click a Seaside Rare coin: the Seaside Rare Exploration collection opens or ticks, and no coins are paid.
+  - Clicking the same coin again gives nothing.
+  - Collecting all five Seaside coins grants Traveler's Boots once, and they're still there after a relog.
+  - The collections window shows the region's coin names.
