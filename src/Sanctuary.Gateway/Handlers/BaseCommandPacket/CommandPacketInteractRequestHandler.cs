@@ -81,15 +81,34 @@ public static class CommandPacketInteractRequestHandler
         if (!node.TryReserve())
             return true;
 
-        var itemPersisted = false;
+        var rewardPersisted = false;
         var nodeCompleted = false;
 
         try
         {
             if (!node.TypeDefinition.HasDrop)
             {
+                var coins = node.TypeDefinition.Coins;
+
+                if (coins > 0)
+                {
+                    if (!TryGrantCoins(connection.Player, coins))
+                    {
+                        node.Release();
+                        return true;
+                    }
+
+                    rewardPersisted = true;
+                }
+
                 node.CompleteCollection();
+                nodeCompleted = true;
+
                 _questManager.OnCollectionNodeGathered(connection.Player, node);
+
+                if (coins > 0)
+                    SendCoinReward(connection, coins);
+
                 return true;
             }
 
@@ -150,7 +169,7 @@ public static class CommandPacketInteractRequestHandler
                 return true;
             }
 
-            itemPersisted = true;
+            rewardPersisted = true;
 
             var clientItem = connection.Player.Items.SingleOrDefault(item =>
                 item.Definition == itemDefinitionId && item.Tint == 0);
@@ -209,13 +228,47 @@ public static class CommandPacketInteractRequestHandler
         {
             _logger.LogError(ex, "Failed to collect node {nodeId} ({type}).", node.SpawnDefinition.Id, node.TypeDefinition.Key);
 
-            if (itemPersisted && !nodeCompleted)
+            if (rewardPersisted && !nodeCompleted)
                 node.CompleteCollection();
-            else if (!itemPersisted)
+            else if (!rewardPersisted)
                 node.Release();
 
             return false;
         }
+    }
+
+    private static bool TryGrantCoins(Player player, int coins)
+    {
+        var characterId = GuidHelper.GetPlayerId(player.Guid);
+
+        using var dbContext = _dbContextFactory.CreateDbContext();
+        var dbCharacter = dbContext.Characters.SingleOrDefault(character => character.Id == characterId);
+
+        if (dbCharacter is null)
+            return false;
+
+        dbCharacter.Coins = (int)Math.Min((long)dbCharacter.Coins + coins, int.MaxValue);
+
+        if (dbContext.SaveChanges() <= 0)
+            return false;
+
+        player.Coins = dbCharacter.Coins;
+        player.SendTunneled(new ClientUpdatePacketCoinCount { Coins = dbCharacter.Coins });
+
+        return true;
+    }
+
+    private static void SendCoinReward(GatewayConnection connection, int coins)
+    {
+        // The same coin celebration the quest turn-in sends (QuestManager.GrantReward).
+        var packet = new RewardBundlePacket();
+        packet.RewardBundle.Success = false;
+        packet.RewardBundle.Unknown1 = coins;
+        packet.RewardBundle.Unknown3 = 0;
+        packet.RewardBundle.IconId = -1;
+        packet.RewardBundle.NameId = -1;
+
+        connection.SendTunneled(packet);
     }
 
     private static CollectionEntryMatch? FindCollectionEntry(int itemDefinitionId)

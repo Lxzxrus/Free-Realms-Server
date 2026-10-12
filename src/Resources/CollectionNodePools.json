@@ -47,5 +47,131 @@
     "NodeType": "tin-ore",
     "MaxActiveNodes": 5,
     "RespawnSeconds": 30
+  },
+  {
+    "Key": "briarwood-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "briarwood-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "briarwood-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "briarwood-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "wugachug-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "wugachug-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "wugachug-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "wugachug-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "merry-vale-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "merry-vale-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "merry-vale-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "merry-vale-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "sanctuary-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sanctuary-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "sanctuary-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sanctuary-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "seaside-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "seaside-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "seaside-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "seaside-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "snowhill-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "snowhill-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "snowhill-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "snowhill-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "blackspore-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "blackspore-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "blackspore-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "blackspore-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "shrouded-glade-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "shrouded-glade-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "shrouded-glade-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "shrouded-glade-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "sunstone-valley-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sunstone-valley-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "sunstone-valley-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sunstone-valley-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
   }
 ]

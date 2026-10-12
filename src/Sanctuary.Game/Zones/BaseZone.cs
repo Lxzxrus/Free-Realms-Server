@@ -1002,6 +1002,7 @@ public abstract class BaseZone : IZone, IDisposable
         node = new CollectionNode(this, typeDefinition, poolDefinition, spawnDefinition)
         {
             Guid = GetNpcGuid(null),
+            NameId = typeDefinition.NameId,
             Name = typeDefinition.Name,
             ModelId = typeDefinition.ModelId,
             Scale = typeDefinition.Scale,
