@@ -1,6 +1,7 @@
 [
   {
     "Id": 2111,
+    "CollectionEntryId": 1938,
     "Position": [
       -2203.585,
       -33.4852,
@@ -10,6 +11,7 @@
   },
   {
     "Id": 2113,
+    "CollectionEntryId": 1960,
     "Position": [
       -2354.243,
       -22.54353,
@@ -19,6 +21,7 @@
   },
   {
     "Id": 2114,
+    "CollectionEntryId": 1961,
     "Position": [
       -2487.373,
       -24.85059,
@@ -28,6 +31,7 @@
   },
   {
     "Id": 2117,
+    "CollectionEntryId": 1962,
     "Position": [
       -2584.45,
       -7.938715,
@@ -37,6 +41,7 @@
   },
   {
     "Id": 2122,
+    "CollectionEntryId": 1963,
     "Position": [
       -1707.786,
       -33.48259,

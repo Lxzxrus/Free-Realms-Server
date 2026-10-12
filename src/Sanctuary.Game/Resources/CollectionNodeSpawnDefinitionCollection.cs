@@ -72,7 +72,8 @@ public sealed class CollectionNodeSpawnDefinitionCollection : ObservableConcurre
                     var entries = JsonSerializer.Deserialize<List<CollectionNodeSpawnDefinition>>(stream,
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                    if (entries is null || entries.Any(entry => entry.Id <= 0 || entry.Position.Length != 3 ||
+                    if (entries is null || entries.Any(entry => entry.Id <= 0 || entry.CollectionEntryId < 0 ||
+                        entry.Position.Length != 3 ||
                         entry.Position.Any(value => !float.IsFinite(value)) || !float.IsFinite(entry.Heading)))
                     {
                         _logger.LogError("Invalid collection node spawns in \"{file}\".", filePath);

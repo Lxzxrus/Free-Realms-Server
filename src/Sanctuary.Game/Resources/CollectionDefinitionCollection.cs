@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -7,6 +8,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Collections;
+using Sanctuary.Game.Collections;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Packet.Common;
 
@@ -15,11 +17,17 @@ namespace Sanctuary.Game.Resources;
 public sealed class CollectionDefinitionCollection : ObservableConcurrentDictionary<int, CollectionDefinition>
 {
     private readonly ILogger _logger;
+    private Dictionary<int, CollectionEntryMatch> _entriesById = new();
 
     public CollectionDefinitionCollection(ILogger logger)
     {
         _logger = logger;
     }
+
+    public readonly record struct CollectionEntryMatch(
+        CollectionDefinition Definition,
+        CollectionEntryDefinition Entry,
+        int Index);
 
     public bool Load(string filePath)
     {
@@ -46,10 +54,20 @@ public sealed class CollectionDefinitionCollection : ObservableConcurrentDiction
             if (!Validate(entries, filePath))
                 return false;
 
+            var entriesById = new Dictionary<int, CollectionEntryMatch>();
+
+            foreach (var definition in entries)
+            {
+                for (var index = 0; index < definition.Entries.Count; index++)
+                    entriesById.Add(definition.Entries[index].Id, new CollectionEntryMatch(definition, definition.Entries[index], index));
+            }
+
             Clear();
 
             foreach (var entry in entries)
                 TryAdd(entry.Id, entry);
+
+            _entriesById = entriesById;
 
             return true;
         }
@@ -60,13 +78,40 @@ public sealed class CollectionDefinitionCollection : ObservableConcurrentDiction
         }
     }
 
-    public List<ClientCollection> CreateClientCollections(ulong playerGuid, IReadOnlySet<int> ownedItemDefinitionIds)
+    /// <summary>
+    /// Finds the collection entry with the supplied id. Entry ids are unique across all collections.
+    /// </summary>
+    public bool TryGetEntry(int entryId, out CollectionEntryMatch match)
+    {
+        return _entriesById.TryGetValue(entryId, out match);
+    }
+
+    /// <summary>
+    /// Finds the collection entry that an item marks collected, if any.
+    /// </summary>
+    public bool TryGetEntryByItem(int itemDefinitionId, out CollectionEntryMatch match)
+    {
+        foreach (var candidate in _entriesById.Values)
+        {
+            if (!candidate.Entry.IsDirect && candidate.Entry.ItemDefinitionId == itemDefinitionId)
+            {
+                match = candidate;
+                return true;
+            }
+        }
+
+        match = default;
+        return false;
+    }
+
+    public List<ClientCollection> CreateClientCollections(ulong playerGuid, CollectionProgress progress,
+        Func<int, ClientItemDefinition?> itemDefinitions)
     {
         return Values
-            .Where(definition => definition.IsStarted(ownedItemDefinitionIds))
+            .Where(definition => definition.IsStarted(progress))
             .OrderBy(definition => definition.CategoryId)
             .ThenBy(definition => definition.Id)
-            .Select(definition => definition.CreateClientCollection(playerGuid, ownedItemDefinitionIds))
+            .Select(definition => definition.CreateClientCollection(playerGuid, progress, itemDefinitions))
             .ToList();
     }
 
@@ -78,20 +123,32 @@ public sealed class CollectionDefinitionCollection : ObservableConcurrentDiction
             return false;
         }
 
+        var allEntries = definitions.SelectMany(definition => definition.Entries).ToList();
+
+        if (allEntries.Select(entry => entry.Id).Distinct().Count() != allEntries.Count)
+        {
+            _logger.LogError("Duplicate collection entry ids found in \"{file}\".", filePath);
+            return false;
+        }
+
+        var itemEntries = allEntries.Where(entry => !entry.IsDirect).ToList();
+
+        if (itemEntries.Select(entry => entry.ItemDefinitionId).Distinct().Count() != itemEntries.Count)
+        {
+            _logger.LogError("Two collection entries share an item definition in \"{file}\".", filePath);
+            return false;
+        }
+
         foreach (var definition in definitions)
         {
             if (definition.Id <= 0 || definition.NameId <= 0 || definition.CategoryId <= 0 ||
-                definition.Entries.Count == 0)
+                definition.Entries.Count == 0 ||
+                definition.RewardCoins < 0 || definition.RewardExperience < 0 || definition.RewardProfileId < 0 ||
+                definition.RewardItemIds.Any(itemId => itemId <= 0) ||
+                definition.RewardItemIds.Distinct().Count() != definition.RewardItemIds.Count ||
+                definition.Entries.Any(entry => entry.Id <= 0 || entry.ItemDefinitionId < 0))
             {
                 _logger.LogError("Collection {id} has invalid required data in \"{file}\".", definition.Id, filePath);
-                return false;
-            }
-
-            if (definition.Entries.Select(entry => entry.Id).Distinct().Count() != definition.Entries.Count ||
-                definition.Entries.Any(entry => entry.ItemDefinitionId <= 0) ||
-                definition.Entries.Select(entry => entry.ItemDefinitionId).Distinct().Count() != definition.Entries.Count)
-            {
-                _logger.LogError("Collection {id} has duplicate entry or item definition ids in \"{file}\".", definition.Id, filePath);
                 return false;
             }
         }

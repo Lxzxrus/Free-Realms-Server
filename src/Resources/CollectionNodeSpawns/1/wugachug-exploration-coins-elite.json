@@ -1,6 +1,7 @@
 [
   {
     "Id": 2105,
+    "CollectionEntryId": 2020,
     "Position": [
       -17.69982,
       50.95578,
@@ -10,6 +11,7 @@
   },
   {
     "Id": 2107,
+    "CollectionEntryId": 2021,
     "Position": [
       37.85324,
       8.221545,
@@ -19,6 +21,7 @@
   },
   {
     "Id": 2108,
+    "CollectionEntryId": 2022,
     "Position": [
       -37.26744,
       35.68904,
@@ -28,6 +31,7 @@
   },
   {
     "Id": 2109,
+    "CollectionEntryId": 2023,
     "Position": [
       78.38216,
       35.72554,
@@ -37,6 +41,7 @@
   },
   {
     "Id": 2110,
+    "CollectionEntryId": 2024,
     "Position": [
       117.5721,
       51.42565,

@@ -14,7 +14,8 @@ namespace Sanctuary.Game.Tests;
 
 /// <summary>
 /// Exploration coins used to be plain npcs spawned by FabledRealms.lua, with nothing behind a click. They are now
-/// collection nodes that pay coins and respawn on their own spot.
+/// collection nodes on their own spots; each ticks an entry of its region's exploration collection
+/// (<see cref="ExplorationCollectionTests"/>).
 /// </summary>
 [TestClass]
 public sealed class ExplorationCoinTests
@@ -127,20 +128,23 @@ public sealed class ExplorationCoinTests
     }
 
     [TestMethod]
-    public void CoinTypes_PayCoinsAndLookLikeTheOriginalNpcs()
+    public void CoinTypes_PayNothingAndLookLikeTheOriginalNpcs()
     {
         var types = LoadTypes();
         var pools = LoadPools();
         var models = new ModelDefinitionCollection(NullLogger.Instance);
         Assert.IsTrue(models.Load(FindSourcePath("Resources", "Models.txt")));
 
+        // Nate's decision (2026-10-12): a coin fills its collection and pays nothing. The placeholder payout is gone.
+        var typesJson = File.ReadAllText(FindSourcePath("Resources", "CollectionNodeTypes.json"));
+        Assert.IsFalse(typesJson.Contains("\"Coins\"", StringComparison.Ordinal), "A node type still has a coin payout.");
+
         foreach (var coin in CoinNpcDefinitions())
         {
             var (nodeType, poolKey) = KindOf(coin);
 
             Assert.IsTrue(types.TryGetValue(nodeType, out var type), $"No node type {nodeType}.");
-            Assert.IsTrue(type.Coins > 0, $"{nodeType} pays no coins.");
-            Assert.IsFalse(type.HasDrop);
+            Assert.IsFalse(type.HasDrop, $"{nodeType} drops an item; a coin ticks a collection entry instead.");
             Assert.AreEqual(coin.NameId, type.NameId, $"{nodeType} doesn't use {coin.Name}'s name.");
             Assert.AreEqual(coin.ModelId, type.ModelId, $"{nodeType} doesn't use {coin.Name}'s model.");
             Assert.IsTrue(models.ContainsKey(type.ModelId));

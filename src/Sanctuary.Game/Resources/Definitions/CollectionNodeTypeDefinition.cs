@@ -17,11 +17,6 @@ public sealed class CollectionNodeTypeDefinition
     public float PlacementYOffset { get; set; }
     public List<CollectionNodeDropDefinition> DropTable { get; set; } = [];
 
-    /// <summary>
-    /// Coins granted on pickup. A type gives an item from its drop table or coins, never both.
-    /// </summary>
-    public int Coins { get; set; }
-
     public bool HasDrop => DropTable.Count > 0;
 
     private WeightedDropTable<CollectionNodeDropDefinition>? _table;

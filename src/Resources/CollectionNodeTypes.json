@@ -120,8 +120,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 10
+    "DropTable": []
   },
   {
     "Key": "briarwood-elite-exploration-coin",
@@ -133,8 +132,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 25
+    "DropTable": []
   },
   {
     "Key": "wugachug-rare-exploration-coin",
@@ -146,8 +144,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 10
+    "DropTable": []
   },
   {
     "Key": "wugachug-elite-exploration-coin",
@@ -159,8 +156,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 25
+    "DropTable": []
   },
   {
     "Key": "merry-vale-rare-exploration-coin",
@@ -172,8 +168,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 10
+    "DropTable": []
   },
   {
     "Key": "merry-vale-elite-exploration-coin",
@@ -185,8 +180,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 25
+    "DropTable": []
   },
   {
     "Key": "sanctuary-rare-exploration-coin",
@@ -198,8 +192,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 10
+    "DropTable": []
   },
   {
     "Key": "sanctuary-elite-exploration-coin",
@@ -211,8 +204,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 25
+    "DropTable": []
   },
   {
     "Key": "seaside-rare-exploration-coin",
@@ -224,8 +216,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 10
+    "DropTable": []
   },
   {
     "Key": "seaside-elite-exploration-coin",
@@ -237,8 +228,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 25
+    "DropTable": []
   },
   {
     "Key": "snowhill-rare-exploration-coin",
@@ -250,8 +240,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 10
+    "DropTable": []
   },
   {
     "Key": "snowhill-elite-exploration-coin",
@@ -263,8 +252,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 25
+    "DropTable": []
   },
   {
     "Key": "blackspore-rare-exploration-coin",
@@ -276,8 +264,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 10
+    "DropTable": []
   },
   {
     "Key": "blackspore-elite-exploration-coin",
@@ -289,8 +276,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 25
+    "DropTable": []
   },
   {
     "Key": "shrouded-glade-rare-exploration-coin",
@@ -302,8 +288,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 10
+    "DropTable": []
   },
   {
     "Key": "shrouded-glade-elite-exploration-coin",
@@ -315,8 +300,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 25
+    "DropTable": []
   },
   {
     "Key": "sunstone-valley-rare-exploration-coin",
@@ -328,8 +312,7 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 10
+    "DropTable": []
   },
   {
     "Key": "sunstone-valley-elite-exploration-coin",
@@ -341,7 +324,6 @@
     "InteractRange": 12,
     "CursorId": 17,
     "PlacementYOffset": 0.0,
-    "DropTable": [],
-    "Coins": 25
+    "DropTable": []
   }
 ]
