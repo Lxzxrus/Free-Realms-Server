@@ -248,7 +248,7 @@
     "RewardExperience": 80,
     "RewardItems": [],
     "PrerequisiteQuestId": 3020,
-    "NextQuestId": 0,
+    "NextQuestId": 3022,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
     "Goals": [
@@ -260,6 +260,104 @@
       {
         "NameId": 93407,
         "DialogueId": 93401,
+        "TargetGuid": 100000001748
+      }
+    ]
+  },
+  {
+    "Name": "Touring Seaside",
+    "Comment": "Cole's tour: the fortune teller's tent, the Boardwalk (centred on the Boardwalk Blvd. mailboxes), Diggy at the Ocean Treasures Cafe. The client has no tour dialogue for Koodini or Diggy, so those steps have none. Text ids found by searching the client's string table (QUESTS.md, Finding text ids).",
+    "QuestId": 3022,
+    "TitleId": 93420,
+    "DescriptionId": 93421,
+    "GiverDialogueId": 93419,
+    "ObjectiveDescriptionId": 93424,
+    "IconId": 43278,
+    "GiverGuid": 100000001748,
+    "TargetGuid": 100000001748,
+    "RewardCoins": 30,
+    "RewardExperience": 80,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3021,
+    "NextQuestId": 3023,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 93425,
+        "Type": 1,
+        "ReachPosition": [
+          -379.92,
+          -6.58,
+          -1168.87
+        ],
+        "ReachRadius": 10
+      },
+      {
+        "NameId": 93427,
+        "Type": 1,
+        "ReachPosition": [
+          -426.24,
+          -18.72,
+          -1223.69
+        ],
+        "ReachRadius": 20
+      },
+      {
+        "NameId": 93429,
+        "TargetGuid": 100000004265
+      },
+      {
+        "NameId": 93407,
+        "DialogueId": 93422,
+        "TargetGuid": 100000001748
+      }
+    ]
+  },
+  {
+    "Name": "Testing the Tour",
+    "Comment": "Brenna's quiz. Our dialogue has one answer per line, so her two questions play with the right answer as the only button: Diggy owns the Ocean Treasures Cafe, the Seaspray Inn is the oldest building.",
+    "QuestId": 3023,
+    "TitleId": 93447,
+    "DescriptionId": 93454,
+    "GiverDialogueId": 93449,
+    "ObjectiveDescriptionId": 93454,
+    "IconId": 43278,
+    "GiverGuid": 100000001748,
+    "TargetGuid": 100000001748,
+    "RewardCoins": 30,
+    "RewardExperience": 80,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3022,
+    "NextQuestId": 0,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 93454,
+        "TargetGuid": 100000001749,
+        "Dialogue": [
+          {
+            "TextId": 93464,
+            "ResponseTextId": 93465
+          },
+          {
+            "TextId": 93466,
+            "ResponseTextId": 21302
+          },
+          {
+            "TextId": 93470,
+            "ResponseTextId": 93473
+          },
+          {
+            "TextId": 93474,
+            "ResponseTextId": 93477
+          }
+        ]
+      },
+      {
+        "NameId": 93457,
+        "DialogueId": 93451,
         "TargetGuid": 100000001748
       }
     ]

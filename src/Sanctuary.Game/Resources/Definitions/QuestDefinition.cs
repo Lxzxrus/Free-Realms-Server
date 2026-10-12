@@ -43,12 +43,15 @@ public sealed class QuestDefinition
         if (playerQuests.ContainsKey(QuestId))
             return false;
 
-        if (PrerequisiteQuestId != 0)
-            return playerQuests.TryGetValue(PrerequisiteQuestId, out var prerequisiteDone) && prerequisiteDone;
-
+        // Exclusions first: two quests that exclude each other can share a prerequisite, and checking the
+        // prerequisite first returned before the exclusion was ever looked at, so both were offered. (Found by
+        // ImAlko reviewing Sulphural's upstream PR #130.)
         foreach (var excludedId in ExcludesQuestIds)
             if (playerQuests.ContainsKey(excludedId))
                 return false;
+
+        if (PrerequisiteQuestId != 0)
+            return playerQuests.TryGetValue(PrerequisiteQuestId, out var prerequisiteDone) && prerequisiteDone;
 
         return true;
     }
