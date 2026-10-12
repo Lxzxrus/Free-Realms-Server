@@ -349,3 +349,35 @@ four unverified lots (18, 29, 31, 32) and Rumbledome (30) with a debug command a
 8. **Fixture names.** For a model with no item (say `hsg_bed_lodge_01` without its bundle, or
    `hsg_playerstudio_gazebo_01`), what does the client show when the server sends an item definition with
    `NameId` 0? If it shows blank rather than crashing, the missing fixtures can ship unnamed first.
+
+## 10. Answers from the client (local session, 2026-10-12)
+
+Checked against the 2014 client on Nate's PC. String ids were read with the method found for task 23 (a string id
+`N` is stored under the lookup2 hash of `Global.Text.N`; see `quests-scout.md` section 9). Nothing from the client
+is committed.
+
+**1. Zone assets.** Every `ZoneName` in section 3 exists as a `.gzne` in the client's manifest, including
+`gw_rumbledome`, `hsg_emptylot_castle_01`, `hsg_emptylot_snowdays_01`, `hsg_emptylot_merryvale_01` and
+`hsg_emptylot_laketree_01`. The client has **seven housing zones our `Houses.json` doesn't list**:
+`hsg_emptylot_bixie_field_01`, `hsg_emptylot_seaside_beach_01`, `hsg_emptylot_wilds_halflot_01`,
+`hsg_emptylot_wilds_rapids_01`, `hsg_hum_economy_decorated_01`, `hsg_hum_seaside_beach_house_01` and
+`hsg_hum_xmas_01`, plus two test zones (`hsg_test`, `hsg_test_interior`).
+
+**2. Strings.** 510215 "Castle Test Lot" (internal, as guessed), 441205 "Snow Days Lot", 426811 "Chromakey Zone",
+404 "Snowhill Lodge" (so lot 29 is the Lodge), **394 "Sunstone Valley Lot"** and **33944 "Sunstone Dam"**. The last
+two don't match the zones section 3 assigns to lots 31 and 32 (Merry Vale, Lake Tree), whose own names are 69968
+"Merry Vale Lot" and 69978 "Lake Tree Lot". Either `Houses.json`'s names or the zone assignments for 31 and 32 are
+wrong: check in game before shipping them. The table also has "Sandy Beach Lot" (8321), "Sanctuary Bixie Field Lot"
+(430596), "Wilds Rapids Lot" (69972) and "Sanctuary Lot" (69969), so the client knows those lots; "Sunstone Dam"
+appears in a sale line too (5840).
+
+**3. Directory snapshots.** Pairs of `<name>_lot.dds` and `<name>_lot_thumb.dds` exist for bixiefield, blackspore,
+blacksporeswamphouse, bogshore, briarfalls, briarwood, briarwoodtowers, condo, crystalmines, dwarfdam (the Sunstone
+Dam), laketree, lonelyisland, merryvale, sandybeach, seaside, shroudedglade, shroudedgladestairs, shroudedgloam,
+snowhill, snowhillbatcave, snowhilllodge, sunstonevalley, valestream, vipclub, wildrapids, wugachug and yacht.
+
+**4. `Models.txt`.** The client's table stops at id **4762**: it has neither 5000 to 5008 (raisingkaines' Blackspore
+meshes) nor 9000 to 9047 (AlchemyDevelopment's). Both wallpaper methods need a changed client file, so wallpaper is a
+decision about client pinning, not a port.
+
+Questions 5 to 8 still need the game.
