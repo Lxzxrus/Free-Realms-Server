@@ -303,3 +303,37 @@ OpenSourceFreeRealms `ace6a82` (captures `p1`, `p2`, `p3`, `p12`, `packets_1` to
 Allakhazam pages: Quests (FR), Quests by Place, Quests by Job, Template:FR Quest, Community (FR), the place pages
 for Sacred Grove, Sanctuary, Seaside, Snowhill, Blackspore Swamp, Wugachug, Merry Vale, Shrouded Glade, Greenwood
 Forest, Briarwood, Lakeshore and Forest Troll Village, and 22 quest pages named in section 4.
+
+## 9. Answers from the client (local session, 2026-10-12)
+
+Checked against the 2014 client on Nate's PC. Nothing from the client is committed; the text quoted below is
+single titles, enough to identify each row.
+
+**1. The mapping is not identity, but it is solved.** The `.dat` row ids run from 63,491 to 4,294,824,798: they are
+hashes. A string id `N` is stored under **Bob Jenkins' lookup2 hash** (the 1996 `hash()`, initial value 0) **of the
+text `Global.Text.N`**, as in PlanetSide 2. All twelve test ids resolve: 94247 "Introduce Yourself", 46280
+"Nomi's Little Brother", 93283 "Welcome to Seaside", 38385 "Lazy Trolls", 36830 "Noise Permit" and 36831 its
+description, 409962 "Spin For The Win!" and 409969 its description, 6514 "Blackspore Swamp Lot", 3388 "Trading
+Card Game". Hashing every id from 0 to 12 million and matching it against the table maps **86,275 of the 113,285
+rows** back to their ids. Real ids sit in 0 to 1,000,000 (82,187 rows) and 4,000,000 to 5,999,999 (about 3,800);
+elsewhere about 26 ids per million match some row by chance (32-bit collisions), so treat a lone hit there as
+noise. The other 27,000 rows are under keys other than `Global.Text.N`.
+
+**So quest text is a lookup.** To use existing text, find the row by its words and take the id; to read any id, hash
+it. New text can't be added without changing the client's locale file, which whole-client pinning protects.
+
+**2. 7-digit ids exist.** 5100479 is "Second Helping of Strongarm Stew" (not the "Introduce Yourself" sticker), and
+4419559 is "Hero's Journal". The 2013 journal ids point at text the client has.
+
+**3. The Seaside Tour's rows.** "Touring Seaside" is **93420**; around it sit its description (93421, "Cole has
+asked you to take a tour of a few of the Seaside locations."), the intro dialogue (93419), the follow-up line
+(93422), the objective list text (93424) and the objectives "Find the Fortune Teller, &quot;The Great
+Koodini&quot;" (93425), "Find The Boardwalk" (93427) and "Speak to Diggy, the owner of Ocean Treasures Cafe"
+(93429). "Testing the Tour" is **93447**, with its completion text (93448), Cole's dialogue (93449, 93451), the
+objective "Answer Brenna's questions correctly" (93454) and "Return to Cole in Seaside" (93457). Step 1 of section 5
+is done.
+
+**4. Quests 3060, 3061, 3070, 3071:** title ids 101400 "Feminine Touch", 400355 "A Booming Problem", 385597 "The
+Party Pooper", 74199 "Suspicious Serenity".
+
+Questions 5 to 8 still need the game or a browser.

@@ -341,7 +341,7 @@ each one searches, reads and ranks, then writes a report. They can run in parall
 
 - **Only add your report**, `docs/research/<topic>-scout.md`. Change nothing under `src/`, `launcher/`, `tools/` or
   `scripts/`. The self-check must still pass.
-- **Where to look:** GitHub and GitLab, starting with the 39 forks of `Open-Source-Free-Realms/Sanctuary` and that
+- **Where to look:** GitHub and GitLab, starting with the forks of `Open-Source-Free-Realms/Sanctuary` (24 direct forks; GitHub counts 39 across the whole network) and that
   repo's open and closed PRs and branches. Then other Free Realms projects, emulators for SOE's other ForgeLight
   games (Clone Wars Adventures shares Free Realms' engine and much of its protocol; PlanetSide 2 and H1Z1 emulators
   such as h1emu share packet families), Free Realms wikis, the Wayback Machine, and community posts and videos that

@@ -45,7 +45,7 @@ Login, Gateway and WebAPI read a git-ignored local file after their tracked conf
 | `import/quest-upstream-v2` | JadenY's quest system, from Sulphural's fork | Read-only source. Credit JadenY |
 | `import/frl-main` | FreeRealms-Legacy. **No git history in common with `main`**; port by hand | Read-only. Trading lives in `src/Sanctuary.Game/Trading` |
 | `import/frl-quests` | Our port of JadenY's quests to FreeRealms-Legacy, verified in the game client | Read-only reference for tests and lessons |
-| `archive/sulphural-main-2026-08-18` | JadenY's big merge of housing, pets, mounts and more. The only surviving copy | Read-only reference. **Don't merge it**: 124+ conflicts |
+| `archive/sulphural-main-2026-08-18` | JadenY's big merge of housing, pets, mounts and more. **Not on GitHub**: the only copy is a git bundle on Nate's PC (`archives/` beside the repo) | Read-only reference. **Don't merge it**: 124+ conflicts |
 
 Both imports share OSFR history with `main`, so git merges them natively. Housing was merged in Task 2
 (12 conflicted files) and quests in Task 3 (5 conflicted files). Quest hooks on zone entry live in
