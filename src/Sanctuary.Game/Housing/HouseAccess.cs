@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Sanctuary.Core.Helpers;
+using Sanctuary.Database.Entities;
 using Sanctuary.Packet.Common;
 
 namespace Sanctuary.Game.Housing;
@@ -24,5 +25,20 @@ public static class HouseAccess
     public static bool MayBeInLockedHouse(ulong playerGuid, IEnumerable<FriendData> friends, ulong ownerCharacterId)
     {
         return GuidHelper.GetPlayerId(playerGuid) == ownerCharacterId || IsOwnersFriend(friends, ownerCharacterId);
+    }
+
+    /// <summary>
+    /// Whether a player may enter a house. The owner always may. A members-only house turns away everyone else who
+    /// isn't a member, and a house that is unpublished or locked turns away everyone but the owner's friends.
+    /// </summary>
+    public static bool MayEnter(ulong playerGuid, IEnumerable<FriendData> friends, bool isMember, DbHouse house)
+    {
+        if (GuidHelper.GetPlayerId(playerGuid) == house.CharacterId)
+            return true;
+
+        if (house.IsMembersOnly && !isMember)
+            return false;
+
+        return (house.IsPublished && !house.IsLocked) || IsOwnersFriend(friends, house.CharacterId);
     }
 }

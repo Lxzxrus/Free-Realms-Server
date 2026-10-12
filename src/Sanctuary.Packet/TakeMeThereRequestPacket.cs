@@ -4,13 +4,18 @@ using Sanctuary.Core.IO;
 
 namespace Sanctuary.Packet;
 
-// Fires when the client's "Take Me There" quest-tracker button is clicked, and keeps
-// retrying every ~30s until it gets a reply. Wire shape confirmed against real captured
-// traffic; Unknown1 and Unknown2 are constant across every capture, but their meaning is
-// not verified (not a CRC32/FNV1a of the action name).
+// Fires when the client's "Take Me There" quest-tracker button is clicked. Wire shape confirmed
+// against real captured traffic; Unknown1 and Unknown2 are constant across every capture, but
+// their meaning is not verified (not a CRC32/FNV1a of the action name).
+//
+// Opcode 142 is not this packet's own: it is PacketClientLuaMetrics, which every Lua UI metrics
+// event uses (the house directory sends "HousingRating_BrowserShown" on it every 30 seconds).
+// Which event name Take Me There sends is not recorded, so it is recognised by its shape: a name
+// followed by exactly one int. PacketClientLuaMetricsHandler tries this read first and drops
+// every event of any other shape.
 public class TakeMeThereRequestPacket : IDeserializable<TakeMeThereRequestPacket>
 {
-    public const short OpCode = 142;
+    public const short OpCode = PacketClientLuaMetrics.OpCode;
 
     public int Unknown1;
     public int Unknown2;

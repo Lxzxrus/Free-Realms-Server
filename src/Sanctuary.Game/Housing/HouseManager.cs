@@ -153,17 +153,8 @@ public sealed class HouseManager : IHouseManager
         if (player.Zone is not WorldZone and not HousingZone)
             return EnterHouseResult.UnsupportedSourceZone;
 
-        var playerId = GuidHelper.GetPlayerId(player.Guid);
-
-        var isOwner = playerId == house.CharacterId;
-        var isFriend = HouseAccess.IsOwnersFriend(player.Friends, house.CharacterId);
-
-        if (!isOwner &&
-            ((house.IsMembersOnly && player.MembershipStatus == 0) ||
-                (!isFriend && (!house.IsPublished || house.IsLocked))))
-        {
+        if (!HouseAccess.MayEnter(player.Guid, player.Friends, player.MembershipStatus != 0, house))
             return EnterHouseResult.NotAuthorized;
-        }
 
         if (!_resourceManager.Zones.TryGetValue(house.ZoneDefinitionId, out var definition) ||
             definition is not HousingZoneDefinition zoneDefinition)
