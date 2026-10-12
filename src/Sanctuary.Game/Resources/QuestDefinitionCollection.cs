@@ -195,6 +195,9 @@ public class QuestDefinitionCollection
                     questIds.Add(quest.QuestId);
             }
 
+            foreach (var problem in goal.ConversationProblems())
+                _logger.LogWarning("Quest {id}, goal {nameId}: {problem} in \"{file}\".", quest.QuestId, goal.NameId, problem, filePath);
+
             if (!goalNameIds.Add(goal.NameId))
                 _logger.LogWarning("Duplicate goal NameId {nameId} on quest {id} in \"{file}\".", goal.NameId, quest.QuestId, filePath);
 

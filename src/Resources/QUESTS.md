@@ -123,6 +123,33 @@ Lua `onStart` (see `FabledRealms.lua`). This one call spawns **every** collectib
 **all** quests in `Quests.json`, not just that zone's - it isn't scoped, so a zone without any
 collect quests can skip the call entirely and it's harmless either way.
 
+## Conversations
+
+A talk goal's NPC says its `DialogueId` as one line. For more, give the goal a `Dialogue`: lines shown one
+after another, each with one response button (`ResponseTextId`, default "You got it!").
+
+A line with `Choices` is a question instead, with one button per answer. The answer picked plays its own
+`Then` lines next. An answer with `"Retry": true` is wrong: after its `Then` lines, the question is asked again.
+Brenna's quiz in quest 3023:
+
+```json
+{
+  "TextId": 93466,
+  "Choices": [
+    { "ResponseTextId": 21311, "Retry": true, "Then": [ { "TextId": 93471, "ResponseTextId": 93472 } ] },
+    { "ResponseTextId": 21302, "Then": [ { "TextId": 93470, "ResponseTextId": 93473 } ] }
+  ]
+}
+```
+
+A step completes when its conversation starts, so the NPC speaks after the step is ticked off. With
+`"CompleteAfterDialogue": true` on the goal it completes only when the last line is answered, so a quiz has to
+be passed: closing the window part way leaves the step open, and talking to the NPC again starts over. It works
+on a goal with one NPC, not a counted talk.
+
+The loader warns, and the tests fail, when a question has only wrong answers, an answer has no text, or
+`CompleteAfterDialogue` is set where it can't work.
+
 ## Chaining and gating
 
 - `PrerequisiteQuestId`: must be completed before this quest can be offered. `0` = none.
@@ -165,6 +192,9 @@ were cut when it left:
 `NotificationAvailable` (default `2`, the "!" icon) and `NotificationActive` (default `6`, the "?"
 icon) control the world badge shown above the giver/target's head. You'll rarely need to change
 these - the defaults match every existing quest.
+
+The giver shows the "!" while the quest is on offer. Once it's accepted, only the NPC the current step needs shows
+the "?" (for a counted talk, each NPC not yet talked to), and each step's NPC is refreshed as the steps go by.
 
 ## Text ids
 

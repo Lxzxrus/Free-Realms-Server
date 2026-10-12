@@ -76,8 +76,7 @@ public sealed class Player : ClientPcData, IEntity
 
     public HashSet<ulong> TalkedQuestNpcs { get; } = new();
 
-    public Queue<QuestDialogueLine> PendingDialogue { get; } = new();
-    public ulong PendingDialogueNpcGuid { get; set; }
+    public QuestConversation? Conversation { get; set; }
 
     public ulong TalkingNpcGuid { get; set; }
     public int TalkAnimationTicket { get; set; }
@@ -582,8 +581,11 @@ public sealed class Player : ClientPcData, IEntity
         {
             foreach (var questId in targetQuestIds)
             {
-                if (Quests.TryGetValue(questId, out var completed) && !completed && quests.TryGet(questId, out var quest))
+                if (Quests.TryGetValue(questId, out var completed) && !completed && quests.TryGet(questId, out var quest)
+                    && quest.WaitsOn(QuestGoalProgress.GetValueOrDefault(questId), npc.Guid, TalkedQuestNpcs))
+                {
                     return quest.NotificationActive;
+                }
             }
         }
 

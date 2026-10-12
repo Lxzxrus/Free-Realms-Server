@@ -224,8 +224,17 @@
       },
       {
         "NameId": 93310,
-        "DialogueId": 93316,
-        "TargetGuid": 100000001885
+        "TargetGuid": 100000001885,
+        "Dialogue": [
+          {
+            "TextId": 93316,
+            "Choices": [
+              { "ResponseTextId": 93320, "Then": [ { "TextId": 93324 } ] },
+              { "ResponseTextId": 93322, "Then": [ { "TextId": 93324 } ] },
+              { "ResponseTextId": 93323, "Then": [ { "TextId": 93325, "ResponseTextId": 93326 } ] }
+            ]
+          }
+        ]
       },
       {
         "NameId": 101743,
@@ -336,6 +345,7 @@
       {
         "NameId": 93454,
         "TargetGuid": 100000001749,
+        "CompleteAfterDialogue": true,
         "Dialogue": [
           {
             "TextId": 93464,
@@ -343,15 +353,19 @@
           },
           {
             "TextId": 93466,
-            "ResponseTextId": 21302
-          },
-          {
-            "TextId": 93470,
-            "ResponseTextId": 93473
+            "Choices": [
+              { "ResponseTextId": 21311, "Retry": true, "Then": [ { "TextId": 93471, "ResponseTextId": 93472 } ] },
+              { "ResponseTextId": 21302, "Then": [ { "TextId": 93470, "ResponseTextId": 93473 } ] },
+              { "ResponseTextId": 93337, "Retry": true, "Then": [ { "TextId": 93471, "ResponseTextId": 93472 } ] }
+            ]
           },
           {
             "TextId": 93474,
-            "ResponseTextId": 93477
+            "Choices": [
+              { "ResponseTextId": 93475, "Retry": true, "Then": [ { "TextId": 93479, "ResponseTextId": 93472 } ] },
+              { "ResponseTextId": 93476, "Retry": true, "Then": [ { "TextId": 93479, "ResponseTextId": 93472 } ] },
+              { "ResponseTextId": 93477 }
+            ]
           }
         ]
       },
