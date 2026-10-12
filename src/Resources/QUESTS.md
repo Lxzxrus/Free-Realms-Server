@@ -132,7 +132,8 @@ collect quests can skip the call entirely and it's harmless either way.
 - `ExcludesQuestIds`: quests that block this one while active *or* completed, and vice versa - list
   both directions. Used for the two race-specific "Introduce Yourself" quests (`2563`/`2564`) so a
   player only ever gets one. Abandoning a quest clears it from the player's quest state, which lifts
-  the exclusion automatically.
+  the exclusion automatically. Exclusions are checked before the prerequisite, so two exclusive
+  branches can share one prerequisite and only the branch taken stays on offer.
 - The loader refuses the file if any of these ids names a quest that isn't in `Quests.json`, and
   logs each one (`Quest 3011's PrerequisiteQuestId is quest 3010, which isn't in ...`). The tests
   check the shipped file the same way.
@@ -172,6 +173,23 @@ SOE T4 client localization ids (resolved client-side as `Global.Text.<id>`). The
 server-side validation - any int is accepted - but an id with no matching client string just shows
 as unresolved text in-game. You need ids that already exist in the client's string table; this
 repo can't add new client-side strings.
+
+### Finding text ids
+
+The client's `locale/en_us_data.dat` keeps each string under Bob Jenkins' lookup2 hash of
+`Global.Text.<id>`, so ids can be looked up, and searched for by their words, with
+`tools/client-strings/strings.py` and your own client folder (nothing from the client goes in the repo):
+
+```bash
+python tools/client-strings/strings.py "<client folder>" search "Touring Seaside" --around 12
+python tools/client-strings/strings.py "<client folder>" lookup 93420 93421 93419
+```
+
+A quest's rows usually sit together: its title, then within a few ids its description, the giver's
+dialogue, the objective text, each goal's name and the turn-in line. Touring Seaside (`3022`) is the
+worked example: title 93420, description 93421, giver dialogue 93419, objective text 93424, goals
+93425, 93427, 93429 and the turn-in line 93422. Some rows the live game used (a goal's own dialogue,
+say) aren't in the client we ship; leave those ids out rather than borrowing unrelated text.
 
 ## No database migration needed
 
