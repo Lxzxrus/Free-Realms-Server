@@ -456,3 +456,38 @@ each one searches, reads and ranks, then writes a report. They can run in parall
 - **Deliverable:** a PR with Nate's in-game checklist. Count the lots on the Marketplace shelf. Buy several: each is
   free. Enter each one: the right scenery and sky, standing on the ground, Decorate works at the build area's edge.
   Relog inside one. Visit one from a second account through the directory.
+
+## 27. `housing-requests`: "Go to House" and a misrouted directory event
+
+Found in the 2026-10-12 playtest; both show as errors in the live Gateway log.
+
+- **"Go to House" doesn't work.** Clicking another player and choosing "Go to House" makes the client send
+  `ClientHousingPacketRequestPlayerHouses` (housing sub-opcode 14) **with extra bytes**, almost certainly the guid of
+  the player whose houses to list. Our packet class has no fields and requires every byte to be read, so it fails
+  ("Failed to deserialize ClientHousingPacketRequestPlayerHouses") and nothing happens. The handler also always
+  lists the *requester's* houses. Work out the layout (other forks, the 2014 captures in the archived
+  `OpenSourceFreeRealms` repo, `docs/research/housing-scout.md`), accept both the empty and the targeted form, and
+  for a target return the houses that player could enter (`HouseAccess`, published and unlocked, or the requester
+  is the owner's friend), so the client's list can enter one through the existing enter-by-guid path.
+- **A directory event reaches the wrong handler.** While the house directory is open, the client sends a packet
+  every 30 seconds that the Gateway hands to `TakeMeThereRequestPacketHandler`, which logs "Failed to deserialize
+  TakeMeThereRequestPacket". Its payload starts `8E 00 07 00 00 00 71 1D 82 3E 1A 00 00 00`, followed by the
+  text `HousingRating_BrowserShown`. Find out what it really is (a UI or metrics event, by the look of it), route
+  it to its own handler or to a quiet ignore, and make sure `TakeMeThereRequestPacket` only accepts its own
+  opcode. Check whether other packets share the same routing mistake.
+- **Scope:** the housing and packet files involved, plus tests (packet round trips for both forms, the access rule
+  for a target's list, the misrouted packet no longer reaching TakeMeThere).
+- **Deliverable:** a PR with Nate's in-game checks: Ariel clicks Nate, "Go to House" lists Nate's houses she may
+  enter and takes her there; a locked house isn't offered to a non-friend; leaving the directory open logs nothing.
+
+## 28. `exploration-coins`: why the Rare Exploration Coin can't be picked up
+
+- **Found in the 2026-10-12 playtest:** Ariel found a "Rare Exploration Coin" floating in Seaside (a collection
+  node; the zone logs "Activated 40 collection node(s) across 7 pool(s)") and couldn't collect it.
+- **Task:** trace the collection node path (`CollectionNode`, `CollectionNodePoolDefinitionCollection`,
+  `src/Resources/CollectionNode*.json`, the interaction and the quest Collect-goal code) and find out why clicking
+  one does nothing. Fix it if the cause is on the server and the fix is contained; otherwise report the cause and
+  what's missing.
+- **Scope:** collection nodes and their tests. Don't change quest definitions.
+- **Deliverable:** a PR (or a report, if the fix is out of reach) with the in-game check: click a Rare
+  Exploration Coin in Seaside; it disappears, the reward lands, and it respawns later.
