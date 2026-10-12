@@ -422,3 +422,37 @@ each one searches, reads and ranks, then writes a report. They can run in parall
   - **Missing build items:** fixtures or placeable items the original game had that the catalog lacks, and any public
     source for the missing icons.
   - Rank which houses could be made enterable first.
+
+## 26. `open-lots`: sixteen more lots on the Marketplace shelf
+
+- **Task:** make 16 more housing lots buyable and enterable, as `docs/research/housing-scout.md` section 7
+  recommends: lots 1, 2, 3, 4, 5, 6, 8, 9, 10, 15, 16, 17, 19, 20, 21 and the Apartment (24), by `Houses.json` id.
+  Read sections 2, 3, 7 and **10** of that report first; section 10 has the client facts it was missing.
+- **The data:** `ZoneName` and `Sky` for each lot come from `AlchemyDevelopment/Sanctuary`, branch
+  `feature/housing` (AGPL-3.0). Credit Jacob Plunkett in the commit. Spawn, rotation and build areas come from our
+  `src/Resources/Houses.json`; deeds and bundles from section 3. Generate the zone files with a small script under
+  `tools/`, run it once, and commit both the script and its output.
+- **Directory pictures** (`DirectorySnapshot`), from section 10: 1 `blackspore_lot`, 3 `bogshore_lot`,
+  4 `briarfalls_lot`, 5 `briarwood_lot`, 6 `briarwoodtowers_lot`, 8 `shroudedgladestairs_lot`, 9 `shroudedglade_lot`,
+  10 `lonelyisland_lot`, 15 `snowhillbatcave_lot`, 16 `crystalmines_lot`, 17 `shroudedgloam_lot`, 19 `snowhill_lot`,
+  20 `valestream_lot`, 21 `wugachug_lot`, 24 `condo_lot`. For 2, the Sunset Party Boat, `yacht_lot` exists but may be
+  a different boat: leave it empty and list it as a check.
+- **Zone ids:** zone definitions share one table with world zones (`FabledRealms` is id 1), so lot 1 can't be zone
+  1. Choose ids that can't collide, keep the two working lots at 14 and 22 (existing houses point at them), keep
+  `Houses.json`'s `ZoneId` consistent with the zone files, and explain the choice in the PR. Existing `Houses` rows
+  in players' databases must keep working.
+- **Lots without a bundle** (2, 8, 15, 24): add a store bundle each with the deed as the marketed item, in the lot
+  group, so they appear on the shelf and are free under `Housing:FreeLots`. Fix bundle 4715's name ("Shrouded Stairs
+  Lot", but it sells the Gloam deed): make each lot's bundle name match what it sells.
+- **Spawn:** clamp the arrival position into the lot's first build area. Lot 1's spawn is outside its own, and the
+  client refuses every placement there.
+- **Out of scope:** lots 7, 18, 23 and 25 to 34; the seven housing zones `Houses.json` doesn't list (section 10);
+  wallpaper and `HousingSurfaceCatalog`; any change to the client.
+- **Check:** the self-check, a boot that loads every zone file, and tests:
+  - every zone file agrees with its `Houses.json` entry on name id, icon and spawn;
+  - every zone file's store bundle exists and sells its deed;
+  - no two zone definitions share an id;
+  - every spawn is inside its first build area.
+- **Deliverable:** a PR with Nate's in-game checklist. Count the lots on the Marketplace shelf. Buy several: each is
+  free. Enter each one: the right scenery and sky, standing on the ground, Decorate works at the build area's edge.
+  Relog inside one. Visit one from a second account through the directory.
