@@ -21,7 +21,8 @@ public sealed class CollectionNodePoolDefinition
         if (hardPointCount < 0)
             throw new ArgumentOutOfRangeException(nameof(hardPointCount));
 
-        // A zero cap enables every hard point while a pool is being authored.
+        // A zero cap enables every hard point: used while a pool is being authored, and by pools whose
+        // nodes each respawn on their own spot (exploration coins).
         return MaxActiveNodes == 0 ? hardPointCount : Math.Min(MaxActiveNodes, hardPointCount);
     }
 

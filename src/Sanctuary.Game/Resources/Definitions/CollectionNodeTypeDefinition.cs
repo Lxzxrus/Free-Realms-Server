@@ -8,6 +8,7 @@ public sealed class CollectionNodeTypeDefinition
 {
     public required string Key { get; set; }
     public required string Name { get; set; }
+    public int NameId { get; set; }
     public int ModelId { get; set; }
     public float Scale { get; set; } = 1f;
     public int CompositeEffectId { get; set; }
@@ -15,6 +16,11 @@ public sealed class CollectionNodeTypeDefinition
     public byte CursorId { get; set; } = 18;
     public float PlacementYOffset { get; set; }
     public List<CollectionNodeDropDefinition> DropTable { get; set; } = [];
+
+    /// <summary>
+    /// Coins granted on pickup. A type gives an item from its drop table or coins, never both.
+    /// </summary>
+    public int Coins { get; set; }
 
     public bool HasDrop => DropTable.Count > 0;
 
