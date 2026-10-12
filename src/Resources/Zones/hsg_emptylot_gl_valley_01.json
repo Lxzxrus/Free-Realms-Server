@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1009,
+  "Name": "hsg_emptylot_gl_valley_01",
+  "DisplayName": "Shrouded Glade Lot",
+  "CommandName": "glade",
+  "NameId": 69964,
+  "IconId": 33445,
+  "StoreBundleId": 4633,
+  "ItemDefinitionId": 17182,
+  "DirectorySnapshot": "shroudedglade_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_hidden_valley24.xml",
+  "SpawnPosition": [
+    445.6,
+    -1.02,
+    431.4
+  ],
+  "SpawnRotation": [
+    -1,
+    0
+  ],
+  "BuildAreas": [
+    {
+      "Min": [328.4, -100, 387.1, 1],
+      "Max": [443.9, 60.0, 476.3, 1]
+    }
+  ]
+}

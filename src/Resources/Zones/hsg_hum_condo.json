@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1024,
+  "Name": "hsg_hum_condo",
+  "DisplayName": "Apartment",
+  "CommandName": "apartment",
+  "NameId": 420151,
+  "IconId": 27226,
+  "StoreBundleId": 900224,
+  "ItemDefinitionId": 10337,
+  "DirectorySnapshot": "condo_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_sunstone_valley24.xml",
+  "SpawnPosition": [
+    63.2,
+    4.79,
+    54.81
+  ],
+  "SpawnRotation": [
+    0,
+    1
+  ],
+  "BuildAreas": [
+    {
+      "Min": [54.6, -100, 55.7, 1],
+      "Max": [69.3, 60, 71.7, 1]
+    }
+  ]
+}

@@ -15560,11 +15560,6 @@
                             "Quantity":  1,
                             "GameItemId":  4356,
                             "MarketingItemId":  7485
-                        },
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
                         }
                     ],
         "Id":  4295,
@@ -15591,11 +15586,6 @@
                       "Image":  "6441"
                   },
         "Entries":  [
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
-                        },
                         {
                             "Quantity":  1,
                             "GameItemId":  4357,
@@ -18321,11 +18311,6 @@
                             "Quantity":  1,
                             "GameItemId":  4674,
                             "MarketingItemId":  10386
-                        },
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5480,
-                            "MarketingItemId":  32791
                         }
                     ],
         "Id":  4596,
@@ -18629,11 +18614,6 @@
         "Entries":  [
                         {
                             "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
-                        },
-                        {
-                            "Quantity":  1,
                             "GameItemId":  4710,
                             "MarketingItemId":  17182
                         }
@@ -18666,11 +18646,6 @@
                             "Quantity":  1,
                             "GameItemId":  4711,
                             "MarketingItemId":  17185
-                        },
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
                         }
                     ],
         "Id":  4634,
@@ -18823,11 +18798,6 @@
                             "Quantity":  1,
                             "GameItemId":  4742,
                             "MarketingItemId":  17567
-                        },
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
                         }
                     ],
         "Id":  4666,
@@ -18917,11 +18887,6 @@
                             "Quantity":  1,
                             "GameItemId":  4777,
                             "MarketingItemId":  17192
-                        },
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
                         }
                     ],
         "Id":  4701,
@@ -19089,18 +19054,13 @@
         "MembersOnlyPrice":  1
     },
     {
-        "Comment":  "Shrouded Stairs Lot",
+        "Comment":  "Shrouded Gloam Lot",
         "LaunchTime":  "2010-11-17T08:00:00+00:00",
         "ExpireTime":  "2040-08-15T07:00:00+00:00",
         "Image":  {
-                      "Image":  "6881"
+                      "Image":  "7891"
                   },
         "Entries":  [
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
-                        },
                         {
                             "Quantity":  1,
                             "GameItemId":  4794,
@@ -19108,8 +19068,8 @@
                         }
                     ],
         "Id":  4715,
-        "NameId":  69965,
-        "DescriptionId":  10482,
+        "NameId":  17432,
+        "DescriptionId":  17433,
         "Status":  1,
         "CurrencyType":  1,
         "Price":  1,
@@ -19193,11 +19153,6 @@
                       "Image":  "6872"
                   },
         "Entries":  [
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
-                        },
                         {
                             "Quantity":  1,
                             "GameItemId":  4858,
@@ -20830,11 +20785,6 @@
                             "Quantity":  1,
                             "GameItemId":  4918,
                             "MarketingItemId":  17193
-                        },
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5480,
-                            "MarketingItemId":  32791
                         }
                     ],
         "Id":  4846,
@@ -21621,11 +21571,6 @@
                       "Image":  "6877"
                   },
         "Entries":  [
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5475,
-                            "MarketingItemId":  32786
-                        },
                         {
                             "Quantity":  1,
                             "GameItemId":  4961,
@@ -22451,11 +22396,6 @@
                             "Quantity":  1,
                             "GameItemId":  5064,
                             "MarketingItemId":  17189
-                        },
-                        {
-                            "Quantity":  1,
-                            "GameItemId":  5480,
-                            "MarketingItemId":  32791
                         }
                     ],
         "Id":  4978,
@@ -41443,6 +41383,122 @@
         "CategoryDisplayOrder":  1480000,
         "DiscountType":  306,
         "SkuId":  2,
+        "MemberDiscount":  1,
+        "MembersOnlyPrice":  1
+    },
+    {
+        "Comment":  "Apartment",
+        "LaunchTime":  "2026-10-01T00:00:00+00:00",
+        "ExpireTime":  "2040-08-15T07:00:00+00:00",
+        "Image":  {
+                      "Image":  "5651"
+                  },
+        "Entries":  [
+                        {
+                            "Quantity":  1,
+                            "GameItemId":  10337,
+                            "MarketingItemId":  10337
+                        }
+                    ],
+        "Id":  900224,
+        "NameId":  420151,
+        "DescriptionId":  1114,
+        "Status":  1,
+        "CurrencyType":  1,
+        "Price":  1,
+        "AltCurrencyPrice":  1,
+        "StoreId":  1,
+        "CategoryGroupId":  206,
+        "CategoryDisplayOrder":  100000,
+        "DiscountType":  104,
+        "SkuId":  1,
+        "MemberDiscount":  1,
+        "MembersOnlyPrice":  1
+    },
+    {
+        "Comment":  "Bat Cavern Lot",
+        "LaunchTime":  "2026-10-01T00:00:00+00:00",
+        "ExpireTime":  "2040-08-15T07:00:00+00:00",
+        "Image":  {
+                      "Image":  "5653"
+                  },
+        "Entries":  [
+                        {
+                            "Quantity":  1,
+                            "GameItemId":  17195,
+                            "MarketingItemId":  17195
+                        }
+                    ],
+        "Id":  900215,
+        "NameId":  69977,
+        "DescriptionId":  1114,
+        "Status":  1,
+        "CurrencyType":  1,
+        "Price":  1,
+        "AltCurrencyPrice":  1,
+        "StoreId":  1,
+        "CategoryGroupId":  206,
+        "CategoryDisplayOrder":  150000,
+        "DiscountType":  104,
+        "SkuId":  1,
+        "MemberDiscount":  1,
+        "MembersOnlyPrice":  1
+    },
+    {
+        "Comment":  "Shrouded Stairs Lot",
+        "LaunchTime":  "2026-10-01T00:00:00+00:00",
+        "ExpireTime":  "2040-08-15T07:00:00+00:00",
+        "Image":  {
+                      "Image":  "6881"
+                  },
+        "Entries":  [
+                        {
+                            "Quantity":  1,
+                            "GameItemId":  10338,
+                            "MarketingItemId":  10338
+                        }
+                    ],
+        "Id":  900208,
+        "NameId":  69965,
+        "DescriptionId":  10482,
+        "Status":  1,
+        "CurrencyType":  1,
+        "Price":  1,
+        "AltCurrencyPrice":  1,
+        "StoreId":  1,
+        "CategoryGroupId":  206,
+        "CategoryDisplayOrder":  1128000,
+        "DiscountType":  104,
+        "SkuId":  1,
+        "MemberDiscount":  1,
+        "MembersOnlyPrice":  1
+    },
+    {
+        "Comment":  "Sunset Party Boat",
+        "LaunchTime":  "2026-10-01T00:00:00+00:00",
+        "ExpireTime":  "2040-08-15T07:00:00+00:00",
+        "Image":  {
+                      "Image":  "8887"
+                  },
+        "Entries":  [
+                        {
+                            "Quantity":  1,
+                            "GameItemId":  79149,
+                            "MarketingItemId":  79149
+                        }
+                    ],
+        "Id":  900202,
+        "NameId":  5103265,
+        "DescriptionId":  5103266,
+        "Status":  1,
+        "CurrencyType":  1,
+        "Price":  1,
+        "AltCurrencyPrice":  1,
+        "StoreId":  1,
+        "CategoryGroupId":  206,
+        "CategoryDisplayOrder":  1200000,
+        "DiscountType":  104,
+        "SkuId":  1,
         "MemberDiscount":  1,
         "MembersOnlyPrice":  1
     }

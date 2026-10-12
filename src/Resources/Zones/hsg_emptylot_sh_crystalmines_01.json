@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1016,
+  "Name": "hsg_emptylot_sh_crystalmines_01",
+  "DisplayName": "Crystal Mines Lot",
+  "CommandName": "mines",
+  "NameId": 69973,
+  "IconId": 33599,
+  "StoreBundleId": 4786,
+  "ItemDefinitionId": 17191,
+  "DirectorySnapshot": "crystalmines_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_deep_mines.xml",
+  "SpawnPosition": [
+    378.6,
+    8.8,
+    427.8
+  ],
+  "SpawnRotation": [
+    1,
+    0
+  ],
+  "BuildAreas": [
+    {
+      "Min": [318.6, -100, 311.9, 1],
+      "Max": [509.4, 64.3, 472.4, 1]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1021,
+  "Name": "hsg_emptylot_wugachug_01",
+  "DisplayName": "Wugachug Lot",
+  "CommandName": "wugachug",
+  "NameId": 69967,
+  "IconId": 33454,
+  "StoreBundleId": 4634,
+  "ItemDefinitionId": 17185,
+  "DirectorySnapshot": "wugachug_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_wugachug24.xml",
+  "SpawnPosition": [
+    573.1,
+    0,
+    559.8
+  ],
+  "SpawnRotation": [
+    -1,
+    0
+  ],
+  "BuildAreas": [
+    {
+      "Min": [457.5, -100, 515.4, 1],
+      "Max": [571.8, 60, 604.8, 1]
+    }
+  ]
+}

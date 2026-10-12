@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1006,
+  "Name": "hsg_emptylot_bw_towers_01",
+  "DisplayName": "Briarwall Towers Lot",
+  "CommandName": "towers",
+  "NameId": 69971,
+  "IconId": 37055,
+  "StoreBundleId": 4978,
+  "ItemDefinitionId": 17189,
+  "DirectorySnapshot": "briarwoodtowers_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_briarwood24.xml",
+  "SpawnPosition": [
+    566.9,
+    0,
+    557.1
+  ],
+  "SpawnRotation": [
+    -1,
+    0
+  ],
+  "BuildAreas": [
+    {
+      "Min": [470.7, -100, 440.2, 1],
+      "Max": [565, 60.0, 679.4, 1]
+    }
+  ]
+}

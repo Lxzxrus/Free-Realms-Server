@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1001,
+  "Name": "hsg_emptylot_blackspore_01",
+  "DisplayName": "Blackspore Swamp Lot",
+  "CommandName": "swamplot",
+  "NameId": 6514,
+  "IconId": 33439,
+  "StoreBundleId": 4666,
+  "ItemDefinitionId": 17567,
+  "DirectorySnapshot": "blackspore_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_blackspore24.xml",
+  "SpawnPosition": [
+    444.3,
+    5.2,
+    429.3
+  ],
+  "SpawnRotation": [
+    -1,
+    0
+  ],
+  "BuildAreas": [
+    {
+      "Min": [322.0, -100, 392.1, 1],
+      "Max": [443.3, 60.0, 477.8, 1]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1010,
+  "Name": "hsg_emptylot_island_01",
+  "DisplayName": "Lonely Island Lot",
+  "CommandName": "island",
+  "NameId": 8322,
+  "IconId": 33121,
+  "StoreBundleId": 4596,
+  "ItemDefinitionId": 10386,
+  "DirectorySnapshot": "lonelyisland_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_seaside24.xml",
+  "SpawnPosition": [
+    368.1,
+    25.2,
+    426.2
+  ],
+  "SpawnRotation": [
+    -0.63,
+    -1
+  ],
+  "BuildAreas": [
+    {
+      "Min": [298.4, -100, 378.7, 1],
+      "Max": [415, 80.0, 475.1, 1]
+    }
+  ]
+}

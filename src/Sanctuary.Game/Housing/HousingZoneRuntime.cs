@@ -1893,13 +1893,7 @@ public sealed class HousingZoneRuntime : IDisposable
 
     private bool IsInsideBuildArea(Vector4 position)
     {
-        return _zone.HousingDefinition.BuildAreas.Any(area =>
-            position.X >= MathF.Min(area.Min.X, area.Max.X) &&
-            position.X <= MathF.Max(area.Min.X, area.Max.X) &&
-            position.Y >= MathF.Min(area.Min.Y, area.Max.Y) &&
-            position.Y <= MathF.Max(area.Min.Y, area.Max.Y) &&
-            position.Z >= MathF.Min(area.Min.Z, area.Max.Z) &&
-            position.Z <= MathF.Max(area.Min.Z, area.Max.Z));
+        return _zone.HousingDefinition.IsInsideBuildArea(position);
     }
 
     private static bool IsFinite(Vector4 value)
