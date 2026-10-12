@@ -41,8 +41,11 @@ to. `Collections.json` now names them (`RewardCoins`, `RewardExperience`, `Rewar
 Regions were matched through the collection icon (2232 Blackspore, 2233 Briarwood, 2234 Wugachug, 2235 Merry Vale,
 2236 Sanctuary and the Wilds, 2237 Seaside, 2238 Shrouded Glade, 2239 Snowhill), which the coin npc models confirm,
 and through the wiki's reward list, which agrees with the capture on all twelve Rare collections. The capture has no
-Sunstone Valley exploration collection and the wiki has none; the 14 Sunstone Valley coins stay in the world without
-an entry. Elite coins are on neither the wiki nor PR 66's list of what they are; the capture says they fill the
+Sunstone Valley exploration collection and the wiki has none. Its two collections (9001 Rare, 9002 Elite; our own ids)
+come from a video of a completed collections window that Ariel found on 2026-10-12: names 3795/3797, descriptions
+3796/3798, entries 8797 to 8804 and 8805 to 8812 in the window's order, icon 7913 (`poi_env_sunstone_valley`). Each
+has eight entries and seven coins, paired in order, so its last entry has no coin. The rewards are shown only as
+pictures and aren't granted yet. Elite coins are on neither the wiki nor PR 66's list of what they are; the capture says they fill the
 Elite collections, and that is what they do now.
 
 Entry ids are **not** the coin npc ids. They are their own id space (1935 to 1989 Rare, 2012 to 2066 Elite,

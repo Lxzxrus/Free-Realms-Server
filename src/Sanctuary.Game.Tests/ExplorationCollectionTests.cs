@@ -34,7 +34,11 @@ public sealed class ExplorationCollectionTests
         [273] = ("sanctuary", 5, [1496]),
         [274] = ("sanctuary", 5, [17271]),
         [275] = ("sanctuary", 5, [15248, 17786]),
-        [276] = ("sanctuary", 5, [15281, 17932])
+        [276] = ("sanctuary", 5, [15281, 17932]),
+
+        // Not in the capture: names from a video of a completed collections window (2026-10-12). Its reward is
+        // shown only as a picture, so none is granted yet.
+        [9001] = ("sunstone-valley", 8, [])
     };
 
     private static readonly Dictionary<int, (string Region, int Entries, int[] Rewards)> Elite = new()
@@ -47,13 +51,15 @@ public sealed class ExplorationCollectionTests
         [289] = ("seaside", 8, [70346]),
         [290] = ("merry-vale", 5, [70347]),
         [291] = ("sanctuary", 8, [70348]),
-        [309] = ("sacred-grove", 8, [70349])
+        [309] = ("sacred-grove", 8, [70349]),
+        [9002] = ("sunstone-valley", 8, [])
     };
 
     // Entries the 2014 npc list has no coin for: two in Snowhill, two in Sanctuary, one in the Wilds Northeast,
-    // one Blackspore Elite, and all eight Sacred Grove Elite (that hub isn't in our world).
+    // one Blackspore Elite, all eight Sacred Grove Elite (that hub isn't in our world), and one of each Sunstone
+    // Valley collection (eight entries, seven coins).
     private static readonly int[] EntriesWithoutACoin =
-        [1949, 1950, 1954, 1955, 1985, 2045, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177];
+        [1949, 1950, 1954, 1955, 1985, 2045, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90018];
 
     private static string FindSourcePath(params string[] relativePath)
     {
@@ -140,7 +146,7 @@ public sealed class ExplorationCollectionTests
                 $"Coin {spawn.Id} in {region} ticks collection {match.Definition.Id}, which belongs to {expected.Region}.");
         }
 
-        Assert.AreEqual(104, seen.Count, "The number of coins with an entry changed.");
+        Assert.AreEqual(118, seen.Count, "The number of coins with an entry changed.");
     }
 
     [TestMethod]
@@ -162,17 +168,11 @@ public sealed class ExplorationCollectionTests
     }
 
     [TestMethod]
-    public void OnlySunstoneValleyCoins_HaveNoEntry()
+    public void EveryCoin_HasAnEntry()
     {
-        // The capture has no Sunstone Valley exploration collection (the wiki has none either), so its 14 coins
-        // stay in the world and do nothing until that collection's data turns up.
-        var spawns = LoadSpawns();
+        var withoutEntry = CoinSpawns(LoadSpawns()).Where(spawn => !spawn.HasCollectionEntry).Select(spawn => spawn.Id);
 
-        var withoutEntry = CoinSpawns(spawns).Where(spawn => !spawn.HasCollectionEntry).ToArray();
-
-        Assert.AreEqual(14, withoutEntry.Length);
-        Assert.IsTrue(withoutEntry.All(spawn => PoolOf(spawn).Region == "sunstone-valley"),
-            "A coin outside Sunstone Valley has no collection entry.");
+        Assert.AreEqual(0, withoutEntry.Count(), "Coins without a collection entry: " + string.Join(", ", withoutEntry));
     }
 
     [TestMethod]
