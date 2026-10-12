@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1005,
+  "Name": "hsg_emptylot_briarwood_01",
+  "DisplayName": "Briarwood Lot",
+  "CommandName": "briarwood",
+  "NameId": 5184,
+  "IconId": 31260,
+  "StoreBundleId": 4295,
+  "ItemDefinitionId": 7485,
+  "DirectorySnapshot": "briarwood_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_briarwood24.xml",
+  "SpawnPosition": [
+    442.2,
+    0,
+    431.7
+  ],
+  "SpawnRotation": [
+    -1,
+    0
+  ],
+  "BuildAreas": [
+    {
+      "Min": [325.8, -100, 386.3, 1],
+      "Max": [444.3, 60.0, 476.3, 1]
+    }
+  ]
+}

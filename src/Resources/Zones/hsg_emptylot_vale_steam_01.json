@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1020,
+  "Name": "hsg_emptylot_vale_steam_01",
+  "DisplayName": "Vale Stream Lot",
+  "CommandName": "valestream",
+  "NameId": 69976,
+  "IconId": 33617,
+  "StoreBundleId": 4885,
+  "ItemDefinitionId": 17194,
+  "DirectorySnapshot": "valestream_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_merryvale24.xml",
+  "SpawnPosition": [
+    573.1,
+    0,
+    561.6
+  ],
+  "SpawnRotation": [
+    -1,
+    0
+  ],
+  "BuildAreas": [
+    {
+      "Min": [365.9, -100, 540.1, 1],
+      "Max": [571.1, 60, 581, 1]
+    }
+  ]
+}

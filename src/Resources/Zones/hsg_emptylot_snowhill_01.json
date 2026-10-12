@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1019,
+  "Name": "hsg_emptylot_snowhill_01",
+  "DisplayName": "Snowhill Lot",
+  "CommandName": "snowhill",
+  "NameId": 5185,
+  "IconId": 31266,
+  "StoreBundleId": 4296,
+  "ItemDefinitionId": 7486,
+  "DirectorySnapshot": "snowhill_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_snowhill_housinglot_01.xml",
+  "SpawnPosition": [
+    428.4,
+    -0.82,
+    419.8
+  ],
+  "SpawnRotation": [
+    -1,
+    0
+  ],
+  "BuildAreas": [
+    {
+      "Min": [332.6, -100, 382.3, 1],
+      "Max": [428.7, 60, 457.4, 1]
+    }
+  ]
+}

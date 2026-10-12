@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1003,
+  "Name": "hsg_emptylot_bog_shore_01",
+  "DisplayName": "Bog Shore Lot",
+  "CommandName": "bogshore",
+  "NameId": 69974,
+  "IconId": 33593,
+  "StoreBundleId": 4701,
+  "ItemDefinitionId": 17192,
+  "DirectorySnapshot": "bogshore_lot",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_housing_wilds.xml",
+  "SpawnPosition": [
+    520.5,
+    0,
+    513.1
+  ],
+  "SpawnRotation": [
+    0,
+    1
+  ],
+  "BuildAreas": [
+    {
+      "Min": [467.2, -100, 514.2, 1],
+      "Max": [581.7, 60.0, 604.5, 1]
+    }
+  ]
+}

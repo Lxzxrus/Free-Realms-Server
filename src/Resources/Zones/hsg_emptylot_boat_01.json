@@ -1,0 +1,33 @@
+{
+  "$type": "Housing",
+  "Id": 1002,
+  "Name": "hsg_emptylot_boat_01",
+  "DisplayName": "Sunset Party Boat",
+  "CommandName": "boat",
+  "NameId": 5103265,
+  "IconId": 47733,
+  "StoreBundleId": 900202,
+  "ItemDefinitionId": 79149,
+  "DirectorySnapshot": "",
+  "TileSize": 64,
+  "StartLatitude": 0,
+  "StartLongitude": 0,
+  "EndLatitude": 12,
+  "EndLongitude": 12,
+  "Sky": "sky_seaside24.xml",
+  "SpawnPosition": [
+    391,
+    32.45,
+    424.8
+  ],
+  "SpawnRotation": [
+    0,
+    1
+  ],
+  "BuildAreas": [
+    {
+      "Min": [218.8, -100, 346.1, 1],
+      "Max": [481.3, 80.0, 505.7, 1]
+    }
+  ]
+}

@@ -165,14 +165,17 @@ public sealed class HouseManager : IHouseManager
             return EnterHouseResult.NotAuthorized;
         }
 
-        if (!_resourceManager.Zones.TryGetValue(house.ZoneDefinitionId, out var zoneDefinition))
+        if (!_resourceManager.Zones.TryGetValue(house.ZoneDefinitionId, out var definition) ||
+            definition is not HousingZoneDefinition zoneDefinition)
+        {
             return EnterHouseResult.ZoneUnavailable;
+        }
 
         // The zone manager creates the house instance, if needed, while it moves the player in.
         if (!player.TeleportToZone(
                 house.ZoneDefinitionId,
                 house.CharacterId,
-                zoneDefinition.SpawnPosition,
+                zoneDefinition.GetArrivalPosition(),
                 zoneDefinition.SpawnRotation))
         {
             return EnterHouseResult.TransferFailed;
