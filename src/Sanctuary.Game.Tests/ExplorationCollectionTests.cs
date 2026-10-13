@@ -168,6 +168,20 @@ public sealed class ExplorationCollectionTests
     }
 
     [TestMethod]
+    public void NewPlayer_IsSentEveryCollection_IncludingOneWithEightEntries()
+    {
+        // The collections window reads eight entry columns per collection, and the client makes only as many
+        // columns as the longest collection it was sent. A player sent only five-entry collections got a Lua error
+        // and a window that couldn't be closed (CollectionsBrowser.lua:134, 2026-10-12).
+        var collections = LoadCollections();
+
+        var sent = collections.CreateClientCollections(1, Sanctuary.Game.Collections.CollectionProgress.Empty, _ => null);
+
+        Assert.AreEqual(collections.Count, sent.Count);
+        Assert.IsTrue(sent.Max(collection => collection.Entries.Count) >= 8);
+    }
+
+    [TestMethod]
     public void EveryCoin_HasAnEntry()
     {
         var withoutEntry = CoinSpawns(LoadSpawns()).Where(spawn => !spawn.HasCollectionEntry).Select(spawn => spawn.Id);

@@ -104,11 +104,16 @@ public sealed class CollectionDefinitionCollection : ObservableConcurrentDiction
         return false;
     }
 
+    /// <summary>
+    /// Every collection, started or not, as SOE's server sent them (the 2014 capture gives one character 253). The
+    /// client's collections window needs this: it sizes its table by the longest collection it was sent and then
+    /// reads eight entry columns, so a player whose collections all had five entries got a Lua error, and a window
+    /// that couldn't be closed (Ariel and Nate, 2026-10-12; CollectionsBrowser.lua:134).
+    /// </summary>
     public List<ClientCollection> CreateClientCollections(ulong playerGuid, CollectionProgress progress,
         Func<int, ClientItemDefinition?> itemDefinitions)
     {
         return Values
-            .Where(definition => definition.IsStarted(progress))
             .OrderBy(definition => definition.CategoryId)
             .ThenBy(definition => definition.Id)
             .Select(definition => definition.CreateClientCollection(playerGuid, progress, itemDefinitions))
