@@ -115,7 +115,6 @@ public static class CommandPacketInteractRequestHandler
 
         var definition = match.Definition;
         var progress = CollectionProgress.From(player);
-        var collectionWasStarted = definition.IsStarted(progress);
 
         // The set is the live one on the player, so adding here also claims the entry against a second click
         // before the database answers.
@@ -172,9 +171,7 @@ public static class CommandPacketInteractRequestHandler
 
         _questManager.OnCollectionNodeGathered(player, node);
 
-        if (!collectionWasStarted)
-            SendCollectionStart(connection, definition, progress);
-
+        // The client has every collection since login (SendSelfToClient), so this only ticks the entry.
         SendCollectionEntryUpdate(connection, definition, match.Entry, match.Index);
 
         if (completed)
@@ -204,7 +201,6 @@ public static class CommandPacketInteractRequestHandler
 
             var progress = CollectionProgress.From(player);
             var hasEntry = _resourceManager.Collections.TryGetEntryByItem(itemDefinitionId, out var match);
-            var collectionWasStarted = hasEntry && match.Definition.IsStarted(progress);
             var collectionEntryWasCollected = hasEntry && match.Entry.IsCollected(progress);
 
             using var dbContext = _dbContextFactory.CreateDbContext();
@@ -247,9 +243,6 @@ public static class CommandPacketInteractRequestHandler
 
             if (hasEntry && !collectionEntryWasCollected)
             {
-                if (!collectionWasStarted)
-                    SendCollectionStart(connection, match.Definition, progressAfter);
-
                 SendCollectionEntryUpdate(connection, match.Definition, match.Entry, match.Index);
 
                 if (completed)
@@ -371,17 +364,6 @@ public static class CommandPacketInteractRequestHandler
     private static ClientItemDefinition? LookupItemDefinition(int itemDefinitionId)
     {
         return _resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) ? definition : null;
-    }
-
-    private static void SendCollectionStart(GatewayConnection connection, CollectionDefinition definition,
-        CollectionProgress progress)
-    {
-        var collection = definition.CreateClientCollection(connection.Player.Guid, progress, LookupItemDefinition);
-
-        using var writer = new PacketWriter();
-        collection.Serialize(writer);
-
-        connection.SendTunneled(new ClientUpdatePacketCollectionStart { Payload = writer.Buffer });
     }
 
     private static void SendCollectionEntryUpdate(GatewayConnection connection, CollectionDefinition definition,
