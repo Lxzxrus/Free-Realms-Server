@@ -302,9 +302,11 @@ public static class CommandPacketInteractRequestHandler
     /// </summary>
     private static List<GrantedItem> GrantRewardItems(DbCharacter dbCharacter, CollectionDefinition definition)
     {
+        var gender = dbCharacter.Gender;
+
         var granted = new List<GrantedItem>();
 
-        foreach (var itemDefinitionId in definition.RewardItemIds)
+        foreach (var itemDefinitionId in definition.RewardItemIdsFor(gender))
         {
             if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var itemDefinition))
             {
@@ -312,6 +314,8 @@ public static class CommandPacketInteractRequestHandler
                     definition.Id, itemDefinitionId);
                 continue;
             }
+
+            itemDefinition = _resourceManager.ClientItemDefinitions.ForGender(itemDefinition, gender);
 
             // The same tint rule as a quest reward.
             var tint = itemDefinition.IsTintable ? 0 : itemDefinition.Icon.TintId;

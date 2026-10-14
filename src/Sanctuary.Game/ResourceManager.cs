@@ -206,7 +206,7 @@ public class ResourceManager : IResourceManager
         {
             // Exploration entries are ticked by a coin, not by owning an item, so they have no item definition.
             if (collection.Entries.Any(entry => !entry.IsDirect && !ClientItemDefinitions.ContainsKey(entry.ItemDefinitionId))
-                || collection.RewardItemIds.Any(itemDefinitionId => !ClientItemDefinitions.ContainsKey(itemDefinitionId)))
+                || collection.RewardItemIds.Concat(collection.RewardItemIdsGirls).Any(itemDefinitionId => !ClientItemDefinitions.ContainsKey(itemDefinitionId)))
             {
                 _logger.LogError("Collection {id} references an unknown item definition.", collection.Id);
                 return false;

@@ -122,6 +122,34 @@ public sealed class ExplorationCollectionTests
     }
 
     [TestMethod]
+    public void EveryClothingReward_HasAVersionForBoysAndGirls()
+    {
+        // The capture's rewards are the boys' items; a girl gets the twin with the same name, colour and trade rules
+        // (Ariel, 2026-10-13: the boys-only Traveler's Boots and Seeker's Hat couldn't be worn).
+        var items = new ClientItemDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(items.Load(FindSourcePath("Resources", "ClientItemDefinitions.json")));
+
+        foreach (var collection in LoadCollections().Values)
+        {
+            foreach (var gender in new[] { 1, 2 })
+            {
+                foreach (var itemId in collection.RewardItemIdsFor(gender))
+                {
+                    Assert.IsTrue(items.TryGetValue(itemId, out var item), $"Collection {collection.Id} rewards unknown item {itemId}.");
+
+                    var fitted = items.ForGender(item, gender);
+
+                    Assert.IsTrue(fitted.GenderUsage is 0 || fitted.GenderUsage == gender,
+                        $"Collection {collection.Id}'s reward {itemId} has no version for gender {gender}.");
+                }
+            }
+        }
+
+        Assert.AreEqual(15783, items.ForGender(items[17300], 2).Id, "Traveler's Boots, girls' version in the same colour.");
+        Assert.AreEqual(17300, items.ForGender(items[17300], 1).Id);
+    }
+
+    [TestMethod]
     public void EveryCoin_TicksOneEntryOfItsRegionsCollection()
     {
         var collections = LoadCollections();
