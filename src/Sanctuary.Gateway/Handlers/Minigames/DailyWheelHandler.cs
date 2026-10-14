@@ -22,6 +22,12 @@ public static class DailyWheelHandler
 {
     public const int ActivityId = 8;
 
+    /// <summary>Minigame type 22, "Wheel" (client MiniGameTypeData.txt); its MiniGameData row is 8.</summary>
+    private const int WheelMiniGameType = 22;
+    private const int WheelIconId = 20985;
+
+    private static int _nextStateId = 8_000;
+
     private const string LuaClass = "MiniGameFlash";
     private const string Swf = "game_wheel.gfx";
 
@@ -38,7 +44,15 @@ public static class DailyWheelHandler
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
     }
 
-    /// <summary>Opens the wheel's Flash if today's spin is unused; otherwise refreshes the client's spin count.</summary>
+    /// <summary>
+    /// Opens a minigame session for the wheel if today's spin is unused; otherwise refreshes the client's spin count.
+    /// </summary>
+    /// <remarks>
+    /// The client forwards the Flash's messages only inside a minigame session (FreeRealms.exe 0x9be6b0), which a
+    /// MiniGameInfo creates ("MiniGame:JoinGame", 0x9beb70). With the start-screen flag off the client then asks to
+    /// start by itself ("MiniGame:RequestStartGame", 0x9be7d0, sub-op 5), and <see cref="TryStart"/> answers with the
+    /// Flash. Starting the Flash without a session (the first version) left a window nothing could close.
+    /// </remarks>
     public static void Open(GatewayConnection connection)
     {
         var player = connection.Player;
@@ -53,13 +67,53 @@ public static class DailyWheelHandler
             return;
         }
 
-        player.WheelSession = new DailyWheelSession();
+        var session = new DailyWheelSession { StateId = System.Threading.Interlocked.Increment(ref _nextStateId) };
+        player.WheelSession = session;
+
+        var wheel = _resourceManager.DailyWheel;
+
+        connection.SendTunneled(new MiniGameInfoPacket(session.StateId, session.GroupId, session.GameId)
+        {
+            Info = new MiniGameInfo
+            {
+                NameId = wheel.NameId,
+                IconId = WheelIconId,
+                DescriptionId = wheel.DescriptionId,
+                Difficulty = 1,
+                Type = WheelMiniGameType,
+                PreselectedGameId = ActivityId,
+                Unknown13 = Swf
+            }
+        });
+    }
+
+    /// <summary>The client's "start game" for the wheel's session: the game starts and the Flash opens.</summary>
+    public static bool TryStart(GatewayConnection connection, int stateId)
+    {
+        var session = connection.Player.WheelSession;
+        if (session is null || session.StateId != stateId)
+            return false;
+
+        connection.SendTunneled(new MiniGameGameStartPacket(session.StateId, session.GroupId, session.GameId));
 
         connection.SendTunneled(new CommandPacketStartFlashGame
         {
             LuaClass = LuaClass,
             Swf = Swf
         });
+
+        return true;
+    }
+
+    /// <summary>The client ended the wheel's session (its close button).</summary>
+    public static bool TryEnd(GatewayConnection connection, int stateId)
+    {
+        var session = connection.Player.WheelSession;
+        if (session is null || session.StateId != stateId)
+            return false;
+
+        Close(connection, session);
+        return true;
     }
 
     /// <summary>Handles a message from the wheel's Flash. False if no wheel is open, so other minigames can.</summary>
@@ -73,9 +127,8 @@ public static class DailyWheelHandler
 
         _logger.LogTrace("Daily wheel message from {player}: {message}", connection.Player.Guid, string.Join(" | ", message));
 
-        session.StateId = packet.StateId;
-        session.GroupId = packet.GroupId;
-        session.GameId = packet.GameId;
+        if (packet.StateId != session.StateId)
+            return false;
 
         switch (message[0])
         {

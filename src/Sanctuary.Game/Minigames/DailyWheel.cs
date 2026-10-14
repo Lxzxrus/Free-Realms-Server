@@ -34,8 +34,10 @@ public sealed class DailyWheel
     public int WheelId { get; set; } = 1;
     public int WheelType { get; set; } = TenSlotType;
 
-    /// <summary>The wheel's title and message: "Spin For The Win!" and "Come back every day...".</summary>
+    /// <summary>The wheel's title, description and message: "Spin For The Win!", "Welcome to the Free Realms Daily
+    /// Rewards wheel!..." and "Come back every day...".</summary>
     public int NameId { get; set; }
+    public int DescriptionId { get; set; }
     public int MessageId { get; set; }
 
     /// <summary>Picture, name and tooltip of a coin prize in the reward window.</summary>

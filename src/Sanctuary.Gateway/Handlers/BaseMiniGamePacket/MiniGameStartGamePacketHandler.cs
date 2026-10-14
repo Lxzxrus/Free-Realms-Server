@@ -29,6 +29,9 @@ public static class MiniGameStartGamePacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(MiniGameStartGamePacket), packet);
 
+        if (DailyWheelHandler.TryStart(connection, packet.StateId))
+            return true;
+
         var miniGameGameStarted = new MiniGameGameStartPacket(packet.StateId, packet.GroupId, packet.GameId);
 
         connection.SendTunneled(miniGameGameStarted);
