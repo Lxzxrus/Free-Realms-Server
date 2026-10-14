@@ -1040,9 +1040,13 @@ public sealed class QuestManager : IQuestManager
 
         foreach (var itemDefinitionId in quest.RewardItems)
         {
-            GrantItem(player, itemDefinitionId);
+            var granted = _resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var rewardDef)
+                ? _resourceManager.ClientItemDefinitions.ForGender(rewardDef, player.Gender).Id
+                : itemDefinitionId;
 
-            player.SendTunneled(new RewardNonBundledItemPacket { ItemDefinitionId = itemDefinitionId, Quantity = 1 });
+            GrantItem(player, granted);
+
+            player.SendTunneled(new RewardNonBundledItemPacket { ItemDefinitionId = granted, Quantity = 1 });
         }
     }
 
@@ -1050,6 +1054,9 @@ public sealed class QuestManager : IQuestManager
     {
         if (!_resourceManager.ClientItemDefinitions.TryGetValue(definitionId, out var itemDef))
             return;
+
+        itemDef = _resourceManager.ClientItemDefinitions.ForGender(itemDef, player.Gender);
+        definitionId = itemDef.Id;
 
         int tint = itemDef.IsTintable ? 0 : itemDef.Icon.TintId;
 

@@ -67,4 +67,40 @@ public class ClientItemDefinitionCollection : ObservableConcurrentDictionary<int
 
         return true;
     }
+
+    /// <summary>
+    /// The version of <paramref name="item"/> made for <paramref name="gender"/> (1 boys, 2 girls), or the item itself
+    /// when it fits anyone or no other version exists. Clothes come in a boys' and a girls' item with the same name,
+    /// colour and trade rules: collection rewards from the 2014 capture are the boys' ones, which a girl can't wear
+    /// (Ariel, 2026-10-13: Traveler's Boots, Seeker's Hat).
+    /// </summary>
+    public ClientItemDefinition ForGender(ClientItemDefinition item, int gender)
+    {
+        if (item.GenderUsage == 0 || item.GenderUsage == gender)
+            return item;
+
+        ClientItemDefinition? sameColour = null;
+        ClientItemDefinition? anyColour = null;
+
+        foreach (var candidate in Values)
+        {
+            if (candidate.NameId != item.NameId || candidate.GenderUsage != gender || candidate.Slot != item.Slot)
+                continue;
+
+            // Some girls' versions don't come in every boys' colour (Pathfinder's Boots); a wearable one beats none.
+            if (candidate.Icon.TintId != item.Icon.TintId)
+            {
+                if (anyColour is null || candidate.Id < anyColour.Id)
+                    anyColour = candidate;
+                continue;
+            }
+
+            if (candidate.NoTrade == item.NoTrade && candidate.NoSale == item.NoSale)
+                return candidate;
+
+            sameColour ??= candidate;
+        }
+
+        return sameColour ?? anyColour ?? item;
+    }
 }

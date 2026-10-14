@@ -28,6 +28,15 @@ public sealed class CollectionDefinition
     public int RewardTextId { get; set; }
     public List<int> RewardItemIds { get; set; } = [];
 
+    /// <summary>
+    /// Girls' rewards, where their version of a boys' item has another name (Seeker's Midriff Shirt for Seeker's
+    /// Shirt). Empty means the girls' twins of <see cref="RewardItemIds"/>.
+    /// </summary>
+    public List<int> RewardItemIdsGirls { get; set; } = [];
+
+    /// <summary>The reward items for a character of this gender (1 boys, 2 girls), before matching each to it.</summary>
+    public List<int> RewardItemIdsFor(int gender) => gender == 2 && RewardItemIdsGirls.Count > 0 ? RewardItemIdsGirls : RewardItemIds;
+
     public List<CollectionEntryDefinition> Entries { get; set; } = [];
 
     public bool IsStarted(CollectionProgress progress)
