@@ -531,3 +531,44 @@ Found in the 2026-10-12 playtest; both show as errors in the live Gateway log.
   - Clicking the same coin again gives nothing.
   - Collecting all five Seaside coins grants Traveler's Boots once, and they're still there after a relog.
   - The collections window shows the region's coin names.
+
+## 30. `security-pass-2`: break what was added since the threat model *(Fable)*
+
+- **Why:** `docs/security/threat-model.md` (task 9) reviewed the server as it was in late September. Since then
+  Evergrove gained everything a cheater pokes first: things that pay coins and items, per-character progress, a new
+  packet family, and house access rules. Evergrove's Station Cash will be earned, never bought, so anything that
+  mints coins, items or progress is the economy. The ex-owner of a rival server is treated as a likely attacker.
+- **In scope** (read each fully, then try to break it as a hostile client that sends any packet, in any order, any
+  number of times, with any field values):
+  1. **Daily wheel** (`Sanctuary.Gateway/Handlers/Minigames/DailyWheelHandler.cs`, `Sanctuary.Game/Minigames/`):
+     a second spin per day (two connections, two sessions, relog mid-spin, replayed messages, a spin request
+     without a session), payouts without a spin, state ids from another session.
+  2. **Exploration coins and collections** (`CommandPacketInteractRequestHandler`, `CollectionNode`,
+     `CollectionDefinition*`, `DbCharacterCollectionEntry`): collecting from out of range, twice, a coin hidden
+     from you, another player's view, completing a collection twice, reward items granted twice, the gender twin
+     (`ClientItemDefinitionCollection.ForGender`) granting something it shouldn't.
+  3. **Minigame and activity packets** (opcodes 39, 141, 167, 175 and 143, ported from upstream's `minigame`
+     branch; `Sanctuary.Packet/Base*` for those families and their handlers): oversized or negative lengths,
+     payloads that allocate or loop without bound, unknown activity ids, `JoinActivityRequest` for every activity
+     (does any path hang the client or the server, or grant anything?), Mining Practice and the TCG lobby paths
+     that are still EDITz's test code.
+  4. **Quests** (`QuestManager`, `QuestDialogue`, `QuestConversation`): skipping a step, answering a quiz the
+     conversation never asked (`CompleteAfterDialogue`), turning in twice, collecting rewards for a quest you
+     abandoned, dialogue responses that index out of range.
+  5. **Housing access** (`HouseAccess`, `ClientHousingPacketRequestPlayerHouses`, entering, visiting, locking):
+     entering a locked or unpublished house, listing someone's private houses, editing a house you're visiting.
+  6. **Coin and item writes in general:** search every place that changes `Coins`, `StationCash` or `Items` (wheel,
+     coins, quests, rewards, trading, the coin store, the marketplace) for read-modify-write races between two
+     connections of one account, or two players, and for negative or overflowing amounts.
+  7. **Re-check** the threat model's open findings against today's code and mark each fixed, still open or changed.
+- **Out of scope:** the economy's amounts (placeholders until the economy pass), the client, the launcher, and the
+  VPS itself (separate review). Don't touch `.github/workflows/update-public-server.yml`.
+- **How:** read the code; where a finding is real, write a failing test that shows it first, then fix it. Use the
+  load-test bot (`src/Sanctuary.LoadTest`, `local-servers.sh`) for anything that needs live packets, as task 28
+  did. Don't weaken a check to make a test pass.
+- **Deliverable:** one PR with:
+  - Fixes for every Critical and High finding, each with its test.
+  - `docs/security/threat-model.md` updated: the new findings ranked (Critical / High / Medium / Low), with
+    exploit steps in one line each, and the old findings' status.
+  - A list of Medium and Low findings left for later, with a suggested fix each.
+  - In-game checks for Nate, for anything a test can't show.
