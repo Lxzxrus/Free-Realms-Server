@@ -635,13 +635,21 @@ public class GatewayConnection : UdpConnection
     public void SendSelfToClient()
     {
         Player.Collections = _resourceManager.Collections.CreateClientCollections(Player.Guid,
-            CollectionProgress.From(Player), LookupItemDefinition);
+            CollectionProgress.From(Player), LookupRewardForPlayer, Player.Gender);
 
         var packetSendSelfToClient = new PacketSendSelfToClient();
 
         packetSendSelfToClient.Payload = Player.Serialize();
 
         SendTunneled(packetSendSelfToClient);
+    }
+
+    /// <summary>A collection reward as this player gets it: the version for their gender (the book's preview).</summary>
+    private ClientItemDefinition? LookupRewardForPlayer(int itemDefinitionId)
+    {
+        return LookupItemDefinition(itemDefinitionId) is { } definition
+            ? _resourceManager.ClientItemDefinitions.ForGender(definition, Player.Gender)
+            : null;
     }
 
     private ClientItemDefinition? LookupItemDefinition(int itemDefinitionId)

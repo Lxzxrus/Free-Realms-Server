@@ -8,6 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Game.Resources;
 using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Packet.Common;
 
 namespace Sanctuary.Game.Tests;
 
@@ -147,6 +148,24 @@ public sealed class ExplorationCollectionTests
 
         Assert.AreEqual(15783, items.ForGender(items[17300], 2).Id, "Traveler's Boots, girls' version in the same colour.");
         Assert.AreEqual(17300, items.ForGender(items[17300], 1).Id);
+    }
+
+    [TestMethod]
+    public void BookPreview_ShowsTheRewardForThePlayersGender()
+    {
+        // Ariel's book still showed the boys' Traveler's Boots after the grant was fixed (2026-10-13).
+        var items = new ClientItemDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(items.Load(FindSourcePath("Resources", "ClientItemDefinitions.json")));
+        var seaside = LoadCollections()[267];
+
+        ClientItemDefinition? Fitted(int id, int gender) => items.TryGetValue(id, out var item) ? items.ForGender(item, gender) : null;
+
+        var girls = seaside.CreateClientCollection(1, Sanctuary.Game.Collections.CollectionProgress.Empty, id => Fitted(id, 2), 2);
+        var boys = seaside.CreateClientCollection(1, Sanctuary.Game.Collections.CollectionProgress.Empty, id => Fitted(id, 1), 1);
+
+        Assert.AreEqual(items[15783].NameId, girls.Reward.NameId);
+        Assert.AreEqual(items[15783].Icon.Id, girls.Reward.IconId, "The girls' Traveler's Boots.");
+        Assert.AreEqual(items[17300].Icon.Id, boys.Reward.IconId, "The boys' Traveler's Boots.");
     }
 
     [TestMethod]

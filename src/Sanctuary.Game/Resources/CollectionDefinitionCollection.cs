@@ -111,12 +111,12 @@ public sealed class CollectionDefinitionCollection : ObservableConcurrentDiction
     /// that couldn't be closed (Ariel and Nate, 2026-10-12; CollectionsBrowser.lua:134).
     /// </summary>
     public List<ClientCollection> CreateClientCollections(ulong playerGuid, CollectionProgress progress,
-        Func<int, ClientItemDefinition?> itemDefinitions)
+        Func<int, ClientItemDefinition?> itemDefinitions, int gender = 0)
     {
         return Values
             .OrderBy(definition => definition.CategoryId)
             .ThenBy(definition => definition.Id)
-            .Select(definition => definition.CreateClientCollection(playerGuid, progress, itemDefinitions))
+            .Select(definition => definition.CreateClientCollection(playerGuid, progress, itemDefinitions, gender))
             .ToList();
     }
 
