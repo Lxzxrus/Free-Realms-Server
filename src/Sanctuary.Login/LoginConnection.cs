@@ -12,6 +12,7 @@ using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.UdpLibrary;
 using Sanctuary.UdpLibrary.Enumerations;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Login;
 
@@ -54,7 +55,7 @@ public class LoginConnection : UdpConnection
         if ((!_useEncryption || !_cipher.Decrypt(data, out var finalLength))
             && (_useEncryption || !PacketUtils.UnwrapPacket(data, out finalLength, _cipher)))
         {
-            _logger.LogError("{connection} failed to unwrap/decrypt packet. ( Data: {data} )", this, Convert.ToHexString(data));
+            _logger.LogError("{connection} failed to unwrap/decrypt packet. ( Data: {data} )", this, PacketLog.Hex(data));
 
             // a real client never sends one of these, so repeated ones disconnect it (and stop it filling the log)
             ReportFault();
@@ -70,7 +71,7 @@ public class LoginConnection : UdpConnection
 
         if (!reader.TryRead(out byte opCode))
         {
-            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", Convert.ToHexString(data));
+            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", PacketLog.Hex(data));
             return;
         }
 
@@ -99,7 +100,7 @@ public class LoginConnection : UdpConnection
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "{connection} threw an unhandled exception while handling packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, Convert.ToHexString(data));
+            _logger.LogError(ex, "{connection} threw an unhandled exception while handling packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, PacketLog.Hex(data));
 
             // one exception is a bug to fix; a connection that keeps causing them is disconnected (see UdpParams.FaultLimit)
             ReportFault();
@@ -113,19 +114,19 @@ public class LoginConnection : UdpConnection
             reader.Reset();
             System.Diagnostics.Debug.WriteLine(reader.ReadExternalLoginPacketName());
 
-            _logger.LogWarning("{connection} received an unhandled packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, Convert.ToHexString(data));
+            _logger.LogWarning("{connection} received an unhandled packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, PacketLog.Hex(data));
         }
 #endif
     }
 
     public override void OnCrcReject(Span<byte> data)
     {
-        _logger.LogError("[CrcReject] UserId: {userid}, Data: {data}", UserId, Convert.ToHexString(data));
+        _logger.LogError("[CrcReject] UserId: {userid}, Data: {data}", UserId, PacketLog.Hex(data));
     }
 
     public override void OnPacketCorrupt(Span<byte> data, UdpCorruptionReason reason)
     {
-        _logger.LogError("[PacketCorrupt] UserId: {userid}, Reason: {reason}, Data: {data}", UserId, reason, Convert.ToHexString(data));
+        _logger.LogError("[PacketCorrupt] UserId: {userid}, Reason: {reason}, Data: {data}", UserId, reason, PacketLog.Hex(data));
     }
 
     public void SendTunneled(ISerializablePacket packet, bool reliable = true, bool secure = false)

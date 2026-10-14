@@ -99,7 +99,7 @@ public class GatewayConnection : UdpConnection
         if ((!_useEncryption || !_cipher.Decrypt(data, out var finalLength))
             && (_useEncryption || !PacketUtils.UnwrapPacket(data, out finalLength, _cipher)))
         {
-            _logger.LogError("{connection} failed to unwrap/decrypt packet. ( Data: {data} )", this, Convert.ToHexString(data));
+            _logger.LogError("{connection} failed to unwrap/decrypt packet. ( Data: {data} )", this, PacketLog.Hex(data));
 
             // a real client never sends one of these, so repeated ones disconnect it (and stop it filling the log)
             ReportFault();
@@ -137,7 +137,7 @@ public class GatewayConnection : UdpConnection
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "{connection} threw an unhandled exception while handling packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, Convert.ToHexString(data));
+            _logger.LogError(ex, "{connection} threw an unhandled exception while handling packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, PacketLog.Hex(data));
 
             // one exception is a bug to fix; a connection that keeps causing them is disconnected (see UdpParams.FaultLimit)
             ReportFault();
@@ -148,19 +148,19 @@ public class GatewayConnection : UdpConnection
 #if DEBUG
         if (!handled)
         {
-            _logger.LogWarning("{connection} received an unhandled packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, Convert.ToHexString(data));
+            _logger.LogWarning("{connection} received an unhandled packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, PacketLog.Hex(data));
         }
 #endif
     }
 
     public override void OnCrcReject(Span<byte> data)
     {
-        _logger.LogError("[CrcReject] Guid: {guid}, Data: {data}", Player?.Guid, Convert.ToHexString(data));
+        _logger.LogError("[CrcReject] Guid: {guid}, Data: {data}", Player?.Guid, PacketLog.Hex(data));
     }
 
     public override void OnPacketCorrupt(Span<byte> data, UdpCorruptionReason reason)
     {
-        _logger.LogError("[PacketCorrupt] Guid: {guid}, Reason: {reason}, Data: {data}", Player?.Guid, reason, Convert.ToHexString(data));
+        _logger.LogError("[PacketCorrupt] Guid: {guid}, Reason: {reason}, Data: {data}", Player?.Guid, reason, PacketLog.Hex(data));
     }
 
     public void SendTunneled(ISerializablePacket packet, bool reliable = true, bool secure = false)

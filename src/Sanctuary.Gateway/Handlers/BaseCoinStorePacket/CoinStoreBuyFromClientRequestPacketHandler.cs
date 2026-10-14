@@ -10,6 +10,7 @@ using Sanctuary.Database;
 using Sanctuary.Game;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Game.Store;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -58,14 +59,6 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
             return true;
         }
 
-        if (clientItem.Count < packet.Quantity)
-        {
-            coinStoreTransactionCompletePacket.Result = 4;
-
-            connection.SendTunneled(coinStoreTransactionCompletePacket);
-
-            return true;
-        }
 
         if (!_resourceManager.ClientItemDefinitions.TryGetValue(clientItem.Definition, out var clientItemDefinition))
         {
@@ -98,14 +91,27 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
         var dbItem = dbQuery.Item;
 
-        var deleteItem = clientItem.Count == packet.Quantity;
+        // The database row decides how many there are and what the coins become; the quantity is the client's word.
+        if (!CoinStoreSale.TryPlan(clientItemDefinition, dbItem.Count, packet.Quantity, dbQuery.Character.Coins, out var plan, out var refusal))
+        {
+            _logger.LogWarning("{player} asked to sell {quantity} of item {item} (definition {definition}, {count} owned): {refusal}.",
+                connection.Player.Guid, packet.Quantity, packet.ItemGuid, clientItem.Definition, dbItem.Count, refusal);
+
+            coinStoreTransactionCompletePacket.Result = (int)refusal;
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
+
+        var deleteItem = plan.RemainingCount == 0;
 
         if (deleteItem)
             dbContext.Items.Remove(dbItem);
         else
-            dbItem.Count -= packet.Quantity;
+            dbItem.Count = plan.RemainingCount;
 
-        dbQuery.Character.Coins += clientItemDefinition.ResellValue * packet.Quantity;
+        dbQuery.Character.Coins = plan.Coins;
 
         if (dbContext.SaveChanges() <= 0)
         {

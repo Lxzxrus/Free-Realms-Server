@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.IO;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Login.Handlers;
 
@@ -34,7 +35,7 @@ public static class TunnelAppPacketClientToServerHandler
 
         if (!reader.TryRead(out short opCode))
         {
-            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", Convert.ToHexString(data));
+            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", PacketLog.Hex(data));
             return false;
         }
 

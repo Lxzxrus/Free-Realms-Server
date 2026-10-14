@@ -195,6 +195,13 @@ public ref struct PacketReader
             return true;
         }
 
+        // A length prefix comes from the other side; a negative one is a bad packet, not a bug to throw on.
+        if (length < 0)
+        {
+            value = string.Empty;
+            return false;
+        }
+
         if (!TryRead(length, out var stringSequence))
         {
             value = string.Empty;

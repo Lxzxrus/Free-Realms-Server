@@ -1,7 +1,8 @@
 # Threat model and ranked findings
 
 *Task 9 (`security-audit`). Analysis only — no code under `src/` was changed. Produced against `main` plus the
-work on this branch, 2026-10-06.*
+work on this branch, 2026-10-06. **Pass 2 (task 30, 2026-10-14) is at the end: the status of F1–F13 today, and the
+findings S1–S13 in what was added since.***
 
 This maps every way into the server and the ways it can be abused, ranked by severity, and names a fix and a
 task-sized estimate for each. The server is going **public on a budget VPS** (the Optiplex becomes staging), and
@@ -282,3 +283,119 @@ the fixes above need doing and then verifying in game and on the staging box. Th
 
 Each row's estimate is a rough task size (S/M), not a promise. Every finding must be fixed before the repo is
 public, because at that point the source — and anything still in it — is open to the stated adversary.
+
+## Pass 2: what was added since the threat model (task 30, 2026-10-14)
+
+The threat model above reviewed the server as it was on 2026-10-06. Since then Evergrove gained the daily wheel,
+exploration coins and collections, the minigame and activity packet families, quests with conversations, house
+access rules and "Go to House", and the coin store and marketplace paths were touched. This pass read each of those
+in full and tried to break it as a hostile client that sends any packet, in any order, any number of times, with any
+field values. Station Cash is earned, never bought, so anything that mints coins, items or progress is the economy.
+
+**Method.** Code reading, with the Gateway's threading model in mind: one loop thread handles every connection's
+packets in turn (`GatewayService`), so two packets never run at once on one server, and a "race" needs two
+connections whose in-memory state has drifted apart, or two gateways. Where a finding was real, a test was written
+first and seen to fail, then the fix made it pass; the handler wiring that a unit test can't reach is on Nate's
+in-game list below. The load-test bot was not used: none of the findings needed live packets to show, and the bot
+can't read the item and coin replies that would prove the coin-store one.
+
+### New findings
+
+| # | Sev | What an attacker does | Where | Fix | Status |
+|---|-----|-----------------------|-------|-----|--------|
+| S1 | **Critical** | Sells an item to the coin store with a **negative quantity**: `Count -= -1000000` grows the stack by a million, and `Coins += ResellValue * quantity` wraps, so with a resell value of 10 and a quantity of −214,748,365 the coins go **up by 2 billion**. Zero quantity "sells" nothing for a transaction. `NoSale` items could be sold | `CoinStoreBuyFromClientRequestPacketHandler` | `CoinStoreSale.TryPlan`: quantity must be positive and no more than the **database** row holds, 64-bit arithmetic with overflow refused, `NoSale` refused. `CoinStoreSaleTests` | **Fixed** |
+| S2 | **High** | Logs the same character in twice. Login refuses a character it knows is online, but it learns that from the Gateway after the fact, so a second `CharacterLoginRequest` sent while the first ticket is being used gets a second ticket. Two sessions of one character each keep their own quest state, so each one that hands in a quest **pays its reward again** (coins, XP, items); nothing on the Gateway refused it | `PacketLoginHandler`, `CharacterLoginRequestHandler` (Login) | The Gateway refuses a login of a character another of its connections already plays (`LoginAdmission`), and clears the ticket only while it is still the one presented, so two logins racing on one ticket end with one refused. `LoginAdmissionTests` | **Fixed** |
+| S3 | **High** | Sends a second `PacketLogin` on a connection that is already in the world (any character of the account with a fresh ticket, or the same one once it has left the starting zone). The handler replaced `Player`: the first one stayed in its zone as a **ghost** that is never saved, never disposed and never logged out at Login, so that character is locked out until the Login server restarts, and the ghosts pile up | `PacketLoginHandler.HandlePacket` (`CreatePlayerFromDatabase` replaced `Player`) | Part of `LoginAdmission`: a connection with a player is disconnected if it logs in again | **Fixed** |
+| S4 | **Medium** | Positions are the client's word (`PlayerUpdatePacketUpdatePositionHandler`), so a client can stand anywhere: collect any coin, finish every reach-location quest step, and talk to any npc. Worse, a **NaN** position passed every range check written as `distance > range` (NaN compares false with everything) without even moving | Position handler; `CommandPacketInteractRequestHandler` | NaN and infinite positions are refused and count as a fault (`Positions.IsFinite`); range checks are now "within range", which NaN fails (`Positions.IsWithinRange`). Teleporting stays open: see "left for later" | **Partly fixed** |
+| S5 | **Medium** | Fills the disk through the log: a packet that makes a handler throw was logged **whole as hex** (a 64 KiB packet is 128 KiB per line), at up to five faults a minute per connection and five connections per address every ten seconds; the daily wheel logged every Flash message at Information, unlimited | `GatewayConnection`, 33 handlers, `DailyWheelHandler.TryHandle` | `PacketLog.Hex` caps every logged packet at 256 bytes; the wheel logs at Debug, cut to 256 characters. `PacketLogTests` | **Fixed** |
+| S6 | **Medium** (latent) | Completes an item-based collection twice. Completion is derived from the inventory, nothing records it, so selling or trading away an entry item and picking it up again completes the collection again. Today the only item-based collection (10, Briarwood) pays coins, and collection coins **are not paid yet**, so nothing is gained today; it becomes a coin tap the day they are | `CommandPacketInteractRequestHandler.HandleItemDropNode`, `CollectionDefinition.IsComplete` | Record completion per character (a row like `DbCharacterCollectionEntry`) and pay a reward once per row | Left for the economy pass |
+| S7 | **Low** | Sends a tunneled packet before logging in: every handler dereferenced the missing player, threw, and was caught as a fault | `PacketTunneledClientPacketHandler`, `PacketTunneledClientWorldPacketHandler` | Refused outright, counted as a fault | **Fixed** |
+| S8 | **Low** | Sends a string with a negative length prefix: `PacketReader.TryRead(out string)` threw instead of failing the read (caught as a fault) | `Sanctuary.Core/IO/PacketReader.cs` | Returns false. `PacketReaderTests` (seen red first) | **Fixed** |
+| S9 | **Low** | Talks to a quest npc from anywhere in the zone when it has one interaction (the menu path checked the reach; the single-option path didn't) | `CommandPacketInteractRequestHandler` | The same reach check as the menu | **Fixed** |
+| S10 | **Low** | Logs in with a guid that isn't a player's: `GuidHelper.GetPlayerId` threw (caught as a fault) | `PacketLoginHandler` | Refused with the usual failed-login reply | **Fixed** |
+| S11 | **Low** | Buys from and sells to the coin store from anywhere: `MerchantGuid` is never checked | Both coin store handlers | Require a store npc within reach, once stores are placed deliberately | Left |
+| S12 | **Info** | `ClientItemDefinitionCollection.ForGender` finds a girls' twin by name, gender and slot. Checked the shipped reward items: every twin has the same cost and flags, so nothing more valuable is handed out. Keep an eye on it when artists add items | `ForGender` | None needed today | Checked |
+| S13 | **Info** (F2) | The old shared challenge `OSFR-EDITz@2024` is still in **git history** (`git log -S` finds it). It is no longer accepted by the servers, but the repo goes public at launch | Git history | Scrub before the repo is made public, or accept it as a rotated, refused value and say so | Open, Nate's call |
+
+### What was tried and held
+
+- **Daily wheel.** A second spin in one opening is refused in memory (`TryClaimSpin`); a second opening the same
+  day is refused by `CanSpin`, and the **database row decides** on the spin itself, so two connections or a relog
+  mid-spin can't pay twice. Payouts need a claimed spin (`PrizeSlot`), so `OnWheelStopMsg` without a spin shows
+  nothing. Messages for another state id are ignored; a message without an open session falls through to nothing.
+  The spin's date and the coins are saved in one `SaveChanges`.
+- **Exploration coins and collections.** An entry is claimed in the player's live set before the database is
+  asked, and the row has a primary key of (entry, character), so a second click, a relog that raced the click, or a
+  second connection ends in `DbUpdateException`, which is handled. A coin hidden from a player (already collected)
+  does nothing when clicked. A node is looked up in the player's own zone. Finishing a direct-entry collection
+  twice is impossible once every entry row exists. The reward items' girls' twins check out (S12).
+- **Minigame and activity packets (39, 141, 167, 175, 143).** Every inbound packet reads fixed-size fields or one
+  length-prefixed payload, bounded by the packet (64 KiB since task 14); nothing loops on a client-supplied count
+  without consuming bytes. `JoinActivityRequest` for an unknown activity does nothing; activity 7 (TCG lobby) and
+  1113 (Mining Practice) only send the client packets that open a window on its side, grant nothing, and keep no
+  server state; every other id does nothing. `MiniGameEnd` for any state id just echoes `MiniGameLeave`.
+- **Quests.** A quiz step completes only through a conversation the server began (`QuestDialogue.Begin`), and
+  only if the player is still on that step when it ends; an answer the question doesn't offer abandons it
+  (`QuestConversation.Answer` checks the index). A turn-in is paid once: the pending queue holds a quest once and
+  drops it if it was abandoned or completed since; `CompleteQuest` refuses a completed quest. Accepting needs
+  `IsOfferableFor`. The one thing a client could do was talk to an npc from across the zone (S9).
+- **Housing access.** `HouseAccess.MayEnter` gates entering by guid, by owner name, from the directory and the
+  "Go to House" list, and the list itself filters by it; a locked house sends non-friends out. Editing needs owner
+  and edit mode: every fixture mutation in `HousingZoneRuntime` (placing, moving, saving, removing) checks
+  `CanEdit`. Friendship needs the other side's
+  pending request, so a visitor can't make themself the owner's friend.
+- **Coins and items elsewhere.** Every writer re-reads the row it changes (wheel, quest rewards, collections,
+  `RewardManager`, both coin store handlers, the marketplace), so two connections can't double-spend from a stale
+  in-memory total; the marketplace and buying from the coin store already check quantities and overflow; trading
+  reconciles the runtime inventory against the database and aborts on any mismatch, and refuses `NoTrade` and
+  trading-card items. Equipping, consuming and style cards look items up by character id. The reward and
+  collection chat commands are Admin-only.
+
+### Left for later (Medium and Low), with a suggested fix each
+
+- **S4, teleporting (Medium).** The client owns its position. A server-side sanity check (distance moved per
+  update against a generous top speed, with the mount's speed allowed for, and zone-area bounds) would turn a
+  teleport into a snap-back and a fault. Needs the real movement rates from the client; do it with the first
+  minigame that pays by position.
+- **S6, collection completion (Medium, latent).** Record completion per character and pay once per row; do it in
+  the same change that starts paying collection coins.
+- **S11, store reach (Low).** Check `MerchantGuid` is a store npc within `InteractRange` once the stores are
+  placed on purpose.
+- **S13, history scrub (F2).** Decide before the repo goes public.
+
+### The threat model's findings today
+
+| # | Then | Now | Where it was fixed |
+|---|------|-----|--------------------|
+| F1 | Critical | **Fixed.** A Debug build refuses to start unless `AllowDebugBuild` is set, then warns | Task 13, `StartupChecks` |
+| F2 | Critical | **Fixed in the tree, open in history.** Secrets live in git-ignored `*.local.json`; the tracked files hold no challenge. The old value is still in git history (S13) | Task 13 |
+| F3 | High | **Fixed.** LoginGateway binds `127.0.0.1` by default; the challenge is a local secret | Task 13 |
+| F4 | High | **Fixed.** Per-connection fault isolation; a fault drops the connection, not the host | Task 14, `docs/udp-limits.md` |
+| F5 | High | **Fixed.** Per-address and global connect rates, 64 KiB packet maximum (was 20 MB), backlog limits | Task 14 |
+| F6 | High | **Fixed.** Portraits go to `/image/{token}`, the token must own the character; 1 MiB body cap, rate limited | Task 15, `docs/webapi.md` |
+| F7 | High | **Fixed.** Login and register rate limits and lockouts; forwarded headers; HTTPS by Caddy in the deployment doc | Task 15 |
+| F8 | Medium | **Unchanged, documented.** A client-protocol limitation; no server secret crosses these channels | Task 9 |
+| F9 | Medium | **Fixed.** Launch economy values in tracked config (1,000 coins, 0 Station Cash, nothing unlocked, not a member); playtest values in local files | Task 13 |
+| F10 | Medium | **Fixed.** `FaultLimit` 5 per minute disconnects a connection that keeps throwing | Task 14 |
+| F11 | Medium | **Fixed.** Lua opens base, table, string and math only | Task 16 |
+| F12 | Medium | **Fixed.** EF Core 9.0.20; the vulnerability scan is clean | Task 16 |
+| F13 | Medium | **Fixed.** Compose requires credentials from `.env` and publishes no database port | Task 13 |
+
+### In-game checks for Nate (task 30)
+
+Nothing in this pass has been verified in the game; the unit tests cover the policies, not the packet wiring.
+
+1. **Coin store still works.** Sell one of a stack of several, sell the last one of a stack, buy something: the
+   counts and coins shown match the database (`SELECT Coins FROM Characters`; `SELECT * FROM Items`).
+2. **A second login is refused, and the first survives.** With one client in the world, log the same character
+   in from a second client (second account session; the launcher will do): the second one must fail to enter and
+   the first must keep playing. Check the Gateway log for `refused a login of character ...: CharacterAlreadyOnline`
+   if the race is hit, or Login's status 8 if Login catches it first (either is right).
+3. **Relog works.** Log out, log in again, with a wheel spin and an exploration coin in between: the spin count
+   and the coin stay collected.
+4. **Normal play isn't flagged.** Walk, ride a mount, jump, enter a house, fall off something: no connection is
+   dropped and the Gateway log shows no fault lines for the client (`ReportFault` logs when it disconnects).
+5. **Quest npcs still answer** when stood next to them, and the one-option npcs (a giver with only an offer) open
+   their dialogue; from far away they shouldn't.
+6. **Exploration coins** still collect when stood on them and still refuse from a few metres away.
+7. **The daily wheel** still spins and pays once, and its messages no longer appear in the log at Information.

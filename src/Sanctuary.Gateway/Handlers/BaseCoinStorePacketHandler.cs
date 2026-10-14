@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.IO;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -24,7 +25,7 @@ public static class BaseCoinStorePacketHandler
     {
         if (!reader.TryRead(out short opCode))
         {
-            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", Convert.ToHexString(reader.Span));
+            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", PacketLog.Hex(reader.Span));
             return false;
         }
 

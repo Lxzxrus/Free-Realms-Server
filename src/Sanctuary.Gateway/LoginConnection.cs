@@ -10,6 +10,7 @@ using Sanctuary.Gateway.Handlers;
 using Sanctuary.Packet;
 using Sanctuary.UdpLibrary;
 using Sanctuary.UdpLibrary.Enumerations;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Gateway;
 
@@ -54,7 +55,7 @@ public class LoginConnection : UdpConnection
 
         if (!reader.TryRead(out byte opCode))
         {
-            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", Convert.ToHexString(data));
+            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", PacketLog.Hex(data));
             return;
         }
 
@@ -67,7 +68,7 @@ public class LoginConnection : UdpConnection
 #if DEBUG
         if (!handled)
         {
-            _logger.LogWarning("{connection} received an unhandled packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, Convert.ToHexString(data));
+            _logger.LogWarning("{connection} received an unhandled packet. ( OpCode: {opcode}, Data: {data} )", this, opCode, PacketLog.Hex(data));
         }
 #endif
     }

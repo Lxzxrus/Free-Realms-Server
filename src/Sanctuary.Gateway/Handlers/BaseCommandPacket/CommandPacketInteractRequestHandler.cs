@@ -20,6 +20,7 @@ using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Game.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -59,6 +60,10 @@ public static class CommandPacketInteractRequestHandler
 
         if (entity is Npc npc && _questManager.IsQuestNpc(npc.Guid))
         {
+            // The same reach as picking from an npc's menu (CommandPacketInteractionSelectHandler).
+            if (!Positions.IsWithinRange(connection.Player.Position, npc.Position, npc.InteractRange))
+                return true;
+
             connection.Player.LastInteractNpcGuid = npc.Guid;
             connection.Player.LastInteractAt = DateTime.UtcNow;
             _questManager.OnNpcInteract(connection.Player, npc);
@@ -71,13 +76,9 @@ public static class CommandPacketInteractRequestHandler
 
     private static bool HandleCollectionNode(GatewayConnection connection, CollectionNode node)
     {
-        var playerPosition = connection.Player.Position;
-        var nodePosition = node.Position;
-        var distanceSquared = Vector3.DistanceSquared(
-            new Vector3(playerPosition.X, playerPosition.Y, playerPosition.Z),
-            new Vector3(nodePosition.X, nodePosition.Y, nodePosition.Z));
-
-        if (distanceSquared > node.InteractRange * node.InteractRange)
+        // "Too far away" is written as "not within range", so a NaN position, which compares false with
+        // everything, is out of range rather than in it.
+        if (!Positions.IsWithinRange(connection.Player.Position, node.Position, node.InteractRange))
             return true;
 
         if (node.SpawnDefinition.HasCollectionEntry)

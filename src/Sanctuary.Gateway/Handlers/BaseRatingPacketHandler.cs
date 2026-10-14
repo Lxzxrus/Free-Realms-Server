@@ -637,6 +637,6 @@ public static class BaseRatingPacketHandler
             "Malformed rating packet {SubOpCode} from player {PlayerGuid}. Data={Data}",
             subOpCode,
             connection.Player.Guid,
-            Convert.ToHexString(payload));
+            PacketLog.Hex(payload));
     }
 }

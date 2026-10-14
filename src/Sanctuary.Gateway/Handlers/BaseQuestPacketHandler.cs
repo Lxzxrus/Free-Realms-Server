@@ -7,6 +7,7 @@ using Sanctuary.Core.IO;
 using Sanctuary.Game.Quests;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -28,7 +29,7 @@ public static class BaseQuestPacketHandler
     {
         if (!reader.TryRead(out int subOpCode))
         {
-            _logger.LogError("Failed to read sub-opcode from BaseQuestPacket. ( Data: {data} )", Convert.ToHexString(reader.Span));
+            _logger.LogError("Failed to read sub-opcode from BaseQuestPacket. ( Data: {data} )", PacketLog.Hex(reader.Span));
             return false;
         }
 

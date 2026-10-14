@@ -21,6 +21,7 @@ public static class PacketLoginHandler
 {
     private static ILogger _logger = null!;
     private static LoginClient _loginClient = null!;
+    private static GatewayServer _server = null!;
     private static GatewayServerOptions _options = null!;
     private static IResourceManager _resourceManager = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
@@ -31,6 +32,7 @@ public static class PacketLoginHandler
         _logger = loggerFactory.CreateLogger(nameof(PacketLoginHandler));
 
         _loginClient = serviceProvider.GetRequiredService<LoginClient>();
+        _server = serviceProvider.GetRequiredService<GatewayServer>();
 
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
@@ -74,6 +76,40 @@ public static class PacketLoginHandler
             return true;
         }
 
+        ulong characterId;
+
+        try
+        {
+            characterId = GuidHelper.GetPlayerId(packet.Guid);
+        }
+        catch (ArgumentException)
+        {
+            _logger.LogWarning("{connection} connected with a guid that isn't a player's. ( Guid: {guid} )", connection, packet.Guid);
+
+            connection.Send(packetLoginReply);
+
+            connection.Disconnect();
+
+            return true;
+        }
+
+        // One player per connection and one connection per character. The Login server refuses a character that is
+        // already online, but it only learns of a login from this server after the fact, so it is checked here too.
+        var refusal = LoginAdmission.Check(
+            connectionHasPlayer: connection.Player is not null,
+            characterOnline: _server.OnlineCharacterIds().Contains(characterId));
+
+        if (refusal != LoginRefusal.None)
+        {
+            _logger.LogWarning("{connection} refused a login of character {id}: {refusal}.", connection, characterId, refusal);
+
+            connection.Send(packetLoginReply);
+
+            connection.Disconnect();
+
+            return true;
+        }
+
         // Use ticket as key.
         connection.InitializeCipher(packet.Ticket);
 
@@ -98,7 +134,7 @@ public static class PacketLoginHandler
                     .ThenInclude(x => x.Members)
                         .ThenInclude(x => x.Character)
             .AsSplitQuery()
-            .SingleOrDefault(x => x.Id == GuidHelper.GetPlayerId(packet.Guid)
+            .SingleOrDefault(x => x.Id == characterId
 #if !DEBUG
                 && x.Ticket == ticket
 #endif
@@ -171,8 +207,10 @@ public static class PacketLoginHandler
             ProfileHelper.RemoveSpecialProfile(character, dbContext, _logger, SpecialProfileIds.Enforcer);
         }
 #if !DEBUG
+        // A ticket is used once: clearing it only while it is still the one presented makes two logins racing on the
+        // same ticket, or on a newer one issued meanwhile, end with one of them refused.
         var result = dbContext.Characters
-            .Where(x => x.Id == character.Id)
+            .Where(x => x.Id == character.Id && x.Ticket == ticket)
             .ExecuteUpdate(x => x.SetProperty(x => x.Ticket, (Guid?)null));
 
         if (result <= 0)
