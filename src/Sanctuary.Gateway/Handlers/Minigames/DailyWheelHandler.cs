@@ -70,6 +70,8 @@ public static class DailyWheelHandler
         var session = new DailyWheelSession { StateId = System.Threading.Interlocked.Increment(ref _nextStateId) };
         player.WheelSession = session;
 
+        _logger.LogInformation("Daily wheel: opening session {stateId} for {player}.", session.StateId, player.Guid);
+
         var wheel = _resourceManager.DailyWheel;
 
         connection.SendTunneled(new MiniGameInfoPacket(session.StateId, session.GroupId, session.GameId)
@@ -92,7 +94,12 @@ public static class DailyWheelHandler
     {
         var session = connection.Player.WheelSession;
         if (session is null || session.StateId != stateId)
+        {
+            _logger.LogInformation("Daily wheel: start for session {stateId} ignored (open session: {open}).", stateId, session?.StateId);
             return false;
+        }
+
+        _logger.LogInformation("Daily wheel: session {stateId} started; sending the Flash.", stateId);
 
         connection.SendTunneled(new MiniGameGameStartPacket(session.StateId, session.GroupId, session.GameId));
 
@@ -125,7 +132,8 @@ public static class DailyWheelHandler
 
         var message = DailyWheelSession.Parse(packet.Payload);
 
-        _logger.LogTrace("Daily wheel message from {player}: {message}", connection.Player.Guid, string.Join(" | ", message));
+        _logger.LogInformation("Daily wheel: message for session {stateId} (open: {open}): {message}",
+            packet.StateId, session.StateId, string.Join(" | ", message));
 
         if (packet.StateId != session.StateId)
             return false;
@@ -244,6 +252,8 @@ public static class DailyWheelHandler
 
     private static void Close(GatewayConnection connection, DailyWheelSession session)
     {
+        _logger.LogInformation("Daily wheel: session {stateId} closed.", session.StateId);
+
         // A prize paid but never shown (the wheel closed mid-spin): still update the coin total and the spin count.
         if (session.PrizeSlot is not null && !session.PrizeShown)
         {
