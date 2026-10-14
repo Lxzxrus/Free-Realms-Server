@@ -176,6 +176,9 @@ public static class DailyWheelHandler
 
         session.DataSent = true;
 
+        // Once per opening, so it can't be used to flood the log: the Flash reached the server.
+        _logger.LogInformation("Daily wheel: the Flash connected for session {stateId}; sending the wheel.", session.StateId);
+
         var wheel = _resourceManager.DailyWheel;
 
         connection.SendTunneled(session.Message("OnWheelDataMsg", wheel.WheelId, wheel.WheelType, wheel.SlotList(), wheel.NameId, wheel.MessageId));
