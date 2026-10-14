@@ -29,6 +29,9 @@ public interface IResourceManager
     StoreBundleCategoryNodeCollection StoreBundleCategories { get; }
     StoreBundleCategoryGroupDefinitionCollection StoreBundleCategoryGroups { get; }
 
+    ClientActivityDefinitionCollection ClientActivityDefinitions { get; }
+    Minigames.DailyWheel DailyWheel { get; }
+
     ZoneDefinitionCollection Zones { get; }
     MountDefinitionCollection Mounts { get; }
     PlayerTitleCollection PlayerTitles { get; }

@@ -1,0 +1,25 @@
+// Spin For The Win, the daily wheel: one spin per character per UTC day. Read by Sanctuary.Game.Minigames.DailyWheel.
+//
+// Placeholder prizes, all coins, until the economy pass sets real values (and maybe items).
+// Category is the picture on the wedge: a frame (1 to 25) of the wheel's mcCategory sprite in game_wheel.gfx.
+// Weight is the relative chance of landing on the wedge.
+{
+  "WheelId": 1,
+  "WheelType": 1,
+  "NameId": 409962,
+  "MessageId": 409970,
+  "PrizeIconId": 4640,
+  "PrizeNameId": 4923,
+  "Slots": [
+    { "Category": 1, "Coins": 10, "Weight": 20 },
+    { "Category": 2, "Coins": 25, "Weight": 12 },
+    { "Category": 3, "Coins": 15, "Weight": 18 },
+    { "Category": 4, "Coins": 50, "Weight": 6 },
+    { "Category": 5, "Coins": 10, "Weight": 20 },
+    { "Category": 6, "Coins": 30, "Weight": 10 },
+    { "Category": 7, "Coins": 15, "Weight": 18 },
+    { "Category": 8, "Coins": 100, "Weight": 2 },
+    { "Category": 9, "Coins": 20, "Weight": 14 },
+    { "Category": 10, "Coins": 40, "Weight": 8 }
+  ]
+}

@@ -61,6 +61,9 @@ public class DbCharacter
     public DateTimeOffset? LastLogin { get; set; }
     public DateTimeOffset? LastRenamed { get; set; }
 
+    /// <summary>When the character last spun the daily wheel (Spin For The Win); one spin per UTC day.</summary>
+    public DateTimeOffset? LastWheelSpin { get; set; }
+
     public ulong? GuildMemberId { get; set; }
     public DbGuildMember? GuildMember { get; set; }
 

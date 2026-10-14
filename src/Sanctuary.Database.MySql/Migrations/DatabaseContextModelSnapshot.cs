@@ -136,6 +136,9 @@ namespace Sanctuary.Database.MySql.Migrations
                     b.Property<DateTimeOffset?>("LastRenamed")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<DateTimeOffset?>("LastWheelSpin")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<int>("MembershipStatus")
                         .HasColumnType("int");
 

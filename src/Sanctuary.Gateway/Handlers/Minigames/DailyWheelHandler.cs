@@ -1,0 +1,205 @@
+using System;
+using System.Linq;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+using Sanctuary.Database;
+using Sanctuary.Game;
+using Sanctuary.Game.Minigames;
+using Sanctuary.Packet;
+using Sanctuary.Packet.Common.Attributes;
+
+namespace Sanctuary.Gateway.Handlers;
+
+/// <summary>
+/// Spin For The Win, the daily wheel. Opened from the activity portal or the Games menu; one spin per character per
+/// UTC day, paid in coins from <c>Resources/DailyWheel.json</c>.
+/// </summary>
+[PacketHandler]
+public static class DailyWheelHandler
+{
+    public const int ActivityId = 8;
+
+    private const string LuaClass = "MiniGameFlash";
+    private const string Swf = "game_wheel.gfx";
+
+    private static ILogger _logger = null!;
+    private static IResourceManager _resourceManager = null!;
+    private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
+
+    public static void ConfigureServices(IServiceProvider serviceProvider)
+    {
+        var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+        _logger = loggerFactory.CreateLogger(nameof(DailyWheelHandler));
+
+        _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
+    }
+
+    /// <summary>Opens the wheel's Flash if today's spin is unused; otherwise refreshes the client's spin count.</summary>
+    public static void Open(GatewayConnection connection)
+    {
+        var player = connection.Player;
+        var now = DateTimeOffset.UtcNow;
+
+        if (player.WheelSession is not null)
+            return;
+
+        if (!DailyWheel.CanSpin(player.LastWheelSpin, now))
+        {
+            connection.SendTunneled(DailyWheelSession.SpinsPacket(_resourceManager.DailyWheel, player.LastWheelSpin, now));
+            return;
+        }
+
+        player.WheelSession = new DailyWheelSession();
+
+        connection.SendTunneled(new CommandPacketStartFlashGame
+        {
+            LuaClass = LuaClass,
+            Swf = Swf
+        });
+    }
+
+    /// <summary>Handles a message from the wheel's Flash. False if no wheel is open, so other minigames can.</summary>
+    public static bool TryHandle(GatewayConnection connection, MiniGamePayloadPacket packet)
+    {
+        var session = connection.Player.WheelSession;
+        if (session is null)
+            return false;
+
+        var message = DailyWheelSession.Parse(packet.Payload);
+
+        _logger.LogTrace("Daily wheel message from {player}: {message}", connection.Player.Guid, string.Join(" | ", message));
+
+        session.StateId = packet.StateId;
+        session.GroupId = packet.GroupId;
+        session.GameId = packet.GameId;
+
+        switch (message[0])
+        {
+            case "FRServer_Connect":
+            case "FRServer_ReadyForGameData":
+                SendWheel(connection, session);
+                break;
+
+            case "OnWheelSpinRequestMsg":
+                Spin(connection, session);
+                break;
+
+            case "OnWheelStopMsg":
+                ShowPrize(connection, session);
+                break;
+
+            case "OnChangeWheelRequestMsg":
+                connection.SendTunneled(session.Message("OnWheelChangedMsg", _resourceManager.DailyWheel.WheelId));
+                break;
+
+            case "FRServer_GameClose":
+            case "FRServer_GameQuit":
+                Close(connection, session);
+                break;
+        }
+
+        return true;
+    }
+
+    /// <summary>The wheel, its spins and "server ready", once per opening.</summary>
+    private static void SendWheel(GatewayConnection connection, DailyWheelSession session)
+    {
+        if (session.DataSent)
+            return;
+
+        session.DataSent = true;
+
+        var wheel = _resourceManager.DailyWheel;
+
+        connection.SendTunneled(session.Message("OnWheelDataMsg", wheel.WheelId, wheel.WheelType, wheel.SlotList(), wheel.NameId, wheel.MessageId));
+        connection.SendTunneled(session.Message("OnWheelUpdateMsg", wheel.WheelId, 1, 1, 0));
+        connection.SendTunneled(session.Message("OnServerReadyMsg"));
+    }
+
+    /// <summary>
+    /// Rolls the prize and pays it before the wheel stops, in one save with the spin's date, so closing the game
+    /// mid-spin neither loses the prize nor frees a second spin. The coin total shown waits for the prize window.
+    /// </summary>
+    private static void Spin(GatewayConnection connection, DailyWheelSession session)
+    {
+        var player = connection.Player;
+        var wheel = _resourceManager.DailyWheel;
+        var now = DateTimeOffset.UtcNow;
+
+        var slot = wheel.Roll(Random.Shared);
+
+        if (!DailyWheel.CanSpin(player.LastWheelSpin, now) || !session.TryClaimSpin(slot))
+        {
+            _logger.LogWarning("Player {player} asked for a second daily wheel spin.", player.Guid);
+            return;
+        }
+
+        using (var dbContext = _dbContextFactory.CreateDbContext())
+        {
+            var dbCharacter = dbContext.Characters.SingleOrDefault(character => character.Id == player.CharacterId);
+
+            // The database decides: another session of this character may have spun already today.
+            if (dbCharacter is null || !DailyWheel.CanSpin(dbCharacter.LastWheelSpin, now))
+            {
+                session.ReleaseSpin();
+                return;
+            }
+
+            dbCharacter.LastWheelSpin = now;
+            dbCharacter.Coins += wheel.Slots[slot].Coins;
+
+            if (dbContext.SaveChanges() <= 0)
+            {
+                session.ReleaseSpin();
+                return;
+            }
+
+            player.LastWheelSpin = now;
+            player.Coins = dbCharacter.Coins;
+        }
+
+        _logger.LogInformation("Player {player} spun the daily wheel and won {coins} coins.", player.Guid, wheel.Slots[slot].Coins);
+
+        connection.SendTunneled(session.Message("OnSpinInfoMsg", slot));
+    }
+
+    /// <summary>The prize window, the new coin total, and no spins left until UTC midnight.</summary>
+    private static void ShowPrize(GatewayConnection connection, DailyWheelSession session)
+    {
+        if (session.PrizeSlot is not int slot || session.PrizeShown)
+            return;
+
+        session.PrizeShown = true;
+
+        var player = connection.Player;
+        var wheel = _resourceManager.DailyWheel;
+        var now = DateTimeOffset.UtcNow;
+
+        connection.SendTunneled(new ClientUpdatePacketCoinCount { Coins = player.Coins });
+
+        connection.SendTunneled(session.Message("OnRewardInfoMsg",
+            wheel.PrizeIconId, wheel.PrizeNameId, wheel.Slots[slot].Coins, wheel.PrizeNameId, wheel.MessageId, 0));
+
+        var secondsUntilNext = (int)Math.Ceiling(DailyWheel.UntilNextSpin(player.LastWheelSpin, now).TotalSeconds);
+        connection.SendTunneled(session.Message("OnWheelUpdateMsg", wheel.WheelId, 0, 1, secondsUntilNext));
+        connection.SendTunneled(DailyWheelSession.SpinsPacket(wheel, player.LastWheelSpin, now));
+    }
+
+    private static void Close(GatewayConnection connection, DailyWheelSession session)
+    {
+        // A prize paid but never shown (the wheel closed mid-spin): still update the coin total and the spin count.
+        if (session.PrizeSlot is not null && !session.PrizeShown)
+        {
+            session.PrizeShown = true;
+            connection.SendTunneled(new ClientUpdatePacketCoinCount { Coins = connection.Player.Coins });
+            connection.SendTunneled(DailyWheelSession.SpinsPacket(_resourceManager.DailyWheel, connection.Player.LastWheelSpin, DateTimeOffset.UtcNow));
+        }
+
+        connection.Player.WheelSession = null;
+        connection.SendTunneled(new MiniGameLeavePacket(session.StateId));
+    }
+}
