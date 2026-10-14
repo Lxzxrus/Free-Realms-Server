@@ -281,6 +281,7 @@ public class GatewayConnection : UdpConnection
             Player.CollectedCollectionEntries.TryAdd(dbEntry.EntryId);
 
         Player.Birthday = dbCharacter.Created;
+        Player.LastWheelSpin = dbCharacter.LastWheelSpin;
         Player.PlayTime = dbCharacter.PlayTime;
 
         Player.MembershipStatus = dbCharacter.MembershipStatus;

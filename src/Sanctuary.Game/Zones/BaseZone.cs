@@ -170,6 +170,10 @@ public abstract class BaseZone : IZone, IDisposable
 
         SendMembershipSubscriptionInfo(player);
 
+        SendListOfActivities(player);
+
+        SendDailyWheelSpins(player);
+
         var packetZoneDoneSendingInitialData = new PacketZoneDoneSendingInitialData();
 
         player.SendTunneled(packetZoneDoneSendingInitialData);
@@ -336,6 +340,31 @@ public abstract class BaseZone : IZone, IDisposable
         referenceDataPacketClientProfileData.Profiles = _resourceManager.Profiles.ToDictionary();
 
         player.SendTunneled(referenceDataPacketClientProfileData);
+    }
+
+    /// <summary>
+    /// The Games menu's list: one list per server type (1 world, 2 client), from the client's own activity data.
+    /// After EDITz's StartingZone.SendListOfActivities on upstream's minigame branch.
+    /// </summary>
+    private void SendListOfActivities(Player player)
+    {
+        foreach (var serverType in new[] { 2, 1 })
+        {
+            player.SendTunneled(new ActivityPacketListOfActivities
+            {
+                ServerType = serverType,
+                Activities = _resourceManager.ClientActivityDefinitions.Values.Where(x => x.ServerType == serverType).ToList()
+            });
+        }
+    }
+
+    /// <summary>
+    /// Tells the client how many daily wheel spins are left. <c>MiniGameFlashC.StartWheel()</c> does nothing unless
+    /// the "wheel" repeating activity has a count above zero.
+    /// </summary>
+    private void SendDailyWheelSpins(Player player)
+    {
+        player.SendTunneled(Minigames.DailyWheelSession.SpinsPacket(_resourceManager.DailyWheel, player.LastWheelSpin, DateTimeOffset.UtcNow));
     }
 
     protected void SendShopData(Player player)

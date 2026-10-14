@@ -4,6 +4,7 @@ using System.Linq;
 
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Resources;
 using Sanctuary.Game.Resources.Definitions.Rewards;
 
@@ -41,6 +42,9 @@ public class ResourceManager : IResourceManager
     public static readonly string StoreBundleGroupsFile = Path.Combine(BaseDirectory, "StoreBundleGroups.json");
     public static readonly string StoreBundleCategoriesFile = Path.Combine(BaseDirectory, "StoreBundleCategories.json");
     public static readonly string StoreBundleCategoryGroupsFile = Path.Combine(BaseDirectory, "StoreBundleCategoryGroups.json");
+
+    public static readonly string ClientActivityDefinitionsFile = Path.Combine(BaseDirectory, "ClientActivityDefinitions.json");
+    public static readonly string DailyWheelFile = Path.Combine(BaseDirectory, "DailyWheel.json");
 
     public static readonly string ZonesDirectory = Path.Combine(BaseDirectory, "Zones");
     public static readonly string HousesFile = Path.Combine(BaseDirectory, "Houses.json");
@@ -83,6 +87,9 @@ public class ResourceManager : IResourceManager
     public StoreBundleGroupDefinitionCollection StoreBundleGroups { get; }
     public StoreBundleCategoryNodeCollection StoreBundleCategories { get; }
     public StoreBundleCategoryGroupDefinitionCollection StoreBundleCategoryGroups { get; }
+
+    public ClientActivityDefinitionCollection ClientActivityDefinitions { get; }
+    public DailyWheel DailyWheel { get; private set; } = new();
 
     public ZoneDefinitionCollection Zones { get; }
     public HouseDefinitionCollection Houses { get; }
@@ -137,6 +144,8 @@ public class ResourceManager : IResourceManager
         StoreBundleGroups = new(_logger);
         StoreBundleCategories = new(_logger);
         StoreBundleCategoryGroups = new(_logger);
+
+        ClientActivityDefinitions = new(_logger);
 
         Zones = new(_logger);
         Houses = new(_logger);
@@ -290,6 +299,14 @@ public class ResourceManager : IResourceManager
         if (!StoreBundleCategoryGroups.Load(StoreBundleCategoryGroupsFile))
             return false;
 
+        if (!ClientActivityDefinitions.Load(ClientActivityDefinitionsFile))
+            return false;
+
+        if (!DailyWheel.TryLoad(DailyWheelFile, _logger, out var dailyWheel))
+            return false;
+
+        DailyWheel = dailyWheel;
+
         if (!Zones.Load(ZonesDirectory))
             return false;
 
@@ -398,6 +415,10 @@ public class ResourceManager : IResourceManager
                 loaded = StoreBundleCategories.Load(StoreBundleCategoriesFile);
             else if (e.FullPath == StoreBundleCategoryGroupsFile)
                 loaded = StoreBundleCategoryGroups.Load(StoreBundleCategoryGroupsFile);
+            else if (e.FullPath == ClientActivityDefinitionsFile)
+                loaded = ClientActivityDefinitions.Load(ClientActivityDefinitionsFile);
+            else if (e.FullPath == DailyWheelFile && DailyWheel.TryLoad(DailyWheelFile, _logger, out var dailyWheel))
+                (DailyWheel, loaded) = (dailyWheel, true);
             else if (e.FullPath == HousesFile)
                 loaded = Houses.Load(HousesFile);
             else if (e.FullPath == MountsFile)

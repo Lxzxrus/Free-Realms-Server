@@ -91,6 +91,12 @@ public sealed class Player : ClientPcData, IEntity
 
     public PendingQuestTurnIns PendingQuestTurnIns { get; } = new();
 
+    /// <summary>When this character last spun the daily wheel; one spin per UTC day.</summary>
+    public DateTimeOffset? LastWheelSpin { get; set; }
+
+    /// <summary>The daily wheel the player has open, or <c>null</c>.</summary>
+    public Minigames.DailyWheelSession? WheelSession { get; set; }
+
     public void AwardXp(int xp)
     {
         SendTunneled(new ClientUpdatePacketUpdateProfileExperience
