@@ -16,10 +16,15 @@ launcher pins. Read with `minigames-scout.md`, whose section 9 lists the wheel's
    `MiniGameFlashC.StartWheel()` (`0xc08260` → `0x9bdbd0`), which **does nothing unless the wheel's count is above
    zero**, then sends `CommandPacketInteractionStartWheel` (command opcode 26, sub-opcode 11, no body). The Games menu
    instead sends `JoinActivityRequest` for activity 8; Evergrove treats both the same.
-3. **The server starts the Flash**: `CommandPacketStartFlashGame` (26/12) with `"MiniGameFlash"` and
-   `"game_wheel.gfx"`. The client's `MiniGame:StartFlashMiniGame` (`0x9bd650`) shows it with `MiniGameFlash:ShowMicro`
-   if a `MiniGameInfo` for the game arrived first and its byte at `+0x907` is 0, otherwise with `MiniGameFlash:Show`
-   (the full-screen minigame frame). Evergrove sends no `MiniGameInfo`, so the wheel opens full screen.
+3. **The server opens a minigame session, then the Flash.** The client forwards the Flash's messages only inside a
+   minigame session (`MiniGame:SendPayload`, `0x9be6b0`, needs a session and tags each message with its state id).
+   A `MiniGameInfo` packet (39/16) creates one (`MiniGame:JoinGame`, `0x9beb70`): Evergrove sends type 22 (Wheel),
+   the wheel's name, description and icon 20985, and its own state id. With the info's start-screen flag (offset
+   `0x267`, our `Unknown11`) off, the client skips the start screen and asks to start by itself
+   (`MiniGame:RequestStartGame`, `0x9be7d0`, sub-op 5). The server answers with `GameStart` (39/17) and
+   `CommandPacketStartFlashGame` (26/12: `"MiniGameFlash"`, `"game_wheel.gfx"`). The first version started the Flash
+   without a session: the frame opened empty, no message reached the server, and nothing could close it. The
+   minigame frame's close button sends `End` (39/6), answered with `Leave` (39/19).
 4. **The Flash and the server talk** through minigame payload packets (39/14), tab-separated and NUL-terminated, the
    order of SOE's own `Wheel.WheelGameServer` inside the Flash file:
    - client `FRServer_Connect` → server `OnWheelDataMsg` (id, type, slot categories, name string, message string),

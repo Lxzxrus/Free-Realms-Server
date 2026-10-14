@@ -29,6 +29,9 @@ public static class MiniGameEndPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(MiniGameEndPacket), packet);
 
+        if (DailyWheelHandler.TryEnd(connection, packet.StateId))
+            return true;
+
         var miniGameLeavePacket = new MiniGameLeavePacket(packet.StateId);
 
         connection.SendTunneled(miniGameLeavePacket);
