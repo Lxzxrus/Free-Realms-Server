@@ -402,7 +402,13 @@ public static class CommandPacketInteractRequestHandler
         bundle.SourceGuid = sourceGuid;
         bundle.PlayerGuid = connection.Player.Guid;
 
-        definition.FillRewardBundle(bundle, LookupItemDefinition);
+        // The same gender fitting as the grant, so each entry finds the item the player actually received.
+        var gender = connection.Player.Gender;
+        definition.FillRewardBundle(bundle,
+            itemDefinitionId => LookupItemDefinition(itemDefinitionId) is { } item
+                ? _resourceManager.ClientItemDefinitions.ForGender(item, gender)
+                : null,
+            gender);
 
         foreach (var entry in bundle.Entries.OfType<RewardBundleEntryItem>())
         {

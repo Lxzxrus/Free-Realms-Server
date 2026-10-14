@@ -65,8 +65,10 @@ public sealed class CollectionDefinition
         return false;
     }
 
+    /// <param name="itemDefinitions">Looks up a reward item, already fitted to the player's gender.</param>
+    /// <param name="gender">The player's gender (1 boys, 2 girls), which picks <see cref="RewardItemIdsGirls"/>.</param>
     public ClientCollection CreateClientCollection(ulong playerGuid, CollectionProgress progress,
-        Func<int, ClientItemDefinition?> itemDefinitions)
+        Func<int, ClientItemDefinition?> itemDefinitions, int gender = 0)
     {
         var collection = new ClientCollection
         {
@@ -80,7 +82,7 @@ public sealed class CollectionDefinition
             RewardTextId = RewardTextId
         };
 
-        FillRewardBundle(collection.Reward, itemDefinitions);
+        FillRewardBundle(collection.Reward, itemDefinitions, gender);
 
         for (var index = 0; index < Entries.Count; index++)
             collection.Entries.Add(CreateClientCollectionEntry(Entries[index], index, Entries[index].IsCollected(progress)));
@@ -92,7 +94,7 @@ public sealed class CollectionDefinition
     /// Writes this collection's reward into <paramref name="bundle"/>: coins, experience and the reward items, with
     /// the first item's icon and name as the bundle's own (as the captured collections carry them).
     /// </summary>
-    public void FillRewardBundle(RewardBundleBase bundle, Func<int, ClientItemDefinition?> itemDefinitions)
+    public void FillRewardBundle(RewardBundleBase bundle, Func<int, ClientItemDefinition?> itemDefinitions, int gender = 0)
     {
         bundle.Unknown1 = RewardCoins;
         bundle.IconId = CurrencyIconId;
@@ -111,7 +113,7 @@ public sealed class CollectionDefinition
 
         var first = true;
 
-        foreach (var itemDefinitionId in RewardItemIds)
+        foreach (var itemDefinitionId in RewardItemIdsFor(gender))
         {
             var itemDefinition = itemDefinitions(itemDefinitionId);
 
