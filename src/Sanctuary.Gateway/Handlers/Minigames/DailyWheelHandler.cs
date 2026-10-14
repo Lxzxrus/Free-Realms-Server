@@ -10,6 +10,7 @@ using Sanctuary.Game;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -132,8 +133,9 @@ public static class DailyWheelHandler
 
         var message = DailyWheelSession.Parse(packet.Payload);
 
-        _logger.LogInformation("Daily wheel: message for session {stateId} (open: {open}): {message}",
-            packet.StateId, session.StateId, string.Join(" | ", message));
+        // Debug, and cut short: the payload is the client's, up to a whole packet, as often as it likes.
+        _logger.LogDebug("Daily wheel: message for session {stateId} (open: {open}): {message}",
+            packet.StateId, session.StateId, PacketLog.Text(string.Join(" | ", message)));
 
         if (packet.StateId != session.StateId)
             return false;

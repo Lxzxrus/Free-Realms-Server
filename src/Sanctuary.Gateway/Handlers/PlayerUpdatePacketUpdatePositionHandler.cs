@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Game.Quests;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Game.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -32,6 +33,14 @@ public static class PlayerUpdatePacketUpdatePositionHandler
         }
 
         // _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PlayerUpdatePacketUpdatePosition), packet);
+
+        // A real client sends finite numbers. NaN compares false with everything, so it would pass every
+        // "too far away" check; a connection that sends it is counted as faulty and dropped if it keeps on.
+        if (!Positions.IsFinite(packet.Position) || !Positions.IsFinite(packet.Rotation))
+        {
+            connection.ReportFault();
+            return true;
+        }
 
         packet.Guid = connection.Player.Guid;
 

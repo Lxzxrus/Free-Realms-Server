@@ -39,7 +39,7 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
         if (!ClientHousingPacketRequestPlayerHouses.TryDeserialize(data, out var packet))
         {
             _logger.LogError("Failed to deserialize {packet}. ( {data} )", nameof(ClientHousingPacketRequestPlayerHouses),
-                Convert.ToHexString(data.Length > 256 ? data[..256] : data));
+                PacketLog.Hex(data));
             return false;
         }
 

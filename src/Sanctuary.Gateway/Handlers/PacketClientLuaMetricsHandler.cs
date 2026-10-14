@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -32,12 +33,12 @@ public static class PacketClientLuaMetricsHandler
         if (!PacketClientLuaMetrics.TryDeserialize(data, out var metric))
         {
             _logger.LogDebug("Unreadable {packet}. ( {data} )", nameof(PacketClientLuaMetrics),
-                Convert.ToHexString(data.Length > 256 ? data[..256] : data));
+                PacketLog.Hex(data));
             return true;
         }
 
         _logger.LogTrace("Received {packet} {name}. ( {data} )", nameof(PacketClientLuaMetrics), metric.Name,
-            Convert.ToHexString(metric.Data));
+            PacketLog.Hex(metric.Data));
 
         return true;
     }

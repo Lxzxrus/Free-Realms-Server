@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -23,7 +24,7 @@ public static class PlayerUpdatePacketRequestStripEffectHandler
     {
         if (!PlayerUpdatePacketRequestStripEffect.TryDeserialize(data, out var packet))
         {
-            _logger.LogError("Failed to deserialize {packet}. ( Data: {data} )", nameof(PlayerUpdatePacketRequestStripEffect), Convert.ToHexString(data));
+            _logger.LogError("Failed to deserialize {packet}. ( Data: {data} )", nameof(PlayerUpdatePacketRequestStripEffect), PacketLog.Hex(data));
             return false;
         }
 

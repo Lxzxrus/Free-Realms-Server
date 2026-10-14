@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.IO;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -26,7 +27,7 @@ public static class BaseUiPacketHandler
 
         if (!reader.TryRead(out byte subOpCode))
         {
-            _logger.LogError("Failed to read sub-opcode from BaseUiPacket. ( Data: {data} )", Convert.ToHexString(reader.Span));
+            _logger.LogError("Failed to read sub-opcode from BaseUiPacket. ( Data: {data} )", PacketLog.Hex(reader.Span));
             return false;
         }
 
@@ -37,10 +38,10 @@ public static class BaseUiPacketHandler
             case SelectedQuestLockedPacket.OpCode:
                 return SelectedQuestLockedPacketHandler.HandlePacket(connection, fullBuffer);
             case 6:
-                _logger.LogInformation("SelectTaskRequest from {name}. Payload: {data}", connection.Player.Name, Convert.ToHexString(reader.RemainingSpan));
+                _logger.LogInformation("SelectTaskRequest from {name}. Payload: {data}", connection.Player.Name, PacketLog.Hex(reader.RemainingSpan));
                 return false;
             default:
-                _logger.LogInformation("Sub-opcode {sub} from {name}. Payload: {data}", subOpCode, connection.Player.Name, Convert.ToHexString(reader.RemainingSpan));
+                _logger.LogInformation("Sub-opcode {sub} from {name}. Payload: {data}", subOpCode, connection.Player.Name, PacketLog.Hex(reader.RemainingSpan));
                 return false;
         }
     }

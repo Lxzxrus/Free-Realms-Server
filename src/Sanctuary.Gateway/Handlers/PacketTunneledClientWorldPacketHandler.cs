@@ -7,6 +7,7 @@ using Sanctuary.Core.IO;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
@@ -29,11 +30,19 @@ public static class PacketTunneledClientWorldPacketHandler
             return false;
         }
 
+        // Every tunneled packet is about the player. The game client sends none before its login is answered, so
+        // one that arrives earlier is from something else, and the handlers would throw on the missing player.
+        if (connection.Player is null)
+        {
+            connection.ReportFault();
+            return false;
+        }
+
         var reader = new PacketReader(packet.Payload);
 
         if (!reader.TryRead(out short opCode))
         {
-            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", Convert.ToHexString(data));
+            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", PacketLog.Hex(data));
             return false;
         }
 
