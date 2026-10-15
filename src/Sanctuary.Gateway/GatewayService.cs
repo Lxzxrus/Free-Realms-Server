@@ -201,6 +201,7 @@ public class GatewayService : BackgroundService
         var loginConnected = false;
         var reconnectDelay = MinLoginReconnectDelay;
         var reconnectAt = 0L;
+        var fishingTickAt = 0L;
 
         try
         {
@@ -209,6 +210,15 @@ public class GatewayService : BackgroundService
                 var hadData = false;
                 hadData |= _server.GiveTime();
                 hadData |= _client.GiveTime();
+
+                // Fishing's bite timers, here on the packet thread like everything else that touches a player's items.
+                var tickNow = Environment.TickCount64;
+
+                if (tickNow >= fishingTickAt)
+                {
+                    fishingTickAt = tickNow + GatewayServer.FishingTickMs;
+                    _server.TickFishing(tickNow);
+                }
 
                 if (clientConnection.Status == Status.Connected)
                 {

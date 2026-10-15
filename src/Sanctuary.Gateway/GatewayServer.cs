@@ -40,6 +40,40 @@ public class GatewayServer : UdpManager<GatewayConnection>
             .ToList();
     }
 
+    /// <summary>How often fishing's bite timers are moved along.</summary>
+    public const int FishingTickMs = 50;
+
+    /// <summary>Moves every fishing player's bite along. On the main loop, the thread that handles their packets.</summary>
+    public void TickFishing(long now)
+    {
+        // A snapshot, as GiveTime takes: a trade can disconnect a player from another thread. And no exception may
+        // leave here: it would end the main loop, and with it the Gateway.
+        try
+        {
+            foreach (var connection in ConnectionList.ToArray())
+            {
+                if (connection?.Player?.FishingSession is not { } session)
+                    continue;
+
+                try
+                {
+                    session.Update(now);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Fishing: the session of {player} failed; ending it.", connection.Player.Guid);
+
+                    connection.Player.FishingSession = null;
+                    connection.Player.ReturnToStartingZone();
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Fishing: the tick failed.");
+        }
+    }
+
     public void OnStarted()
     {
         _resourceManager.Zones.CollectionChanged += Zones_CollectionChanged;

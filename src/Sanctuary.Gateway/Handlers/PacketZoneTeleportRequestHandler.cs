@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game;
-using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -49,7 +48,8 @@ public static class PacketZoneTeleportRequestHandler
         var position = pointOfInterest.SpawnPosition;
         var rotation = new Quaternion(rotationZ, 0f, rotationX, 0f);
 
-        if (connection.Player.Zone is HousingZone)
+        // Every point of interest is in the starting zone, so from a house or a fishing hole this is a zone change.
+        if (connection.Player.Zone != _zoneManager.StartingZone)
         {
             connection.Player.TeleportToZone(_zoneManager.StartingZone, position, rotation);
             return true;
@@ -65,6 +65,8 @@ public static class PacketZoneTeleportRequestHandler
         };
 
         connection.SendTunneled(clientUpdatePacketUpdateLocation);
+
+        FishingHandler.OfferHoleAt(connection, pointOfInterest);
 
         return true;
     }

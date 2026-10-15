@@ -209,6 +209,11 @@ public class ZoneManager : IZoneManager
             Id = NextID(),
             OwnerId = ownerId
         },
+        FishingZoneDefinition fishingZoneDefinition => new FishingZone(fishingZoneDefinition, _serviceProvider)
+        {
+            Id = NextID(),
+            OwnerId = ownerId // Always 'null': everyone fishing a hole shares it, and sees each other fish.
+        },
         _ => throw new InvalidOperationException($"Unhandled zone definition type: {zoneDefinition.GetType()}")
     };
 
@@ -280,6 +285,7 @@ public class ZoneManager : IZoneManager
         WorldZoneDefinition => true,
         CombatZoneDefinition => ownerId is not null,
         HousingZoneDefinition housing => ownerId is not null && TryGetHouseId(ownerId.Value, housing.Id, out _),
+        FishingZoneDefinition => ownerId is null,
         _ => false
     };
 
