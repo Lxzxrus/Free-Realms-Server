@@ -97,6 +97,9 @@ public sealed class Player : ClientPcData, IEntity
     /// <summary>The daily wheel the player has open, or <c>null</c>.</summary>
     public Minigames.DailyWheelSession? WheelSession { get; set; }
 
+    /// <summary>The Flash minigame the player has open (Mining Practice...), or <c>null</c>.</summary>
+    public Minigames.FlashMinigameSession? FlashMinigame { get; set; }
+
     public void AwardXp(int xp)
     {
         SendTunneled(new ClientUpdatePacketUpdateProfileExperience
