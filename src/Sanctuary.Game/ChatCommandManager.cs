@@ -73,7 +73,7 @@ public class ChatCommandManager : IChatCommandManager
         if (!_commands.TryGetValue(keyWord.ToLowerInvariant(), out var cmd))
             return false;
 
-        if (invoker.ChatCommandRole < cmd.RequiredRole)
+        if (!CanUse(invoker.ChatCommandRole, cmd))
         {
             ChatHelper.SendSystemMessage(invoker, $"You do not have permission to use this command.");
             return true;
@@ -86,6 +86,9 @@ public class ChatCommandManager : IChatCommandManager
 
         return true;
     }
+
+    /// <summary>The only gate on a command: the invoker's role must be at least the one the command requires.</summary>
+    public static bool CanUse(ChatCommandRole role, IChatCommandView command) => role >= command.RequiredRole;
 
     public void LogAction(IChatCommand command, Player invoker, string action, string? targetName, string? detail)
     {

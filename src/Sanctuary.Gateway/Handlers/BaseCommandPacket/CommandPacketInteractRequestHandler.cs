@@ -100,7 +100,7 @@ public static class CommandPacketInteractRequestHandler
 
     /// <summary>
     /// An exploration coin: ticks one entry of its collection for this character, once, and then disappears for
-    /// this character only. Nothing is paid; finishing the collection grants its reward items.
+    /// this character only. Nothing is paid for the coin; finishing the collection pays its reward items and stars.
     /// </summary>
     private static bool HandleCollectionEntryNode(GatewayConnection connection, CollectionNode node)
     {
@@ -124,6 +124,7 @@ public static class CommandPacketInteractRequestHandler
 
         var grantedRewards = new List<GrantedItem>();
         var completed = false;
+        ExperienceGain? experience = null;
 
         try
         {
@@ -140,8 +141,10 @@ public static class CommandPacketInteractRequestHandler
 
             dbCharacter.CollectionEntries.Add(new DbCharacterCollectionEntry { EntryId = entryId });
 
-            // The progress now includes the entry, so this is "complete after this pickup".
-            completed = definition.IsComplete(progress);
+            // The progress now includes the entry, so this is "complete after this pickup". It pays once.
+            completed = definition.IsComplete(progress) &&
+                CollectionCompletion.TryRecord(dbContext, _resourceManager.RankLevels, player.CharacterId, definition,
+                    out experience);
 
             if (completed)
                 grantedRewards = GrantRewardItems(dbCharacter, definition);
@@ -176,7 +179,10 @@ public static class CommandPacketInteractRequestHandler
         SendCollectionEntryUpdate(connection, definition, match.Entry, match.Index);
 
         if (completed)
+        {
+            SendCollectionExperience(connection, definition, experience);
             SendCollectionCompleted(connection, definition, grantedRewards, node.Guid);
+        }
 
         return true;
     }
@@ -221,7 +227,12 @@ public static class CommandPacketInteractRequestHandler
             // drop in by hand to see whether it finishes the collection.
             var ownedAfter = new HashSet<int>(progress.OwnedItemDefinitionIds) { itemDefinitionId };
             var progressAfter = progress with { OwnedItemDefinitionIds = ownedAfter };
-            var completed = hasEntry && !collectionEntryWasCollected && match.Definition.IsComplete(progressAfter);
+            // Holding the items is what finishes it, so it can finish again after one is sold and picked up again;
+            // it pays only the first time.
+            ExperienceGain? experience = null;
+            var completed = hasEntry && !collectionEntryWasCollected && match.Definition.IsComplete(progressAfter) &&
+                CollectionCompletion.TryRecord(dbContext, _resourceManager.RankLevels, player.CharacterId,
+                    match.Definition, out experience);
             var grantedRewards = completed ? GrantRewardItems(dbCharacter, match.Definition) : [];
 
             if (dbContext.SaveChanges() <= 0)
@@ -247,7 +258,10 @@ public static class CommandPacketInteractRequestHandler
                 SendCollectionEntryUpdate(connection, match.Definition, match.Entry, match.Index);
 
                 if (completed)
+                {
+                    SendCollectionExperience(connection, match.Definition, experience);
                     SendCollectionCompleted(connection, match.Definition, grantedRewards, node.Guid);
+                }
             }
             else
             {
@@ -298,8 +312,9 @@ public static class CommandPacketInteractRequestHandler
     }
 
     /// <summary>
-    /// The collection's reward items, added to the character's rows (not yet saved). Coins and experience in a
-    /// collection's reward are not paid: the economy is a later task.
+    /// The collection's reward items, added to the character's rows (not yet saved). Its stars are staged by
+    /// <see cref="CollectionCompletion.TryRecord"/>; the coins in a collection's reward are not paid: the economy is
+    /// a later task.
     /// </summary>
     private static List<GrantedItem> GrantRewardItems(DbCharacter dbCharacter, CollectionDefinition definition)
     {
@@ -387,6 +402,28 @@ public static class CommandPacketInteractRequestHandler
             Unknown = entry.Unknown,
             Collected = entry.Collected
         });
+    }
+
+    /// <summary>
+    /// The saved stars of a finished collection, on the level bar of the job they went to. The celebration shows the
+    /// number. Without a job to take them (most characters don't have the Medic job that the Briarwood mushrooms
+    /// pay), nothing was paid.
+    /// </summary>
+    private static void SendCollectionExperience(GatewayConnection connection, CollectionDefinition definition,
+        ExperienceGain? experience)
+    {
+        if (experience is { } gain)
+        {
+            RewardHelper.SendExperience(_resourceManager.RankLevels, _logger, connection.Player, gain);
+            return;
+        }
+
+        if (definition.RewardExperience > 0)
+        {
+            _logger.LogInformation("Collection {collectionId}'s {stars} stars for profile {profileId} were not paid to " +
+                "character {characterId}: it doesn't have that job, or the job is at the top level.",
+                definition.Id, definition.RewardExperience, definition.RewardProfileId, connection.Player.CharacterId);
+        }
     }
 
     /// <summary>

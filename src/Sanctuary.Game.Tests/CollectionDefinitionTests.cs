@@ -129,7 +129,7 @@ public sealed class CollectionDefinitionTests
         var bundle = new RewardBundleBase();
         definition.FillRewardBundle(bundle, id => items.GetValueOrDefault(id));
 
-        Assert.AreEqual(9, bundle.Unknown1, "Coins travel in the bundle's first int.");
+        Assert.AreEqual(9, bundle.Coins, "Coins travel in the bundle's first int.");
         Assert.AreEqual(430, bundle.IconId, "The bundle shows the first reward item.");
         Assert.AreEqual(2630, bundle.NameId);
         Assert.AreEqual(3, bundle.Entries.Count);

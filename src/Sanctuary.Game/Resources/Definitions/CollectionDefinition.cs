@@ -96,7 +96,7 @@ public sealed class CollectionDefinition
     /// </summary>
     public void FillRewardBundle(RewardBundleBase bundle, Func<int, ClientItemDefinition?> itemDefinitions, int gender = 0)
     {
-        bundle.Unknown1 = RewardCoins;
+        bundle.Coins = RewardCoins;
         bundle.IconId = CurrencyIconId;
         bundle.NameId = CurrencyNameId;
 

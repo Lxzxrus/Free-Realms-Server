@@ -100,17 +100,6 @@ public sealed class Player : ClientPcData, IEntity
     /// <summary>The Flash minigame the player has open (Mining Practice...), or <c>null</c>.</summary>
     public Minigames.FlashMinigameSession? FlashMinigame { get; set; }
 
-    public void AwardXp(int xp)
-    {
-        SendTunneled(new ClientUpdatePacketUpdateProfileExperience
-        {
-            ProfileId = ActiveProfileId,
-            XpGained = xp,
-            TotalXpInLevel = 0,
-            CurrentLevel = 0
-        });
-    }
-
     public ConcurrentDictionary<ChatChannel, bool> ChatChannelStatus { get; set; } = [];
 
     public int StationCash { get; set; }

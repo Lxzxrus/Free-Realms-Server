@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,12 @@ public enum SpecialProfileIds
 
 public static class ProfileHelper
 {
+    /// <summary>
+    /// The level a new job row starts at: 1, so it has a level bar to fill, except the staff jobs (Referee,
+    /// Enforcer), which start at the top as upstream has them.
+    /// </summary>
+    public static int StartingLevel(int profileId) => Enum.IsDefined((SpecialProfileIds)profileId) ? 20 : 1;
+
     public static void GrantDefaultItems(DbCharacter character, DbProfile dbProfile,
         ClientProfileData profileData, IResourceManager resourceManager)
     {
@@ -70,7 +77,7 @@ public static class ProfileHelper
         {
             CharacterId = character.Id,
             Id = id,
-            Level = 20
+            Level = StartingLevel(id)
         };
 
         var existingItemIds = character.Items.Select(x => x.Id).ToHashSet();

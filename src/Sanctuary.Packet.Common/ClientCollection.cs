@@ -10,7 +10,7 @@ namespace Sanctuary.Packet.Common;
 /// <remarks>
 /// Layout from the 253 collections in the 2014 <c>SendSelf</c> capture (<c>possible_character_data.pcapng</c>):
 /// the header, one <see cref="RewardBundleBase"/> (the same payload as the reward packets, with per-entry tails that
-/// depend on the entry type), one more int, then the entries. <see cref="RewardBundleBase.Unknown1"/> is the coin
+/// depend on the entry type), one more int, then the entries. <see cref="RewardBundleBase.Coins"/> is the coin
 /// reward there and <see cref="RewardBundleBase.Unknown3"/> is 15 in every row.
 /// </remarks>
 public sealed class ClientCollection : ISerializableType

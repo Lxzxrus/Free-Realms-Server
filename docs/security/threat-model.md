@@ -308,7 +308,7 @@ can't read the item and coin replies that would prove the coin-store one.
 | S3 | **High** | Sends a second `PacketLogin` on a connection that is already in the world (any character of the account with a fresh ticket, or the same one once it has left the starting zone). The handler replaced `Player`: the first one stayed in its zone as a **ghost** that is never saved, never disposed and never logged out at Login, so that character is locked out until the Login server restarts, and the ghosts pile up | `PacketLoginHandler.HandlePacket` (`CreatePlayerFromDatabase` replaced `Player`) | Part of `LoginAdmission`: a connection with a player is disconnected if it logs in again | **Fixed** |
 | S4 | **Medium** | Positions are the client's word (`PlayerUpdatePacketUpdatePositionHandler`), so a client can stand anywhere: collect any coin, finish every reach-location quest step, and talk to any npc. Worse, a **NaN** position passed every range check written as `distance > range` (NaN compares false with everything) without even moving | Position handler; `CommandPacketInteractRequestHandler` | NaN and infinite positions are refused and count as a fault (`Positions.IsFinite`); range checks are now "within range", which NaN fails (`Positions.IsWithinRange`). Teleporting stays open: see "left for later" | **Partly fixed** |
 | S5 | **Medium** | Fills the disk through the log: a packet that makes a handler throw was logged **whole as hex** (a 64 KiB packet is 128 KiB per line), at up to five faults a minute per connection and five connections per address every ten seconds; the daily wheel logged every Flash message at Information, unlimited | `GatewayConnection`, 33 handlers, `DailyWheelHandler.TryHandle` | `PacketLog.Hex` caps every logged packet at 256 bytes; the wheel logs at Debug, cut to 256 characters. `PacketLogTests` | **Fixed** |
-| S6 | **Medium** (latent) | Completes an item-based collection twice. Completion is derived from the inventory, nothing records it, so selling or trading away an entry item and picking it up again completes the collection again. Today the only item-based collection (10, Briarwood) pays coins, and collection coins **are not paid yet**, so nothing is gained today; it becomes a coin tap the day they are | `CommandPacketInteractRequestHandler.HandleItemDropNode`, `CollectionDefinition.IsComplete` | Record completion per character (a row like `DbCharacterCollectionEntry`) and pay a reward once per row | Left for the economy pass |
+| S6 | **Medium** (latent) | Completes an item-based collection twice. Completion is derived from the inventory, nothing records it, so selling or trading away an entry item and picking it up again completes the collection again. Today the only item-based collection (10, Briarwood) pays coins, and collection coins **are not paid yet**, so nothing is gained today; it becomes a coin tap the day they are. Task 31 started paying its 50 stars, which made it a live star tap | `CommandPacketInteractRequestHandler.HandleItemDropNode`, `CollectionDefinition.IsComplete` | The first finish writes a `CharacterCompletedCollections` row (primary key collection, character) in the same save as the reward, and a finish with a row pays nothing and shows no celebration (`CollectionCompletion.TryRecord`, task 31). `CollectionCompletionTests` | **Fixed** |
 | S7 | **Low** | Sends a tunneled packet before logging in: every handler dereferenced the missing player, threw, and was caught as a fault | `PacketTunneledClientPacketHandler`, `PacketTunneledClientWorldPacketHandler` | Refused outright, counted as a fault | **Fixed** |
 | S8 | **Low** | Sends a string with a negative length prefix: `PacketReader.TryRead(out string)` threw instead of failing the read (caught as a fault) | `Sanctuary.Core/IO/PacketReader.cs` | Returns false. `PacketReaderTests` (seen red first) | **Fixed** |
 | S9 | **Low** | Talks to a quest npc from anywhere in the zone when it has one interaction (the menu path checked the reach; the single-option path didn't) | `CommandPacketInteractRequestHandler` | The same reach check as the menu | **Fixed** |
@@ -345,11 +345,11 @@ can't read the item and coin replies that would prove the coin-store one.
   `CanEdit`. Friendship needs the other side's
   pending request, so a visitor can't make themself the owner's friend.
 - **Coins and items elsewhere.** Every writer re-reads the row it changes (wheel, quest rewards, collections,
-  `RewardManager`, both coin store handlers, the marketplace), so two connections can't double-spend from a stale
+  `RewardHelper`, both coin store handlers, the marketplace), so two connections can't double-spend from a stale
   in-memory total; the marketplace and buying from the coin store already check quantities and overflow; trading
   reconciles the runtime inventory against the database and aborts on any mismatch, and refuses `NoTrade` and
-  trading-card items. Equipping, consuming and style cards look items up by character id. The reward and
-  collection chat commands are Admin-only.
+  trading-card items. Equipping, consuming and style cards look items up by character id. The reward,
+  experience and collection chat commands are Admin-only.
 
 ### Left for later (Medium and Low), with a suggested fix each
 
@@ -357,8 +357,6 @@ can't read the item and coin replies that would prove the coin-store one.
   update against a generous top speed, with the mount's speed allowed for, and zone-area bounds) would turn a
   teleport into a snap-back and a fault. Needs the real movement rates from the client; do it with the first
   minigame that pays by position.
-- **S6, collection completion (Medium, latent).** Record completion per character and pay once per row; do it in
-  the same change that starts paying collection coins.
 - **S11, store reach (Low).** Check `MerchantGuid` is a store npc within `InteractRange` once the stores are
   placed on purpose.
 - **S13, history scrub (F2).** Decide before the repo goes public.
