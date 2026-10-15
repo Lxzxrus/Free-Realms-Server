@@ -32,6 +32,9 @@ public static class MiniGameEndPacketHandler
         if (DailyWheelHandler.TryEnd(connection, packet.StateId))
             return true;
 
+        if (FlashMinigameHandler.TryEnd(connection, packet.StateId))
+            return true;
+
         var miniGameLeavePacket = new MiniGameLeavePacket(packet.StateId);
 
         connection.SendTunneled(miniGameLeavePacket);

@@ -32,21 +32,10 @@ public static class MiniGameStartGamePacketHandler
         if (DailyWheelHandler.TryStart(connection, packet.StateId))
             return true;
 
-        var miniGameGameStarted = new MiniGameGameStartPacket(packet.StateId, packet.GroupId, packet.GameId);
+        if (FlashMinigameHandler.TryStart(connection, packet.StateId))
+            return true;
 
-        connection.SendTunneled(miniGameGameStarted);
-
-        // Mining Practice
-        if (packet.StateId == 1113)
-        {
-            var commandPacketStartFlashGame = new CommandPacketStartFlashGame()
-            {
-                LuaClass = "MiniGameFlash",
-                Swf = "game_hidden.gfx"
-            };
-
-            connection.SendTunneled(commandPacketStartFlashGame);
-        }
+        connection.SendTunneled(new MiniGameGameStartPacket(packet.StateId, packet.GroupId, packet.GameId));
 
         return true;
     }

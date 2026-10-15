@@ -34,36 +34,8 @@ public static class MiniGamePayloadPacketHandler
         if (DailyWheelHandler.TryHandle(connection, packet))
             return true;
 
-        // Mining Practice
-        if (packet.StateId == 1113)
-        {
-            var message = Encoding.UTF8.GetString(packet.Payload).TrimEnd('\0');
-
-            Debug.WriteLine(message);
-
-            var args = message.Split('\t');
-
-            if (args.Length > 0)
-            {
-                switch (args[0])
-                {
-                    case "OnConnectMsg":
-                        {
-                            var miniGamePayloadPacket2 = new MiniGamePayloadPacket
-                            {
-                                Payload = Encoding.UTF8.GetBytes("OnServerReadyMsg\0")
-                            };
-
-                            connection.SendTunneled(miniGamePayloadPacket2);
-                        }
-                        break;
-
-                    default:
-                        Debug.WriteLine(message);
-                        break;
-                }
-            }
-        }
+        if (FlashMinigameHandler.TryHandle(connection, packet))
+            return true;
 
         return true;
     }
