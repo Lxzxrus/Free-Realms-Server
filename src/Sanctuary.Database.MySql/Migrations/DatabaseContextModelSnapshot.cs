@@ -390,15 +390,13 @@ namespace Sanctuary.Database.MySql.Migrations
                     b.Property<bool>("PetAutospawn")
                         .HasColumnType("tinyint(1)");
 
-                    b.Property<float>("Rating")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("float")
-                        .HasDefaultValue(0f);
-
-                    b.Property<int>("Votes")
+                    b.Property<int>("Plot")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(0);
+
+                    b.Property<DateTimeOffset?>("RankedSince")
+                        .HasColumnType("datetime(6)");
 
                     b.Property<int>("ZoneDefinitionId")
                         .HasColumnType("int");
@@ -582,6 +580,45 @@ namespace Sanctuary.Database.MySql.Migrations
                         .IsUnique();
 
                     b.ToTable("Mounts");
+                });
+
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbPlotVote", b =>
+                {
+                    b.Property<ulong>("HouseId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<ulong>("UserId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<DateTimeOffset>("WeekStart")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<ulong>("CharacterId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime(6)")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<ulong>("OwnerUserId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<DateTimeOffset>("Updated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime(6)")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<int>("Value")
+                        .HasColumnType("int");
+
+                    b.HasKey("HouseId", "UserId", "WeekStart");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("WeekStart", "HouseId");
+
+                    b.ToTable("PlotVotes");
                 });
 
             modelBuilder.Entity("Sanctuary.Database.Entities.DbProfile", b =>
@@ -844,6 +881,17 @@ namespace Sanctuary.Database.MySql.Migrations
                         .IsRequired();
 
                     b.Navigation("Character");
+                });
+
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbPlotVote", b =>
+                {
+                    b.HasOne("Sanctuary.Database.Entities.DbUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Sanctuary.Database.Entities.DbProfile", b =>

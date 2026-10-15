@@ -379,15 +379,13 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.Property<bool>("PetAutospawn")
                         .HasColumnType("INTEGER");
 
-                    b.Property<float>("Rating")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("REAL")
-                        .HasDefaultValue(0f);
-
-                    b.Property<int>("Votes")
+                    b.Property<int>("Plot")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0);
+
+                    b.Property<DateTimeOffset?>("RankedSince")
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("ZoneDefinitionId")
                         .HasColumnType("INTEGER");
@@ -569,6 +567,45 @@ namespace Sanctuary.Database.Sqlite.Migrations
                         .IsUnique();
 
                     b.ToTable("Mounts");
+                });
+
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbPlotVote", b =>
+                {
+                    b.Property<ulong>("HouseId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<ulong>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("WeekStart")
+                        .HasColumnType("TEXT");
+
+                    b.Property<ulong>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<ulong>("OwnerUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("Updated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("Value")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("HouseId", "UserId", "WeekStart");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("WeekStart", "HouseId");
+
+                    b.ToTable("PlotVotes");
                 });
 
             modelBuilder.Entity("Sanctuary.Database.Entities.DbProfile", b =>
@@ -829,6 +866,17 @@ namespace Sanctuary.Database.Sqlite.Migrations
                         .IsRequired();
 
                     b.Navigation("Character");
+                });
+
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbPlotVote", b =>
+                {
+                    b.HasOne("Sanctuary.Database.Entities.DbUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Sanctuary.Database.Entities.DbProfile", b =>
