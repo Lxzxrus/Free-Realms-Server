@@ -58,7 +58,7 @@ public sealed class DailyWheelSession
         return new RepeatingActivityAddPacket
         {
             Id = wheel.WheelId,
-            Count = DailyWheel.CanSpin(lastSpin, now) ? 1 : 0,
+            Count = wheel.Enabled && DailyWheel.CanSpin(lastSpin, now) ? 1 : 0,
             Consecutive = 1,
             SecondsUntilNext = seconds,
             SecondsUntilNext2 = seconds,

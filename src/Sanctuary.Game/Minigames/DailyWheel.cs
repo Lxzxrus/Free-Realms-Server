@@ -31,6 +31,13 @@ public sealed class DailyWheel
 
     public const string RepeatingActivityName = "wheel";
 
+    /// <summary>
+    /// Off until the wheel can be drawn: 82 of the 83 images inside game_wheel.gfx are in neither the client's packs nor
+    /// its asset list (OSFR never had them), so the wheel opened as an empty frame. Off, no spin is offered and nothing
+    /// opens; everything else stays ready.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
     public int WheelId { get; set; } = 1;
     public int WheelType { get; set; } = TenSlotType;
 

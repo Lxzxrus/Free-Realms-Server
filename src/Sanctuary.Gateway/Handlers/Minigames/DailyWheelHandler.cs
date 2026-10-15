@@ -62,7 +62,7 @@ public static class DailyWheelHandler
         if (player.WheelSession is not null)
             return;
 
-        if (!DailyWheel.CanSpin(player.LastWheelSpin, now))
+        if (!_resourceManager.DailyWheel.Enabled || !DailyWheel.CanSpin(player.LastWheelSpin, now))
         {
             connection.SendTunneled(DailyWheelSession.SpinsPacket(_resourceManager.DailyWheel, player.LastWheelSpin, now));
             return;

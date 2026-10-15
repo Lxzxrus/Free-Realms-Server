@@ -42,6 +42,15 @@ a frame (1 to 25) of one sprite (character 194), and the pictures themselves are
 can't be previewed outside the game. The live game's prize tables (`MicroGameWheel*.txt`) were server data and are not
 in the client, so Evergrove's prizes are its own (`src/Resources/DailyWheel.json`).
 
+## Why it can't be shown yet (2026-10-14)
+
+In game the wheel's frame opened with its title but nothing in it. `game_wheel.gfx` keeps its pictures as 83 external
+images (`img<number>.dds`), and **82 of them are in neither the client's packs nor its asset list**. The same check
+passes for `game_mining.gfx` (85 of 85), `MinigameStartScreen.gfx` (47 of 47) and `LootWheelOfAwesomeness.gfx`
+(28 of 28). OSFR's asset server also lacks every minigame `.swf`, but the client loads the `.gfx`. So the wheel is
+switched off (`Enabled` in `DailyWheel.json`) until its art exists: new art made for Evergrove as a client mod, or the
+images from another client copy. Before building any other Flash minigame, run the same image check on its `.gfx`.
+
 ## Still unknown
 
 - Which of the two seconds fields in `RepeatingActivityAdd` is "next spin", and what the second string and last int
