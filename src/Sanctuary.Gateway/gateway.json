@@ -17,5 +17,14 @@
     "CreativeMode": true,
     "CreativeCatalogLimit": 0,
     "FreeLots": true
+  },
+
+  "Competition": {
+    "TimeZone": "UTC",
+    "WeekStartDay": "Monday",
+    "WeekStartTime": "00:00:00",
+    "MinAccountAgeDays": 3,
+    "MinPlaytimeMinutes": 120,
+    "MinimumVotes": 10
   }
 }

@@ -148,6 +148,34 @@ public class GatewayService : BackgroundService
             housingOptions.CreativeCatalogLimit,
             housingOptions.FreeLots ? "on" : "off");
 
+        // The ranked-plot competition's settings. A time zone this machine doesn't know would stop every vote, so refuse
+        // to start instead.
+        var competitionOptions = _serviceProvider.GetRequiredService<IOptions<CompetitionOptions>>().Value;
+        var competitionProblems = competitionOptions.Problems();
+
+        if (competitionProblems.Count > 0)
+        {
+            foreach (var problem in competitionProblems)
+                _logger.LogCritical("Cannot start {server}: {problem}", nameof(GatewayServer), problem);
+
+            _hostApplicationLifetime.StopApplication();
+
+            return Task.CompletedTask;
+        }
+
+        var competitionWeek = competitionOptions.WeekContaining(DateTimeOffset.UtcNow);
+
+        _logger.LogInformation(
+            "Competition: weeks start {WeekStartDay} {WeekStartTime} {TimeZone} (this week {WeekStart:u} to {WeekEnd:u}); voters need an account {MinAccountAgeDays} days old and {MinPlaytimeMinutes} minutes played; m = {MinimumVotes}.",
+            competitionOptions.WeekStartDay,
+            competitionOptions.WeekStartTime,
+            competitionOptions.TimeZone,
+            competitionWeek.Start,
+            competitionWeek.End,
+            competitionOptions.MinAccountAgeDays,
+            competitionOptions.MinPlaytimeMinutes,
+            competitionOptions.MinimumVotes);
+
         // Register services on static packet handlers.
         _serviceProvider.ConfigurePacketHandlers();
 

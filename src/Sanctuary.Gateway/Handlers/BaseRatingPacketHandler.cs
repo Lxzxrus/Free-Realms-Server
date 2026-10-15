@@ -4,14 +4,18 @@ using System.Globalization;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
@@ -28,6 +32,7 @@ public static class BaseRatingPacketHandler
     private static ILogger _logger = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
     private static IResourceManager _resourceManager = null!;
+    private static CompetitionOptions _competitionOptions = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -35,6 +40,7 @@ public static class BaseRatingPacketHandler
         _logger = loggerFactory.CreateLogger(nameof(BaseRatingPacketHandler));
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _competitionOptions = serviceProvider.GetRequiredService<IOptions<CompetitionOptions>>().Value;
     }
 
     public static bool HandlePacket(GatewayConnection connection, PacketReader reader)
@@ -80,7 +86,8 @@ public static class BaseRatingPacketHandler
         }
 
         var totalCount = query.Count();
-        var selected = SortDirectoryQuery(query, mode)
+        var standings = LoadStandings(dbContext);
+        var selected = SortDirectoryQuery(query, mode, standings)
             .Take(MaxDirectoryEntries)
             .ToList();
         var response = new RatingPacketDataReply
@@ -91,7 +98,7 @@ public static class BaseRatingPacketHandler
         };
 
         for (int index = 0; index < selected.Count; index++)
-            response.Entries[index] = ToRatingEntry(selected[index]);
+            response.Entries[index] = ToRatingEntry(selected[index], standings);
 
         connection.SendTunneled(response);
         return true;
@@ -132,7 +139,8 @@ public static class BaseRatingPacketHandler
                 house.Character.LastName != null && house.Character.LastName.ToLower().Contains(normalizedSearch));
         }
 
-        var houses = SortDirectoryQuery(query, 0)
+        var standings = LoadStandings(dbContext);
+        var houses = SortDirectoryQuery(query, 0, standings)
             .Take(MaxDirectoryEntries)
             .ToList();
 
@@ -140,7 +148,7 @@ public static class BaseRatingPacketHandler
         {
             Correlation = correlation,
             Query = searchText,
-            Entries = houses.Select(ToRatingEntry).ToList()
+            Entries = houses.Select(house => ToRatingEntry(house, standings)).ToList()
         });
         return true;
     }
@@ -158,15 +166,17 @@ public static class BaseRatingPacketHandler
             return false;
 
         using var dbContext = _dbContextFactory.CreateDbContext();
+        var standings = LoadStandings(dbContext);
         var house = SortDirectoryQuery(
             CreateDirectoryQuery(dbContext, connection.Player.MembershipStatus != 0),
-            0).FirstOrDefault();
+            0,
+            standings).FirstOrDefault();
 
         connection.SendTunneled(new RatingPacketSendFeatured
         {
             Correlation = correlation,
             System = HousingSystem,
-            Entry = house is null ? new RatingDataEntry() : ToRatingEntry(house)
+            Entry = house is null ? new RatingDataEntry() : ToRatingEntry(house, standings)
         });
         return true;
     }
@@ -202,6 +212,16 @@ public static class BaseRatingPacketHandler
         house.IsPublished = true;
         dbContext.SaveChanges();
         SendCandidateInfo(connection, dbContext, house, connection.Player.Guid);
+
+        var message = (house.Plot, house.IsLocked) switch
+        {
+            (HousePlot.Ranked, false) => "Your ranked plot is published: it's in this week's competition, and visitors can vote for it.",
+            (HousePlot.Ranked, true) => "Your ranked plot is published, but it's locked, so it isn't in the directory or the competition until you unlock it.",
+            (_, false) => "This personal plot is published, so anyone can visit it, but it isn't in the weekly competition. To enter this house instead, say !house ranked here.",
+            (_, true) => "This personal plot is published, but it's locked, so only your friends can visit until you unlock it."
+        };
+
+        ChatHelper.SendSystemMessage(connection.Player, message);
         return true;
     }
 
@@ -215,6 +235,13 @@ public static class BaseRatingPacketHandler
         house.IsPublished = false;
         dbContext.SaveChanges();
         SendCandidateInfo(connection, dbContext, house, connection.Player.Guid);
+
+        if (house.Plot == HousePlot.Ranked)
+        {
+            ChatHelper.SendSystemMessage(connection.Player,
+                "Your ranked plot is unpublished, so it has left the weekly competition. Publish it again before the week ends and this week's votes count again.");
+        }
+
         return true;
     }
 
@@ -232,10 +259,13 @@ public static class BaseRatingPacketHandler
             }
         }
 
-        var rating = ParseVote(values);
-        var houseId = TryAddVote(connection, rating);
+        var stars = ParseVote(values);
+        var outcome = TryVote(connection, stars, out var houseId);
 
         connection.SendTunneled(new RatingPacketVoteReply());
+
+        if (outcome is not null)
+            SendVoteMessage(connection, outcome.Value, stars);
 
         if (houseId is not null)
         {
@@ -250,85 +280,102 @@ public static class BaseRatingPacketHandler
         return true;
     }
 
-    private static ulong? TryAddVote(GatewayConnection connection, int rating)
+    /// <summary>
+    /// Records a vote for the house the player is standing in: the client's vote packet doesn't say which house.
+    /// </summary>
+    /// <returns>What happened, or <c>null</c> if the player isn't in a house or the vote couldn't be saved.</returns>
+    private static PlotVoteOutcome? TryVote(GatewayConnection connection, int stars, out ulong? votedHouseId)
     {
-        if (rating is < 1 or > 5 ||
-            !TryGetActiveHouseKey(connection, out var houseId, out var ownerId, out var zoneDefinitionId))
+        votedHouseId = null;
+
+        if (!TryGetActiveHouseKey(connection, out var houseId, out var ownerId, out var zoneDefinitionId))
         {
+            ChatHelper.SendSystemMessage(connection.Player, "Stand in a ranked plot to vote for it.");
             return null;
         }
 
+        votedHouseId = houseId;
+
         var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
+        var now = DateTimeOffset.UtcNow;
+
         using var strategyContext = _dbContextFactory.CreateDbContext();
         var strategy = strategyContext.Database.CreateExecutionStrategy();
 
         try
         {
+            // Serializable, so the checks and the write see the same votes.
             return strategy.Execute(() =>
             {
                 using var dbContext = _dbContextFactory.CreateDbContext();
                 using var transaction = dbContext.Database.BeginTransaction(IsolationLevel.Serializable);
-                var house = dbContext.Houses.SingleOrDefault(entry =>
-                    entry.Id == houseId &&
-                    entry.CharacterId == ownerId &&
-                    entry.ZoneDefinitionId == zoneDefinitionId);
 
-                if (house is null || !house.IsPublished || house.CharacterId == characterId)
-                    return (ulong?)null;
-
-                if (dbContext.HouseVotes.Any(vote =>
-                    vote.HouseId == house.Id &&
-                    vote.CharacterId == characterId))
+                if (!dbContext.Houses.Any(house =>
+                        house.Id == houseId &&
+                        house.CharacterId == ownerId &&
+                        house.ZoneDefinitionId == zoneDefinitionId))
                 {
-                    return (ulong?)house.Id;
+                    return new PlotVoteOutcome(PlotVoteResult.NotFound);
                 }
 
-                dbContext.HouseVotes.Add(new DbHouseVote
-                {
-                    HouseId = house.Id,
-                    CharacterId = characterId,
-                    Value = rating
-                });
-                dbContext.SaveChanges();
-
-                var aggregate = dbContext.HouseVotes
-                    .Where(vote => vote.HouseId == house.Id)
-                    .GroupBy(vote => vote.HouseId)
-                    .Select(group => new
-                    {
-                        Votes = group.Count(),
-                        Rating = group.Average(vote => vote.Value)
-                    })
-                    .Single();
-
-                house.Votes = aggregate.Votes;
-                house.Rating = (float)aggregate.Rating;
-                dbContext.SaveChanges();
+                var outcome = PlotVoting.Cast(dbContext, characterId, houseId, stars, now, _competitionOptions);
                 transaction.Commit();
-                return (ulong?)house.Id;
+                return outcome;
             });
         }
-        catch (DbUpdateException exception)
+        catch (Exception exception) when (exception is DbUpdateException or RetryLimitExceededException)
         {
-            using var dbContext = _dbContextFactory.CreateDbContext();
-            var existingHouseId = dbContext.Houses
-                .Where(house =>
-                    house.Id == houseId &&
-                    house.CharacterId == ownerId &&
-                    house.ZoneDefinitionId == zoneDefinitionId)
-                .Select(house => (ulong?)house.Id)
-                .SingleOrDefault();
-
-            if (existingHouseId is not null && dbContext.HouseVotes.Any(vote =>
-                vote.HouseId == existingHouseId.Value &&
-                vote.CharacterId == characterId))
-            {
-                return existingHouseId;
-            }
-
             _logger.LogWarning(exception, "Failed to add a rating for the active house.");
+            ChatHelper.SendSystemMessage(connection.Player, "Your vote couldn't be saved. Please try again.");
             return null;
         }
+    }
+
+    private static void SendVoteMessage(GatewayConnection connection, PlotVoteOutcome outcome, int stars)
+    {
+        var message = outcome.Result switch
+        {
+            PlotVoteResult.Cast =>
+                $"You gave this plot {Stars(stars)} this week. You can change your vote until the week ends ({DescribeWeekStart()}).",
+            PlotVoteResult.Changed =>
+                $"You changed your vote for this plot from {Stars(outcome.PreviousStars)} to {Stars(stars)}.",
+            PlotVoteResult.Unchanged =>
+                $"You've already given this plot {Stars(stars)} this week.",
+            PlotVoteResult.InvalidStars =>
+                $"A vote is {PlotVoting.MinStars} to {PlotVoting.MaxStars} stars.",
+            PlotVoteResult.NotEntered =>
+                "This house isn't in the weekly competition, so it can't take votes. Only a published, unlocked ranked plot can.",
+            PlotVoteResult.NotFound =>
+                "This house can't take votes right now.",
+            PlotVoteResult.OwnAccount =>
+                "You can't vote for a plot your own account owns.",
+            PlotVoteResult.AccountTooNew =>
+                $"New accounts can't vote yet. Yours can from {outcome.EligibleFrom.UtcDateTime:yyyy-MM-dd HH:mm} UTC.",
+            PlotVoteResult.NotEnoughPlaytime =>
+                $"Your account can vote once its characters have played {_competitionOptions.MinPlaytimeMinutes} minutes between them. So far: {outcome.PlaytimeMinutes}.",
+            _ => null
+        };
+
+        if (message is not null)
+            ChatHelper.SendSystemMessage(connection.Player, message);
+    }
+
+    private static string Stars(int stars) => stars == 1 ? "1 star" : $"{stars} stars";
+
+    /// <summary>When votes reset, for chat: "Monday 00:00 UTC".</summary>
+    private static string DescribeWeekStart()
+    {
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"votes reset {_competitionOptions.WeekStartDay} {_competitionOptions.WeekStartTime:hh\\:mm} {_competitionOptions.TimeZone}");
+    }
+
+    private static WeeklyStandings LoadStandings(DatabaseContext dbContext)
+    {
+        return PlotVoting.Standings(
+            dbContext,
+            _competitionOptions.WeekContaining(DateTimeOffset.UtcNow),
+            _competitionOptions.MinimumVotes);
     }
 
     private static IQueryable<DbHouse> CreateDirectoryQuery(DatabaseContext dbContext, bool isMember)
@@ -349,15 +396,19 @@ public static class BaseRatingPacketHandler
 
     // SQLite can't sort by ulong (the house id) in SQL. The query has already filtered in the database, so the
     // sort runs on the loaded houses; that works the same on every provider.
-    private static IOrderedEnumerable<DbHouse> SortDirectoryQuery(IQueryable<DbHouse> query, int mode)
+    // Top rated: the plots with votes this week by score, then the rest of the competition, then published personal
+    // plots, which have no score.
+    private static IOrderedEnumerable<DbHouse> SortDirectoryQuery(IQueryable<DbHouse> query, int mode, WeeklyStandings standings)
     {
         var houses = query.AsEnumerable();
 
         return mode == 3
             ? houses.OrderByDescending(house => house.Id)
             : houses
-                .OrderByDescending(house => house.Rating)
-                .ThenByDescending(house => house.Votes)
+                .OrderByDescending(house => standings.For(house.Id).Votes > 0)
+                .ThenByDescending(house => standings.For(house.Id).Score)
+                .ThenByDescending(house => standings.For(house.Id).Votes)
+                .ThenByDescending(house => house.Plot == HousePlot.Ranked)
                 .ThenByDescending(house => house.Id);
     }
 
@@ -402,8 +453,9 @@ public static class BaseRatingPacketHandler
         var ownedCandidate = query
             .Where(house => house.CharacterId == ownerId)
             .AsEnumerable()
-            // SQLite can't sort by ulong in SQL, so sort after loading.
-            .OrderBy(house => house.Id)
+            // SQLite can't sort by ulong in SQL, so sort after loading. The owner's ranked plot comes first.
+            .OrderByDescending(house => house.Plot == HousePlot.Ranked)
+            .ThenBy(house => house.Id)
             .FirstOrDefault();
         return ownedCandidate is not null && CanViewCandidate(connection, ownedCandidate)
             ? ownedCandidate
@@ -473,28 +525,31 @@ public static class BaseRatingPacketHandler
                 ownerId == house.CharacterId &&
                 zoneDefinitionId == house.ZoneDefinitionId;
 
+            var standing = LoadStandings(dbContext).For(house.Id);
+
+            // A vote can be changed all week, so CanVote stays on after voting. Eligibility isn't part of it: a
+            // refused vote gets a chat message saying why, where a disabled button wouldn't.
             response.Candidates.Add(new CandidateRatingInfo
             {
                 CandidateId = GetCandidateId(house),
                 OwnerName = GetCharacterName(house.Character),
                 Name = GetHouseName(house),
-                Rating = house.Rating,
-                Votes = house.Votes,
+                Rating = (float)standing.Score,
+                Votes = standing.Votes,
                 HasRating = house.IsPublished,
                 CanVote = isActiveHouse &&
-                    house.IsPublished &&
-                    house.CharacterId != characterId &&
-                    !dbContext.HouseVotes.Any(vote =>
-                        vote.HouseId == house.Id &&
-                        vote.CharacterId == characterId)
+                    PlotVoting.IsEntered(house.Plot, house.IsPublished, house.IsLocked) &&
+                    HousePlots.FindUserId(dbContext, characterId) is ulong userId &&
+                    userId != house.Character.UserId
             });
         }
 
         connection.SendTunneled(response);
     }
 
-    private static RatingDataEntry ToRatingEntry(DbHouse house)
+    private static RatingDataEntry ToRatingEntry(DbHouse house, WeeklyStandings standings)
     {
+        var standing = standings.For(house.Id);
         var definition = GetSupportedDefinitions()
             .Single(entry => entry.Id == house.ZoneDefinitionId);
 
@@ -507,8 +562,8 @@ public static class BaseRatingPacketHandler
             Snapshot = definition.DirectorySnapshot,
             Description = house.Description,
             Keywords = house.KeywordList,
-            Rating = house.Rating,
-            Votes = house.Votes
+            Rating = (float)standing.Score,
+            Votes = standing.Votes
         };
     }
 

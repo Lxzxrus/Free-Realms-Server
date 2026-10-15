@@ -48,6 +48,7 @@ public sealed class HousingZoneRuntime : IDisposable
     private readonly IResourceManager _resourceManager;
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
     private readonly HousingOptions _options;
+    private readonly CompetitionOptions _competitionOptions;
     private readonly HousingCreativeCatalog _creativeCatalog;
     private readonly ILogger _logger;
     private readonly object _mutationLock = new();
@@ -82,6 +83,7 @@ public sealed class HousingZoneRuntime : IDisposable
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
         _options = serviceProvider.GetRequiredService<IOptions<HousingOptions>>().Value;
+        _competitionOptions = serviceProvider.GetRequiredService<IOptions<CompetitionOptions>>().Value;
         _creativeCatalog = serviceProvider.GetRequiredService<HousingCreativeCatalog>();
         _logger = serviceProvider.GetRequiredService<ILoggerFactory>()
             .CreateLogger($"Housing {zone.HouseId}");
@@ -288,6 +290,14 @@ public sealed class HousingZoneRuntime : IDisposable
             var refreshedHouse = LoadHouse(dbContext);
             if (refreshedHouse is not null)
                 BroadcastHouseInfo(refreshedHouse);
+
+            // A locked plot isn't entered in the competition (PlotVoting.IsEntered), so say so.
+            if (setting == HouseSetting.Locked && refreshedHouse is { Plot: HousePlot.Ranked, IsPublished: true })
+            {
+                ChatHelper.SendSystemMessage(player, value.Value
+                    ? "Your ranked plot is locked, so it has left this week's competition until you unlock it."
+                    : "Your ranked plot is unlocked and back in this week's competition.");
+            }
 
             return value;
         }
@@ -967,8 +977,16 @@ public sealed class HousingZoneRuntime : IDisposable
         Player viewer)
     {
         var viewerId = GuidHelper.GetPlayerId(viewer.Guid);
-        var hasVote = dbContext.HouseVotes.AsNoTracking().Any(vote =>
-            vote.HouseId == house.Id && vote.CharacterId == viewerId);
+        var standing = PlotVoting.Standings(
+                dbContext,
+                _competitionOptions.WeekContaining(DateTimeOffset.UtcNow),
+                _competitionOptions.MinimumVotes)
+            .For(house.Id);
+
+        // Votes can be changed all week, so a vote already cast this week doesn't turn CanVote off.
+        var canVote = PlotVoting.IsEntered(house.Plot, house.IsPublished, house.IsLocked) &&
+            HousePlots.FindUserId(dbContext, viewerId) is ulong viewerUserId &&
+            viewerUserId != house.Character.UserId;
 
         return new PlayerHousingInstanceInfo
         {
@@ -989,10 +1007,10 @@ public sealed class HousingZoneRuntime : IDisposable
             Description = house.Description,
             KeywordList = house.KeywordList,
             Unknown21 = _zone.HousingDefinition.DirectorySnapshot,
-            Rating = house.Rating,
-            Votes = house.Votes,
+            Rating = (float)standing.Score,
+            Votes = standing.Votes,
             HasRating = house.IsPublished,
-            CanVote = house.IsPublished && viewerId != house.CharacterId && !hasVote,
+            CanVote = canVote,
             FactoryPlotId = 0,
             WhenCreated = house.Created
         };

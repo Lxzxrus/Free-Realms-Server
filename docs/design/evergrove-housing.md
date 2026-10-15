@@ -27,6 +27,8 @@ Numbers marked *(placeholder)* are starting values to tune after real players ar
   - a **ranked plot**: built to be visited, rated and entered into the weekly competition.
 - **Plots belong to the account, not the character.** One account has one personal and one ranked plot, whichever
   character is playing. Otherwise a player could enter the competition once per character.
+  *(As built in task 32, section 8: the ranked plot is per account, but houses still belong to the character that
+  bought them.)*
 - Each plot can use any lot type (seaside, snowhill, and so on), and the owner can switch lot type.
   *(Open: what happens to a build when the lot type changes. Simplest is to keep both builds and let the player
   switch back.)*
@@ -114,10 +116,10 @@ Station Cash stays the **premium currency**, but it's **earned, never bought**: 
 | Piece | State |
 |---|---|
 | House directory, publish/unpublish, voting, rating, featured, search | Exists (`BaseRatingPacketHandler`, `DbHouse`, `DbHouseVote`) |
-| Votes | **Per character**, permanent, 1–5 stars, owner's own character can't vote. Needs: per account, weekly reset, changeable, eligibility rules |
-| Rating | Plain average on `DbHouse.Rating`. Needs: weekly vote-weighted score |
+| Votes | **Per account per week (task 32):** one vote per account per ranked plot per week, changeable, eligibility rules. See section 8 |
+| Rating | **Weekly vote-weighted score (task 32)**, worked out from this week's votes when it's shown. See section 8 |
 | Featured house | Top of the directory sort. Needs: last week's confirmed winner |
-| Houses | One per character per lot type; no limit on how many. Needs: personal and ranked plots per account |
+| Houses | One per character per lot type; no limit on how many. **Personal and ranked plots (task 32):** one ranked plot per account; houses still belong to the character that bought them. See section 8 |
 | Fixtures | **Free (PR #19):** `Housing:CreativeMode` offers all 1,706 placeable fixtures, unlimited; each placed piece records `IsCreative`, so it never returns an item. Wallpapers, floors and lots (`Housing:FreeLots`) are free. Dyeable pieces appear once, in their default colour |
 | Station Cash | A per-character balance with no way to earn it. Needs everything in section 4 |
 | Experience and levels | Not yet. OSFR PR #120 |
@@ -136,7 +138,52 @@ Each phase becomes cloud tasks once the one before it has been playtested.
 
 ## 7. Open questions
 
-- The competition week's timezone.
+- The competition week's timezone. Since task 32 it's a setting (`Competition:TimeZone`, default UTC); pick the zone.
 - Who the staff are, and how a staff member confirms results: a chat command, or a small page on the WebAPI.
 - Every *(placeholder)* number.
 - What happens to a build when a plot changes lot type.
+
+## 8. As built: plots and weekly voting (task 32)
+
+Build-order phases 2 and 3.
+
+- **Plots.** A house is a **personal plot** unless its account has made it the **ranked plot**: standing in their own
+  house, the owner says `!house ranked`. An account has one ranked plot across all its characters. Making another
+  house ranked turns the old one back into a personal plot with its build untouched, which is section 2's "keep both
+  builds" answer for switching lot type. `!house personal` takes the ranked plot out of the competition, and
+  `!house list` shows the ranked plot, its votes and score this week, and when the week runs. Existing houses are
+  personal.
+- **A plot's votes count from when it last became the ranked plot.** Moving the ranked plot away and back starts it
+  again from no votes that week, so an account can't run two builds in a week and keep whichever scored better.
+- **Houses still belong to the character that bought them.** Only the ranked plot is per account. Letting every
+  character on an account enter and build in its plots means changing every owner check in the housing runtime, and
+  the client's edit permissions, so it's left for its own task.
+- **Publishing** stays separate from the kind of plot. A published, unlocked ranked plot is **entered**. A locked one
+  isn't: it's out of the directory and only the owner's friends can come in. A published personal plot can be visited
+  and is listed in the directory, but takes no votes and shows no rating.
+- **Votes** (`PlotVotes`) are cast from the client's rating panel while standing in the plot. A second vote in the
+  same week changes the first. Each week starts empty, and past weeks' votes are kept, with the account that owned the
+  plot, even after the house is deleted. A refused vote gets a chat message saying why. The per-character votes from
+  before (`HouseVotes`) are kept as history; nothing writes them.
+- **Who can vote:** the account's age is from its creation date. Its playtime is what all its characters have saved
+  at logout, plus the voting character's session in progress.
+- **Score:** section 3's formula, with `C` the average of every vote counted this week across the competition. Each
+  plot weighs in by its votes, so one account giving 1 star to a few plots nobody else voted for barely moves it. A
+  plot with no votes this week shows no rating rather than `C`. Wherever the client showed the old average, it
+  now shows this score and this week's vote count. The directory's top-rated list puts plots with votes first, by
+  score, then the rest of the competition, then personal plots. Featured is the top of that list until phase 4.
+
+The numbers are settings in the Gateway's `Competition` section (`gateway.json`, documented in
+`gateway.local.example.json`). The Gateway reads them at startup and refuses to start if they're invalid.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `Competition:TimeZone` | `UTC` | The competition week's time zone, as an IANA id such as `Europe/London` |
+| `Competition:WeekStartDay` | `Monday` | The day each week starts. Votes reset then |
+| `Competition:WeekStartTime` | `00:00:00` | The time each week starts. Across a daylight-saving change a week is an hour shorter or longer |
+| `Competition:MinAccountAgeDays` | 3 *(placeholder)* | How old an account must be to vote |
+| `Competition:MinPlaytimeMinutes` | 120 *(placeholder)* | How long its characters must have played, between them, to vote |
+| `Competition:MinimumVotes` | 10 *(placeholder)* | `m` in the score. 0 makes it a plain average |
+
+1 to 5 stars is the client's, not a setting. Phase 4 (results, staff confirmation, prizes, the Hall of Fame, the
+featured winner, reports) is not built.

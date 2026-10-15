@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
@@ -25,6 +26,7 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
     private static ILogger _logger = null!;
     private static IResourceManager _resourceManager = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
+    private static CompetitionOptions _competitionOptions = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -32,6 +34,7 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
         _logger = loggerFactory.CreateLogger(nameof(ClientHousingPacketRequestPlayerHousesHandler));
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
+        _competitionOptions = serviceProvider.GetRequiredService<IOptions<CompetitionOptions>>().Value;
     }
 
     public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
@@ -66,7 +69,7 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
             PlayerGuid = connection.Player.Guid
         };
 
-        AddInstances(packet, houses, connection.Player.Guid, connection.Player.Name.FullName);
+        AddInstances(packet, houses, connection.Player.Guid, connection.Player.Name.FullName, LoadStandings(dbContext));
 
         connection.SendTunneled(packet);
     }
@@ -122,7 +125,7 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
             PlayerGuid = 0
         };
 
-        AddInstances(packet, houses, ownerGuid, ownerName);
+        AddInstances(packet, houses, ownerGuid, ownerName, LoadStandings(dbContext));
 
         connection.SendTunneled(packet);
     }
@@ -151,11 +154,25 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
             .ToList();
     }
 
-    private static void AddInstances(HousingPacketInstanceList packet, List<(DbHouse House, int FixtureCount)> houses, ulong ownerGuid, string ownerName)
+    private static WeeklyStandings LoadStandings(DatabaseContext dbContext)
+    {
+        return PlotVoting.Standings(
+            dbContext,
+            _competitionOptions.WeekContaining(DateTimeOffset.UtcNow),
+            _competitionOptions.MinimumVotes);
+    }
+
+    private static void AddInstances(
+        HousingPacketInstanceList packet,
+        List<(DbHouse House, int FixtureCount)> houses,
+        ulong ownerGuid,
+        string ownerName,
+        WeeklyStandings standings)
     {
         foreach (var entry in houses)
         {
             var house = entry.House;
+            var standing = standings.For(house.Id);
             if (!_resourceManager.Zones.TryGetValue(house.ZoneDefinitionId, out var definition) ||
                 definition is not HousingZoneDefinition housingDefinition)
             {
@@ -179,8 +196,8 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
                 Description = house.Description,
                 KeywordList = house.KeywordList,
                 Unknown21 = string.Empty,
-                Rating = house.Rating,
-                Votes = house.Votes,
+                Rating = (float)standing.Score,
+                Votes = standing.Votes,
                 HasRating = house.IsPublished,
                 CanVote = false,
                 WhenCreated = house.Created

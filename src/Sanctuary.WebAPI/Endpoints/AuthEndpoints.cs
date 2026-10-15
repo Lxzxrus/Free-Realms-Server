@@ -145,7 +145,8 @@ public static class AuthEndpoints
         RegisterRequestModel request,
         CancellationToken cancellationToken,
         IOptions<WebAPIOptions> webAPIOptions,
-        IDbContextFactory<DatabaseContext> dbContextFactory)
+        IDbContextFactory<DatabaseContext> dbContextFactory,
+        TimeProvider timeProvider)
     {
         if (!MiniValidator.TryValidate(request, out var errors))
             return Results.ValidationProblem(errors);
@@ -169,6 +170,9 @@ public static class AuthEndpoints
             Username = request.Username,
             Password = hashedPassword,
             IsMember = webAPIOptions.Value.MemberByDefault ?? false,
+            // Set here, not left to the database default: SQLite's DATE() drops the time and MariaDB's NOW() is in the
+            // server's time zone, and the account's age decides when it may vote in the ranked-plot competition.
+            Created = timeProvider.GetUtcNow(),
         };
 
         await dbContext.Users.AddAsync(dbUser, cancellationToken);

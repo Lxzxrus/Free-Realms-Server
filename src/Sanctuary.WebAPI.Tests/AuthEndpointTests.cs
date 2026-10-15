@@ -7,7 +7,11 @@ using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using Sanctuary.Database;
 
 namespace Sanctuary.WebAPI.Tests;
 
@@ -290,6 +294,31 @@ public class AuthEndpointTests
         using var login = await host.LoginAsync("newuser9", "password123", address: "198.51.100.99");
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, login.StatusCode, "a rate-limited registration must not create the account");
+    }
+
+    /// <summary>
+    /// The ranked-plot competition lets an account vote once it's a few days old, so registration records the exact
+    /// time, in UTC, rather than leaving it to the database default (a date only, on SQLite).
+    /// </summary>
+    [TestMethod]
+    public async Task RegisterRecordsWhenTheAccountWasCreated()
+    {
+        using var host = new WebAPIHost();
+        await host.StartAsync();
+        host.Time.Advance(TimeSpan.FromHours(7.5));
+
+        var client = host.CreateClient(WebAPIHost.DefaultAddress);
+        using var response = await client.PostAsJsonAsync("/register", new { username = "newuser", password = "password123" });
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+
+        var dbContextFactory = host.Services.GetRequiredService<IDbContextFactory<DatabaseContext>>();
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+        var created = await dbContext.Users
+            .Where(user => user.Username == "newuser")
+            .Select(user => user.Created)
+            .SingleAsync();
+
+        Assert.AreEqual(host.Time.GetUtcNow(), created);
     }
 
     [TestMethod]

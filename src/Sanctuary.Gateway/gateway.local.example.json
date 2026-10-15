@@ -53,5 +53,27 @@
 
     // Lots cost nothing.
     // "FreeLots": true,
+  },
+
+  // The weekly ranked-plot competition (docs/design/evergrove-housing.md, section 3). Read at startup: restart the
+  // server after changing these. The numbers are the design's placeholders.
+  "Competition": {
+    // The time zone the competition week follows: an IANA id such as "Europe/London" or "America/New_York", or
+    // "UTC". The server refuses to start if it doesn't know the id. Changing it mid-week can move the week's start,
+    // and votes cast before the new start stop counting.
+    // "TimeZone": "UTC",
+
+    // When each week starts, in that time zone. Votes reset then.
+    // "WeekStartDay": "Monday",
+    // "WeekStartTime": "00:00:00",
+
+    // Who may vote: an account at least this many days old whose characters have played at least this many minutes
+    // between them. A playtest with new accounts needs both at 0.
+    // "MinAccountAgeDays": 3,
+    // "MinPlaytimeMinutes": 120,
+
+    // m in the week's score, (v * R + m * C) / (v + m): how many votes' worth of the average of all ranked plots
+    // each plot starts with, so a plot with few votes stays near the average. 0 is a plain average.
+    // "MinimumVotes": 10,
   }
 }

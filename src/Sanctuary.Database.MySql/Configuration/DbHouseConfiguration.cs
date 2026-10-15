@@ -28,8 +28,7 @@ public sealed class DbHouseConfiguration : IEntityTypeConfiguration<DbHouse>
         builder.Property(h => h.MaxLandmarkCount).IsRequired().HasDefaultValue(0);
         builder.Property(h => h.FurnitureScore).IsRequired().HasDefaultValue(0);
         builder.Property(h => h.IsPublished).IsRequired().HasDefaultValue(false);
-        builder.Property(h => h.Votes).IsRequired().HasDefaultValue(0);
-        builder.Property(h => h.Rating).IsRequired().HasDefaultValue(0f);
+        builder.Property(h => h.Plot).IsRequired().HasDefaultValue(HousePlot.Personal);
         builder.Property(h => h.Description).IsRequired().HasDefaultValue(string.Empty);
         builder.Property(h => h.KeywordList).IsRequired().HasDefaultValue(string.Empty);
         builder.Property(h => h.CustomizationData).HasColumnType("TEXT");
