@@ -113,6 +113,15 @@ public sealed class Player : ClientPcData, IEntity
 
     public GuildData? GuildData { get; set; }
 
+    /// <summary>
+    /// The job rank a player needs to found a guild. SOE's was 15; Evergrove's quests reach about 7 today, so it is 5
+    /// until there is more to earn stars from.
+    /// </summary>
+    public const int GuildCreationRank = 5;
+
+    /// <summary>Whether the player may found a guild: not in one, and a job at <see cref="GuildCreationRank"/>.</summary>
+    public bool CanCreateGuild => GuildData is null && Profiles.Any(profile => profile.Rank >= GuildCreationRank);
+
     public int TimezoneOffset { get; set; }
 
     public Dictionary<int, Dictionary<int, int>> ActionBarItemGuids { get; set; } = new();

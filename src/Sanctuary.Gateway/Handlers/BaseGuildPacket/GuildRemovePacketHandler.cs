@@ -122,7 +122,7 @@ public static class GuildRemovePacketHandler
 
         var guildCanCreateGuildPacket = new GuildCanCreateGuildPacket
         {
-            CanCreateGuild = player.Profiles.Any(x => x.Rank >= 15)
+            CanCreateGuild = player.CanCreateGuild
         };
 
         player.SendTunneled(guildCanCreateGuildPacket);

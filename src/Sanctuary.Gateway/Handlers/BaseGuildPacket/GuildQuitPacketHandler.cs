@@ -162,7 +162,7 @@ public static class GuildQuitPacketHandler
 
         var guildCanCreateGuildPacket = new GuildCanCreateGuildPacket
         {
-            CanCreateGuild = connection.Player.Profiles.Any(x => x.Rank >= 15)
+            CanCreateGuild = connection.Player.CanCreateGuild
         };
 
         connection.SendTunneled(guildCanCreateGuildPacket);
