@@ -572,3 +572,73 @@ Found in the 2026-10-12 playtest; both show as errors in the live Gateway log.
     exploit steps in one line each, and the old findings' status.
   - A list of Medium and Low findings left for later, with a suggested fix each.
   - In-game checks for Nate, for anything a test can't show.
+
+## Sprint (tasks 31 to 33, started 2026-10-14)
+
+Three cloud tasks run at once. They touch different areas, but each may add a database migration, and every
+migration edits the two `DatabaseContextModelSnapshot.cs` files. **Add your migration last, as one commit, after
+fetching `main`.** If `main` moves on before your PR merges, Nate merges the PRs one at a time and the local session
+rebases or regenerates the later migrations. Don't edit `Quests.json` (a local session owns it this sprint), and don't
+edit `docs/status.md`.
+
+## 31. `xp-levels`: experience and level-ups *(Opus)*
+
+- **Why:** players earn nothing that lasts beyond coins. Quest rewards already call `Player.AwardXp`, which tells the
+  client the XP was gained but never stores it or levels anyone up. Job ranks, level-gated items and future rewards
+  all need it.
+- **Source:** upstream OSFR PR #120, "Exp granting & level-ups" by ImAlko, branch `feature/progression` of
+  `Open-Source-Free-Realms/Sanctuary` (AGPL-3.0; open, mergeable upstream). Read its description: one level curve
+  for all jobs (`RankLevels.json`), XP and rank update packets, a `RewardHelper`, `!experience` and `!reward` chat
+  commands, and its note that the client's level-up animations play at 4, 8, 12 and 16 because of the client's own
+  `notifications.gfx` (not a server bug; leave it).
+- **Task:** port it onto our `main` by hand where it conflicts, following `CLAUDE.md`'s porting lessons (bring its
+  changes to shared packet files, and say which way each conflict went). Then:
+  1. XP is stored per profile (job) and survives a relog; check `.Include(...)` in the login query.
+  2. Quest rewards (`QuestManager.GrantReward`) and collection rewards that carry experience pay real XP through
+     the new path, not the old display-only `AwardXp`.
+  3. A level-up sends the client's rank packets and is persisted.
+  4. The chat commands must be staff-only, like `!mod` (`Sanctuary.Game/ChatCommands`); find how `!mod` checks.
+  5. Credit ImAlko in the commit.
+- **Out of scope:** per-job curves, level-gated item checks, and anything in `Quests.json`.
+- **Deliverable:** one PR with tests for the level curve, XP persistence and the staff-only commands, and in-game
+  checks for Nate: finish a quest with an XP reward and watch the bar move, level up, relog and see the level kept.
+
+## 32. `ranked-plots`: plots and weekly voting *(Opus)*
+
+- **Read first:** `docs/design/evergrove-housing.md`, all of it. This task is its build-order phases 2 and 3.
+- **What exists:** houses (`DbHouse`), the directory and ratings (`BaseRatingPacketHandler`), votes per character
+  (`DbHouseVote`: house, character, value, created), a plain average in `DbHouse.Rating`, and `HouseAccess`.
+- **Task:**
+  1. **Plots:** each account has two, personal and ranked (section 2). Decide from the code how a house becomes
+     the ranked one, and make the rule the design asks for; existing houses must keep working (default them to
+     personal).
+  2. **Votes per account per week** (section 3, Voting): one vote per account per ranked plot per week, changeable
+     during the week, reset at the week boundary, history kept, eligibility (account age and playtime: placeholders
+     in config), and no voting on your own account's plot. The week's timezone is an open question: make it a
+     setting, default UTC, Monday 00:00.
+  3. **The weekly score:** the vote-weighted average in section 3, Scoring, with `m` and every other number as a
+     setting. Keep the client's existing rating display working.
+- **Out of scope:** phase 4 (results, staff confirmation, prizes, Hall of Fame) and Station Cash.
+- **Deliverable:** one PR with tests for eligibility, one-vote-per-week, changing a vote, the week boundary and the
+  score formula; a short section added to the design doc saying what was built and which numbers are settings;
+  in-game checks for Nate and Ariel (two accounts voting on each other's ranked plots).
+
+## 33. `fishing`: the fishing minigame *(Opus)*
+
+- **Source:** upstream OSFR PR #31, "Add the fishing mini-game" by edenfps (branch `fishing` of `edenfps/Sanctuary`,
+  +3.9k lines, written against upstream's `minigame` branch). Its four docs (`FISHING_HANDOFF.md`,
+  `FISHING_RE_NOTES.md`, `FISHING_1TO1_PLAN.md`, `FISHING_WIKI.md`) explain it; read them first.
+  `docs/research/minigames-scout.md` covers what it does and doesn't do.
+- **Licence:** the fork had no licence file at that commit, but the PR was offered to the AGPL-3.0 repo. Port it with
+  credit, and note in the PR that we're relying on that.
+- **What's already on our `main`:** EDITz's minigame packet layer (#74; opcodes 39, 141, 167, 175), the daily wheel,
+  zoning through `Player.TeleportToZone` (never create a zone instance directly), and upstream's fishing stats in
+  `ClientPcData`.
+- **Task:** port the fishing packets (opcode 138), `FishingSession`, the fish tables, rods and lures, catch
+  persistence and its handlers onto our main. Adapt to our zoning: the six `*_fishing_*` holes need zone definitions
+  in `src/Resources/Zones` and spawn points (only Sacred Grove Shallows (563) has a verified spawn; mark the others
+  as guesses). Keep its debug commands staff-only. Credit edenfps.
+- **Out of scope:** XP for fishing (task 31 runs at the same time), collections, the tension minigame.
+- **Deliverable:** one PR with tests for the catch rules and the packet round-trips, its docs kept under
+  `docs/research/fishing/`, and in-game checks for Nate: reach Sacred Grove Shallows from the points-of-interest
+  list, cast, reel, catch, relog and find the fish kept.
