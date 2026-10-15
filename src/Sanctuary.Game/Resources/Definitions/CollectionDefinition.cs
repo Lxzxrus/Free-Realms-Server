@@ -132,7 +132,9 @@ public sealed class CollectionDefinition
                 IconId = itemDefinition.Icon.Id,
                 TintId = itemDefinition.Icon.TintId,
                 NameId = itemDefinition.NameId,
-                DefinitionId = itemDefinitionId
+                // The fitted item's own id: the client's tooltip reads this one (it said "Boys only" while the
+                // picture was already the girls' boot, Ariel, 2026-10-14).
+                DefinitionId = itemDefinition.Id
             });
         }
     }

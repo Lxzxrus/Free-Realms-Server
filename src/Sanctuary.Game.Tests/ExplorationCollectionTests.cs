@@ -166,6 +166,10 @@ public sealed class ExplorationCollectionTests
         Assert.AreEqual(items[15783].NameId, girls.Reward.NameId);
         Assert.AreEqual(items[15783].Icon.Id, girls.Reward.IconId, "The girls' Traveler's Boots.");
         Assert.AreEqual(items[17300].Icon.Id, boys.Reward.IconId, "The boys' Traveler's Boots.");
+
+        // The tooltip reads the entry's item id, not its picture.
+        Assert.AreEqual(15783, girls.Reward.Entries.OfType<RewardBundleEntryItem>().Single().DefinitionId);
+        Assert.AreEqual(17300, boys.Reward.Entries.OfType<RewardBundleEntryItem>().Single().DefinitionId);
     }
 
     [TestMethod]
