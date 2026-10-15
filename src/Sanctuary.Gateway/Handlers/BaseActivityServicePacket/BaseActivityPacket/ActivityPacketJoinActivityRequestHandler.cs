@@ -47,6 +47,12 @@ public static class ActivityPacketJoinActivityRequestHandler
         if (FlashMinigameHandler.TryOpen(connection, clientActivityDefinition))
             return true;
 
+        if (FishingHandler.IsFishingHole(packet.ActivityId))
+        {
+            FishingHandler.Join(connection, clientActivityDefinition);
+            return true;
+        }
+
         // Free Realms Trading Card Game Lobby
         if (packet.ActivityId == 7)
         {

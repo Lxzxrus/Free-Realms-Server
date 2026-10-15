@@ -35,6 +35,9 @@ public static class MiniGameEndPacketHandler
         if (FlashMinigameHandler.TryEnd(connection, packet.StateId))
             return true;
 
+        if (FishingHandler.TryEnd(connection, packet.StateId))
+            return true;
+
         var miniGameLeavePacket = new MiniGameLeavePacket(packet.StateId);
 
         connection.SendTunneled(miniGameLeavePacket);

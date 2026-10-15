@@ -100,6 +100,12 @@ public sealed class Player : ClientPcData, IEntity
     /// <summary>The Flash minigame the player has open (Mining Practice...), or <c>null</c>.</summary>
     public Minigames.FlashMinigameSession? FlashMinigame { get; set; }
 
+    /// <summary>The fishing hole whose start screen the player was last shown (its activity id), or 0.</summary>
+    public int PendingFishingActivityId { get; set; }
+
+    /// <summary>The player's fishing, while they are in a fishing hole; <c>null</c> otherwise.</summary>
+    public Minigames.Fishing.FishingSession? FishingSession { get; set; }
+
     public ConcurrentDictionary<ChatChannel, bool> ChatChannelStatus { get; set; } = [];
 
     public int StationCash { get; set; }
@@ -453,6 +459,20 @@ public sealed class Player : ClientPcData, IEntity
         SendTunneled(packetClientBeginZoning);
 
         return true;
+    }
+
+    /// <summary>
+    /// Back to the starting zone, where the player last stood in it (its spawn if they never did): out of a house, a
+    /// fishing hole, anywhere.
+    /// </summary>
+    public bool ReturnToStartingZone()
+    {
+        var startingZone = _zoneManager.StartingZone;
+
+        var position = StartingZonePosition == default ? startingZone.SpawnPosition : StartingZonePosition;
+        var rotation = StartingZoneRotation == default ? startingZone.SpawnRotation : StartingZoneRotation;
+
+        return TeleportToZone(startingZone, position, rotation);
     }
 
     private void UpdateZoneArea()
