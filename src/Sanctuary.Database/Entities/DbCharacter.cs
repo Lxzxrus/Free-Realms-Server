@@ -77,6 +77,7 @@ public class DbCharacter
     public ICollection<DbProfile> Profiles { get; set; } = new HashSet<DbProfile>();
     public ICollection<DbCharacterQuest> Quests { get; set; } = new HashSet<DbCharacterQuest>();
     public ICollection<DbCharacterCollectionEntry> CollectionEntries { get; set; } = new HashSet<DbCharacterCollectionEntry>();
+    public ICollection<DbCharacterCompletedCollection> CompletedCollections { get; set; } = new HashSet<DbCharacterCompletedCollection>();
 
     public ICollection<DbHouse> Houses { get; set; } = new HashSet<DbHouse>();
 

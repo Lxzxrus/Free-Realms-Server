@@ -211,6 +211,24 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.ToTable("CharacterCollectionEntries");
                 });
 
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterCompletedCollection", b =>
+                {
+                    b.Property<int>("CollectionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<ulong>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("CollectionId", "CharacterId");
+
+                    b.HasIndex("CharacterId");
+
+                    b.ToTable("CharacterCompletedCollections");
+                });
+
             modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterQuest", b =>
                 {
                     b.Property<int>("QuestId")
@@ -716,6 +734,17 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.Navigation("Character");
                 });
 
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterCompletedCollection", b =>
+                {
+                    b.HasOne("Sanctuary.Database.Entities.DbCharacter", "Character")
+                        .WithMany("CompletedCollections")
+                        .HasForeignKey("CharacterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Character");
+                });
+
             modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacterQuest", b =>
                 {
                     b.HasOne("Sanctuary.Database.Entities.DbCharacter", "Character")
@@ -856,6 +885,8 @@ namespace Sanctuary.Database.Sqlite.Migrations
             modelBuilder.Entity("Sanctuary.Database.Entities.DbCharacter", b =>
                 {
                     b.Navigation("CollectionEntries");
+
+                    b.Navigation("CompletedCollections");
 
                     b.Navigation("Friends");
 
