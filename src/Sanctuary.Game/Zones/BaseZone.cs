@@ -239,7 +239,7 @@ public abstract class BaseZone : IZone, IDisposable
     {
         var guildCanCreateGuildPacket = new GuildCanCreateGuildPacket
         {
-            CanCreateGuild = player.Profiles.Any(x => x.Rank >= 15) && player.GuildData is null
+            CanCreateGuild = player.CanCreateGuild
         };
 
         player.SendTunneled(guildCanCreateGuildPacket);

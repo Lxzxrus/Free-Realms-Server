@@ -267,6 +267,10 @@ public static class RewardHelper
             player.SendTunneled(CreateRankPacket(profile));
 
         player.SendTunneled(CreateExperiencePacket(profile));
+
+        // Reaching the guild rank shows the client's "create guild" now, not at the next zone change.
+        if (gain.OldLevel < Player.GuildCreationRank && gain.Level >= Player.GuildCreationRank)
+            player.SendTunneled(new GuildCanCreateGuildPacket { CanCreateGuild = player.CanCreateGuild });
     }
 
     /// <summary>

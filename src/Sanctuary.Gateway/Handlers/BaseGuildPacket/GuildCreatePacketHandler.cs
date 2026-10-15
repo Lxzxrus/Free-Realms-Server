@@ -39,6 +39,13 @@ public static class GuildCreatePacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(GuildCreatePacket), packet);
 
+        // The client hides "create" unless told it may; a modified one can still ask, so the rule is checked here too.
+        if (!connection.Player.CanCreateGuild)
+        {
+            _logger.LogWarning("{player} asked to create a guild without the rank, or while in one.", connection.Player.Guid);
+            return true;
+        }
+
         var guildName = GuildHelper.NormalizeName(packet.TemporaryName ?? packet.Name);
 
         _logger.LogTrace(
