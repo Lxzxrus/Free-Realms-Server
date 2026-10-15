@@ -121,6 +121,15 @@ public sealed class DailyWheelTests
     }
 
     [TestMethod]
+    public void SwitchedOff_OffersNoSpin()
+    {
+        var wheel = TenSlots();
+        wheel.Enabled = false;
+
+        Assert.AreEqual(0, DailyWheelSession.SpinsPacket(wheel, null, Noon).Count);
+    }
+
+    [TestMethod]
     public void Session_PaysOneSpin()
     {
         var session = new DailyWheelSession();

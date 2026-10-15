@@ -3,7 +3,10 @@
 // Placeholder prizes, all coins, until the economy pass sets real values (and maybe items).
 // Category is the picture on the wedge: a frame (1 to 25) of the wheel's mcCategory sprite in game_wheel.gfx.
 // Weight is the relative chance of landing on the wedge.
+// Enabled is false until the wheel can be drawn: 82 of its 83 images are missing from every client file we have
+// (docs/research/daily-wheel.md). Set it to true to offer the spin again.
 {
+  "Enabled": false,
   "WheelId": 1,
   "WheelType": 1,
   "NameId": 409962,
