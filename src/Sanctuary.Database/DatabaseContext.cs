@@ -14,6 +14,7 @@ public abstract class DatabaseContext : DbContext
     public DbSet<DbHouse> Houses => Set<DbHouse>();
     public DbSet<DbHouseFixture> HouseFixtures => Set<DbHouseFixture>();
     public DbSet<DbHouseVote> HouseVotes => Set<DbHouseVote>();
+    public DbSet<DbPlotVote> PlotVotes => Set<DbPlotVote>();
     public DbSet<DbFriend> Friends => Set<DbFriend>();
     public DbSet<DbIgnore> Ignores => Set<DbIgnore>();
     public DbSet<DbProfile> Profiles => Set<DbProfile>();

@@ -58,6 +58,9 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddOptions<HousingOptions>()
         .BindConfiguration(HousingOptions.Section);
 
+    serviceCollection.AddOptions<CompetitionOptions>()
+        .BindConfiguration(CompetitionOptions.Section);
+
     // Database
     serviceCollection.AddDatabase(hostBuilderContext.Configuration);
 

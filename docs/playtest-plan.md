@@ -97,7 +97,8 @@ export Database__ConnectionString="Data Source=/home/nate/sanctuary-playtest.db"
 ```
 
 Local settings files for S1. They are git-ignored, and they hold the playtest values: rich new characters with
-every title and job, member accounts, and permission for a Debug build to start. Make one challenge with
+every title and job, member accounts, new accounts allowed to vote in the ranked-plot competition, and permission for a
+Debug build to start. Make one challenge with
 `openssl rand -base64 32` and put the same value in the first two files.
 
 `src/Sanctuary.Login/login.local.json`:
@@ -122,6 +123,10 @@ every title and job, member accounts, and permission for a Debug build to start.
   "AllowDebugBuild": true,
   "Server": {
     "LoginGatewayChallenge": "<the challenge>"
+  },
+  "Competition": {
+    "MinAccountAgeDays": 0,
+    "MinPlaytimeMinutes": 0
   }
 }
 ```
@@ -236,7 +241,7 @@ Realms unless a step says otherwise.
 | ID | From | Who | Do | Expect | Gateway log | ✓/✗ |
 |---|---|---|---|---|---|---|
 | V1 | #2.11 | W | The house is unpublished. Type `!house visit seaside <N's full character name>` | Refused: "Only the owner and their friends can enter that house." | – | |
-| V2 | #2.12 | N, then W | N publishes the house. W searches the directory, views featured houses, and votes for N's house | The house appears in the search. The vote counts | No `Failed to add a rating for the active house` | |
+| V2 | #2.12, task 32 | N, then W | N publishes the house and says `!house ranked` in it. W searches the directory, views featured houses, and votes for N's house | The house appears in the search. The vote counts: W's chat says "You gave this plot … this week", and the house shows 1 vote | No `Failed to add a rating for the active house` | |
 | V3 | #2.11 | W | Enter N's house from the directory, or with `!house visit` | W gets in and sees N's furniture from H5–H6 | – | |
 | V4 | #2.11, #7.4 | W | Try to edit: turn on edit mode, move or pick up an item. If the house panel shows the Lock, Flora or Pet toggles, flip one | Nothing changes. A flipped checkbox flips straight back, and N's panel doesn't change | **No** `set …` line | |
 | V5 | #7.2 | N | Join W in the house. Turn **Allow flora** off, then on | Expected: the lot's ground plants disappear and come back. We don't know what the client does with this flag, so **both write down exactly what you see, including "nothing"** | `<N> set FloraAllowed to False.`, then `…True.` | |
