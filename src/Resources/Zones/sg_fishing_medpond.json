@@ -1,0 +1,14 @@
+{
+  "$type": "Fishing",
+  "Id": 563,
+  "Name": "sg_fishing_medpond",
+  "Comment": "Sacred Grove Shallows (activity 563). Spawn checked in game by edenfps (upstream PR #31); the coordinates are this scene's own, not FabledRealms'.",
+  "TileSize": 64,
+  "StartLatitude": -16,
+  "StartLongitude": -16,
+  "EndLatitude": 16,
+  "EndLongitude": 16,
+  "SpawnPosition": [435.05676, -64.46508, 370.70682],
+  "SpawnRotation": [0, 0, 0, 1],
+  "UnderwaterBedX": 68
+}

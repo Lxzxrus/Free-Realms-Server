@@ -39,15 +39,10 @@ public static class PacketZoneSafeTeleportRequestHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PacketZoneSafeTeleportRequest), packet);
 
-        if (connection.Player.Zone is HousingZone)
+        // Out of a house or a fishing hole: the hub points of interest are all in the starting zone.
+        if (connection.Player.Zone is HousingZone or FishingZone)
         {
-            var returnPosition = connection.Player.StartingZonePosition == default
-                ? _zoneManager.StartingZone.SpawnPosition
-                : connection.Player.StartingZonePosition;
-            var returnRotation = connection.Player.StartingZoneRotation == default
-                ? _zoneManager.StartingZone.SpawnRotation
-                : connection.Player.StartingZoneRotation;
-            connection.Player.TeleportToZone(_zoneManager.StartingZone, returnPosition, returnRotation);
+            connection.Player.ReturnToStartingZone();
             return true;
         }
 

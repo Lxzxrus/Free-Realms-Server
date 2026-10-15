@@ -35,6 +35,9 @@ public static class MiniGameStartGamePacketHandler
         if (FlashMinigameHandler.TryStart(connection, packet.StateId))
             return true;
 
+        if (FishingHandler.TryStart(connection, packet.StateId, packet.GroupId, packet.GameId))
+            return true;
+
         connection.SendTunneled(new MiniGameGameStartPacket(packet.StateId, packet.GroupId, packet.GameId));
 
         return true;

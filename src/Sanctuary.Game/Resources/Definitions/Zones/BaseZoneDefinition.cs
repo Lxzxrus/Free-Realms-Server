@@ -8,6 +8,7 @@ namespace Sanctuary.Game.Resources.Definitions.Zones;
 [JsonDerivedType(typeof(WorldZoneDefinition), "World")]
 [JsonDerivedType(typeof(CombatZoneDefinition), "Dungeon")]
 [JsonDerivedType(typeof(HousingZoneDefinition), "Housing")]
+[JsonDerivedType(typeof(FishingZoneDefinition), "Fishing")]
 public abstract class BaseZoneDefinition
 {
     public int Id { get; set; }
