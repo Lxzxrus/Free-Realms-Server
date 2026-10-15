@@ -73,6 +73,7 @@ public sealed class ShippedResourcesLoadTests
             resourceManager = new ResourceManager(logger);
 
             Assert.IsTrue(resourceManager.Load(), "The servers would refuse to start: " + string.Join(" | ", logger.Errors));
+            Assert.AreEqual(20, resourceManager.RankLevels.MaxLevel, "Every job levels from 1 to 20.");
         }
         finally
         {

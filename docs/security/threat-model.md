@@ -345,11 +345,11 @@ can't read the item and coin replies that would prove the coin-store one.
   `CanEdit`. Friendship needs the other side's
   pending request, so a visitor can't make themself the owner's friend.
 - **Coins and items elsewhere.** Every writer re-reads the row it changes (wheel, quest rewards, collections,
-  `RewardManager`, both coin store handlers, the marketplace), so two connections can't double-spend from a stale
+  `RewardHelper`, both coin store handlers, the marketplace), so two connections can't double-spend from a stale
   in-memory total; the marketplace and buying from the coin store already check quantities and overflow; trading
   reconciles the runtime inventory against the database and aborts on any mismatch, and refuses `NoTrade` and
-  trading-card items. Equipping, consuming and style cards look items up by character id. The reward and
-  collection chat commands are Admin-only.
+  trading-card items. Equipping, consuming and style cards look items up by character id. The reward,
+  experience and collection chat commands are Admin-only.
 
 ### Left for later (Medium and Low), with a suggested fix each
 

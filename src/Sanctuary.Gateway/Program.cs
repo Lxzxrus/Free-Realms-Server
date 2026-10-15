@@ -120,7 +120,6 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<IInteractionManager, InteractionManager>();
     serviceCollection.AddSingleton<IChatCommandManager, ChatCommandManager>();
     serviceCollection.AddSingleton<IQuestManager, QuestManager>();
-    serviceCollection.AddSingleton<IRewardManager, RewardManager>();
     serviceCollection.AddSingleton<IHouseManager, HouseManager>();
     serviceCollection.AddSingleton<HousingCreativeCatalog>();
     serviceCollection.AddSingleton<TradeOptions>();

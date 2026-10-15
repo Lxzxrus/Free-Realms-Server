@@ -25,7 +25,7 @@ public class HelpChatCommand : IChatCommand
     public bool Handle(Player invoker, string[] args)
     {
         var summaries = _chatCommandManager.Commands
-            .Where(command => invoker.ChatCommandRole >= command.RequiredRole)
+            .Where(command => ChatCommandManager.CanUse(invoker.ChatCommandRole, command))
             .OrderBy(command => command.KeyWord)
             .Select(command => command.KeyWord + ": " + command.Description)
             .ToArray();

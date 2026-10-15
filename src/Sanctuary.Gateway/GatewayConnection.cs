@@ -19,6 +19,7 @@ using Sanctuary.Database.Entities;
 using Sanctuary.Game;
 using Sanctuary.Game.Collections;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Gateway.Handlers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -310,8 +311,7 @@ public class GatewayConnection : UdpConnection
 
             clientPcProfile.ItemClasses = profileData.ItemClasses;
 
-            clientPcProfile.Rank = dbProfile.Level;
-            clientPcProfile.RankPercent = dbProfile.LevelXP;
+            RewardHelper.SetRank(_resourceManager.RankLevels, clientPcProfile, dbProfile.Level, dbProfile.LevelXP);
 
             foreach (var dbItem in dbProfile.Items)
             {

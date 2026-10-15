@@ -11,6 +11,7 @@ using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -275,7 +276,7 @@ public static class CharacterCreateRequestHandler
         var dbProfile = new DbProfile
         {
             Id = profileData.Id,
-            Level = 20
+            Level = ProfileHelper.StartingLevel(profileData.Id)
         };
 
         dbCharacter.ActiveProfileId = dbProfile.Id;
@@ -369,7 +370,7 @@ public static class CharacterCreateRequestHandler
             var dbProfile = new DbProfile
             {
                 Id = profileData.Id,
-                Level = 20
+                Level = ProfileHelper.StartingLevel(profileData.Id)
             };
 
             // TODO
