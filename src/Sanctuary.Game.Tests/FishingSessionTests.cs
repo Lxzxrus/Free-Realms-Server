@@ -494,8 +494,15 @@ public sealed class FishingSessionTests
             return chests / 50_000.0;
         }
 
-        // About 0.06 without it and 0.18 with it.
+        // About 0.02 without it (Nate's choice: one cast in 50) and 0.095 with it.
+        Assert.AreEqual(0.02, ChestShare(0), 0.003);
         Assert.IsTrue(ChestShare(FishingGear.TreasureMagnetItemId) > 2 * ChestShare(0));
+    }
+
+    [TestMethod]
+    public void MiscCatchWeights_AreTheirPerCentOfAllCasts()
+    {
+        Assert.AreEqual(FishTables.MiscCatchChance * 100, FishTables.MiscCatches.Sum(miscCatch => miscCatch.Weight), 0.001);
     }
 
     [TestMethod]

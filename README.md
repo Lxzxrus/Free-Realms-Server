@@ -74,8 +74,8 @@ The build copies each local file next to its server.
 - **Debug builds** refuse to start unless `"AllowDebugBuild": true` is set, because they skip login checks and make
   every player an Admin. Set it for a private test server only, never for one others can reach.
 - **Starting values:** `StartingCoins`, `StartingStationCash`, `UnlockAllTitles` and `UnlockAllProfiles` in
-  `login.local.json`, and `WebAPI:MemberByDefault` in `appsettings.local.json`. `docs/playtest-plan.md` has a
-  playtest set.
+  `login.local.json`. `docs/playtest-plan.md` has a playtest set. Every account is a member; Evergrove has no paid
+  membership.
 - The Login server's Gateway port (20041) listens on `127.0.0.1` only. Change `Server:LoginGatewayBindAddress`
   only when the Gateway runs on another machine, and firewall the port to that machine.
 

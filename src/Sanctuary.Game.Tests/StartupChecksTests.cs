@@ -171,17 +171,6 @@ public sealed class StartupChecksTests
     }
 
     [TestMethod]
-    [DataRow("Sanctuary.WebAPI/appsettings.json")]
-    [DataRow("Sanctuary.WebAPI/appsettings.Development.json")]
-    public void TrackedWebApiConfigDoesNotMakeEveryoneAMember(string path)
-    {
-        using var document = JsonDocument.Parse(ReadSource(path));
-
-        if (document.RootElement.GetProperty("WebAPI").TryGetProperty("MemberByDefault", out var memberByDefault))
-            Assert.IsFalse(memberByDefault.GetBoolean());
-    }
-
-    [TestMethod]
     [DataRow("Sanctuary.Login/login.json")]
     [DataRow("Sanctuary.Gateway/gateway.json")]
     public void TrackedConfigHasNoChallenge(string path)

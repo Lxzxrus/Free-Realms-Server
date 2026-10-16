@@ -174,6 +174,10 @@ account is instantly rich, fully unlocked, and a member.
 **Fix:** set launch-appropriate values and `MemberByDefault:false`; manage them via the externalized config from
 F2. Estimate: small.
 
+**Update 2026-10-15:** membership is no longer part of this finding. Evergrove has no paid membership, so every
+account is a member by design (`Sanctuary.Game.Membership`) and `MemberByDefault` was removed. Coins, Station Cash
+and unlocks stay launch values.
+
 ### F10 — Release silently swallows handler exceptions (Medium, defence-in-depth)
 
 `GatewayConnection.cs:119` and `LoginConnection.cs:80` catch all exceptions from packet handlers in Release and log

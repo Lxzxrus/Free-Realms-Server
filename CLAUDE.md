@@ -32,7 +32,7 @@ Login, Gateway and WebAPI read a git-ignored local file after their tracked conf
   refuse OSFR's old public value. Never put a real challenge in a tracked file.
 - A Debug build refuses to start unless `"AllowDebugBuild": true` is set, then logs a warning banner. Tests don't
   start the servers, so `dotnet test` is unaffected.
-- Tracked config holds the launch values (0 coins, nothing unlocked, accounts aren't members). Playtest values go in
+- Tracked config holds the launch values (0 coins, nothing unlocked). Every account is a member: Evergrove has no paid membership (`Sanctuary.Game.Membership`). Playtest values go in
   the local files; `docs/playtest-plan.md` lists them. Docker Compose needs `src/Docker/.env` (`.env.example`).
 - `src/Sanctuary.LoadTest/local-servers.sh` makes its own random challenge, so it needs no local files.
 

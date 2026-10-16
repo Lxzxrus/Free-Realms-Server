@@ -285,7 +285,8 @@ public class GatewayConnection : UdpConnection
         Player.LastWheelSpin = dbCharacter.LastWheelSpin;
         Player.PlayTime = dbCharacter.PlayTime;
 
-        Player.MembershipStatus = dbCharacter.MembershipStatus;
+        // Everyone is a member, whatever an older character row says.
+        Player.MembershipStatus = Membership.MemberStatus;
         Player.ShowMemberNagScreen = _options.ShowMemberNagScreen;
 
         foreach (var dbProfile in dbCharacter.Profiles)

@@ -13,8 +13,6 @@ public class WebAPIOptions
     /// </summary>
     public string? LaunchArguments { get; set; }
 
-    public bool? MemberByDefault { get; set; }
-
     /// <summary>
     /// Public base URL of the portrait endpoint, for example <c>https://play.example.com/image</c>.
     /// Each login appends a signed token to it. Leave it empty to turn portrait uploads off.

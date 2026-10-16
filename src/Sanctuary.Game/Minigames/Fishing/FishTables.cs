@@ -116,14 +116,15 @@ public static class FishTables
 
     /// <summary>
     /// Treasure and junk, the same in every hole. Junk has no model of its own, so it bites like a fish and turns out
-    /// to be an old boot.
+    /// to be an old boot. The weights add up to <see cref="MiscCatchChance"/> in per cent, so each is its share of
+    /// all casts: the chest (a house decoration the coin store sells for 50,000) comes up once in 50.
     /// </summary>
     public static readonly MiscCatch[] MiscCatches =
     [
-        new("Treasure Chest", 3016, 5091, 6347, 3, TreasureChestModelId, 5f),
-        new("Old Boot", 68103, 99954, 4430, 1, 0, 3f),
-        new("Soggy Socks", 68104, 99955, 4435, 1, 0, 3f),
-        new("Soggy Stick of Dynamite", 68002, 99964, 4436, 1, 0, 2f),
+        new("Treasure Chest", 3016, 5091, 6347, 3, TreasureChestModelId, 2f),
+        new("Old Boot", 68103, 99954, 4430, 1, 0, 5f),
+        new("Soggy Socks", 68104, 99955, 4435, 1, 0, 5f),
+        new("Soggy Stick of Dynamite", 68002, 99964, 4436, 1, 0, 3f),
     ];
 
     /// <summary>The share of casts that bring up treasure or junk instead of a fish.</summary>

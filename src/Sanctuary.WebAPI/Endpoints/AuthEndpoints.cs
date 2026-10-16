@@ -144,7 +144,6 @@ public static class AuthEndpoints
     private static async Task<IResult> RegisterHandlerAsync(
         RegisterRequestModel request,
         CancellationToken cancellationToken,
-        IOptions<WebAPIOptions> webAPIOptions,
         IDbContextFactory<DatabaseContext> dbContextFactory,
         TimeProvider timeProvider)
     {
@@ -169,7 +168,8 @@ public static class AuthEndpoints
         {
             Username = request.Username,
             Password = hashedPassword,
-            IsMember = webAPIOptions.Value.MemberByDefault ?? false,
+            // Not read: everyone is a member (Sanctuary.Game.Membership). Recorded so the row says so too.
+            IsMember = true,
             // Set here, not left to the database default: SQLite's DATE() drops the time and MariaDB's NOW() is in the
             // server's time zone, and the account's age decides when it may vote in the ranked-plot competition.
             Created = timeProvider.GetUtcNow(),
