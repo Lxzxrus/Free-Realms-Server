@@ -211,13 +211,15 @@ public class GatewayService : BackgroundService
                 hadData |= _server.GiveTime();
                 hadData |= _client.GiveTime();
 
-                // Fishing's bite timers, here on the packet thread like everything else that touches a player's items.
+                // Fishing's bite timers and the match-three clocks, here on the packet thread like everything else that
+                // touches a player's items.
                 var tickNow = Environment.TickCount64;
 
                 if (tickNow >= fishingTickAt)
                 {
                     fishingTickAt = tickNow + GatewayServer.FishingTickMs;
                     _server.TickFishing(tickNow);
+                    _server.TickMinigames();
                 }
 
                 if (clientConnection.Status == Status.Connected)
