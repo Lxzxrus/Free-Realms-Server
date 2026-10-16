@@ -25,6 +25,7 @@ public sealed class HousingFixtureLedgerTests
     private const ulong HouseId = 1;
     private const ulong OwnerId = 7;
     private const ulong VisitorId = 8;
+    private const ulong AltId = 9;
 
     private const int ChairDefinitionId = 22940;
     private const int ChairTintId = 231;
@@ -41,28 +42,24 @@ public sealed class HousingFixtureLedgerTests
         using var dbContext = CreateDbContext();
         dbContext.Database.Migrate();
 
+        // The owner and the alt share an account; the visitor plays on another.
         var user = new DbUser
         {
             Username = "owner",
             Password = string.Empty
         };
-
-        foreach (var characterId in new[] { OwnerId, VisitorId })
+        var visitor = new DbUser
         {
-            user.Characters.Add(new DbCharacter
-            {
-                Id = characterId,
-                FirstName = $"Character{characterId}",
-                Head = string.Empty,
-                HeadId = 0,
-                Hair = string.Empty,
-                HairId = 0,
-                SkinTone = string.Empty,
-                SkinToneId = 0
-            });
-        }
+            Username = "visitor",
+            Password = string.Empty
+        };
 
-        dbContext.Users.Add(user);
+        foreach (var characterId in new[] { OwnerId, AltId })
+            user.Characters.Add(NewCharacter(characterId));
+
+        visitor.Characters.Add(NewCharacter(VisitorId));
+
+        dbContext.Users.AddRange(user, visitor);
         dbContext.Houses.Add(new DbHouse
         {
             Id = HouseId,
@@ -81,6 +78,18 @@ public sealed class HousingFixtureLedgerTests
         });
         dbContext.SaveChanges();
     }
+
+    private static DbCharacter NewCharacter(ulong characterId) => new()
+    {
+        Id = characterId,
+        FirstName = $"Character{characterId}",
+        Head = string.Empty,
+        HeadId = 0,
+        Hair = string.Empty,
+        HairId = 0,
+        SkinTone = string.Empty,
+        SkinToneId = 0
+    };
 
     [TestCleanup]
     public void Cleanup()
@@ -294,19 +303,70 @@ public sealed class HousingFixtureLedgerTests
         Assert.AreEqual(1, ReadItems().Single(item => item.Id == ChairStackId).Count);
     }
 
+    [TestMethod]
+    public void PickupAll_BySomeoneElse_ChangesNothing()
+    {
+        Place(FromInventory());
+        Place(Creative());
+
+        using (var dbContext = CreateDbContext())
+            Assert.IsFalse(HousingFixtureLedger.TryPickupAll(dbContext, HouseId, VisitorId, out _, out _));
+
+        Assert.AreEqual(2, ReadFixtures().Count);
+    }
+
+    [TestMethod]
+    public void Place_RecordsWhoPlacedIt()
+    {
+        var byOwner = Place(Creative())!;
+        var byAlt = Place(Creative(), AltId);
+
+        Assert.IsNotNull(byAlt, "Any character on the account builds in its houses.");
+        Assert.AreEqual(OwnerId, byOwner.PlacedByCharacterId);
+        Assert.AreEqual(AltId, byAlt.PlacedByCharacterId);
+        CollectionAssert.AreEquivalent(new[] { OwnerId, AltId }, ReadFixtures().Select(fixture => fixture.PlacedByCharacterId).ToArray());
+    }
+
+    [TestMethod]
+    public void SecondCharacterOnTheAccount_PicksUpWhatTheOwnerPlaced()
+    {
+        var fixture = Place(Creative())!;
+
+        using (var dbContext = CreateDbContext())
+            Assert.IsTrue(HousingFixtureLedger.TryPickup(dbContext, HouseId, AltId, fixture.Id, out _));
+
+        Assert.AreEqual(0, ReadFixtures().Count);
+    }
+
+    [TestMethod]
+    public void InventoryPickup_BySecondCharacter_GoesToTheirInventory()
+    {
+        // The owner may be online on another connection, so the owner's inventory isn't changed behind their back.
+        var fixture = Place(FromInventory())!;
+
+        using (var dbContext = CreateDbContext())
+        {
+            Assert.IsTrue(HousingFixtureLedger.TryPickup(dbContext, HouseId, AltId, fixture.Id, out var returned));
+            Assert.AreEqual(AltId, returned!.CharacterId);
+        }
+
+        Assert.AreEqual(1, ReadItems().Single(item => item.Id == ChairStackId).Count, "The owner's stack is as placing left it.");
+        Assert.AreEqual(1, ReadItems(AltId).Single(item => item.Definition == ChairDefinitionId).Count);
+    }
+
     private static HousingFixtureLedger.Source Creative() =>
         new(ChairDefinitionId, 0, HousingCreativeCatalog.RecordIdBase + ChairDefinitionId, true);
 
     private static HousingFixtureLedger.Source FromInventory() =>
         new(ChairDefinitionId, ChairTintId, ChairStackId, false);
 
-    private DbHouseFixture? Place(HousingFixtureLedger.Source source)
+    private DbHouseFixture? Place(HousingFixtureLedger.Source source, ulong characterId = OwnerId)
     {
         using var dbContext = CreateDbContext();
         return HousingFixtureLedger.Place(
             dbContext,
             HouseId,
-            OwnerId,
+            characterId,
             Guid.NewGuid(),
             source,
             new Vector4(1, 2, 3, 1),
@@ -335,11 +395,11 @@ public sealed class HousingFixtureLedgerTests
         return dbContext.HouseFixtures.AsNoTracking().Where(fixture => fixture.HouseId == HouseId).ToList();
     }
 
-    private List<DbItem> ReadItems()
+    private List<DbItem> ReadItems(ulong characterId = OwnerId)
     {
         using var dbContext = CreateDbContext();
         return dbContext.Items.AsNoTracking()
-            .Where(item => item.CharacterId == OwnerId)
+            .Where(item => item.CharacterId == characterId)
             .OrderBy(item => item.Id)
             .ToList();
     }

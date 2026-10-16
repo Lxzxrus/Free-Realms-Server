@@ -179,14 +179,50 @@ public sealed class HousePlotsTests
     }
 
     [TestMethod]
-    public void OnlyTheOwnerChangesAHousesPlot()
+    public void EveryCharacterOnTheAccount_OwnsEveryHouseItBought()
+    {
+        SeedHouses();
+
+        using var dbContext = CreateDbContext();
+
+        ulong[] Owned(ulong characterId) => HouseOwnership.OwnedByAccountOf(dbContext, characterId)
+            .Select(house => house.Id)
+            .AsEnumerable()
+            .Order()
+            .ToArray();
+
+        CollectionAssert.AreEqual(new[] { Seaside, Blackspore, AltsHouse }, Owned(Character));
+        CollectionAssert.AreEqual(new[] { Seaside, Blackspore, AltsHouse }, Owned(Alt));
+        CollectionAssert.AreEqual(new[] { StrangersHouse }, Owned(Stranger));
+        Assert.IsEmpty(Owned(999), "A character that doesn't exist owns nothing.");
+    }
+
+    [TestMethod]
+    public void AnotherAccount_CannotChangeAHousesPlot()
     {
         SeedHouses();
 
         using (var dbContext = CreateDbContext())
         {
             Assert.AreEqual(PlotChangeResult.NotOwner, HousePlots.MakeRanked(dbContext, Seaside, Stranger, Now).Result);
-            Assert.AreEqual(PlotChangeResult.NotOwner, HousePlots.MakeRanked(dbContext, Seaside, Alt, Now).Result, "Houses still belong to their character.");
+            Assert.AreEqual(PlotChangeResult.NotOwner, HousePlots.MakePersonal(dbContext, Seaside, Stranger).Result);
+        }
+
+        Assert.AreEqual(HousePlot.Personal, PlotOf(Seaside));
+    }
+
+    [TestMethod]
+    public void SecondCharacterOnTheAccount_ManagesItsRankedPlot()
+    {
+        SeedHouses();
+
+        using (var dbContext = CreateDbContext())
+        {
+            // The alt makes a house its other character bought the account's ranked plot, then takes it out again.
+            Assert.AreEqual(PlotChangeResult.Changed, HousePlots.MakeRanked(dbContext, Seaside, Alt, Now).Result);
+            Assert.AreEqual(HousePlot.Ranked, PlotOf(Seaside));
+
+            Assert.AreEqual(PlotChangeResult.Changed, HousePlots.MakePersonal(dbContext, Seaside, Alt).Result);
         }
 
         Assert.AreEqual(HousePlot.Personal, PlotOf(Seaside));

@@ -20,6 +20,13 @@ public class DbHouseFixture
     /// </summary>
     public bool IsCreative { get; set; }
 
+    /// <summary>
+    /// The character that placed it, which may be any character on the house's account. Kept as history, so it has no
+    /// foreign key and outlives the character. Fixtures from before houses were shared were all placed by the
+    /// character that bought the house.
+    /// </summary>
+    public ulong PlacedByCharacterId { get; set; }
+
     public float PositionX { get; set; }
     public float PositionY { get; set; }
     public float PositionZ { get; set; }

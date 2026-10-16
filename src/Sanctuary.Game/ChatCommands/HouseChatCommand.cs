@@ -67,14 +67,20 @@ public sealed class HouseChatCommand : IChatCommand
     {
         var characterId = GuidHelper.GetPlayerId(invoker.Guid);
         var names = _houseManager.GetOwnedHouses(characterId)
-            .Select(house => (Name: GetHouseName(house), house.Plot))
+            .Select(house => (Name: GetHouseName(house), house.Plot, BoughtBy: house.CharacterId == characterId ? null : CharacterName(house.Character)))
             .OrderBy(house => house.Name)
-            .Select(house => house.Plot == HousePlot.Ranked ? $"{house.Name} (ranked plot)" : house.Name)
+            .Select(house => (house.Plot, house.BoughtBy) switch
+            {
+                (HousePlot.Ranked, null) => $"{house.Name} (ranked plot)",
+                (HousePlot.Ranked, var buyer) => $"{house.Name} (ranked plot, on {buyer})",
+                (_, null) => house.Name,
+                (_, var buyer) => $"{house.Name} (on {buyer})"
+            })
             .ToList();
 
         ChatHelper.SendSystemMessage(invoker, names.Count == 0
-            ? "You do not own a house."
-            : $"Owned houses: {string.Join(", ", names)}");
+            ? "Your account does not own a house."
+            : $"Your account's houses: {string.Join(", ", names)}");
 
         ChatHelper.SendSystemMessage(invoker, DescribeRankedPlot(characterId));
 
@@ -99,7 +105,7 @@ public sealed class HouseChatCommand : IChatCommand
         if (rankedPlot is null)
             return $"Your account has no ranked plot. Stand in one of your houses and say !house ranked to make it the one in the weekly competition. {weekText}";
 
-        var owner = rankedPlot.CharacterId == characterId ? string.Empty : $", on {rankedPlot.Character.FullName ?? rankedPlot.Character.FirstName}";
+        var owner = rankedPlot.CharacterId == characterId ? string.Empty : $", on {CharacterName(rankedPlot.Character)}";
 
         if (!rankedPlot.IsPublished)
             return $"Your account's ranked plot is {GetHouseName(rankedPlot)}{owner}. Publish it from the house directory to enter it in the weekly competition. {weekText}";
@@ -148,7 +154,7 @@ public sealed class HouseChatCommand : IChatCommand
 
             case PlotChangeResult.Changed:
                 var replaced = change.Replaced is DbHouse previous
-                    ? $" {GetHouseName(previous)} (on {previous.Character.FullName ?? previous.Character.FirstName}) is a personal plot again and has left the competition, and its votes this week no longer count."
+                    ? $" {GetHouseName(previous)} (on {CharacterName(previous.Character)}) is a personal plot again and has left the competition, and its votes this week no longer count."
                     : string.Empty;
 
                 var entered = (isPublished, isLocked) switch
@@ -238,10 +244,10 @@ public sealed class HouseChatCommand : IChatCommand
         }
     }
 
-    /// <summary>The house the player is standing in, if it's theirs. Tells them otherwise.</summary>
+    /// <summary>The house the player is standing in, if their account owns it. Tells them otherwise.</summary>
     private static bool TryGetOwnHouse(Player invoker, out HousingZone zone)
     {
-        if (invoker.Zone is HousingZone housingZone && housingZone.OwnerId == GuidHelper.GetPlayerId(invoker.Guid))
+        if (invoker.Zone is HousingZone housingZone && housingZone.IsOwner(invoker))
         {
             zone = housingZone;
             return true;
@@ -251,6 +257,8 @@ public sealed class HouseChatCommand : IChatCommand
         ChatHelper.SendSystemMessage(invoker, "Stand in one of your own houses first.");
         return false;
     }
+
+    private static string CharacterName(DbCharacter character) => character.FullName ?? character.FirstName;
 
     private string GetHouseName(DbHouse house)
     {

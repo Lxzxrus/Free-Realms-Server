@@ -56,13 +56,16 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
         return true;
     }
 
-    /// <summary>Sends the player their own houses.</summary>
+    /// <summary>
+    /// Sends the player their account's houses, whichever of its characters bought them, as the player's own: the
+    /// client enters one from "My Houses" by its guid.
+    /// </summary>
     public static void SendHouseList(GatewayConnection connection)
     {
         var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
 
         using var dbContext = _dbContextFactory.CreateDbContext();
-        var houses = LoadHouses(dbContext, characterId);
+        var houses = LoadHouses(HouseOwnership.OwnedByAccountOf(dbContext, characterId));
 
         var packet = new HousingPacketInstanceList
         {
@@ -75,9 +78,10 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
     }
 
     /// <summary>
-    /// Answers "Go to House" on another player with that player's houses the requester may enter (see
-    /// <see cref="HouseAccess.MayEnter"/>). Picking one sends <see cref="ClientHousingPacketEnterRequest"/>, which
-    /// checks the same rule again.
+    /// Answers "Go to House" on another player with the houses that player bought which the requester may enter (see
+    /// <see cref="HouseAccess.MayEnter"/>). Houses another character on the same account bought aren't listed, so the
+    /// list doesn't tell visitors which characters share an account. Picking one sends
+    /// <see cref="ClientHousingPacketEnterRequest"/>, which checks the same rule again.
     /// </summary>
     private static void SendTargetHouseList(GatewayConnection connection, ulong ownerGuid)
     {
@@ -100,15 +104,15 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
         var owner = dbContext.Characters
             .AsNoTracking()
             .Where(character => character.Id == ownerId)
-            .Select(character => new { character.FullName })
+            .Select(character => new { character.FullName, character.UserId })
             .FirstOrDefault();
 
         var ownerName = owner?.FullName ?? string.Empty;
 
         var houses = owner is null
             ? []
-            : LoadHouses(dbContext, ownerId)
-                .Where(entry => HouseAccess.MayEnter(player.Guid, player.Friends, player.MembershipStatus != 0, entry.House))
+            : LoadHouses(dbContext.Houses.Where(house => house.CharacterId == ownerId))
+                .Where(entry => HouseAccess.MayEnter(player.UserId, player.Friends, player.MembershipStatus != 0, entry.House, owner.UserId))
                 .ToList();
 
         if (houses.Count == 0)
@@ -130,18 +134,16 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
         connection.SendTunneled(packet);
     }
 
-    private static List<(DbHouse House, int FixtureCount)> LoadHouses(DatabaseContext dbContext, ulong ownerId)
+    private static List<(DbHouse House, int FixtureCount)> LoadHouses(IQueryable<DbHouse> houses)
     {
         var supportedZoneDefinitionIds = _resourceManager.Zones.Values
             .OfType<HousingZoneDefinition>()
             .Select(definition => definition.Id)
             .ToArray();
 
-        return dbContext.Houses
+        return houses
             .AsNoTracking()
-            .Where(house =>
-                house.CharacterId == ownerId &&
-                supportedZoneDefinitionIds.Contains(house.ZoneDefinitionId))
+            .Where(house => supportedZoneDefinitionIds.Contains(house.ZoneDefinitionId))
             .Select(house => new
             {
                 House = house,

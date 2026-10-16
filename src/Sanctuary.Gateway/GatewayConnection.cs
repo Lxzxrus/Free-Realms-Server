@@ -266,6 +266,7 @@ public class GatewayConnection : UdpConnection
         Player.Coins = dbCharacter.Coins;
 
         Player.CharacterId = dbCharacter.Id;
+        Player.UserId = dbCharacter.UserId;
 
         Player.ActiveQuestId = dbCharacter.ActiveQuestId ?? 0;
 

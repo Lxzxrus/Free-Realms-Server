@@ -252,7 +252,7 @@ public static class CoinStoreSellToClientRequestPacketHandler
 
         if (isHousingInventory &&
             connection.Player.Zone is HousingZone housingZone &&
-            housingZone.OwnerId == GuidHelper.GetPlayerId(connection.Player.Guid))
+            housingZone.IsOwner(connection.Player))
         {
             housingZone.Runtime.RefreshFixtureItemList(connection.Player);
         }

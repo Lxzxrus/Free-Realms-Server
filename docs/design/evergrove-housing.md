@@ -27,8 +27,8 @@ Numbers marked *(placeholder)* are starting values to tune after real players ar
   - a **ranked plot**: built to be visited, rated and entered into the weekly competition.
 - **Plots belong to the account, not the character.** One account has one personal and one ranked plot, whichever
   character is playing. Otherwise a player could enter the competition once per character.
-  *(As built in task 32, section 8: the ranked plot is per account, but houses still belong to the character that
-  bought them.)*
+  *(As built in tasks 32 and 35, section 8: every house, the ranked plot included, belongs to the account, and any of
+  its characters can use it.)*
 - Each plot can use any lot type (seaside, snowhill, and so on), and the owner can switch lot type.
   *(Open: what happens to a build when the lot type changes. Simplest is to keep both builds and let the player
   switch back.)*
@@ -119,7 +119,7 @@ Station Cash stays the **premium currency**, but it's **earned, never bought**: 
 | Votes | **Per account per week (task 32):** one vote per account per ranked plot per week, changeable, eligibility rules. See section 8 |
 | Rating | **Weekly vote-weighted score (task 32)**, worked out from this week's votes when it's shown. See section 8 |
 | Featured house | Top of the directory sort. Needs: last week's confirmed winner |
-| Houses | One per character per lot type; no limit on how many. **Personal and ranked plots (task 32):** one ranked plot per account; houses still belong to the character that bought them. See section 8 |
+| Houses | One per account per lot type, and no limit on how many lots. **Personal and ranked plots (task 32):** one ranked plot per account. **Shared (task 35):** every character on the account enters, builds in and manages all its houses. See section 8 |
 | Fixtures | **Free (PR #19):** `Housing:CreativeMode` offers all 1,706 placeable fixtures, unlimited; each placed piece records `IsCreative`, so it never returns an item. Wallpapers, floors and lots (`Housing:FreeLots`) are free. Dyeable pieces appear once, in their default colour |
 | Station Cash | A per-character balance with no way to earn it. Needs everything in section 4 |
 | Experience and levels | Not yet. OSFR PR #120 |
@@ -142,8 +142,10 @@ Each phase becomes cloud tasks once the one before it has been playtested.
 - Who the staff are, and how a staff member confirms results: a chat command, or a small page on the WebAPI.
 - Every *(placeholder)* number.
 - What happens to a build when a plot changes lot type.
+- Deleting the character who bought a house still deletes the house, although it's the account's (section 8). It could
+  move to another character on the account, or the deletion could be refused while the account has other characters.
 
-## 8. As built: plots and weekly voting (task 32)
+## 8. As built: plots, shared houses and weekly voting (tasks 32 and 35)
 
 Build-order phases 2 and 3.
 
@@ -155,9 +157,26 @@ Build-order phases 2 and 3.
   personal.
 - **A plot's votes count from when it last became the ranked plot.** Moving the ranked plot away and back starts it
   again from no votes that week, so an account can't run two builds in a week and keep whichever scored better.
-- **Houses still belong to the character that bought them.** Only the ranked plot is per account. Letting every
-  character on an account enter and build in its plots means changing every owner check in the housing runtime, and
-  the client's edit permissions, so it's left for its own task.
+- **Houses belong to the account (task 35).** Every character on the account can do whatever the character who bought
+  a house can: enter it, locked or unpublished, from My Houses or `!house enter`; build in it (place, move, paint,
+  pick up, wallpapers and floors, `!build`); publish and unpublish it; lock it and change its other settings; and make
+  it the ranked or a personal plot. My Houses and `!house list` show all the account's houses, and `!house list` says
+  which character bought those the player didn't. Inside, a character on the account is told it's the owner, so the
+  client offers Decorate. A character on another account never gets any of this, whatever its friends.
+- **Visitors see the character who bought it.** The house still records its buyer (`Houses.CharacterId`). The
+  directory shows the buyer as the owner, "Go to House" on a character and `!house visit <lot> <name>` find the houses
+  that character bought, and the friends who may come into a locked house are the buyer's. A friend of another
+  character on the account gains nothing. So no visitor's rights changed, and nothing shows a visitor which characters
+  share an account.
+- **One of each lot per account.** A lot any character on the account has can't be bought again. Before task 35 two
+  characters on an account could each buy the same lot; both houses are kept, and `!house enter` goes to the player's
+  own first.
+- **Who placed what.** Each placed part records the character that placed it (`HouseFixtures.PlacedByCharacterId`),
+  for history and moderation. Parts placed before task 35 record the house's buyer, the only character that could build
+  there. A part placed from inventory (only with `Housing:CreativeMode` off) goes back to the inventory of whichever
+  character picks it up: another character on the account may be online, and its inventory isn't changed behind its
+  back.
+- **Deleting the buyer** still deletes its houses, as before task 35 (section 7).
 - **Publishing** stays separate from the kind of plot. A published, unlocked ranked plot is **entered**. A locked one
   isn't: it's out of the directory and only the owner's friends can come in. A published personal plot can be visited
   and is listed in the directory, but takes no votes and shows no rating.
@@ -166,7 +185,8 @@ Build-order phases 2 and 3.
   plot, even after the house is deleted. A refused vote gets a chat message saying why. The per-character votes from
   before (`HouseVotes`) are kept as history; nothing writes them.
 - **Who can vote:** the account's age is from its creation date. Its playtime is what all its characters have saved
-  at logout, plus the voting character's session in progress.
+  at logout, plus the voting character's session in progress. No character votes on its own account's plots, whichever
+  character bought them; sharing houses (task 35) didn't change voting.
 - **Score:** section 3's formula, with `C` the average of every vote counted this week across the competition. Each
   plot weighs in by its votes, so one account giving 1 star to a few plots nobody else voted for barely moves it. A
   plot with no votes this week shows no rating rather than `C`. Wherever the client showed the old average, it

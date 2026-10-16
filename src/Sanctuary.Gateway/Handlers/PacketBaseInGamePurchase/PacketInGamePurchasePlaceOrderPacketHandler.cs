@@ -413,7 +413,7 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
 
         if (purchasedHousingInventory &&
             connection.Player.Zone is HousingZone housingZone &&
-            housingZone.OwnerId == GuidHelper.GetPlayerId(connection.Player.Guid))
+            housingZone.IsOwner(connection.Player))
         {
             housingZone.Runtime.RefreshFixtureItemList(connection.Player);
         }
@@ -458,8 +458,8 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
                 {
                     strategyContext.ChangeTracker.Clear();
 
-                    if (strategyContext.Houses.Any(house =>
-                            house.CharacterId == characterId &&
+                    // Houses belong to the account, so a lot any of its characters has is already this character's.
+                    if (HouseOwnership.OwnedByAccountOf(strategyContext, characterId).Any(house =>
                             house.ZoneDefinitionId == housingZoneDefinition.Id))
                     {
                         result = 2;
