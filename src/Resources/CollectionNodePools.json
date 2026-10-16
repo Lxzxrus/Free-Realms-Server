@@ -173,5 +173,54 @@
     "NodeType": "sunstone-valley-elite-exploration-coin",
     "MaxActiveNodes": 0,
     "RespawnSeconds": 300
+  },
+  {
+    "Key": "wugachug-sasparilla-samples",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sasparilla-sample",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "wugachug-sugar",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sugar",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "wugachug-sweet-honey",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sweet-honey",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "wugachug-sweet-smelling-flower",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sweet-smelling-flower",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "merry-vale-firewood",
+    "ZoneDefinitionId": 1,
+    "NodeType": "firewood",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "merry-vale-homework-page-1",
+    "ZoneDefinitionId": 1,
+    "NodeType": "ronnies-homework-page-1",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "merry-vale-homework-page-2",
+    "ZoneDefinitionId": 1,
+    "NodeType": "ronnies-homework-page-2",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
   }
 ]

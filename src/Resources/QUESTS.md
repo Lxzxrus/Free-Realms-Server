@@ -36,8 +36,6 @@ The smallest valid entry is a single "talk to this NPC" quest with no reward:
   "DescriptionId": 0,
   "GiverDialogueId": 0,
   "ObjectiveDescriptionId": 0,
-  "SubGoalId": 0,
-  "TargetDialogueId": 0,
   "IconId": 43278,
   "GiverGuid": 100000001201,
   "TargetGuid": 100000001201,
@@ -45,19 +43,17 @@ The smallest valid entry is a single "talk to this NPC" quest with no reward:
   "RewardExperience": 0,
   "RewardItems": [],
   "PrerequisiteQuestId": 0,
-  "NextQuestId": 0
+  "NextQuestId": 0,
+  "Goals": [
+    { "NameId": 0, "TargetGuid": 100000001201 }
+  ]
 }
 ```
 
 `Comment` is ignored by the loader - it's purely a label for whoever's reading the file. `QuestId`
-must be unique; a duplicate is skipped with a startup warning. `IconId` 43278 is what every
-existing quest uses.
-
-With no `Goals` array, the quest falls back to a single synthesized "talk to `TargetGuid`" goal
-built from `ObjectiveDescriptionId`/`SubGoalId`/`TargetDialogueId` (see
-`QuestDefinition.EffectiveGoals`). This is the legacy shape and still works fine for simple
-give-and-turn-in-at-the-same-NPC quests (see `QuestId: 3001` "Nomi's Little Brother" style quests
-in `Quests.json` for a real single-goal example, or `3040`-`3043` for a real multi-step chain).
+must be unique; the same id twice makes the loader refuse the file. `IconId` 43278 is what every
+existing quest uses. Every quest needs at least one goal: the loader refuses a quest without `Goals`.
+`3090` "Misplaced Mugwopp" is a real single-goal quest, and `3040`-`3043` a real multi-step chain.
 
 ## Multi-goal quests
 
@@ -75,8 +71,8 @@ done. Each goal becomes its own tracker row.
 - `NameId` is the tracker row text AND the goal's client-side identity - it must be unique across
   a quest's goals, or the client can't tell them apart (checkmarks/progress won't render right).
   The loader warns on a duplicate.
-- `DialogueId` on the **final** goal becomes the turn-in speech bubble; earlier goals' `DialogueId`
-  is unused today.
+- `DialogueId` on the **final** goal becomes the turn-in speech bubble; an earlier talk goal's
+  `DialogueId` is what its NPC says as that step is ticked off.
 - `Type` defaults to `0` (TalkToNpc) if omitted.
 
 ## Goal types
@@ -85,7 +81,7 @@ done. Each goal becomes its own tracker row.
 |---|---|---|
 | `TalkToNpc` | 0 | player interacts with `TargetGuid` |
 | `ReachLocation` | 1 | player gets within `ReachRadius` (default 12) of `ReachPosition`, checked on every position update (2D, X/Z only) |
-| `Collect` | 2 | player gathers `RequiredCount` pickups from `CollectSpawns` |
+| `Collect` | 2 | player gathers `RequiredCount` pickups of the node type `CollectNodeType` |
 
 That's the full set - this branch has no combat system, so there's no Kill/hunt or
 battle-instance-encounter goal type. Don't add one without also building what would drive it.
@@ -100,28 +96,43 @@ Use `/whereami` in-game to grab coordinates while standing where you want the go
 
 ### Collect example
 
+Ronnie's firewood (quest 3072):
+
 ```json
-{
-  "NameId": 46489,
-  "Type": 2,
-  "RequiredCount": 8,
-  "CollectModelId": 584,
-  "CollectNameId": 74449,
-  "CollectSpawns": [
-    [-1090.0, 5.40, 384.0],
-    [-1072.0, 5.30, 348.0]
-  ]
-}
+{ "NameId": 41752, "DescriptionId": 41755, "Type": 2, "RequiredCount": 10, "CollectNodeType": "firewood" }
 ```
 
-`RequiredCount` of `0` (or omitted) defaults to "collect them all" (`CollectSpawns.Count`).
-`CollectModelId` is a `Models.txt` id (e.g. `93` = `bw_collectible_mushrooms_01`); `CollectNameId`
-is the hover/name text shown on the pickup.
+The pickups are collection nodes, the same system as mushrooms and exploration coins, so the quest
+doesn't place them. Three files do:
 
-Every zone that has a Collect-goal quest must call `zone.spawnQuestCollectibles()` once from its
-Lua `onStart` (see `FabledRealms.lua`). This one call spawns **every** collectible pickup across
-**all** quests in `Quests.json`, not just that zone's - it isn't scoped, so a zone without any
-collect quests can skip the call entirely and it's harmless either way.
+- `CollectionNodeTypes.json`: the node type. `Key` is what `CollectNodeType` names; `ModelId` is a
+  `Models.txt` id (`748` = `sg_log_wFirefly`); `NameId` is the hover text ("Stick of Firewood");
+  `DropTable` is empty, so gathering one gives nothing but the quest credit.
+- `CollectionNodePools.json`: a pool of that type in a zone (`merry-vale-firewood`).
+  `MaxActiveNodes` `0` puts a node on every spawn point; `RespawnSeconds` is how long a gathered one
+  stays gone.
+- `CollectionNodeSpawns/<zone id>/<pool key>.json`: the spawn points. Ids are unique across every
+  file. Stand on the spot and use `/whereami`, or take the height from an NPC or a waypoint
+  (`Maps/FabledRealms.map`) right beside it, so the node sits on the ground.
+
+Anyone can gather a quest's nodes, on the quest or not, so each needs a short respawn.
+`RequiredCount` must be at least `1`, and the test
+`ShippedCollectGoals_HaveEnoughPickupsOutAtOnce` fails when a goal needs more pickups than its
+pools put out at once, or names a type that doesn't exist.
+
+### Counted talk
+
+A talk goal with `RequiredCount` above 1 and a `TargetGuids` list completes after the player has
+clicked that many of the listed NPCs, in any order, each counting once. Every one not yet clicked
+shows the "?". Root of the Problem (3103) picks five of the fourteen chugaroot plants on Farmer
+Murglot's patch:
+
+```json
+{ "NameId": 386167, "RequiredCount": 5, "TargetGuids": [100000001714, 100000001715, 100000001716] }
+```
+
+`TargetDialogueIds` (with `TargetResponseIds`) gives each NPC in `TargetGuids` its own line, in the
+same order.
 
 ## Conversations
 
@@ -219,7 +230,9 @@ A quest's rows usually sit together: its title, then within a few ids its descri
 dialogue, the objective text, each goal's name and the turn-in line. Touring Seaside (`3022`) is the
 worked example: title 93420, description 93421, giver dialogue 93419, objective text 93424, goals
 93425, 93427, 93429 and the turn-in line 93422. Some rows the live game used (a goal's own dialogue,
-say) aren't in the client we ship; leave those ids out rather than borrowing unrelated text.
+say) aren't in the client we ship; leave those ids out rather than borrowing unrelated text. When
+a lost row's exact words exist under another id, use that one: Birthday Surprises' "Speak with
+Tumbolina" row is gone, and 71001, from another quest, reads the same.
 
 ## No database migration needed
 
@@ -230,10 +243,9 @@ adding quests to `Quests.json` is purely additive and needs no EF Core migration
 
 1. Confirm the giver/target NPCs are already spawned in a zone script - note their guids.
 2. Pick a unique `QuestId`.
-3. Write the entry: single goal (legacy fields) or a `Goals` list for multi-step.
+3. Write the entry with its `Goals`, one per step.
 4. Wire `PrerequisiteQuestId`/`NextQuestId` if it's part of a chain, `ExcludesQuestIds` if it's
    mutually exclusive with another quest.
-5. If it has a `Collect` goal, make sure the zone's Lua script calls
-   `zone.spawnQuestCollectibles()` from `onStart`.
+5. If it has a `Collect` goal, add its node type, pool and spawn points (see Collect example).
 6. Build, spawn any test NPCs with `/npc spawn`, and walk through accept -> goals -> turn-in
    in-client.

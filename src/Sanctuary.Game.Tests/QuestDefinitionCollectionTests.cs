@@ -123,6 +123,50 @@ public sealed class QuestDefinitionCollectionTests
         }
     }
 
+    [TestMethod]
+    public void ShippedCollectGoals_HaveEnoughPickupsOutAtOnce()
+    {
+        // A Collect goal names a node type; the pickups come from the pools of that type. A goal needing more than
+        // its pools put out at once makes the player wait for respawns, and a type nobody spawns can't be finished.
+        // Everything from the folder Quests.json is in: other tests leave an empty CollectionNodeSpawns in the
+        // test output, which a search of its own would find first.
+        var resources = Path.GetDirectoryName(FindShippedQuests())!;
+
+        var types = new CollectionNodeTypeDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(types.Load(Path.Combine(resources, "CollectionNodeTypes.json")));
+
+        var pools = new CollectionNodePoolDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(pools.Load(Path.Combine(resources, "CollectionNodePools.json")));
+
+        var spawns = new CollectionNodeSpawnDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(spawns.Load(Path.Combine(resources, "CollectionNodeSpawns")));
+
+        var problems = new List<string>();
+
+        foreach (var quest in LoadQuests(FindShippedQuests()).Quests.Values)
+        {
+            foreach (var goal in quest.Goals.Where(goal => goal.Type == QuestGoalType.Collect))
+            {
+                if (!types.ContainsKey(goal.CollectNodeType))
+                {
+                    problems.Add($"Quest {quest.QuestId}, goal {goal.NameId}: no node type \"{goal.CollectNodeType}\"");
+                    continue;
+                }
+
+                var outAtOnce = pools.Values
+                    .Where(pool => pool.NodeType == goal.CollectNodeType)
+                    .Sum(pool => pool.GetTargetActiveCount(spawns.Values.Count(spawn =>
+                        spawn.Pool == pool.Key && spawn.ZoneDefinitionId == pool.ZoneDefinitionId)));
+
+                if (goal.RequiredCount <= 0 || outAtOnce < goal.RequiredCount)
+                    problems.Add($"Quest {quest.QuestId}, goal {goal.NameId}: needs {goal.RequiredCount} " +
+                        $"\"{goal.CollectNodeType}\", and {outAtOnce} are out at once");
+            }
+        }
+
+        Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
+    }
+
     private static string WriteQuestFile(string json)
     {
         var path = Path.Combine(Path.GetTempPath(), $"quests-{Guid.NewGuid():N}.json");

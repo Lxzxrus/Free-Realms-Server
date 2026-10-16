@@ -325,5 +325,87 @@
     "CursorId": 17,
     "PlacementYOffset": 0.0,
     "DropTable": []
+  },
+  {
+    "Key": "sasparilla-sample",
+    "Name": "Sasparilla Sample",
+    "NameId": 71298,
+    "ModelId": 521,
+    "Scale": 1.0,
+    "CompositeEffectId": 5386,
+    "InteractRange": 12,
+    "CursorId": 17,
+    "PlacementYOffset": 0.0,
+    "DropTable": []
+  },
+  {
+    "Key": "sugar",
+    "Name": "Sugar",
+    "NameId": 23316,
+    "ModelId": 3635,
+    "Scale": 1.0,
+    "CompositeEffectId": 5386,
+    "InteractRange": 12,
+    "CursorId": 17,
+    "PlacementYOffset": 0.0,
+    "DropTable": []
+  },
+  {
+    "Key": "sweet-honey",
+    "Name": "Barrel of Honey",
+    "NameId": 7604,
+    "ModelId": 83,
+    "Scale": 1.0,
+    "CompositeEffectId": 5386,
+    "InteractRange": 12,
+    "CursorId": 17,
+    "PlacementYOffset": 0.0,
+    "DropTable": []
+  },
+  {
+    "Key": "sweet-smelling-flower",
+    "Name": "Sweet-Smelling Flower",
+    "NameId": 74330,
+    "ModelId": 248,
+    "Scale": 1.0,
+    "CompositeEffectId": 5386,
+    "InteractRange": 12,
+    "CursorId": 17,
+    "PlacementYOffset": 0.0,
+    "DropTable": []
+  },
+  {
+    "Key": "firewood",
+    "Name": "Stick of Firewood",
+    "NameId": 41754,
+    "ModelId": 748,
+    "Scale": 1.0,
+    "CompositeEffectId": 5386,
+    "InteractRange": 12,
+    "CursorId": 17,
+    "PlacementYOffset": 0.0,
+    "DropTable": []
+  },
+  {
+    "Key": "ronnies-homework-page-1",
+    "Name": "Ronnie's Homework",
+    "ModelId": 584,
+    "Scale": 1.0,
+    "CompositeEffectId": 5386,
+    "InteractRange": 12,
+    "CursorId": 17,
+    "PlacementYOffset": 0.0,
+    "DropTable": []
+  },
+  {
+    "Key": "ronnies-homework-page-2",
+    "Name": "Ronnie's Homework",
+    "ModelId": 584,
+    "Scale": 1.0,
+    "CompositeEffectId": 5386,
+    "InteractRange": 12,
+    "CursorId": 17,
+    "PlacementYOffset": 0.0,
+    "DropTable": []
   }
 ]
