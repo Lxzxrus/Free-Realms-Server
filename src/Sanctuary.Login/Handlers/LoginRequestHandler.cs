@@ -108,11 +108,12 @@ public static class LoginRequestHandler
 
         loginReply.LoggedIn = true;
         loginReply.Status = 1;
-        loginReply.IsMember = user.IsMember;
+        // Everyone is a member (Membership).
+        loginReply.IsMember = true;
 
         var accountInfo = new AccountInfo
         {
-            IsMember = user.IsMember,
+            IsMember = true,
             MaxCharacters = user.MaxCharacters,
             IsAdminAccount = user.IsAdmin
         };
