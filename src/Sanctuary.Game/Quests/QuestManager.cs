@@ -159,6 +159,9 @@ public sealed class QuestManager : IQuestManager
 
     private const int CollectPickupEffect = 5386;
 
+    public bool NeedsCollectionNode(Player player, string nodeType) =>
+        ActiveGoals(player).Any(active => active.Goal.Type == QuestGoalType.Collect && active.Goal.CollectNodeType == nodeType);
+
     public void OnCollectionNodeGathered(Player player, CollectionNode node)
     {
         var nodeType = node.TypeDefinition.Key;

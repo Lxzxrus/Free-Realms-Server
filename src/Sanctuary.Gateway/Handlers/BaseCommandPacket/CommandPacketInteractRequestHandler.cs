@@ -103,6 +103,14 @@ public static class CommandPacketInteractRequestHandler
         if (node.SpawnDefinition.HasCollectionEntry)
             return HandleCollectionEntryNode(connection, node);
 
+        // A pickup with nothing to give exists only for a quest's Collect step (homework, buckets, firewood): it can
+        // be taken only while a quest needs it, or it disappears for 30 seconds for nothing.
+        if (!node.TypeDefinition.HasDrop && !_questManager.NeedsCollectionNode(connection.Player, node.TypeDefinition.Key))
+        {
+            ChatHelper.SendSystemMessage(connection.Player, "You don't need this right now.");
+            return true;
+        }
+
         if (!node.TryReserve())
             return true;
 

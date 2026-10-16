@@ -16,6 +16,9 @@ public interface IQuestManager
 
     void OnCollectionNodeGathered(Player player, CollectionNode node);
 
+    /// <summary>Whether one of the player's quests is on a Collect step for this kind of pickup.</summary>
+    bool NeedsCollectionNode(Player player, string nodeType);
+
     void OnPlayerMoved(Player player);
 
     void AcceptQuest(Player player, int questId);
