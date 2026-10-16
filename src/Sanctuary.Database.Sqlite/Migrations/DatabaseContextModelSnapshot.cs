@@ -439,6 +439,9 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.Property<int>("ItemDefinitionId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<ulong>("PlacedByCharacterId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("PlacementToken")
                         .HasColumnType("TEXT");
 
