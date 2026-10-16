@@ -743,6 +743,255 @@
     ]
   },
   {
+    "Name": "Chores, What a Bore!",
+    "Comment": "Ronnie's first chore: ten sticks of firewood from around the edges of Merry Vale (pool merry-vale-firewood).",
+    "QuestId": 3072,
+    "TitleId": 41744,
+    "DescriptionId": 41745,
+    "GiverDialogueId": 41743,
+    "ObjectiveDescriptionId": 41749,
+    "IconId": 43278,
+    "GiverGuid": 100000002195,
+    "TargetGuid": 100000002195,
+    "RewardCoins": 13,
+    "RewardExperience": 80,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 0,
+    "NextQuestId": 3073,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 41752,
+        "DescriptionId": 41755,
+        "Type": 2,
+        "RequiredCount": 10,
+        "CollectNodeType": "firewood"
+      },
+      {
+        "NameId": 41849,
+        "DescriptionId": 41850,
+        "DialogueId": 41851,
+        "TargetGuid": 100000002195
+      }
+    ]
+  },
+  {
+    "Name": "A Delivery to Aunt Daisy",
+    "QuestId": 3073,
+    "TitleId": 41861,
+    "DescriptionId": 41862,
+    "GiverDialogueId": 41860,
+    "ObjectiveDescriptionId": 41866,
+    "IconId": 43278,
+    "GiverGuid": 100000002195,
+    "TargetGuid": 100000002195,
+    "RewardCoins": 36,
+    "RewardExperience": 80,
+    "RewardItems": [
+      3023,
+      3023,
+      3023,
+      3023,
+      3023
+    ],
+    "PrerequisiteQuestId": 3072,
+    "NextQuestId": 3074,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 41867,
+        "DescriptionId": 41868,
+        "DialogueId": 41856,
+        "TargetGuid": 100000003216
+      },
+      {
+        "NameId": 41849,
+        "DescriptionId": 41870,
+        "DialogueId": 41864,
+        "TargetGuid": 100000002195
+      }
+    ]
+  },
+  {
+    "Name": "Missing Homework",
+    "Comment": "Five pages: on the ground by the bridge south of the warpstone, by the vendor carts, with the squirrel far south over the bridge (an unnamed squirrel, the only one there), with Amalia, who fished one out of the northern stream, and Vroomba, who used one as a handkerchief. The client's page text, not the wiki's (a dog and a fish there).",
+    "QuestId": 3074,
+    "TitleId": 46489,
+    "DescriptionId": 46490,
+    "GiverDialogueId": 46488,
+    "ObjectiveDescriptionId": 46498,
+    "IconId": 43278,
+    "GiverGuid": 100000002195,
+    "TargetGuid": 100000002195,
+    "RewardCoins": 30,
+    "RewardExperience": 100,
+    "RewardItems": [
+      248
+    ],
+    "PrerequisiteQuestId": 3073,
+    "NextQuestId": 0,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 46499,
+        "DescriptionId": 46500,
+        "Type": 2,
+        "RequiredCount": 1,
+        "CollectNodeType": "ronnies-homework-page-1"
+      },
+      {
+        "NameId": 46501,
+        "DescriptionId": 46502,
+        "Type": 2,
+        "RequiredCount": 1,
+        "CollectNodeType": "ronnies-homework-page-2"
+      },
+      {
+        "NameId": 46503,
+        "DescriptionId": 46504,
+        "TargetGuid": 100000004313
+      },
+      {
+        "NameId": 46505,
+        "DescriptionId": 46506,
+        "TargetGuid": 100000002267,
+        "Dialogue": [
+          {
+            "TextId": 46592,
+            "ResponseTextId": 46593
+          },
+          {
+            "TextId": 46594
+          }
+        ]
+      },
+      {
+        "NameId": 46507,
+        "DescriptionId": 46508,
+        "DialogueId": 46558,
+        "TargetGuid": 100000002278
+      },
+      {
+        "NameId": 46598,
+        "DescriptionId": 46599,
+        "DialogueId": 46492,
+        "TargetGuid": 100000002195
+      }
+    ]
+  },
+  {
+    "Name": "Picking Petals",
+    "QuestId": 3075,
+    "TitleId": 387034,
+    "DescriptionId": 387035,
+    "GiverDialogueId": 387033,
+    "ObjectiveDescriptionId": 387038,
+    "IconId": 43278,
+    "GiverGuid": 100000002220,
+    "TargetGuid": 100000002271,
+    "RewardCoins": 10,
+    "RewardExperience": 50,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 0,
+    "NextQuestId": 3076,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 387039,
+        "DescriptionId": 387040,
+        "DialogueId": 387036,
+        "TargetGuid": 100000002271
+      }
+    ]
+  },
+  {
+    "Name": "Birthday Surprises",
+    "Comment": "The client lost this quest's own \"Speak with Tumbolina\" row (387051); 71001 is the same words.",
+    "QuestId": 3076,
+    "TitleId": 387044,
+    "DescriptionId": 387045,
+    "GiverDialogueId": 387043,
+    "ObjectiveDescriptionId": 387048,
+    "IconId": 43278,
+    "GiverGuid": 100000002271,
+    "TargetGuid": 100000002271,
+    "RewardCoins": 24,
+    "RewardExperience": 80,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3075,
+    "NextQuestId": 3077,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 387049,
+        "DescriptionId": 387050,
+        "DialogueId": 387057,
+        "TargetGuid": 100000002279
+      },
+      {
+        "NameId": 71001,
+        "DescriptionId": 387052,
+        "DialogueId": 387059,
+        "TargetGuid": 100000002200
+      },
+      {
+        "NameId": 387053,
+        "DescriptionId": 387054,
+        "DialogueId": 387061,
+        "TargetGuid": 100000002219
+      },
+      {
+        "NameId": 387055,
+        "DescriptionId": 387056,
+        "DialogueId": 387046,
+        "TargetGuid": 100000002271
+      }
+    ]
+  },
+  {
+    "Name": "The Perfect Present",
+    "QuestId": 3077,
+    "TitleId": 387067,
+    "DescriptionId": 387068,
+    "GiverDialogueId": 387066,
+    "ObjectiveDescriptionId": 387071,
+    "IconId": 43278,
+    "GiverGuid": 100000002271,
+    "TargetGuid": 100000002220,
+    "RewardCoins": 18,
+    "RewardExperience": 80,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3076,
+    "NextQuestId": 0,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 387072,
+        "DescriptionId": 387073,
+        "DialogueId": 387080,
+        "TargetGuid": 100000002217
+      },
+      {
+        "NameId": 387074,
+        "DescriptionId": 387075,
+        "DialogueId": 387081,
+        "TargetGuid": 100000002219
+      },
+      {
+        "NameId": 387076,
+        "DescriptionId": 387077,
+        "DialogueId": 387069,
+        "TargetGuid": 100000002220
+      }
+    ]
+  },
+  {
     "Name": "Aiding our Allies - Arch Druid Camellia sends you to Headmaster Merk in Sunstone Valley",
     "QuestId": 3080,
     "TitleId": 440466,
@@ -764,6 +1013,327 @@
         "NameId": 440471,
         "DialogueId": 440468,
         "TargetGuid": 100000003841
+      }
+    ]
+  },
+  {
+    "Name": "Misplaced Mugwopp",
+    "Comment": "Chugawug Friends 1/3: Blorple at the Greenwood Camp sends you to Mugwopp, south of the Merry Vale warpstone.",
+    "QuestId": 3090,
+    "TitleId": 46211,
+    "DescriptionId": 46212,
+    "GiverDialogueId": 46210,
+    "ObjectiveDescriptionId": 117225,
+    "IconId": 43278,
+    "GiverGuid": 100000003463,
+    "TargetGuid": 100000002301,
+    "RewardCoins": 15,
+    "RewardExperience": 60,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 0,
+    "NextQuestId": 3091,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 46618,
+        "DescriptionId": 117225,
+        "DialogueId": 46252,
+        "TargetGuid": 100000002301
+      }
+    ]
+  },
+  {
+    "Name": "How Bad is it?",
+    "Comment": "Chugawug Friends 2/3: Mugwopp sends you to Smoggo, deep in Briarwood (Bristlewood).",
+    "QuestId": 3091,
+    "TitleId": 390259,
+    "DescriptionId": 390260,
+    "GiverDialogueId": 390258,
+    "ObjectiveDescriptionId": 390277,
+    "IconId": 43278,
+    "GiverGuid": 100000002301,
+    "TargetGuid": 100000002741,
+    "RewardCoins": 2,
+    "RewardExperience": 60,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3090,
+    "NextQuestId": 3092,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 387480,
+        "DescriptionId": 390279,
+        "DialogueId": 390261,
+        "TargetGuid": 100000002741
+      }
+    ]
+  },
+  {
+    "Name": "Briarwood's Not So Bad",
+    "Comment": "Chugawug Friends 3/3: Smoggo sends you to Sergeant Cargug by the entrance to Nettleseed.",
+    "QuestId": 3092,
+    "TitleId": 390589,
+    "DescriptionId": 390590,
+    "GiverDialogueId": 390588,
+    "ObjectiveDescriptionId": 390604,
+    "IconId": 43278,
+    "GiverGuid": 100000002741,
+    "TargetGuid": 100000002799,
+    "RewardCoins": 2,
+    "RewardExperience": 60,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3091,
+    "NextQuestId": 0,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 36445,
+        "DescriptionId": 390602,
+        "DialogueId": 390591,
+        "TargetGuid": 100000002799
+      }
+    ]
+  },
+  {
+    "Name": "Join the Party",
+    "Comment": "Sasparilla Hunt 1/7: Boranug at the Wugachug gate sends you to the Brewmaster.",
+    "QuestId": 3100,
+    "TitleId": 385979,
+    "DescriptionId": 385980,
+    "GiverDialogueId": 385978,
+    "ObjectiveDescriptionId": 385983,
+    "IconId": 43278,
+    "GiverGuid": 100000001611,
+    "TargetGuid": 100000001661,
+    "RewardCoins": 4,
+    "RewardExperience": 50,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 0,
+    "NextQuestId": 3101,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 385984,
+        "DescriptionId": 385983,
+        "DialogueId": 385981,
+        "TargetGuid": 100000001661
+      }
+    ]
+  },
+  {
+    "Name": "Taste Testing",
+    "Comment": "Sasparilla Hunt 2/7: four buckets of the brew around Wugachug (pool wugachug-sasparilla-samples).",
+    "QuestId": 3101,
+    "TitleId": 71709,
+    "DescriptionId": 71710,
+    "GiverDialogueId": 71721,
+    "ObjectiveDescriptionId": 71723,
+    "IconId": 43278,
+    "GiverGuid": 100000001661,
+    "TargetGuid": 100000001621,
+    "RewardCoins": 13,
+    "RewardExperience": 80,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3100,
+    "NextQuestId": 3102,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 71711,
+        "DescriptionId": 71720,
+        "DialogueId": 385998,
+        "TargetGuid": 100000001621
+      },
+      {
+        "NameId": 71713,
+        "Type": 2,
+        "RequiredCount": 4,
+        "CollectNodeType": "sasparilla-sample"
+      },
+      {
+        "NameId": 71719,
+        "DescriptionId": 71720,
+        "DialogueId": 71724,
+        "TargetGuid": 100000001621
+      }
+    ]
+  },
+  {
+    "Name": "Fixing the Flavor",
+    "Comment": "Sasparilla Hunt 3/7: a sack of sugar behind Loopug inside the gate, and a barrel of honey up the road by the brewing tents.",
+    "QuestId": 3102,
+    "TitleId": 71867,
+    "DescriptionId": 71868,
+    "GiverDialogueId": 71866,
+    "ObjectiveDescriptionId": 71868,
+    "IconId": 43278,
+    "GiverGuid": 100000001621,
+    "TargetGuid": 100000001621,
+    "RewardCoins": 60,
+    "RewardExperience": 80,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3101,
+    "NextQuestId": 3103,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 71872,
+        "Type": 2,
+        "RequiredCount": 1,
+        "CollectNodeType": "sugar"
+      },
+      {
+        "NameId": 71681,
+        "Type": 2,
+        "RequiredCount": 1,
+        "CollectNodeType": "sweet-honey"
+      },
+      {
+        "NameId": 71715,
+        "DialogueId": 71869,
+        "TargetGuid": 100000001621
+      }
+    ]
+  },
+  {
+    "Name": "Root of the Problem",
+    "Comment": "Sasparilla Hunt 4/7. The live game played the Chugaroot Farm Harvesting minigame here; we have no minigame for it, so you pick five of the chugaroot plants spawned on Farmer Murglot's patch.",
+    "QuestId": 3103,
+    "TitleId": 386159,
+    "DescriptionId": 386160,
+    "GiverDialogueId": 386158,
+    "ObjectiveDescriptionId": 386167,
+    "IconId": 43278,
+    "GiverGuid": 100000001621,
+    "TargetGuid": 100000001621,
+    "RewardCoins": 60,
+    "RewardExperience": 90,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3102,
+    "NextQuestId": 3104,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 386167,
+        "RequiredCount": 5,
+        "TargetGuids": [
+          100000001714,
+          100000001715,
+          100000001716,
+          100000001717,
+          100000001718,
+          100000001719,
+          100000001720,
+          100000001721,
+          100000001722,
+          100000001723,
+          100000001724,
+          100000001725,
+          100000001726,
+          100000001727
+        ]
+      },
+      {
+        "NameId": 386178,
+        "DialogueId": 386161,
+        "TargetGuid": 100000001621
+      }
+    ]
+  },
+  {
+    "Name": "The Secret Ingredient",
+    "Comment": "Sasparilla Hunt 5/7. The flower grew inside the Sweetwater Climb instance, which we can't enter yet, so it grows at the instance's entrance instead. The client has no description row for this quest; 386232 is Brockoom's own reminder of where the flowers are.",
+    "QuestId": 3104,
+    "TitleId": 74321,
+    "DescriptionId": 386232,
+    "GiverDialogueId": 74320,
+    "ObjectiveDescriptionId": 386232,
+    "IconId": 43278,
+    "GiverGuid": 100000001621,
+    "TargetGuid": 100000001621,
+    "RewardCoins": 90,
+    "RewardExperience": 100,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3103,
+    "NextQuestId": 3105,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 74326,
+        "Type": 2,
+        "RequiredCount": 1,
+        "CollectNodeType": "sweet-smelling-flower"
+      },
+      {
+        "NameId": 74328,
+        "DialogueId": 74323,
+        "TargetGuid": 100000001621
+      }
+    ]
+  },
+  {
+    "Name": "Save the Sasparilla!",
+    "Comment": "Sasparilla Hunt 6/7, shortened: the live quest had you defeat ten Bixie Rebels in Sweetwater Climb and return to Wugawump. With no combat and no instance, it ends when you warn him. Restore the goals 74302 and 74304 once both exist.",
+    "QuestId": 3105,
+    "TitleId": 74258,
+    "DescriptionId": 386235,
+    "GiverDialogueId": 74306,
+    "ObjectiveDescriptionId": 386235,
+    "IconId": 43278,
+    "GiverGuid": 100000001621,
+    "TargetGuid": 100000001661,
+    "RewardCoins": 90,
+    "RewardExperience": 100,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3104,
+    "NextQuestId": 3106,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 74260,
+        "DialogueId": 386237,
+        "TargetGuid": 100000001661
+      }
+    ]
+  },
+  {
+    "Name": "A Refreshing Reward",
+    "Comment": "Sasparilla Hunt 7/7: five Sweetwater Sasparillas from Brockoom's private stock.",
+    "QuestId": 3106,
+    "TitleId": 386248,
+    "DescriptionId": 386249,
+    "GiverDialogueId": 386247,
+    "ObjectiveDescriptionId": 386252,
+    "IconId": 43278,
+    "GiverGuid": 100000001661,
+    "TargetGuid": 100000001621,
+    "RewardCoins": 0,
+    "RewardExperience": 60,
+    "RewardItems": [
+      2265,
+      2265,
+      2265,
+      2265,
+      2265
+    ],
+    "PrerequisiteQuestId": 3105,
+    "NextQuestId": 0,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Goals": [
+      {
+        "NameId": 386253,
+        "DialogueId": 386250,
+        "TargetGuid": 100000001621
       }
     ]
   }
