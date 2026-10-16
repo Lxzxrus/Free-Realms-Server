@@ -363,53 +363,6 @@ public static class CharacterCreateRequestHandler
     private static void UnlockAllProfiles(DbCharacter dbCharacter, DbItem chestItem, DbItem legItem, DbItem feetItem)
     {
         foreach (var profileData in _resourceManager.Profiles.Values)
-        {
-            if (dbCharacter.Profiles.Any(x => x.Id == profileData.Id))
-                continue;
-
-            var dbProfile = new DbProfile
-            {
-                Id = profileData.Id,
-                Level = ProfileHelper.StartingLevel(profileData.Id)
-            };
-
-            // TODO
-            if (profileData.DefaultItems.Count == 0)
-            {
-                dbProfile.Items.Add(chestItem);
-                dbProfile.Items.Add(legItem);
-                dbProfile.Items.Add(feetItem);
-            }
-            else
-            {
-                foreach (var defaultItemId in profileData.DefaultItems)
-                {
-                    if (!_resourceManager.ClientItemDefinitions.TryGetValue(defaultItemId, out var defaultClientItemDefinition))
-                        continue;
-
-                    if (defaultClientItemDefinition.GenderUsage != 0 && defaultClientItemDefinition.GenderUsage != dbCharacter.Gender)
-                        continue;
-
-                    var dbItem = dbCharacter.Items.SingleOrDefault(x => x.Definition == defaultItemId);
-
-                    if (dbItem is null)
-                    {
-                        dbItem = new DbItem
-                        {
-                            Id = dbCharacter.Items.Count + 1,
-                            Definition = defaultClientItemDefinition.Id,
-                            Tint = defaultClientItemDefinition.Icon.TintId,
-                            Count = 1
-                        };
-
-                        dbCharacter.Items.Add(dbItem);
-                    }
-
-                    dbProfile.Items.Add(dbItem);
-                }
-            }
-
-            dbCharacter.Profiles.Add(dbProfile);
-        }
+            ProfileHelper.TryAddProfile(dbCharacter, profileData, _resourceManager, [chestItem, legItem, feetItem], out _);
     }
 }

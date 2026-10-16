@@ -121,15 +121,10 @@ refused and not used up (before, any use ate it for nothing).
 
 ## Check in game (Nate)
 
-Use a character with the Fisherman job (`UnlockAllProfiles` in `login.local.json`) and a fishing rod equipped: the
-job's starter kit is clothes only, and the client needs the rod to cast. The coin store sells the five rods. Lures
-are sold nowhere; for step 10, give yourself five Skipper Seekers while logged out (replace `<id>` with the
-character's id):
-
-```sql
-INSERT INTO Items (Id, CharacterId, Definition, Count, Tint)
-SELECT MAX(Id) + 1, <id>, 68160, 5, 0 FROM Items WHERE CharacterId = <id>;
-```
+Use a character with the Fisherman job (from Reed Stillwater, or `!job grant 137`; see `docs/research/jobs.md`)
+and a fishing rod equipped: the job's starter kit is clothes only, and the client needs the rod to cast. The coin
+store sells the five rods and, since task 34, the thirteen lures, as the live game's Coin Shop did: 45 coins each (50
+less the 10% member discount). Buy five Skipper Seekers for step 10.
 
 1. **Get there.** Open the map's points of interest and pick **Sacred Grove Shallows**: you land by the water in
    Fabled Realms and the hole's start screen opens. (Or open the Games menu: six fishing holes are listed.)

@@ -294,55 +294,7 @@ public class GatewayConnection : UdpConnection
             if (!_resourceManager.Profiles.TryGetValue(dbProfile.Id, out var profileData))
                 continue;
 
-            var clientPcProfile = new ClientPcProfile();
-
-            clientPcProfile.Id = dbProfile.Id;
-
-            clientPcProfile.NameId = profileData.NameId;
-            clientPcProfile.DescriptionId = profileData.DescriptionId;
-
-            clientPcProfile.Type = profileData.Type;
-            clientPcProfile.Icon = profileData.Icon;
-
-            clientPcProfile.AbilityBgImageSet = profileData.AbilityBgImageSet;
-            clientPcProfile.BadgeImageSet = profileData.BadgeImageSet;
-            clientPcProfile.ButtonImageSet = profileData.ButtonImageSet;
-
-            clientPcProfile.MembersOnly = profileData.MembersOnly;
-
-            clientPcProfile.ItemClasses = profileData.ItemClasses;
-
-            RewardHelper.SetRank(_resourceManager.RankLevels, clientPcProfile, dbProfile.Level, dbProfile.LevelXP);
-
-            foreach (var dbItem in dbProfile.Items)
-            {
-                if (!_resourceManager.ClientItemDefinitions.TryGetValue(dbItem.Definition, out var clientItemDefinition))
-                    continue;
-
-                if (clientPcProfile.Items.TryGetValue(clientItemDefinition.Slot, out var profileItem))
-                    profileItem.Id = dbItem.Id;
-                else
-                {
-                    profileItem = new ProfileItem
-                    {
-                        Id = dbItem.Id,
-                        Slot = clientItemDefinition.Slot
-                    };
-
-                    clientPcProfile.Items.Add(clientItemDefinition.Slot, profileItem);
-                }
-            }
-
-            Player.Profiles.Add(clientPcProfile);
-
-            if (!Player.ProfileTypes.Any(x => x.Type == profileData.Type))
-            {
-                Player.ProfileTypes.Add(new ProfileTypeEntry
-                {
-                    Type = profileData.Type,
-                    ProfileId = profileData.Id
-                });
-            }
+            ProfileHelper.AddClientProfile(Player, ProfileHelper.CreateClientProfile(profileData, dbProfile, _resourceManager));
         }
 
         if (Player.Profiles.Count == 0)

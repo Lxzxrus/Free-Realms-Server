@@ -96,7 +96,33 @@ public static class RewardHelper
             return false;
         }
 
-        var clientItem = player.Items.SingleOrDefault(item => item.Definition == itemDefinitionId && item.Tint == tint);
+        var clientItem = SendItem(player, dbItem, itemDefinition);
+
+        var packet = CreateRewardBundlePacket(player, sourceGuid, iconId: itemDefinition.Icon.Id,
+            nameId: itemDefinition.NameId, descriptionId: itemDefinition.DescriptionId);
+
+        packet.RewardBundle.Entries.Add(new RewardBundleEntryItem
+        {
+            IconId = itemDefinition.Icon.Id,
+            NameId = itemDefinition.NameId,
+            DefinitionId = clientItem.Definition,
+            Tint = clientItem.Tint,
+            Quantity = quantity,
+            ItemGuid = clientItem.Id
+        });
+
+        player.SendTunneled(packet);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Mirrors a saved item row into the player's bags and tells the client: a row the player doesn't have yet is
+    /// added, one they have gets its new count.
+    /// </summary>
+    public static ClientItem SendItem(Player player, DbItem dbItem, ClientItemDefinition itemDefinition)
+    {
+        var clientItem = player.Items.SingleOrDefault(item => item.Id == dbItem.Id);
 
         if (clientItem is null)
         {
@@ -126,22 +152,7 @@ public static class RewardHelper
             });
         }
 
-        var packet = CreateRewardBundlePacket(player, sourceGuid, iconId: itemDefinition.Icon.Id,
-            nameId: itemDefinition.NameId, descriptionId: itemDefinition.DescriptionId);
-
-        packet.RewardBundle.Entries.Add(new RewardBundleEntryItem
-        {
-            IconId = itemDefinition.Icon.Id,
-            NameId = itemDefinition.NameId,
-            DefinitionId = clientItem.Definition,
-            Tint = clientItem.Tint,
-            Quantity = quantity,
-            ItemGuid = clientItem.Id
-        });
-
-        player.SendTunneled(packet);
-
-        return true;
+        return clientItem;
     }
 
     public static bool TryGrantCurrency(DatabaseContext dbContext, ILogger logger, Player player, CurrencyType currencyType,

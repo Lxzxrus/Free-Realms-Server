@@ -63,6 +63,7 @@ public sealed class StaffChatCommandTests
     [DataRow("script")]
     [DataRow("exp")]
     [DataRow("reward")]
+    [DataRow("job")]
     public void StaffCommands_RefusePlayers(string keyWord)
     {
         var command = Command(keyWord);
@@ -71,10 +72,13 @@ public sealed class StaffChatCommandTests
         Assert.IsFalse(ChatCommandManager.CanUse(ChatCommandRole.Player, command));
     }
 
+    /// <summary><c>!job</c> uses <c>!mod</c>'s check: mods and admins, never players.</summary>
     [TestMethod]
-    public void Mod_IsForModsAndAdmins()
+    [DataRow("mod")]
+    [DataRow("job")]
+    public void ModCommands_AreForModsAndAdmins(string keyWord)
     {
-        var command = Command("mod");
+        var command = Command(keyWord);
 
         Assert.IsFalse(ChatCommandManager.CanUse(ChatCommandRole.Player, command));
         Assert.IsTrue(ChatCommandManager.CanUse(ChatCommandRole.Mod, command));

@@ -14,6 +14,7 @@ using Sanctuary.Core.Extensions;
 using Sanctuary.Database;
 using Sanctuary.Game;
 using Sanctuary.Game.Housing;
+using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Trading;
 using Sanctuary.Gateway;
@@ -123,6 +124,7 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<IInteractionManager, InteractionManager>();
     serviceCollection.AddSingleton<IChatCommandManager, ChatCommandManager>();
     serviceCollection.AddSingleton<IQuestManager, QuestManager>();
+    serviceCollection.AddSingleton<IJobManager, JobManager>();
     serviceCollection.AddSingleton<IHouseManager, HouseManager>();
     serviceCollection.AddSingleton<HousingCreativeCatalog>();
     serviceCollection.AddSingleton<TradeOptions>();

@@ -14,6 +14,7 @@ using Sanctuary.Database.Entities;
 using Sanctuary.Game;
 using Sanctuary.Game.Collections;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources;
 using Sanctuary.Game.Resources.Definitions;
@@ -31,6 +32,7 @@ public static class CommandPacketInteractRequestHandler
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
     private static IResourceManager _resourceManager = null!;
     private static IQuestManager _questManager = null!;
+    private static IJobManager _jobManager = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -39,6 +41,7 @@ public static class CommandPacketInteractRequestHandler
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
         _questManager = serviceProvider.GetRequiredService<IQuestManager>();
+        _jobManager = serviceProvider.GetRequiredService<IJobManager>();
     }
 
     public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
@@ -58,7 +61,7 @@ public static class CommandPacketInteractRequestHandler
             return HandleCollectionNode(connection, collectionNode);
 
 
-        if (entity is Npc npc && _questManager.IsQuestNpc(npc.Guid))
+        if (entity is Npc npc && (_questManager.IsQuestNpc(npc.Guid) || JobTrainers.IsTrainer(npc.Guid)))
         {
             // The same reach as picking from an npc's menu (CommandPacketInteractionSelectHandler).
             if (!Positions.IsWithinRange(connection.Player.Position, npc.Position, npc.InteractRange))
@@ -66,7 +69,23 @@ public static class CommandPacketInteractRequestHandler
 
             connection.Player.LastInteractNpcGuid = npc.Guid;
             connection.Player.LastInteractAt = DateTime.UtcNow;
-            _questManager.OnNpcInteract(connection.Player, npc);
+
+            var trainerOptions = _jobManager.GetTrainerOptions(connection.Player, npc);
+
+            if (trainerOptions.Count == 0)
+            {
+                if (_questManager.IsQuestNpc(npc.Guid))
+                    _questManager.OnNpcInteract(connection.Player, npc);
+                else
+                    entity.OnInteract(connection.Player);
+
+                return true;
+            }
+
+            // Taking a job is always picked from the menu, never done by the click alone.
+            var options = _questManager.GetInteractionOptions(connection.Player, npc);
+            options.AddRange(trainerOptions);
+            connection.Player.SendInteractionMenu(npc, options);
             return true;
         }
 
