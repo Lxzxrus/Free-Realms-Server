@@ -642,3 +642,59 @@ edit `docs/status.md`.
 - **Deliverable:** one PR with tests for the catch rules and the packet round-trips, its docs kept under
   `docs/research/fishing/`, and in-game checks for Nate: reach Sacred Grove Shallows from the points-of-interest
   list, cast, reel, catch, relog and find the fish kept.
+
+## Second sprint (tasks 34 and 35, started 2026-10-15)
+
+Two local sessions while Ariel playtests, plus Claude's own session on Mining. **Each session works in its own new
+worktree** on the branch it was assigned, never in another session's folder. The areas don't overlap: jobs and
+NPCs (34), housing ownership (35), minigames (Claude). If you need a migration, add it last, as one commit, after
+fetching `main`. Don't edit `docs/status.md`.
+
+## 34. `job-trainers`: how a player gets a new job *(Opus)*
+
+- **Why:** a character starts with Adventurer, and nothing in game gives another job. Fishing needs the Fisherman
+  job and a rod; Mining needs the Miner job. On 2026-10-15 Nate and Ariel got the Fisherman job only by a hand-written
+  database insert. Every job-gated feature is closed to players until this exists.
+- **Research first, then write it down** (`docs/research/jobs.md`): how the live game handed out jobs. Leads:
+  - `docs/research/quests-scout.md`: the Brawler questline's "Restless Rumors gives a job shard and switches job",
+    the Hero's Journal job tutorials, and the 17 per-job quest categories;
+  - the client's own text (`tools/client-strings/strings.py`) for trainer, tryout and "new job" strings;
+  - the client's packet names for adding a profile while playing (opcode tables under `src/Sanctuary.Packet`, and
+    the decompiled UI Lua if Nate has it locally; never commit client files or extracted text dumps);
+  - the Allakhazam and Fandom wikis for where each job's trainer stood.
+- **Task:**
+  1. A server path that grants a job to a character while they play: the `Profiles` row at level 1
+     (`ProfileHelper.StartingLevel`), its starter kit (`ProfileHelper.GrantDefaultItems`, which respects gender),
+     saved first, then the client told so the job appears without a relog. Reuse what character creation and
+     `UnlockAllProfiles` already do rather than copying them.
+  2. How players reach it, following what the research finds: a trainer NPC per job (an interaction or a short
+     quest), or the item the live game used. Start with Fisherman and Miner, then any other job whose trainer and
+     text are clear. Use NPCs that `FabledRealms.lua` spawns; say which are guesses.
+  3. A staff-only `!job grant <profileId> [player]` chat command (same check as `!mod`) for testing and support.
+  4. Lures: the fishing lures are sold nowhere (`docs/research/fishing/README.md`). If the research shows where
+     they were sold, add them to that vendor; otherwise say so in the PR.
+- **Out of scope:** job XP balance, members-only rules (everyone is a member), and the Mining game itself.
+- **Deliverable:** one PR with tests (granting is saved and idempotent; a second grant changes nothing; starter kit
+  by gender; the command is staff-only), `docs/research/jobs.md`, and in-game checks for Nate and Ariel: get the
+  Fisherman job from its trainer on a fresh character, see it in the jobs window without relogging, switch to it,
+  wear the starter kit, relog and keep it.
+
+## 35. `shared-plots`: every character on an account uses its houses *(Opus)*
+
+- **Read first:** `docs/design/evergrove-housing.md`, sections 2 and 8. Task 32 made the ranked slot per account but
+  left houses owned per character, and named this as its own task.
+- **Why:** plots are an account's in the design. Today a player's second character can't enter or build in the
+  houses their first character bought, and can't manage the account's ranked plot.
+- **Task:** let every character on the owning account enter, build in, publish, lock and manage the account's
+  houses, as their owner would. Task 32 measured it as about 15 files: the owner checks in `HousingZoneRuntime`,
+  `HousingFixtureLedger` and `HouseAccess`, the zone instance key, and the client's edit permissions. Keep
+  per-character records (who placed what) where they matter for history, and keep voting rules as task 32 built them
+  (an account still never votes on its own plot, from any character). Existing houses must keep working with no
+  data loss; if ownership moves to the account, migrate it.
+- **Security:** a character must never gain owner rights over another account's house. Test that across accounts,
+  and that friends' and visitors' rights don't change.
+- **Out of scope:** phase 4 of the competition (results, prizes, Hall of Fame) and Station Cash.
+- **Deliverable:** one PR with tests (second character enters and edits; another account can't; voting unchanged;
+  the migration keeps every existing house), the design doc's section 8 updated, and in-game checks for Nate and
+  Ariel: buy a house on one character, log in as a second character on the same account, enter it from My Houses,
+  place and remove an item, publish and lock it, and check a friend's visit still works.
