@@ -66228,6 +66228,71 @@
     "TintGroupId": 3
   },
   {
+    "Comment": "16oz Steak (fishing lure)",
+    "Id": 68152,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Flyfisher 3000 (fishing lure)",
+    "Id": 68153,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "French Fry (fishing lure)",
+    "Id": 68154,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Frostflies (fishing lure)",
+    "Id": 68155,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Mega Slider (fishing lure)",
+    "Id": 68156,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Nightcrawlers (fishing lure)",
+    "Id": 68157,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Perch Pinpointer (fishing lure)",
+    "Id": 68158,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Shiny Crankbait (fishing lure)",
+    "Id": 68159,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Skipper Seeker (fishing lure)",
+    "Id": 68160,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Sleek Clicker (fishing lure)",
+    "Id": 68161,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Thorn Jig (fishing lure)",
+    "Id": 68162,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Tiny Rib (fishing lure)",
+    "Id": 68163,
+    "CategoryId": 3
+  },
+  {
+    "Comment": "Treasure Magnet (fishing lure)",
+    "Id": 68164,
+    "CategoryId": 3
+  },
+  {
     "Id": 68428,
     "CategoryId": 105,
     "TintGroupId": 1
