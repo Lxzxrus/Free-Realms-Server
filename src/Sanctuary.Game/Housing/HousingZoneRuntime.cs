@@ -119,8 +119,7 @@ public sealed class HousingZoneRuntime : IDisposable
             if (house is null)
                 return;
 
-            var ownerGuid = GuidHelper.GetPlayerGuid(house.CharacterId);
-            var ownerName = ResolveOwnerName(house);
+            var (ownerGuid, ownerName) = ShownOwner(house, player);
             var instanceInfo = BuildInstanceInfo(dbContext, house, player);
 
             player.SendTunneled(new HousingPacketInstanceList
@@ -245,10 +244,10 @@ public sealed class HousingZoneRuntime : IDisposable
             if (house is null)
                 return;
 
-            var ownerGuid = GuidHelper.GetPlayerGuid(house.CharacterId);
+            var (ownerGuid, ownerName) = ShownOwner(house, player);
             player.SendTunneled(new HousingPacketInstanceData
             {
-                InstanceData = BuildInstanceData(house, ownerGuid, ResolveOwnerName(house))
+                InstanceData = BuildInstanceData(house, ownerGuid, ownerName)
             });
             SendFixtureItemList(player, house);
             SendPersistedFixtureAssets(player, house);
@@ -269,9 +268,9 @@ public sealed class HousingZoneRuntime : IDisposable
 
             using var dbContext = _dbContextFactory.CreateDbContext();
 
-            // Only the owner may change the house. Anyone else gets the real state back,
+            // Only the owner's account may change the house. Anyone else gets the real state back,
             // so a checkbox they flipped in their panel flips back.
-            if (!IsOwner(player) || _zone.OwnerId is not ulong ownerId)
+            if (!IsOwner(player))
             {
                 var unchangedHouse = LoadHouse(dbContext);
                 if (unchangedHouse is not null)
@@ -280,7 +279,7 @@ public sealed class HousingZoneRuntime : IDisposable
                 return null;
             }
 
-            var value = HouseSettings.Toggle(dbContext, _zone.HouseId, ownerId, setting);
+            var value = HouseSettings.Toggle(dbContext, _zone.HouseId, GuidHelper.GetPlayerId(player.Guid), setting);
             if (value is null)
                 return null;
 
@@ -566,11 +565,7 @@ public sealed class HousingZoneRuntime : IDisposable
             }
 
             using var dbContext = _dbContextFactory.CreateDbContext();
-            var characterId = GuidHelper.GetPlayerId(player.Guid);
-            var fixture = dbContext.HouseFixtures.FirstOrDefault(candidate =>
-                candidate.Id == fixtureId &&
-                candidate.HouseId == _zone.HouseId &&
-                candidate.House.CharacterId == characterId);
+            var fixture = FindOwnedFixture(dbContext, player, fixtureId);
 
             if (fixture is null)
                 return;
@@ -670,9 +665,8 @@ public sealed class HousingZoneRuntime : IDisposable
                 return;
             }
 
-            var house = dbContext.Houses.FirstOrDefault(candidate =>
-                candidate.Id == _zone.HouseId &&
-                candidate.CharacterId == characterId);
+            var house = HouseOwnership.OwnedByAccountOf(dbContext, characterId)
+                .FirstOrDefault(candidate => candidate.Id == _zone.HouseId);
             if (house is null)
                 return;
 
@@ -725,10 +719,8 @@ public sealed class HousingZoneRuntime : IDisposable
                 return;
 
             using var dbContext = _dbContextFactory.CreateDbContext();
-            var characterId = GuidHelper.GetPlayerId(player.Guid);
-            var house = dbContext.Houses.FirstOrDefault(candidate =>
-                candidate.Id == _zone.HouseId &&
-                candidate.CharacterId == characterId);
+            var house = HouseOwnership.OwnedByAccountOf(dbContext, GuidHelper.GetPlayerId(player.Guid))
+                .FirstOrDefault(candidate => candidate.Id == _zone.HouseId);
             if (house is null)
                 return;
 
@@ -988,12 +980,14 @@ public sealed class HousingZoneRuntime : IDisposable
             HousePlots.FindUserId(dbContext, viewerId) is ulong viewerUserId &&
             viewerUserId != house.Character.UserId;
 
+        var (ownerGuid, ownerName) = ShownOwner(house, viewer);
+
         return new PlayerHousingInstanceInfo
         {
-            OwnerGuid = GuidHelper.GetPlayerGuid(house.CharacterId),
+            OwnerGuid = ownerGuid,
             InstanceGuid = GuidHelper.GetHouseGuid(house.Id),
             NameId = _zone.HousingDefinition.NameId,
-            OwnerName = ResolveOwnerName(house),
+            OwnerName = ownerName,
             HouseName = string.IsNullOrWhiteSpace(house.Name)
                 ? _zone.HousingDefinition.DisplayName
                 : house.Name,
@@ -1212,11 +1206,7 @@ public sealed class HousingZoneRuntime : IDisposable
             return;
 
         using var dbContext = _dbContextFactory.CreateDbContext();
-        var characterId = GuidHelper.GetPlayerId(player.Guid);
-        var fixture = dbContext.HouseFixtures.FirstOrDefault(candidate =>
-            candidate.Id == fixtureId &&
-            candidate.HouseId == _zone.HouseId &&
-            candidate.House.CharacterId == characterId);
+        var fixture = FindOwnedFixture(dbContext, player, fixtureId);
 
         if (fixture is null)
             return;
@@ -1839,9 +1829,29 @@ public sealed class HousingZoneRuntime : IDisposable
             _editors.Contains(player.Guid);
     }
 
-    private bool IsOwner(Player player)
+    private bool IsOwner(Player player) => _zone.IsOwner(player);
+
+    /// <summary>
+    /// Who the house is shown to <paramref name="viewer"/> as belonging to. A character on the owning account sees it as
+    /// their own, as the client expects of a house it lets them edit (the owner's guid is also the one edit permission
+    /// in <see cref="PlayerHousingInstanceData.Permissions"/>). Everyone else sees the character who bought it.
+    /// </summary>
+    private (ulong Guid, string Name) ShownOwner(DbHouse house, Player viewer)
     {
-        return _zone.OwnerId == GuidHelper.GetPlayerId(player.Guid);
+        return IsOwner(viewer)
+            ? (viewer.Guid, viewer.Name.FullName)
+            : (GuidHelper.GetPlayerGuid(house.CharacterId), ResolveOwnerName(house));
+    }
+
+    /// <summary>A placed fixture in this house, if the player's account owns the house.</summary>
+    private DbHouseFixture? FindOwnedFixture(DatabaseContext dbContext, Player player, int fixtureId)
+    {
+        var ownedHouses = HouseOwnership.OwnedByAccountOf(dbContext, GuidHelper.GetPlayerId(player.Guid));
+
+        return dbContext.HouseFixtures.FirstOrDefault(candidate =>
+            candidate.Id == fixtureId &&
+            candidate.HouseId == _zone.HouseId &&
+            ownedHouses.Any(house => house.Id == candidate.HouseId));
     }
 
     private bool IsFixtureInventoryItem(int itemDefinitionId)

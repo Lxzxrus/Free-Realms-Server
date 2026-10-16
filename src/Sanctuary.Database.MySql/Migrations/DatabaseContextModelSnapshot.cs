@@ -452,6 +452,9 @@ namespace Sanctuary.Database.MySql.Migrations
                     b.Property<int>("ItemDefinitionId")
                         .HasColumnType("int");
 
+                    b.Property<ulong>("PlacedByCharacterId")
+                        .HasColumnType("bigint unsigned");
+
                     b.Property<Guid>("PlacementToken")
                         .HasColumnType("char(36)");
 

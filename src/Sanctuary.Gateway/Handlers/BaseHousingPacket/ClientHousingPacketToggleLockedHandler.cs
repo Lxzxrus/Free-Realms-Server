@@ -43,9 +43,10 @@ public static class ClientHousingPacketToggleLockedHandler
             var sentOut = _houseManager.SendOutLockedOutVisitors(zone);
             if (sentOut > 0)
             {
+                // Friends of the character who bought the house may stay, whichever character on its account locked it.
                 ChatHelper.SendSystemMessage(connection.Player, sentOut == 1
-                    ? "House locked. 1 visitor who isn't on your friend list was sent outside."
-                    : $"House locked. {sentOut} visitors who aren't on your friend list were sent outside.");
+                    ? "House locked. 1 visitor who isn't on the owner's friend list was sent outside."
+                    : $"House locked. {sentOut} visitors who aren't on the owner's friend list were sent outside.");
             }
         }
 

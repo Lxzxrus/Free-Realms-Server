@@ -198,8 +198,8 @@ public class ZoneManager : IZoneManager
             OwnerId = ownerId // Note: should always be 'null'.
         },
         HousingZoneDefinition housingZoneDefinition when ownerId is not null
-            && TryGetHouseId(ownerId.Value, housingZoneDefinition.Id, out var houseId) =>
-            new HousingZone(housingZoneDefinition, houseId, _serviceProvider)
+            && TryGetHouse(ownerId.Value, housingZoneDefinition.Id, out var houseId, out var ownerUserId) =>
+            new HousingZone(housingZoneDefinition, houseId, ownerUserId, _serviceProvider)
         {
             Id = NextID(),
             OwnerId = ownerId
@@ -284,22 +284,25 @@ public class ZoneManager : IZoneManager
         // This is why we don't pass a player instance here directly.
         WorldZoneDefinition => true,
         CombatZoneDefinition => ownerId is not null,
-        HousingZoneDefinition housing => ownerId is not null && TryGetHouseId(ownerId.Value, housing.Id, out _),
+        HousingZoneDefinition housing => ownerId is not null && TryGetHouse(ownerId.Value, housing.Id, out _, out _),
         FishingZoneDefinition => ownerId is null,
         _ => false
     };
 
-    private bool TryGetHouseId(ulong ownerId, int zoneDefinitionId, out ulong houseId)
+    /// <param name="ownerId">The character who bought the house.</param>
+    /// <param name="ownerUserId">The account that owns it.</param>
+    private bool TryGetHouse(ulong ownerId, int zoneDefinitionId, out ulong houseId, out ulong ownerUserId)
     {
         using var dbContext = _dbContextFactory.CreateDbContext();
 
-        var dbHouseId = dbContext.Houses
+        var house = dbContext.Houses
             .Where(house => house.CharacterId == ownerId && house.ZoneDefinitionId == zoneDefinitionId)
-            .Select(house => (ulong?)house.Id)
+            .Select(house => new { house.Id, house.Character.UserId })
             .SingleOrDefault();
 
-        houseId = dbHouseId ?? 0;
+        houseId = house?.Id ?? 0;
+        ownerUserId = house?.UserId ?? 0;
 
-        return dbHouseId is not null;
+        return house is not null;
     }
 }

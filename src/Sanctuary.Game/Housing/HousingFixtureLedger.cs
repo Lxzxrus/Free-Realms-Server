@@ -23,10 +23,12 @@ public static class HousingFixtureLedger
     public readonly record struct Source(int ItemDefinitionId, int TintId, int ItemRecordId, bool IsCreative);
 
     /// <summary>
-    /// Adds a fixture to the house. An inventory source uses up one item from its stack; a creative source touches no
-    /// inventory. Saves the changes.
+    /// Adds a fixture to the house, recording the character that placed it. An inventory source uses up one item from
+    /// that character's stack; a creative source touches no inventory. Saves the changes.
     /// </summary>
-    /// <returns>The new fixture, or <c>null</c> if the house isn't the character's, is full, or the stack is gone.</returns>
+    /// <returns>
+    /// The new fixture, or <c>null</c> if the house isn't the character's account's, is full, or the stack is gone.
+    /// </returns>
     public static DbHouseFixture? Place(
         DatabaseContext dbContext,
         ulong houseId,
@@ -37,11 +39,9 @@ public static class HousingFixtureLedger
         Quaternion rotation,
         float scale)
     {
-        var house = dbContext.Houses
+        var house = HouseOwnership.OwnedByAccountOf(dbContext, characterId)
             .Include(candidate => candidate.Fixtures)
-            .FirstOrDefault(candidate =>
-                candidate.Id == houseId &&
-                candidate.CharacterId == characterId);
+            .FirstOrDefault(candidate => candidate.Id == houseId);
 
         if (house is null || house.Fixtures.Count >= house.MaxFixtureCount)
             return null;
@@ -70,6 +70,7 @@ public static class HousingFixtureLedger
             ItemDefinitionId = source.ItemDefinitionId,
             TintId = source.TintId,
             IsCreative = source.IsCreative,
+            PlacedByCharacterId = characterId,
             PositionX = position.X,
             PositionY = position.Y,
             PositionZ = position.Z,
@@ -90,11 +91,15 @@ public static class HousingFixtureLedger
     }
 
     /// <summary>
-    /// Removes one fixture from the house. A fixture placed from inventory goes back to it; a creative fixture just
-    /// goes. Saves the changes.
+    /// Removes one fixture from the house. A fixture placed from inventory goes back to the inventory of the character
+    /// picking it up, which may not be the one that placed it: a character elsewhere on the account may be online, and
+    /// changing its inventory behind its back would leave its client and the database disagreeing. A creative fixture
+    /// just goes. Saves the changes.
     /// </summary>
     /// <param name="returnedItem">The stack the fixture went back to, or <c>null</c> for a creative fixture.</param>
-    /// <returns><c>false</c>, changing nothing, if the fixture isn't in the character's house or can't be returned.</returns>
+    /// <returns>
+    /// <c>false</c>, changing nothing, if the fixture isn't in the character's account's house or can't be returned.
+    /// </returns>
     public static bool TryPickup(
         DatabaseContext dbContext,
         ulong houseId,
@@ -104,10 +109,11 @@ public static class HousingFixtureLedger
     {
         returnedItem = null;
 
+        var ownedHouses = HouseOwnership.OwnedByAccountOf(dbContext, characterId);
         var fixture = dbContext.HouseFixtures.FirstOrDefault(candidate =>
             candidate.Id == fixtureId &&
             candidate.HouseId == houseId &&
-            candidate.House.CharacterId == characterId);
+            ownedHouses.Any(house => house.Id == candidate.HouseId));
 
         if (fixture is null)
             return false;
@@ -129,9 +135,12 @@ public static class HousingFixtureLedger
     }
 
     /// <summary>
-    /// Removes every fixture from the house, returning those placed from inventory. Saves the changes.
+    /// Removes every fixture from the house, returning those placed from inventory to the character picking them up
+    /// (see <see cref="TryPickup"/>). Saves the changes.
     /// </summary>
-    /// <returns><c>false</c>, changing nothing, if the house isn't the character's or a stack can't be returned.</returns>
+    /// <returns>
+    /// <c>false</c>, changing nothing, if the house isn't the character's account's or a stack can't be returned.
+    /// </returns>
     public static bool TryPickupAll(
         DatabaseContext dbContext,
         ulong houseId,
@@ -142,11 +151,9 @@ public static class HousingFixtureLedger
         removedFixtureIds = [];
         returnedItems = [];
 
-        var house = dbContext.Houses
+        var house = HouseOwnership.OwnedByAccountOf(dbContext, characterId)
             .Include(candidate => candidate.Fixtures)
-            .FirstOrDefault(candidate =>
-                candidate.Id == houseId &&
-                candidate.CharacterId == characterId);
+            .FirstOrDefault(candidate => candidate.Id == houseId);
 
         if (house is null)
             return false;

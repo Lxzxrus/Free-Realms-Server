@@ -22,6 +22,10 @@ public sealed class HousingRequestsTests
     private const ulong OwnerId = 7;
     private const ulong VisitorId = 8;
 
+    // The accounts the owner and the visitor play on.
+    private const ulong OwnersAccount = 1;
+    private const ulong VisitorsAccount = 2;
+
     private static byte[] Wire(Action<PacketWriter> write)
     {
         using var writer = new PacketWriter();
@@ -114,10 +118,10 @@ public sealed class HousingRequestsTests
         House(4, membersOnly: true)
     ];
 
-    private static ulong[] Listed(ulong playerId, FriendData[] friends, bool isMember)
+    private static ulong[] Listed(ulong playerUserId, FriendData[] friends, bool isMember)
     {
         return OwnersHouses
-            .Where(house => HouseAccess.MayEnter(GuidHelper.GetPlayerGuid(playerId), friends, isMember, house))
+            .Where(house => HouseAccess.MayEnter(playerUserId, friends, isMember, house, OwnersAccount))
             .Select(house => house.Id)
             .ToArray();
     }
@@ -127,21 +131,21 @@ public sealed class HousingRequestsTests
     [TestMethod]
     public void TargetList_NonFriendSeesOnlyPublishedUnlockedHouses()
     {
-        CollectionAssert.AreEqual(new ulong[] { 1 }, Listed(VisitorId, [], isMember: false));
-        CollectionAssert.AreEqual(new ulong[] { 1, 4 }, Listed(VisitorId, [], isMember: true));
+        CollectionAssert.AreEqual(new ulong[] { 1 }, Listed(VisitorsAccount, [], isMember: false));
+        CollectionAssert.AreEqual(new ulong[] { 1, 4 }, Listed(VisitorsAccount, [], isMember: true));
     }
 
     [TestMethod]
     public void TargetList_FriendAlsoSeesLockedAndUnpublishedHouses()
     {
-        CollectionAssert.AreEqual(new ulong[] { 1, 2, 3 }, Listed(VisitorId, OwnerAsFriend, isMember: false));
-        CollectionAssert.AreEqual(new ulong[] { 1, 2, 3, 4 }, Listed(VisitorId, OwnerAsFriend, isMember: true));
+        CollectionAssert.AreEqual(new ulong[] { 1, 2, 3 }, Listed(VisitorsAccount, OwnerAsFriend, isMember: false));
+        CollectionAssert.AreEqual(new ulong[] { 1, 2, 3, 4 }, Listed(VisitorsAccount, OwnerAsFriend, isMember: true));
     }
 
     [TestMethod]
     public void TargetList_OwnerSeesEveryHouse()
     {
-        CollectionAssert.AreEqual(new ulong[] { 1, 2, 3, 4 }, Listed(OwnerId, [], isMember: false));
+        CollectionAssert.AreEqual(new ulong[] { 1, 2, 3, 4 }, Listed(OwnersAccount, [], isMember: false));
     }
 
     /// <summary>

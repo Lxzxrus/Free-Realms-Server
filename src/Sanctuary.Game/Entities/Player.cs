@@ -63,6 +63,9 @@ public sealed class Player : ClientPcData, IEntity
 
     public ulong CharacterId { get; set; }
 
+    /// <summary>The account the character belongs to. Every character on it shares its houses.</summary>
+    public ulong UserId { get; set; }
+
     public ulong LastInteractNpcGuid { get; set; }
     public DateTime LastInteractAt { get; set; }
 

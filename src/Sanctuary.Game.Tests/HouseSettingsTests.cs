@@ -18,6 +18,7 @@ public sealed class HouseSettingsTests
     private const ulong HouseId = 1;
     private const ulong OwnerId = 7;
     private const ulong VisitorId = 8;
+    private const ulong AltId = 9;
 
     private SqliteConnection _connection = null!;
 
@@ -30,28 +31,24 @@ public sealed class HouseSettingsTests
         using var dbContext = CreateDbContext();
         dbContext.Database.Migrate();
 
+        // The owner and the alt share an account; the visitor plays on another.
         var user = new DbUser
         {
             Username = "owner",
             Password = string.Empty
         };
-
-        foreach (var characterId in new[] { OwnerId, VisitorId })
+        var visitor = new DbUser
         {
-            user.Characters.Add(new DbCharacter
-            {
-                Id = characterId,
-                FirstName = $"Character{characterId}",
-                Head = string.Empty,
-                HeadId = 0,
-                Hair = string.Empty,
-                HairId = 0,
-                SkinTone = string.Empty,
-                SkinToneId = 0
-            });
-        }
+            Username = "visitor",
+            Password = string.Empty
+        };
 
-        dbContext.Users.Add(user);
+        foreach (var characterId in new[] { OwnerId, AltId })
+            user.Characters.Add(NewCharacter(characterId));
+
+        visitor.Characters.Add(NewCharacter(VisitorId));
+
+        dbContext.Users.AddRange(user, visitor);
         dbContext.Houses.Add(new DbHouse
         {
             Id = HouseId,
@@ -60,6 +57,18 @@ public sealed class HouseSettingsTests
         });
         dbContext.SaveChanges();
     }
+
+    private static DbCharacter NewCharacter(ulong characterId) => new()
+    {
+        Id = characterId,
+        FirstName = $"Character{characterId}",
+        Head = string.Empty,
+        HeadId = 0,
+        Hair = string.Empty,
+        HairId = 0,
+        SkinTone = string.Empty,
+        SkinToneId = 0
+    };
 
     [TestCleanup]
     public void Cleanup()
@@ -134,6 +143,15 @@ public sealed class HouseSettingsTests
             Assert.IsNull(HouseSettings.Toggle(dbContext, HouseId, VisitorId, HouseSetting.Locked));
 
         Assert.IsFalse(ReadHouse().IsLocked);
+    }
+
+    [TestMethod]
+    public void Toggle_BySecondCharacterOnTheAccount_ChangesTheHouse()
+    {
+        using (var dbContext = CreateDbContext())
+            Assert.AreEqual(true, HouseSettings.Toggle(dbContext, HouseId, AltId, HouseSetting.Locked));
+
+        Assert.IsTrue(ReadHouse().IsLocked);
     }
 
     [TestMethod]

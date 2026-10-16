@@ -16,7 +16,7 @@ public enum PlotChangeResult
     /// <summary>The house already was that kind of plot.</summary>
     Unchanged,
 
-    /// <summary>The character doesn't own the house.</summary>
+    /// <summary>The character's account doesn't own the house.</summary>
     NotOwner
 }
 
@@ -27,9 +27,10 @@ public enum PlotChangeResult
 public readonly record struct PlotChange(PlotChangeResult Result, DbHouse? Replaced = null);
 
 /// <summary>
-/// An account's two plots (<c>docs/design/evergrove-housing.md</c>, section 2). A house belongs to the character that
-/// bought it, but the ranked plot is per account: one house across all the account's characters is
-/// <see cref="HousePlot.Ranked"/>, and every other house is personal. Existing houses are personal.
+/// An account's two plots (<c>docs/design/evergrove-housing.md</c>, section 2). A house belongs to its account (see
+/// <see cref="HouseOwnership"/>), and so does the ranked plot: one house across all the account's characters is
+/// <see cref="HousePlot.Ranked"/>, and every other house is personal. Any character on the account may change which.
+/// Existing houses are personal.
 /// </summary>
 public static class HousePlots
 {
@@ -62,11 +63,12 @@ public static class HousePlots
     /// Whichever house was the account's ranked plot before, on any of its characters, becomes personal, and its votes
     /// this week stop counting. Saves the changes.
     /// </summary>
-    public static PlotChange MakeRanked(DatabaseContext dbContext, ulong houseId, ulong ownerCharacterId, DateTimeOffset now)
+    /// <param name="characterId">The character making the change: any character on the house's account.</param>
+    public static PlotChange MakeRanked(DatabaseContext dbContext, ulong houseId, ulong characterId, DateTimeOffset now)
     {
-        var house = dbContext.Houses
+        var house = HouseOwnership.OwnedByAccountOf(dbContext, characterId)
             .Include(candidate => candidate.Character)
-            .FirstOrDefault(candidate => candidate.Id == houseId && candidate.CharacterId == ownerCharacterId);
+            .FirstOrDefault(candidate => candidate.Id == houseId);
 
         if (house is null)
             return new PlotChange(PlotChangeResult.NotOwner);
@@ -104,10 +106,11 @@ public static class HousePlots
     /// Makes a house a personal plot, which takes it out of the competition. Its votes are kept, but if it becomes the
     /// ranked plot again they don't count again. Saves the change.
     /// </summary>
-    public static PlotChange MakePersonal(DatabaseContext dbContext, ulong houseId, ulong ownerCharacterId)
+    /// <param name="characterId">The character making the change: any character on the house's account.</param>
+    public static PlotChange MakePersonal(DatabaseContext dbContext, ulong houseId, ulong characterId)
     {
-        var house = dbContext.Houses
-            .FirstOrDefault(candidate => candidate.Id == houseId && candidate.CharacterId == ownerCharacterId);
+        var house = HouseOwnership.OwnedByAccountOf(dbContext, characterId)
+            .FirstOrDefault(candidate => candidate.Id == houseId);
 
         if (house is null)
             return new PlotChange(PlotChangeResult.NotOwner);

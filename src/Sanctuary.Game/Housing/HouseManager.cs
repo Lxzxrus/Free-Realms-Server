@@ -38,9 +38,9 @@ public sealed class HouseManager : IHouseManager
     {
         using var dbContext = _dbContextFactory.CreateDbContext();
 
-        return dbContext.Houses
+        return HouseOwnership.OwnedByAccountOf(dbContext, characterId)
             .AsNoTracking()
-            .Where(house => house.CharacterId == characterId)
+            .Include(house => house.Character)
             .ToList()
             // SQLite can't sort by ulong in SQL, so sort after loading.
             .OrderBy(house => house.Id)
@@ -54,11 +54,16 @@ public sealed class HouseManager : IHouseManager
 
         using var dbContext = _dbContextFactory.CreateDbContext();
 
-        var house = dbContext.Houses
+        // Before houses were shared, two characters on an account could each buy the same lot. Both are kept, and the
+        // player's own comes first.
+        var house = HouseOwnership.OwnedByAccountOf(dbContext, characterId)
             .AsNoTracking()
-            .SingleOrDefault(entry =>
-                entry.CharacterId == characterId &&
-                entry.ZoneDefinitionId == zoneDefinitionId);
+            .Where(entry => entry.ZoneDefinitionId == zoneDefinitionId)
+            .ToList()
+            // SQLite can't sort by ulong in SQL, so sort after loading.
+            .OrderByDescending(entry => entry.CharacterId == characterId)
+            .ThenBy(entry => entry.Id)
+            .FirstOrDefault();
 
         return EnterHouse(player, house);
     }
@@ -131,7 +136,7 @@ public sealed class HouseManager : IHouseManager
 
         // A snapshot: leaving the house takes each visitor out of the zone's player list.
         var visitors = zone.Players
-            .Where(player => !HouseAccess.MayBeInLockedHouse(player.Guid, player.Friends, ownerId))
+            .Where(player => !HouseAccess.MayBeInLockedHouse(player.UserId, player.Friends, zone.OwnerUserId, ownerId))
             .ToList();
 
         foreach (var visitor in visitors)
@@ -153,7 +158,7 @@ public sealed class HouseManager : IHouseManager
         if (player.Zone is not WorldZone and not HousingZone)
             return EnterHouseResult.UnsupportedSourceZone;
 
-        if (!HouseAccess.MayEnter(player.Guid, player.Friends, player.MembershipStatus != 0, house))
+        if (!HouseAccess.MayEnter(player.UserId, player.Friends, player.MembershipStatus != 0, house, FindOwnerUserId(house)))
             return EnterHouseResult.NotAuthorized;
 
         if (!_resourceManager.Zones.TryGetValue(house.ZoneDefinitionId, out var definition) ||
@@ -174,6 +179,14 @@ public sealed class HouseManager : IHouseManager
 
         UpdateLastVisited(house.Id);
         return EnterHouseResult.Success;
+    }
+
+    /// <summary>The account that owns the house: that of the character who bought it.</summary>
+    private ulong FindOwnerUserId(DbHouse house)
+    {
+        using var dbContext = _dbContextFactory.CreateDbContext();
+
+        return HousePlots.FindUserId(dbContext, house.CharacterId) ?? 0;
     }
 
     private void UpdateLastVisited(ulong houseId)

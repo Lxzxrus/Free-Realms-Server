@@ -18,8 +18,13 @@ public enum EnterHouseResult
 
 public interface IHouseManager
 {
+    /// <summary>
+    /// The houses the character's account owns, whichever of its characters bought them, with their
+    /// <see cref="DbHouse.Character"/>.
+    /// </summary>
     IReadOnlyList<DbHouse> GetOwnedHouses(ulong characterId);
 
+    /// <summary>Enters the player's account's house on that lot, preferring the player's own if there are two.</summary>
     EnterHouseResult EnterOwnedHouse(Player player, int zoneDefinitionId);
     EnterHouseResult EnterHouse(Player player, ulong houseGuid);
     EnterHouseResult VisitHouse(Player player, int zoneDefinitionId, string ownerName);

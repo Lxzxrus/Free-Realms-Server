@@ -218,7 +218,7 @@ public static class BaseRatingPacketHandler
             (HousePlot.Ranked, false) => "Your ranked plot is published: it's in this week's competition, and visitors can vote for it.",
             (HousePlot.Ranked, true) => "Your ranked plot is published, but it's locked, so it isn't in the directory or the competition until you unlock it.",
             (_, false) => "This personal plot is published, so anyone can visit it, but it isn't in the weekly competition. To enter this house instead, say !house ranked here.",
-            (_, true) => "This personal plot is published, but it's locked, so only your friends can visit until you unlock it."
+            (_, true) => $"This personal plot is published, but it's locked, so only {OwnersFriends(connection, house)} can visit until you unlock it."
         };
 
         ChatHelper.SendSystemMessage(connection.Player, message);
@@ -462,10 +462,18 @@ public static class BaseRatingPacketHandler
             : null;
     }
 
+    /// <summary>Whoever may come into the house while it's locked: the friends of the character who bought it.</summary>
+    private static string OwnersFriends(GatewayConnection connection, DbHouse house)
+    {
+        return house.CharacterId == GuidHelper.GetPlayerId(connection.Player.Guid)
+            ? "your friends"
+            : $"{GetCharacterName(house.Character)}'s friends";
+    }
+
+    /// <param name="house">With its <see cref="DbHouse.Character"/>.</param>
     private static bool CanViewCandidate(GatewayConnection connection, DbHouse house)
     {
-        var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
-        if (house.CharacterId == characterId)
+        if (HouseAccess.IsOwner(connection.Player.UserId, house.Character.UserId))
             return true;
 
         if (TryGetActiveHouseKey(
@@ -488,20 +496,17 @@ public static class BaseRatingPacketHandler
         return isFriend || house.IsPublished && !house.IsLocked;
     }
 
+    /// <summary>The house the player is standing in, if their account owns it.</summary>
     private static DbHouse? FindCurrentOwnedHouse(DatabaseContext dbContext, GatewayConnection connection)
     {
         if (!TryGetActiveHouseKey(connection, out var houseId, out var ownerId, out var zoneDefinitionId))
             return null;
 
-        var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
-        if (characterId != ownerId)
-            return null;
-
-        return dbContext.Houses
+        return HouseOwnership.OwnedByAccountOf(dbContext, GuidHelper.GetPlayerId(connection.Player.Guid))
             .Include(house => house.Character)
             .SingleOrDefault(house =>
                 house.Id == houseId &&
-                house.CharacterId == characterId &&
+                house.CharacterId == ownerId &&
                 house.ZoneDefinitionId == zoneDefinitionId);
     }
 

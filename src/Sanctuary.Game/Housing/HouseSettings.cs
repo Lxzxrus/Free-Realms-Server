@@ -19,12 +19,13 @@ public static class HouseSettings
     /// <summary>
     /// Flips <paramref name="setting"/> on the house and saves it.
     /// </summary>
-    /// <returns>The new value, or <c>null</c> if <paramref name="ownerId"/> doesn't own that house.</returns>
-    public static bool? Toggle(DatabaseContext dbContext, ulong houseId, ulong ownerId, HouseSetting setting)
+    /// <returns>
+    /// The new value, or <c>null</c> if the house isn't owned by <paramref name="characterId"/>'s account.
+    /// </returns>
+    public static bool? Toggle(DatabaseContext dbContext, ulong houseId, ulong characterId, HouseSetting setting)
     {
-        var house = dbContext.Houses.FirstOrDefault(candidate =>
-            candidate.Id == houseId &&
-            candidate.CharacterId == ownerId);
+        var house = HouseOwnership.OwnedByAccountOf(dbContext, characterId)
+            .FirstOrDefault(candidate => candidate.Id == houseId);
 
         if (house is null)
             return null;
