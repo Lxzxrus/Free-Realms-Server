@@ -45,6 +45,7 @@ public class ResourceManager : IResourceManager
 
     public static readonly string ClientActivityDefinitionsFile = Path.Combine(BaseDirectory, "ClientActivityDefinitions.json");
     public static readonly string DailyWheelFile = Path.Combine(BaseDirectory, "DailyWheel.json");
+    public static readonly string MatchThreeFile = Path.Combine(BaseDirectory, "MatchThree.json");
 
     public static readonly string ZonesDirectory = Path.Combine(BaseDirectory, "Zones");
     public static readonly string HousesFile = Path.Combine(BaseDirectory, "Houses.json");
@@ -91,6 +92,7 @@ public class ResourceManager : IResourceManager
 
     public ClientActivityDefinitionCollection ClientActivityDefinitions { get; }
     public DailyWheel DailyWheel { get; private set; } = new();
+    public Minigames.MatchThree.MatchThreeDefinitions MatchThree { get; private set; } = new();
 
     public ZoneDefinitionCollection Zones { get; }
     public HouseDefinitionCollection Houses { get; }
@@ -311,6 +313,11 @@ public class ResourceManager : IResourceManager
 
         DailyWheel = dailyWheel;
 
+        if (!Minigames.MatchThree.MatchThreeDefinitions.TryLoad(MatchThreeFile, _logger, out var matchThree))
+            return false;
+
+        MatchThree = matchThree;
+
         if (!Zones.Load(ZonesDirectory))
             return false;
 
@@ -426,6 +433,8 @@ public class ResourceManager : IResourceManager
                 loaded = ClientActivityDefinitions.Load(ClientActivityDefinitionsFile);
             else if (e.FullPath == DailyWheelFile && DailyWheel.TryLoad(DailyWheelFile, _logger, out var dailyWheel))
                 (DailyWheel, loaded) = (dailyWheel, true);
+            else if (e.FullPath == MatchThreeFile && Minigames.MatchThree.MatchThreeDefinitions.TryLoad(MatchThreeFile, _logger, out var matchThree))
+                (MatchThree, loaded) = (matchThree, true);
             else if (e.FullPath == HousesFile)
                 loaded = Houses.Load(HousesFile);
             else if (e.FullPath == MountsFile)

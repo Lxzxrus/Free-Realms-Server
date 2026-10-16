@@ -1,0 +1,51 @@
+// Evergrove's match-three levels (Mining and, later, the other match-three games). SOE's level tables never shipped
+// with the client, so every number here is ours. The fields are explained in
+// src/Sanctuary.Game/Minigames/MatchThree/MatchThreeDefinition.cs and docs/research/mining.md.
+//
+// Mining's pictures: rocks 1 to 5; ore 0-2 iron, 3-5 tin, 6-8 silver, 9-11 gold, 12-14 copper (low, medium, high
+// quality); gems 0 tourmaline, 1 topaz, 2 onyx, 3 moonstone, 4 turquoise, 5 amethyst, 6 garnet, 7 ruby, 8 fire agate,
+// 9 malachite. Power-ups: 0 more time, 1 double score, 2 five times score, 50 dynamite, 51 wild tiles, 52 destruct,
+// 53 shuffle.
+{
+  "Games": [
+    {
+      "Name": "mining",
+      "Levels": [
+        {
+          "Comment": "Mining Practice: chain rocks so copper ore falls out through the bottom; five pieces win.",
+          "DurationSeconds": 60,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "SpawnChances": { "Selectable": 85, "Collectable": 8, "Powerup": 3, "Hazard": 2, "Wildcard": 2 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Type": 1, "Chance": 20 },
+            { "Type": 2, "Chance": 20 },
+            { "Type": 3, "Chance": 20 },
+            { "Type": 4, "Chance": 20 },
+            { "Type": 5, "Chance": 20 }
+          ],
+          "Collectables": [
+            { "Comment": "Copper ore, low quality. Icon 698 is the Copper Ore item's (a guess at what the bin shows).", "Type": 12, "Chance": 1, "Quota": 5, "IconId": 698 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 40, "Duration": 5 },
+            { "Comment": "Double score", "Type": 1, "Chance": 30, "Duration": 10 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 30, "Power": 5 }
+          ]
+        }
+      ]
+    }
+  ]
+}

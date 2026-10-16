@@ -8,7 +8,9 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
+using Sanctuary.Game;
 using Sanctuary.Game.Minigames;
+using Sanctuary.Game.Minigames.MatchThree;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -17,8 +19,8 @@ namespace Sanctuary.Gateway.Handlers;
 
 /// <summary>
 /// Launches the Flash minigames the server knows about, with the client's start screen, and carries their messages.
-/// The game logic itself (the match-three board for Mining) comes later; for now the server answers the Flash's
-/// connection and logs what it sends, so the launch can be checked in game.
+/// A match-three game (Mining) is played by <see cref="MatchThreeGame"/> with the levels in
+/// <c>Resources/MatchThree.json</c>; see docs/research/mining.md.
 /// </summary>
 /// <remarks>
 /// Flow (FreeRealms.exe, docs/research/daily-wheel.md): MiniGameInfo with the start-screen flag on opens a session
@@ -34,17 +36,22 @@ public static class FlashMinigameHandler
     /// <summary>Activity id → game. Mining Practice: activity 1113, MiniGameData row 375, type 8 (match three).</summary>
     public static readonly IReadOnlyDictionary<int, FlashMinigameDefinition> Definitions = new Dictionary<int, FlashMinigameDefinition>
     {
-        [1113] = new(ActivityId: 1113, GameId: 375, Type: 8, Swf: "game_mining.gfx")
+        [1113] = new(ActivityId: 1113, GameId: 375, Type: 8, Swf: "game_mining.gfx", MatchThreeGame: "mining")
     };
 
     private static int _nextStateId = 20_000;
 
     private static ILogger _logger = null!;
+    private static ILogger _gameLogger = null!;
+    private static IResourceManager _resourceManager = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
         _logger = loggerFactory.CreateLogger(nameof(FlashMinigameHandler));
+        _gameLogger = loggerFactory.CreateLogger(nameof(MatchThreeGame));
+
+        _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
     }
 
     /// <summary>Opens the start screen for a known Flash minigame. False if the activity isn't one.</summary>
@@ -131,7 +138,19 @@ public static class FlashMinigameHandler
         if (session is null || session.StateId != stateId)
             return false;
 
+        if (session.Started)
+            return true;
+
         session.Started = true;
+
+        if (session.Definition.MatchThreeGame is { } name)
+        {
+            if (_resourceManager.MatchThree.Find(name) is { } game)
+                session.MatchThree = new MatchThreeGame(game, new Output(connection, session.StateId),
+                    () => Environment.TickCount64, Random.Shared, _gameLogger);
+            else
+                _logger.LogError("Minigame: no match-three game \"{name}\" in MatchThree.json; {swf} will have no board.", name, session.Definition.Swf);
+        }
 
         _logger.LogInformation("Minigame: session {stateId} started; sending {swf}.", stateId, session.Definition.Swf);
 
@@ -156,18 +175,49 @@ public static class FlashMinigameHandler
 
         switch (message[0])
         {
-            case "FRServer_Connect":
-                // The game's own server would load its level data here, then say it's ready.
-                Send(connection, session, "OnServerReadyMsg");
-                break;
-
             case "FRServer_GameClose":
             case "FRServer_GameQuit":
                 Close(connection, session);
-                break;
+                return true;
         }
 
+        if (session.MatchThree is { } game)
+        {
+            game.Handle(message);
+            LogResult(connection, session, game);
+        }
+        else if (message[0] == "FRServer_Connect")
+            Send(connection, session, "OnServerReadyMsg");
+
         return true;
+    }
+
+    /// <summary>The match-three clock, from the Gateway's main loop.</summary>
+    public static void Tick(GatewayConnection connection, FlashMinigameSession session)
+    {
+        if (session.MatchThree is not { } game)
+            return;
+
+        game.Tick();
+        LogResult(connection, session, game);
+    }
+
+    /// <summary>A game that threw: the player's minigame is closed rather than left half-working.</summary>
+    public static void Fail(GatewayConnection connection, FlashMinigameSession session)
+    {
+        session.MatchThree = null;
+        Close(connection, session);
+    }
+
+    private static void LogResult(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game)
+    {
+        if (game.Result == session.LoggedResult)
+            return;
+
+        session.LoggedResult = game.Result;
+
+        _logger.LogInformation("Minigame: {player} {result} {game} on level {level} with {score} points.",
+            connection.Player.Guid, game.Result, game.Name, game.Level?.Number, game.TotalScore);
     }
 
     /// <summary>The client ended the session (the minigame frame's close button).</summary>
@@ -181,15 +231,20 @@ public static class FlashMinigameHandler
         return true;
     }
 
-    private static void Send(GatewayConnection connection, FlashMinigameSession session, string name, params object[] args)
-    {
-        var text = string.Join('\t', [name, .. Array.ConvertAll(args, arg => Convert.ToString(arg, System.Globalization.CultureInfo.InvariantCulture))]);
+    private static void Send(GatewayConnection connection, FlashMinigameSession session, string name, params object[] args) =>
+        new Output(connection, session.StateId).Send(name, args);
 
-        connection.SendTunneled(new MiniGamePayloadPacket
+    /// <summary>Messages to the game's Flash: minigame payloads, tab-separated and NUL-terminated.</summary>
+    private sealed class Output(GatewayConnection connection, int stateId) : IMatchThreeOutput
+    {
+        public void Send(string name, params object[] args)
         {
-            StateId = session.StateId,
-            Payload = Encoding.UTF8.GetBytes(text + "\0")
-        });
+            connection.SendTunneled(new MiniGamePayloadPacket
+            {
+                StateId = stateId,
+                Payload = Encoding.UTF8.GetBytes(MatchThreeGame.Format(name, args) + "\0")
+            });
+        }
     }
 
     private static void Close(GatewayConnection connection, FlashMinigameSession session)

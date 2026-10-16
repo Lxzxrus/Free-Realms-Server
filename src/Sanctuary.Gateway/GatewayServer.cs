@@ -74,6 +74,33 @@ public class GatewayServer : UdpManager<GatewayConnection>
         }
     }
 
+    /// <summary>Runs the clocks of open match-three games (Mining): a level ends when its time is up. Main loop.</summary>
+    public void TickMinigames()
+    {
+        try
+        {
+            foreach (var connection in ConnectionList.ToArray())
+            {
+                if (connection?.Player?.FlashMinigame is not { MatchThree: not null } session)
+                    continue;
+
+                try
+                {
+                    Handlers.FlashMinigameHandler.Tick(connection, session);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Minigame: the game of {player} failed; ending it.", connection.Player.Guid);
+                    Handlers.FlashMinigameHandler.Fail(connection, session);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Minigame: the tick failed.");
+        }
+    }
+
     public void OnStarted()
     {
         _resourceManager.Zones.CollectionChanged += Zones_CollectionChanged;
