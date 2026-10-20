@@ -13,4 +13,10 @@ public sealed class FishingZoneDefinition : BaseZoneDefinition
     /// fish over the wrong water.
     /// </summary>
     public float UnderwaterBedX { get; set; }
+
+    /// <summary>
+    /// Height of the water's surface, where the bobber lands: the Y of the scene's <c>Water</c> areas in its
+    /// <c>Areas.xml</c>. When it's missing the spawn's height is used, which is only right for a spawn at the water's edge.
+    /// </summary>
+    public float? WaterLevel { get; set; }
 }

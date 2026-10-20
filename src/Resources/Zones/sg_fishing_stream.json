@@ -2,13 +2,14 @@
   "$type": "Fishing",
   "Id": 562,
   "Name": "sg_fishing_stream",
-  "Comment": "Rainbow Lake (activity 562). The spawn is a GUESS (upstream PR #31's placeholder): stand by the water in this scene, type !whereami and put the numbers here. Scene is a guess too: upstream PR #31 put Rainbow Lake in bw_fishing_medpond (Darklit Lagoon's scene) and never used sg_fishing_stream, but Rainbow Lake is in Lakeshore, a Sacred Grove hole. UnderwaterBedX is borrowed from sg_fishing_medpond; the real value is the Underwater_Bed X in the client's sg_fishing_streamAreas.xml. To go back to the PR's mapping, set Name to bw_fishing_medpond and UnderwaterBedX to 74.",
+  "Comment": "Rainbow Lake (activity 562). Spawn checked in game by Nate on 2026-10-19: the path by the boardwalk, beside the stream (water level -66). The old placeholder (200, 0, 200) was outside the scene. Scene confirmed in game: Rainbow Lake is sg_fishing_stream (upstream PR #31 had put it in bw_fishing_medpond, Darklit Lagoon's scene). UnderwaterBedX is the Underwater_Bed X in the client's sg_fishing_streamAreas.xml.",
   "TileSize": 64,
   "StartLatitude": -16,
   "StartLongitude": -16,
   "EndLatitude": 16,
   "EndLongitude": 16,
-  "SpawnPosition": [200, 0, 200],
+  "SpawnPosition": [441.42, -60.31, 475.08],
   "SpawnRotation": [0, 0, 0, 1],
-  "UnderwaterBedX": 68
+  "UnderwaterBedX": 58,
+  "WaterLevel": -66
 }

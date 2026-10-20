@@ -333,6 +333,12 @@ hook actor has no visible mesh. It is registered (no `sub_726E30` null-deref cra
 wandering fish and the driven biter use their own model ids and are unaffected; the decoy still
 self-despawns on bite, so this only hides the otherwise-visible pre-bite phase.
 
+**Changed 2026-10-19 (Evergrove playtest):** with the invisible block, players saw no hook at all: the fish swam up
+to empty water and bit nothing. The client's own lure didn't show either. Unknown2 is now **1673**
+(`sg_fishing_lure_bbe.adr`, "in-world fishing lure" in Models.txt, in the official packs), so the object at the hook
+is the lure, and it still goes away when the fish bites. If that ever brings back a frozen fish, the client is
+drawing Unknown2 with another model's skeleton; go back to 69.
+
 ## Bobber / line placement
 
 The bobber comes from SpawnProxiedFishingBobber (sub 8) @ OnRoutePacket case 8 (0xB6D1CA): it sets the
