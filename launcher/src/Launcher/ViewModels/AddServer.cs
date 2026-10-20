@@ -114,7 +114,6 @@ public partial class AddServer : Popup
                 WebApiUrl = serverManifest.WebApiUrl,
                 LoginServer = serverManifest.LoginServer,
                 ClientUrl = serverManifest.ClientUrl,
-                AssetUrl = serverManifest.AssetUrl,
 
                 SavePath = savePath
             };

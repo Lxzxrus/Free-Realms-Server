@@ -173,7 +173,6 @@ public partial class Server : ObservableObject
                 Info.WebApiUrl = serverManifest.WebApiUrl;
                 Info.LoginServer = serverManifest.LoginServer;
                 Info.ClientUrl = serverManifest.ClientUrl;
-                Info.AssetUrl = serverManifest.AssetUrl;
 
                 Settings.Instance.Save();
             }
@@ -527,18 +526,20 @@ public partial class Server : ObservableObject
     /// </summary>
     private async Task PrecacheAsync()
     {
+        var assetUrl = AssetPrecache.AssetUrlFor(Info.Url, Constants.DefaultServerUrl, Constants.DefaultAssetUrl);
+
         try
         {
-            var outcome = await AssetPrecache.EnsureAsync(ClientDirectory, Info.AssetUrl, HttpHelper.PrecacheHttpClient,
+            var outcome = await AssetPrecache.EnsureAsync(ClientDirectory, assetUrl, HttpHelper.PrecacheHttpClient,
                 new Progress<(int Done, int Total)>(p =>
                     StatusMessage = App.GetText("Text.Server.PrecachingGameFiles", p.Done, p.Total)));
 
             if (outcome == PrecacheOutcome.Added)
-                _logger.Info("Pre-cached {Count} file(s) from {Url}.", AssetPrecache.Files.Count, Info.AssetUrl);
+                _logger.Info("Pre-cached the minigame and fishing files from {Url}.", assetUrl);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
         {
-            _logger.Warn(ex, "Pre-caching from {Url} failed.", Info.AssetUrl);
+            _logger.Warn(ex, "Pre-caching from {Url} failed.", assetUrl);
 
             App.AddNotification(App.GetText("Text.Server.PrecacheFailed", ex.Message), false);
         }

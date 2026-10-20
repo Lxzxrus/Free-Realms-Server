@@ -300,6 +300,28 @@ public static class AssetPrecache
         return PrecacheOutcome.Added;
     }
 
+    /// <summary>
+    /// The asset server to pre-cache from for a server: the build's <paramref name="defaultAssetUrl"/> for the default
+    /// server, nothing for any other. The pinned list is the default server's files, and the address isn't read from
+    /// servermanifest.xml because older launchers refuse a manifest with an element they don't know.
+    /// </summary>
+    public static string? AssetUrlFor(string? serverUrl, string defaultServerUrl, string defaultAssetUrl)
+    {
+        if (string.IsNullOrEmpty(defaultAssetUrl)
+            || !Uri.TryCreate(serverUrl, UriKind.Absolute, out var server)
+            || !Uri.TryCreate(defaultServerUrl, UriKind.Absolute, out var defaultServer))
+        {
+            return null;
+        }
+
+        var same = server.Scheme == defaultServer.Scheme
+                   && string.Equals(server.IdnHost, defaultServer.IdnHost, StringComparison.OrdinalIgnoreCase)
+                   && server.Port == defaultServer.Port
+                   && server.AbsolutePath.TrimEnd('/') == defaultServer.AbsolutePath.TrimEnd('/');
+
+        return same ? defaultAssetUrl : null;
+    }
+
     /// <summary>An absolute http(s) address with no user name or password in it.</summary>
     public static bool TryParseAssetUrl(string? text, out Uri url)
     {

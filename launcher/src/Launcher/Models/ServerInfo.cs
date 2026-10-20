@@ -28,9 +28,6 @@ public sealed class ServerInfo : ObservableObject
     /// </summary>
     public string? ClientUrl { get; set; }
 
-    /// <summary>The asset server named by the server manifest, for pre-caching. Null: nothing is pre-cached.</summary>
-    public string? AssetUrl { get; set; }
-
     /// <summary>
     /// The server's folder, relative to the data folder (<c>Servers\&lt;name&gt;</c>), made when the server is added.
     /// Checked on load by <see cref="Helpers.DataFolder.ToServerPath"/>.

@@ -247,6 +247,34 @@ public sealed class AssetPrecacheTests
     }
 
     [TestMethod]
+    [DataRow("https://play.evergrove.fyi", true)]
+    [DataRow("https://play.evergrove.fyi/", true)]
+    [DataRow("https://PLAY.evergrove.fyi/", true)]
+    [DataRow("http://play.evergrove.fyi", false)]
+    [DataRow("https://play.evergrove.fyi:8443", false)]
+    [DataRow("https://play.evergrove.fyi.example", false)]
+    [DataRow("https://other.example", false)]
+    [DataRow(null, false)]
+    public void AssetUrlFor_OnlyTheDefaultServer(string? serverUrl, bool preCaches)
+    {
+        Assert.AreEqual(preCaches ? "http://play.evergrove.fyi:8080/assets" : null,
+            AssetPrecache.AssetUrlFor(serverUrl, "https://play.evergrove.fyi", "http://play.evergrove.fyi:8080/assets"));
+    }
+
+    [TestMethod]
+    public void AssetUrlFor_NothingWhenTheBuildSetsNoAddress()
+    {
+        Assert.IsNull(AssetPrecache.AssetUrlFor("https://play.evergrove.fyi", "https://play.evergrove.fyi", ""));
+    }
+
+    [TestMethod]
+    public void TheShippedLauncherPreCachesForItsDefaultServer()
+    {
+        Assert.IsTrue(AssetPrecache.TryParseAssetUrl(
+            AssetPrecache.AssetUrlFor(Constants.DefaultServerUrl, Constants.DefaultServerUrl, Constants.DefaultAssetUrl), out _));
+    }
+
+    [TestMethod]
     public void UrlOf_IsWhatTheGameAsksFor()
     {
         var file = new PrecacheFile("sg_fishing_medpond.gzne.z", 4712, 3470421027, new string('0', 64));

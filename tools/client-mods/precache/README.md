@@ -29,14 +29,17 @@ After the client check (`ClientVerifier`) and the client mods, the launcher (`He
 2. Looks for each file in the game's download cache packs (`AssetsW_*.pack`). A copy counts if its index entry has the
    list's CRC and size **and** its data still hashes to that CRC. A damaged copy is hidden (its name's first letter
    becomes `~`), so the game stops reading it.
-3. Downloads what's missing from `<AssetUrl>/<folder>/<name>`, the address the game itself uses, unpacks `.z` files
+3. Downloads what's missing from `<DefaultAssetUrl>/<folder>/<name>`, the address the game itself uses, unpacks `.z` files
    and checks size, CRC-32 and SHA-256. One mismatch and nothing is written.
 4. Writes them as a new cache pack after the game's own (`AssetsW_<last + 1>.pack`), through a temporary file.
 
 The official `Assets_*.pack` files are never touched. If anything fails, the player gets a notice and the game starts
 anyway.
 
-`AssetUrl` comes from the server manifest (`launcher/server/servermanifest.xml`). Without it nothing is pre-cached.
+The asset server's address is a launcher build setting, `DefaultAssetUrl` in `launcher/src/Directory.Build.props`,
+and it's used for the default server only: the list is that server's files. It isn't in `servermanifest.xml` because
+launchers released before this one refuse a manifest with an element they don't know (the server would show as
+offline). Empty: nothing is pre-cached.
 
 ### Why plain HTTP is allowed here
 

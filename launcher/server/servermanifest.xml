@@ -18,9 +18,4 @@ New here? Register with the button under the login form, then press **Play**. Th
   <!-- No ClientUrl: the launcher downloads and repairs the game from the official OSFR client itself (see
        launcher/README.md, "The whole client is pinned"), so this server hosts no client. A ClientUrl serving a
        clientmanifest.xml could only add data files on top. -->
-
-  <!-- The asset server the game streams from (WebAPI's AssetDelivery:IndirectServerAddress). The launcher puts the
-       few files the game needs on the spot (Mining pictures, fishing hole zones) into the game's cache from here;
-       see tools/client-mods/precache. Plain HTTP is fine: every file is pinned by SHA-256 inside the launcher. -->
-  <AssetUrl>http://play.evergrove.fyi:8080/assets</AssetUrl>
 </ServerManifest>
