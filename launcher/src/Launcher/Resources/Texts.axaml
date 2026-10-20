@@ -96,6 +96,9 @@ If the game isn't there yet, Play downloads it (about 850 MB). Your other folder
 {0}</x:String>
   <x:String x:Key="Text.Server.ModsFailed" xml:space="preserve">Evergrove's additions to the game (such as the building search) couldn't be added, so the game starts without them:
 {0}</x:String>
+  <x:String x:Key="Text.Server.PrecachingGameFiles" xml:space="preserve">Getting minigame and fishing files ready... {0}/{1}</x:String>
+  <x:String x:Key="Text.Server.PrecacheFailed" xml:space="preserve">Some minigame and fishing files couldn't be downloaded, so the game starts without them (Mining may show missing pictures, and fishing holes may not load). Press Play again later to retry:
+{0}</x:String>
   <x:String x:Key="Text.Server.CheckFailed" xml:space="preserve">The game files couldn't be checked, so the game wasn't started. Try again; if it keeps happening, look in the launcher's log.</x:String>
   <x:String x:Key="Text.Server.CodeCheckFailed" xml:space="preserve">Some of the game's program files changed since they were last checked, so the game wasn't started. Press Play again to check and repair them.</x:String>
   <x:String x:Key="Text.Server.ServerCodeRefused" xml:space="preserve">The server offered program files for your game folder. Servers may only add game data, so those files weren't downloaded.</x:String>

@@ -173,6 +173,7 @@ public partial class Server : ObservableObject
                 Info.WebApiUrl = serverManifest.WebApiUrl;
                 Info.LoginServer = serverManifest.LoginServer;
                 Info.ClientUrl = serverManifest.ClientUrl;
+                Info.AssetUrl = serverManifest.AssetUrl;
 
                 Settings.Instance.Save();
             }
@@ -502,6 +503,8 @@ public partial class Server : ObservableObject
                 App.AddNotification(App.GetText("Text.Server.ModsFailed", modError), false);
             }
 
+            await PrecacheAsync();
+
             return true;
         }
         catch (Exception ex)
@@ -515,6 +518,29 @@ public partial class Server : ObservableObject
         finally
         {
             IsDownloading = false;
+        }
+    }
+
+    /// <summary>
+    /// Puts the files the game loads on the spot into its download cache (<see cref="AssetPrecache"/>). The game still
+    /// starts if this fails; Mining and fishing are what suffer.
+    /// </summary>
+    private async Task PrecacheAsync()
+    {
+        try
+        {
+            var outcome = await AssetPrecache.EnsureAsync(ClientDirectory, Info.AssetUrl, HttpHelper.PrecacheHttpClient,
+                new Progress<(int Done, int Total)>(p =>
+                    StatusMessage = App.GetText("Text.Server.PrecachingGameFiles", p.Done, p.Total)));
+
+            if (outcome == PrecacheOutcome.Added)
+                _logger.Info("Pre-cached {Count} file(s) from {Url}.", AssetPrecache.Files.Count, Info.AssetUrl);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or TaskCanceledException or UnauthorizedAccessException)
+        {
+            _logger.Warn(ex, "Pre-caching from {Url} failed.", Info.AssetUrl);
+
+            App.AddNotification(App.GetText("Text.Server.PrecacheFailed", ex.Message), false);
         }
     }
 

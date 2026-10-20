@@ -22,4 +22,10 @@ public sealed class ServerManifest
     /// Optional: where clientmanifest.xml and client/ are served, if not from the server URL itself.
     /// </summary>
     public string? ClientUrl { get; set; }
+
+    /// <summary>
+    /// Optional: the asset server the game streams from (WebAPI's <c>AssetDelivery:IndirectServerAddress</c>), so the
+    /// launcher can pre-cache the files the game needs on the spot (<see cref="Helpers.AssetPrecache"/>).
+    /// </summary>
+    public string? AssetUrl { get; set; }
 }

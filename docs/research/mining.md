@@ -102,6 +102,14 @@ The code: `src/Sanctuary.Game/Minigames/MatchThree/` (`MatchThreeGame`, `MatchTh
 `MatchThreeTileGenerator`, `MatchThreeTile`), wired in `FlashMinigameHandler`; the Gateway's main loop ticks the clock
 every 50 ms. Tests: `MatchThreeTests`, with a scripted client that plays whole games, dynamite included.
 
+## The pictures must be on the player's disk
+
+The Mining Flash loads its 75 pictures (`img<n>.dds`) and `mining_tutorial.gfx` synchronously, and synchronous loads
+only read the packs on disk. The official client lacks them, so before the launcher pre-cached them (2026-10-19,
+`tools/client-mods/precache`), Mining showed no copper, bin or frame, and `FailedSyncLoadAssets.txt` listed each
+picture. A minigame added later needs its `.gfx` checked the same way: every picture it names must be in the official
+packs or on the pre-cache list.
+
 ## Still unknown
 
 - **What the client does at the end of a game.** It sends `FRServer_GameOver` after a win or loss; the live server
