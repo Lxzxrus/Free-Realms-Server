@@ -18,6 +18,7 @@ GNU AGPL v3: see [LICENSE](LICENSE).
 | SHA-256 of `FreeRealms.exe`. **Empty: the launcher starts no game until it's set** | the official client's, `26cc1c52…` (must match `ClientPins.txt`) | `ClientExecutableSha256`, same file (see [the client pin](#the-client-pin)) |
 | Where launcher updates come from | `https://github.com/Lxzxrus/Free-Realms-Server` | `UpdateRepositoryUrl`, same file. The release workflow sets it to the repository it runs in |
 | Server name and description shown in the launcher | `Free Realms Evergrove` | [server/servermanifest.xml](server/servermanifest.xml), on the server |
+| Where the files the game loads on the spot come from (Mining pictures, fishing hole zones), default server only. Empty: off | `http://play.evergrove.fyi:8080/assets` | `DefaultAssetUrl`, same file (see [tools/client-mods/precache](../tools/client-mods/precache/README.md)) |
 | Where players download the game client | The official OSFR client, repaired against the pins (no `<ClientUrl>`) | `OfficialClientUrl` in `Helpers/Constants.cs` |
 
 Any of the build properties can be overridden for one build, on the command line or as an environment variable:
@@ -54,7 +55,9 @@ What the server must host for this is in [server/README.md](server/README.md).
   register, game files) must be `https://`, unless the host is this machine or a private network address
   (`10/8`, `172.16/12`, `192.168/16`, link-local, IPv6 unique-local, or a `.local` name). Anything else is refused
   before it's sent: over plain HTTP, anyone on the path could read the password or swap `FreeRealms.exe`. Local
-  plain HTTP shows a warning on the login and register forms. Updates are always HTTPS, to GitHub only.
+  plain HTTP shows a warning on the login and register forms. Updates are always HTTPS, to GitHub only. The one
+  exception is the pre-cache from the asset server (the game can't do HTTPS): it fetches only files whose SHA-256
+  is built into the launcher, so nothing a server or anyone in between sends can be written in their place.
 - **Files stay in the client folder.** A server's file list can't write outside the client folder, and a server's
   name can't escape the servers folder.
 - **Updates come from this repository's GitHub Releases, never from the game server**, so someone who breaks into
@@ -155,7 +158,12 @@ What happens when a player presses **Play** (see `ClientVerifier`):
    pin. If any can't be repaired, the game isn't started.
 4. Only then is the server's own `clientmanifest.xml` used, and it can only **add data files**: it can't replace a
    pinned file, and it can't add code (*"The server offered program files for your game folder..."*).
-5. Right before the game starts, `FreeRealms.exe` and every code file are hashed again.
+5. The files the game loads on the spot but the official client lacks (Mining's pictures, fishing hole zones) are
+   put into the game's download cache from the default server's asset server (`DefaultAssetUrl`), each checked against a SHA-256 built
+   into the launcher (*"Getting minigame and fishing files ready..."*; `Helpers/AssetPrecache.cs`, see
+   [tools/client-mods/precache](../tools/client-mods/precache/README.md)). This is the one plain-HTTP download, and
+   it's safe for the same reason as the pins: nothing that doesn't match is written. If it fails, the game still starts.
+6. Right before the game starts, `FreeRealms.exe` and every code file are hashed again.
 
 Downloads send `Accept: */*`: without it, Cloudflare in front of the official download injects its analytics script
 into HTML files (the client's `loading.html`), which then fail their pins.
@@ -187,6 +195,7 @@ folder button) instead of downloading 852 MB. That folder gets the same check an
 - **Path checks** on the client manifest's file and folder names, and on server names.
 - **No client manifest means "use the local client"** instead of an error, so a server can work without hosting
   the game files.
+- **Pre-caching** the files the game loads on the spot but the official client lacks, from `DefaultAssetUrl`.
 - **Optional `<ClientUrl>`** in the server manifest, to serve the game files from somewhere other than the server
   URL. Older manifests without it still work.
 - **Settings folder fix:** if the local app-data folder doesn't exist yet (a fresh Linux account has no

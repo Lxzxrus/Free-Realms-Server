@@ -29,6 +29,12 @@ public static class Constants
     public static readonly string DefaultServerUrl = GetMetadata("DefaultServerUrl");
 
     /// <summary>
+    /// <see cref="DefaultServerUrl"/>'s asset server, for <see cref="AssetPrecache"/>. Empty when the build didn't set it,
+    /// and then nothing is pre-cached.
+    /// </summary>
+    public static readonly string DefaultAssetUrl = GetMetadata("DefaultAssetUrl", required: false);
+
+    /// <summary>
     /// Launcher updates come from this repository's GitHub Releases (see <see cref="UpdateSource"/>), not from
     /// <see cref="DefaultServerUrl"/>.
     /// </summary>

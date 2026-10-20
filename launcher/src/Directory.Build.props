@@ -17,6 +17,12 @@
     <!-- The server added on first run. It must serve servermanifest.xml (see launcher/server/README.md). -->
     <DefaultServerUrl Condition="'$(DefaultServerUrl)' == ''">https://play.evergrove.fyi</DefaultServerUrl>
 
+    <!-- The default server's asset server (WebAPI's AssetDelivery:IndirectServerAddress). The launcher pre-caches from it
+         the few files the game loads on the spot (tools/client-mods/precache), for the default server only. It's a
+         build setting, not part of servermanifest.xml, because launchers before 2026-10-19 refuse a manifest with an
+         element they don't know. Plain HTTP is fine: every file is pinned by SHA-256 in the launcher. Empty: off. -->
+    <DefaultAssetUrl Condition="'$(DefaultAssetUrl)' == ''">http://play.evergrove.fyi:8080/assets</DefaultAssetUrl>
+
     <!-- Launcher updates come from this repository's GitHub Releases, never from the game server, so a break-in on
          the server can't push a launcher to players. Must be https://github.com/{owner}/{repository}, and the
          repository must be public: the launcher has no token. The release workflow sets it to the repository it

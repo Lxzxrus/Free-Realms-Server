@@ -29,6 +29,29 @@ public static class HttpHelper
 
     public static HttpClient DownloadHttpClient => _downloadHttpClient;
 
+    /// <summary>
+    /// For <see cref="AssetPrecache"/> only: the asset server is plain HTTP (the game can't do HTTPS), so this client
+    /// skips <see cref="TransportPolicy"/>. It is safe because it only fetches files from the list pinned in the
+    /// launcher, and each is checked against its SHA-256 before anything is written. No redirects.
+    /// </summary>
+    public static HttpClient PrecacheHttpClient => _precacheHttpClient.Value;
+
+    private static readonly Lazy<HttpClient> _precacheHttpClient = new(() =>
+    {
+        var httpClient = new HttpClient(new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            ConnectCallback = HappyEyeballsConnectAsync
+        })
+        {
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+
+        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+
+        return httpClient;
+    });
+
     public static HttpClient CreateHttpClient()
     {
         var httpClient = new HttpClient(new HttpLoggingHandler(new TransportPolicyHandler(new SocketsHttpHandler()

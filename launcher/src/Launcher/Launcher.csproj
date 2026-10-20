@@ -24,6 +24,7 @@
     <AssemblyMetadata Include="LauncherTitle" Value="$(LauncherTitle)" />
     <AssemblyMetadata Include="LauncherId" Value="$(LauncherId)" />
     <AssemblyMetadata Include="DefaultServerUrl" Value="$(DefaultServerUrl)" />
+    <AssemblyMetadata Include="DefaultAssetUrl" Value="$(DefaultAssetUrl)" />
     <AssemblyMetadata Include="UpdateRepositoryUrl" Value="$(UpdateRepositoryUrl)" />
     <AssemblyMetadata Include="ClientExecutableSha256" Value="$(ClientExecutableSha256)" />
     <InternalsVisibleTo Include="Launcher.Tests" />
@@ -37,6 +38,8 @@
     <!-- Evergrove's client additions: our own compiled code only (tools/client-mods/). -->
     <EmbeddedResource Include="Mods\housing-search.tag" LogicalName="Launcher.Mods.housing-search.tag" />
     <EmbeddedResource Include="Mods\scripts.patch" LogicalName="Launcher.Mods.scripts.patch" />
+    <!-- Files the game loads on the spot that the official client lacks, with their SHA-256 (tools/client-mods/precache). -->
+    <EmbeddedResource Include="Mods\precache.txt" LogicalName="Launcher.Mods.precache.txt" />
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
