@@ -62,6 +62,12 @@ public sealed class ExplorationCoinTests
         throw new FileNotFoundException($"src/{string.Join('/', relativePath)} not found above the test output.");
     }
 
+    /// <summary>
+    /// Coins placed by hand where the 2014 npc list had none: Oberyn's Broken Home (Blackspore Elite), from Ariel's
+    /// <c>!whereami</c> on 2026-10-20.
+    /// </summary>
+    private static readonly int[] PlacedCoinIds = [4493];
+
     private static NpcDefinition[] CoinNpcDefinitions()
     {
         var npcs = new NpcDefinitionCollection(NullLogger.Instance);
@@ -122,7 +128,11 @@ public sealed class ExplorationCoinTests
             Assert.AreEqual(1, spawn.ZoneDefinitionId);
         }
 
-        Assert.AreEqual(CoinNpcDefinitions().Length,
+        foreach (var id in PlacedCoinIds)
+            Assert.IsTrue(spawns.TryGetValue(id, out var placed) && placed.Pool.Contains("-exploration-coins-", StringComparison.Ordinal),
+                $"Placed coin {id} is missing from the coin pools.");
+
+        Assert.AreEqual(CoinNpcDefinitions().Length + PlacedCoinIds.Length,
             spawns.Values.Count(spawn => spawn.Pool.Contains("-exploration-coins-", StringComparison.Ordinal)),
             "A coin pool holds a spawn that isn't an exploration coin.");
     }

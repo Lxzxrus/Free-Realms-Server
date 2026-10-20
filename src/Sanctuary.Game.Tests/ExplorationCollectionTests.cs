@@ -60,7 +60,7 @@ public sealed class ExplorationCollectionTests
     // one Blackspore Elite, all eight Sacred Grove Elite (that hub isn't in our world), and one of each Sunstone
     // Valley collection (eight entries, seven coins).
     private static readonly int[] EntriesWithoutACoin =
-        [1949, 1950, 1954, 1955, 1985, 2045, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90018];
+        [1949, 1950, 1954, 1955, 1985, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90018];
 
     private static string FindSourcePath(params string[] relativePath)
     {
@@ -197,7 +197,30 @@ public sealed class ExplorationCollectionTests
                 $"Coin {spawn.Id} in {region} ticks collection {match.Definition.Id}, which belongs to {expected.Region}.");
         }
 
-        Assert.AreEqual(118, seen.Count, "The number of coins with an entry changed.");
+        Assert.AreEqual(119, seen.Count, "The number of coins with an entry changed.");
+    }
+
+    [TestMethod]
+    [DataRow(2112, 2041, "Hollow Hiding Hole")]
+    [DataRow(2115, 2039, "Between Ninjas And Graveyards")]
+    [DataRow(2116, 2040, "Top Tier Mining Excavation")]
+    [DataRow(2118, 2043, "A Relic View")]
+    [DataRow(2119, 2042, "Upon Shattered History")]
+    [DataRow(2120, 2044, "Branching Out")]
+    [DataRow(2121, 2045, "Splortata's Timeout Spot")]
+    [DataRow(4493, 2038, "Oberyn's Broken Home")]
+    [DataRow(4421, 1966, "A Place to Pond-er")]
+    [DataRow(4422, 1939, "Gather Round the Campfire")]
+    [DataRow(4423, 1965, "Scouting the Pathway")]
+    [DataRow(4424, 1967, "Spore Falls")]
+    [DataRow(4425, 1964, "Xandril's Nook")]
+    public void CoinsCheckedInGame_TickTheEntryNamedForTheirPlace(int coinId, int entryId, string place)
+    {
+        // Ariel collected every Blackspore Elite and Briarwood Rare coin on 2026-10-20 and named each coin's place from
+        // the original game's guides. The coins had been paired with entries by id order, which put five of them one
+        // place off and left Oberyn's Broken Home without a coin.
+        Assert.IsTrue(LoadSpawns().TryGetValue(coinId, out var spawn), $"No coin {coinId} ({place}).");
+        Assert.AreEqual(entryId, spawn.CollectionEntryId, $"Coin {coinId} is at {place}.");
     }
 
     [TestMethod]
