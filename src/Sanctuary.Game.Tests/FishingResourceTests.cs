@@ -114,6 +114,23 @@ public sealed class FishingResourceTests
     }
 
     [TestMethod]
+    public void EverySpawn_StandsOnTheBank()
+    {
+        foreach (var id in HoleIds)
+        {
+            var hole = Hole(id);
+
+            // The water's height is what the bobber lands on; without it the spawn's is used.
+            Assert.IsNotNull(hole.WaterLevel, $"Hole {id} has no WaterLevel.");
+
+            // Below the water a player starts on the bottom of the pond, and well above it they've left the scene
+            // (the placeholder spawns of upstream PR #31 did both). Every spawn checked in game is 0 to 8 above it.
+            var aboveWater = hole.SpawnPosition.Y - hole.WaterLevel.Value;
+            Assert.IsTrue(aboveWater is >= -1f and <= 10f, $"Hole {id}: spawn {aboveWater} above the water.");
+        }
+    }
+
+    [TestMethod]
     public void EachHole_HasFish_AndAPointOfInterest()
     {
         foreach (var id in HoleIds)

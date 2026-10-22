@@ -121,7 +121,7 @@ public sealed class FishingSessionTests
         var (runPacket, runToVisible) = host.Sent[1];
         var run = (FishingPacketSpawnFishRun)runPacket;
         Assert.IsFalse(runToVisible, "Another player's client may have no bobber, and would crash on the fish run.");
-        Assert.AreEqual(FishingSession.InvisibleDecoyModelId, run.Unknown2, "0 crashes the client.");
+        Assert.AreEqual(FishingSession.HookLureModelId, run.Unknown2, "0 crashes the client.");
 
         Assert.IsFalse(run.UnderwaterFishSpawns[0].Unknown7, "A fish that bites: the first fish wanders.");
         var biter = run.UnderwaterFishSpawns.Single(fish => fish.Unknown == FishingSession.BiterFishId);
@@ -381,6 +381,20 @@ public sealed class FishingSessionTests
     }
 
     [TestMethod]
+    public void RegisterResponse_SendsTheWaterLevel_NotTheSpawnHeight()
+    {
+        // Frostbitten Banks: the spawn is on a path 7 above the water, and the bobber must land on the water.
+        var hole = SacredGroveShallows();
+        hole.SpawnPosition = new Vector4(538.99f, 30.28f, 578.01f, 1f);
+        hole.WaterLevel = 23f;
+        var session = new FishingSession(new FakeHost(), hole, NullLogger.Instance, AFish());
+
+        var response = session.RegisterResponse(new CastRange("Metal Fishing Rod", 3f, 25f));
+
+        Assert.AreEqual(23f, response.FishingZoneConfig.Unknown6);
+    }
+
+    [TestMethod]
     public void RegisterResponse_DescribesTheHole()
     {
         var session = Session(new FakeHost(), AFish());
@@ -393,7 +407,7 @@ public sealed class FishingSessionTests
 
         Assert.AreEqual("sg_fishing_medpond", response.FishingZoneConfig.Unknown);
         Assert.AreEqual(68f, response.FishingZoneConfig.Unknown3, "The underwater bed's X, or the fish swim in the sky.");
-        Assert.AreEqual(-64.46508f, response.FishingZoneConfig.Unknown6, "The water's height: the spawn's.");
+        Assert.AreEqual(-64.46508f, response.FishingZoneConfig.Unknown6, "No WaterLevel: the spawn's height.");
 
         CollectionAssert.AreEqual(FishingSession.PreloadModelIds, response.FishModelIds);
 

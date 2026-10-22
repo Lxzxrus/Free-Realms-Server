@@ -48,10 +48,11 @@ public sealed class FishingSession
     public const int BobberModelId = 1063;
 
     /// <summary>
-    /// The actor the client parks at the hook before the bite: widget_01, the invisible block. It must be a real model
-    /// (0 crashes the client) that shows nothing.
+    /// The actor the client parks at the hook before the bite, and takes away when the fish bites: sg_fishing_lure_bbe,
+    /// the "in-world fishing lure" in Models.txt. 0 crashes the client. It was widget_01 (69, the invisible block) until
+    /// a playtest on 2026-10-19 found no hook on screen while the fish swam up and bit.
     /// </summary>
-    public const int InvisibleDecoyModelId = 69;
+    public const int HookLureModelId = 1673;
 
     /// <summary>The fish that bites. Only fish that aren't catchable swim, bite and fight.</summary>
     public const int BiterFishId = 2;
@@ -160,8 +161,8 @@ public sealed class FishingSession
             {
                 Unknown = _hole.Name,
                 Unknown3 = _hole.UnderwaterBedX,
-                // The spawn stands at the water's edge, so its height is the water's: the one value played in game.
-                Unknown6 = _hole.SpawnPosition.Y
+                // The water's surface, where the bobber lands (docs/research/fishing/FISHING_RE_NOTES.md).
+                Unknown6 = _hole.WaterLevel ?? _hole.SpawnPosition.Y
             },
             // The Fish Finder follows in its own packet, as edenfps played it.
             FishModelIds = [.. PreloadModelIds]
@@ -260,7 +261,7 @@ public sealed class FishingSession
             }
             else
             {
-                // The first fish wanders (so the decoy at the hook goes when the biter bites), the biter matches the
+                // The first fish wanders (so the lure at the hook goes when the biter bites), the biter matches the
                 // catch, and four more wander.
                 fish.Add(UnderwaterFish(10, wanderers[0], catchable: false));
                 fish.Add(UnderwaterFish(BiterFishId, fishCatch.UnderwaterModelId, catchable: false));
@@ -277,7 +278,7 @@ public sealed class FishingSession
             _host.Send(new FishingPacketSpawnFishRun
             {
                 Unknown = true,
-                Unknown2 = InvisibleDecoyModelId,
+                Unknown2 = HookLureModelId,
                 UnderwaterFishSpawns = fish
             });
 

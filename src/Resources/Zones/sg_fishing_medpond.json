@@ -10,5 +10,6 @@
   "EndLongitude": 16,
   "SpawnPosition": [435.05676, -64.46508, 370.70682],
   "SpawnRotation": [0, 0, 0, 1],
-  "UnderwaterBedX": 68
+  "UnderwaterBedX": 68,
+  "WaterLevel": -64.46508
 }

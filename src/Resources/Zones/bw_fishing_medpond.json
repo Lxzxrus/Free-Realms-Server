@@ -2,7 +2,7 @@
   "$type": "Fishing",
   "Id": 560,
   "Name": "bw_fishing_medpond",
-  "Comment": "Darklit Lagoon (activity 560). The spawn is a GUESS (upstream PR #31's placeholder): stand by the water in this scene, type !whereami and put the numbers here.",
+  "Comment": "Darklit Lagoon (activity 560). Spawn checked in game by Nate on 2026-10-19: upstream PR #31's placeholder happens to land on the bank (water level -2).",
   "TileSize": 64,
   "StartLatitude": -16,
   "StartLongitude": -16,
@@ -10,5 +10,6 @@
   "EndLongitude": 16,
   "SpawnPosition": [200, 0, 200],
   "SpawnRotation": [0, 0, 0, 1],
-  "UnderwaterBedX": 74
+  "UnderwaterBedX": 74,
+  "WaterLevel": -2
 }

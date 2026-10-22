@@ -2,13 +2,14 @@
   "$type": "Fishing",
   "Id": 565,
   "Name": "sh_fishing_stream",
-  "Comment": "Frostbitten Banks (activity 565). The spawn is a GUESS (upstream PR #31's placeholder): stand by the water in this scene, type !whereami and put the numbers here.",
+  "Comment": "Frostbitten Banks (activity 565). Spawn checked in game by Nate on 2026-10-19: the stone path between the pools (water level 23). The old placeholder (200, 0, 200) was outside the scene: players fell out of the world.",
   "TileSize": 64,
   "StartLatitude": -16,
   "StartLongitude": -16,
   "EndLatitude": 16,
   "EndLongitude": 16,
-  "SpawnPosition": [200, 0, 200],
+  "SpawnPosition": [538.99, 30.28, 578.01],
   "SpawnRotation": [0, 0, 0, 1],
-  "UnderwaterBedX": 69
+  "UnderwaterBedX": 69,
+  "WaterLevel": 23
 }

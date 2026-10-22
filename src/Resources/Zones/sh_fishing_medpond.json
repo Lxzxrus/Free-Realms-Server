@@ -2,13 +2,14 @@
   "$type": "Fishing",
   "Id": 564,
   "Name": "sh_fishing_medpond",
-  "Comment": "Wintery Basin (activity 564). The spawn is a GUESS (upstream PR #31's placeholder): stand by the water in this scene, type !whereami and put the numbers here.",
+  "Comment": "Wintery Basin (activity 564). Spawn checked in game by Nate on 2026-10-19: snowy ground beside the water (water level 0). The old placeholder (200, 0, 200) was under the ground: players fell out of the world.",
   "TileSize": 64,
   "StartLatitude": -16,
   "StartLongitude": -16,
   "EndLatitude": 16,
   "EndLongitude": 16,
-  "SpawnPosition": [200, 0, 200],
+  "SpawnPosition": [202.42, 5.74, 290.33],
   "SpawnRotation": [0, 0, 0, 1],
-  "UnderwaterBedX": 55
+  "UnderwaterBedX": 55,
+  "WaterLevel": 0
 }
