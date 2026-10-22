@@ -63,10 +63,16 @@ public sealed class ExplorationCoinTests
     }
 
     /// <summary>
-    /// Coins placed by hand where the 2014 npc list had none: Oberyn's Broken Home (Blackspore Elite), from Ariel's
-    /// <c>!whereami</c> on 2026-10-20.
+    /// Coins placed by hand where the 2014 npc list had none, from Ariel's <c>!whereami</c>: Oberyn's Broken Home
+    /// (Blackspore Elite, 2026-10-20) and Melted Corner (Snowhill Elite, 2026-10-21).
     /// </summary>
-    private static readonly int[] PlacedCoinIds = [4493];
+    private static readonly int[] PlacedCoinIds = [4493, 4494];
+
+    /// <summary>
+    /// 2014 coins whose place belongs to the other kind's collection, so they sit in that kind's pool: the elite coin
+    /// npc 4435 stands at Perry's Lookout, a Snowhill Rare place (Ariel, 2026-10-21).
+    /// </summary>
+    private static readonly Dictionary<int, string> MovedPools = new() { [4435] = "snowhill-exploration-coins-rare" };
 
     private static NpcDefinition[] CoinNpcDefinitions()
     {
@@ -124,7 +130,7 @@ public sealed class ExplorationCoinTests
         foreach (var coin in CoinNpcDefinitions())
         {
             Assert.IsTrue(spawns.TryGetValue(coin.Id, out var spawn), $"{coin.Name} {coin.Id} has no spawn.");
-            Assert.AreEqual(KindOf(coin).Pool, spawn.Pool, $"{coin.Name} {coin.Id} is in the wrong pool.");
+            Assert.AreEqual(MovedPools.GetValueOrDefault(coin.Id, KindOf(coin).Pool), spawn.Pool, $"{coin.Name} {coin.Id} is in the wrong pool.");
             Assert.AreEqual(1, spawn.ZoneDefinitionId);
         }
 

@@ -60,7 +60,7 @@ public sealed class ExplorationCollectionTests
     // one Blackspore Elite, all eight Sacred Grove Elite (that hub isn't in our world), and one of each Sunstone
     // Valley collection (eight entries, seven coins).
     private static readonly int[] EntriesWithoutACoin =
-        [1949, 1950, 1954, 1955, 1985, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90018];
+        [1947, 1954, 1955, 1985, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90018];
 
     private static string FindSourcePath(params string[] relativePath)
     {
@@ -197,7 +197,7 @@ public sealed class ExplorationCollectionTests
                 $"Coin {spawn.Id} in {region} ticks collection {match.Definition.Id}, which belongs to {expected.Region}.");
         }
 
-        Assert.AreEqual(119, seen.Count, "The number of coins with an entry changed.");
+        Assert.AreEqual(120, seen.Count, "The number of coins with an entry changed.");
     }
 
     [TestMethod]
@@ -209,6 +209,18 @@ public sealed class ExplorationCollectionTests
     [DataRow(2120, 2044, "Branching Out")]
     [DataRow(2121, 2045, "Splortata's Timeout Spot")]
     [DataRow(4493, 2038, "Oberyn's Broken Home")]
+    [DataRow(4436, 1950, "Smitty's Hiding Place")]
+    [DataRow(4439, 1935, "Beyond the Springs")]
+    [DataRow(4435, 1948, "Perry's Lookout")]
+    [DataRow(4443, 1949, "Penguin Point")]
+    [DataRow(4434, 2018, "Perry's Hideaway")]
+    [DataRow(4437, 2017, "Miner Difficulties")]
+    [DataRow(4438, 2016, "Hot Hangout")]
+    [DataRow(4440, 2019, "Between Rocks And Trees")]
+    [DataRow(4441, 2014, "Penguin Path")]
+    [DataRow(4442, 2013, "Beyond the Nameless Peak")]
+    [DataRow(4444, 2015, "Leafy Retreat")]
+    [DataRow(4494, 2012, "Melted Corner")]
     [DataRow(4421, 1966, "A Place to Pond-er")]
     [DataRow(4422, 1939, "Gather Round the Campfire")]
     [DataRow(4423, 1965, "Scouting the Pathway")]
@@ -216,7 +228,7 @@ public sealed class ExplorationCollectionTests
     [DataRow(4425, 1964, "Xandril's Nook")]
     public void CoinsCheckedInGame_TickTheEntryNamedForTheirPlace(int coinId, int entryId, string place)
     {
-        // Ariel collected every Blackspore Elite and Briarwood Rare coin on 2026-10-20 and named each coin's place from
+        // Ariel collected every Blackspore Elite and Briarwood Rare coin on 2026-10-20 (Snowhill on 2026-10-21) and named each coin's place from
         // the original game's guides. The coins had been paired with entries by id order, which put five of them one
         // place off and left Oberyn's Broken Home without a coin.
         Assert.IsTrue(LoadSpawns().TryGetValue(coinId, out var spawn), $"No coin {coinId} ({place}).");

@@ -73,6 +73,11 @@ other, so a wrong name meant a wrong `CollectionEntryId`.
   Splortata's Timeout Spot each carried another place's entry, and the coin with no entry was really Oberyn's Broken
   Home's, not the eighth. All re-paired; Oberyn's coin (spawn 4493) placed at Ariel's `!whereami`.
 - **Briarwood Rare** (269): four of five off by one place (Campfire, Pond-er, Xandril's Nook, Spore Falls); re-paired.
+- **Snowhill Rare** (265) and **Elite** (284), 2026-10-21: the two sets were crossed. The elite coin npc 4435 stands
+  at Perry's Lookout, a Rare place, so it moved to the Rare pool; Penguin Point and Smitty's Hiding Place, listed as
+  gaps, are the coins at those places. Seven Elite coins re-paired, and Melted Corner's coin (spawn 4494) placed at
+  Ariel's `!whereami`. **Between the Peaks** (Rare) has no coin: its hillside was raised and a camp built where the
+  coin stood, so it needs a reachable spot.
 - **Between Ninjas And Graveyards** (Blackspore Elite) is at the right place, but the ground around it has changed
   and it can't be reached on foot. It needs moving to the nearest spot a player can stand on.
 
