@@ -1,7 +1,7 @@
 [
   {
     "Id": 2112,
-    "CollectionEntryId": 2038,
+    "CollectionEntryId": 2041,
     "Position": [
       -2339.398,
       -32.17005,
@@ -31,7 +31,7 @@
   },
   {
     "Id": 2118,
-    "CollectionEntryId": 2041,
+    "CollectionEntryId": 2043,
     "Position": [
       -2462.171,
       -4.072798,
@@ -51,7 +51,7 @@
   },
   {
     "Id": 2120,
-    "CollectionEntryId": 2043,
+    "CollectionEntryId": 2044,
     "Position": [
       -2159.402,
       -14.84997,
@@ -61,12 +61,22 @@
   },
   {
     "Id": 2121,
-    "CollectionEntryId": 2044,
+    "CollectionEntryId": 2045,
     "Position": [
       -1738.381,
       -29.74651,
       833.8047
     ],
     "Heading": -0.163379
+  },
+  {
+    "Id": 4493,
+    "CollectionEntryId": 2038,
+    "Position": [
+      -2202.31,
+      -21.77,
+      1079.31
+    ],
+    "Heading": 0
   }
 ]

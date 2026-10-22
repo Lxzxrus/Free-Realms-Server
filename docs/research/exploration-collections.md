@@ -51,12 +51,35 @@ Elite collections, and that is what they do now.
 Entry ids are **not** the coin npc ids. They are their own id space (1935 to 1989 Rare, 2012 to 2066 Elite,
 2170 to 2177 Sacred Grove). The entries' creation order matches the coins' npc id order in the one region where both
 show a gap (Seaside: one early, four later), so entries were paired with coins in that order, region by region, with
-the Wilds quarters split by quadrant around Sanctuary (x grows east, z grows south). **That pairing is not verified
-in game.** The collection and entry name ids are in `Collections.json` for `tools/client-strings/strings.py`.
+the Wilds quarters split by quadrant around Sanctuary (x grows east, z grows south). **That pairing is only partly
+verified in game** (see "Checked in game" below). The collection and entry name ids are in `Collections.json` for `tools/client-strings/strings.py`.
 
 ## Gaps
 
-The 2014 npc list (hence PR 66's spawns) lacks coins for 14 entries: Snowhill Rare 4 and 5, Sanctuary Rare 5 and 6,
-Wilds Northeast Rare 5, Blackspore Elite 8, and all of Sacred Grove Elite (that hub isn't in our world). Those
+The 2014 npc list (hence PR 66's spawns) lacked coins for 14 entries: Snowhill Rare 4 and 5, Sanctuary Rare 5 and 6,
+Wilds Northeast Rare 5, one Blackspore Elite entry (Oberyn's Broken Home, placed on 2026-10-20, see below), and all of
+Sacred Grove Elite (that hub isn't in our world). Those
 collections cannot be finished until the coins are placed (`!admin collection place <pool>` writes a spawn; the
 spawn then needs its `CollectionEntryId`).
+
+## Checked in game
+
+Ariel collected three whole sets on 2026-10-20 and named each coin's place from the original game's guides (its
+position, and video walkthroughs of the collections). The pop-up and the collections book always agreed with each
+other, so a wrong name meant a wrong `CollectionEntryId`.
+
+- **Briarwood Elite** (287): all eight right; the backpack was granted.
+- **Blackspore Elite** (288): the id-order pairing was off. Branching Out, A Relic View, Hollow Hiding Hole and
+  Splortata's Timeout Spot each carried another place's entry, and the coin with no entry was really Oberyn's Broken
+  Home's, not the eighth. All re-paired; Oberyn's coin (spawn 4493) placed at Ariel's `!whereami`.
+- **Briarwood Rare** (269): four of five off by one place (Campfire, Pond-er, Xandril's Nook, Spore Falls); re-paired.
+- **Snowhill Rare** (265) and **Elite** (284), 2026-10-21: the two sets were crossed. The elite coin npc 4435 stands
+  at Perry's Lookout, a Rare place, so it moved to the Rare pool; Penguin Point and Smitty's Hiding Place, listed as
+  gaps, are the coins at those places. Seven Elite coins re-paired, and Melted Corner's coin (spawn 4494) placed at
+  Ariel's `!whereami`. **Between the Peaks** (Rare) has no coin: its hillside was raised and a camp built where the
+  coin stood, so it needs a reachable spot.
+- **Between Ninjas And Graveyards** (Blackspore Elite) is at the right place, but the ground around it has changed
+  and it can't be reached on foot. It needs moving to the nearest spot a player can stand on.
+
+`ExplorationCollectionTests.CoinsCheckedInGame_TickTheEntryNamedForTheirPlace` pins these pairs. The other regions'
+pairings are still the id-order guess, so expect the same kind of shift there.

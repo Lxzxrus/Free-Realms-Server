@@ -62,6 +62,18 @@ public sealed class ExplorationCoinTests
         throw new FileNotFoundException($"src/{string.Join('/', relativePath)} not found above the test output.");
     }
 
+    /// <summary>
+    /// Coins placed by hand where the 2014 npc list had none, from Ariel's <c>!whereami</c>: Oberyn's Broken Home
+    /// (Blackspore Elite, 2026-10-20) and Melted Corner (Snowhill Elite, 2026-10-21).
+    /// </summary>
+    private static readonly int[] PlacedCoinIds = [4493, 4494];
+
+    /// <summary>
+    /// 2014 coins whose place belongs to the other kind's collection, so they sit in that kind's pool: the elite coin
+    /// npc 4435 stands at Perry's Lookout, a Snowhill Rare place (Ariel, 2026-10-21).
+    /// </summary>
+    private static readonly Dictionary<int, string> MovedPools = new() { [4435] = "snowhill-exploration-coins-rare" };
+
     private static NpcDefinition[] CoinNpcDefinitions()
     {
         var npcs = new NpcDefinitionCollection(NullLogger.Instance);
@@ -118,11 +130,15 @@ public sealed class ExplorationCoinTests
         foreach (var coin in CoinNpcDefinitions())
         {
             Assert.IsTrue(spawns.TryGetValue(coin.Id, out var spawn), $"{coin.Name} {coin.Id} has no spawn.");
-            Assert.AreEqual(KindOf(coin).Pool, spawn.Pool, $"{coin.Name} {coin.Id} is in the wrong pool.");
+            Assert.AreEqual(MovedPools.GetValueOrDefault(coin.Id, KindOf(coin).Pool), spawn.Pool, $"{coin.Name} {coin.Id} is in the wrong pool.");
             Assert.AreEqual(1, spawn.ZoneDefinitionId);
         }
 
-        Assert.AreEqual(CoinNpcDefinitions().Length,
+        foreach (var id in PlacedCoinIds)
+            Assert.IsTrue(spawns.TryGetValue(id, out var placed) && placed.Pool.Contains("-exploration-coins-", StringComparison.Ordinal),
+                $"Placed coin {id} is missing from the coin pools.");
+
+        Assert.AreEqual(CoinNpcDefinitions().Length + PlacedCoinIds.Length,
             spawns.Values.Count(spawn => spawn.Pool.Contains("-exploration-coins-", StringComparison.Ordinal)),
             "A coin pool holds a spawn that isn't an exploration coin.");
     }
