@@ -12,6 +12,7 @@ using Sanctuary.Game;
 using Sanctuary.Game.ChatCommands;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Interactions;
+using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Combat;
@@ -627,6 +628,12 @@ public sealed class Player : ClientPcData, IEntity
                 }
             }
         }
+
+        var trainerImageId = JobTrainers.NotificationImageFor(npc.Guid,
+            profileId => Profiles.Any(profile => profile.Id == profileId), _resourceManager.Profiles.ContainsKey);
+
+        if (trainerImageId != 0)
+            return trainerImageId;
 
         return npc.Notification?.ImageId ?? 0;
     }

@@ -816,7 +816,7 @@
     "NameId": 5699,
     "LocationId": 2026,
     "Position": [ 489.98856, 47.29089, 273.6612 ],
-    "SpawnPosition": [ 489.98856, 47.29089, 273.6612 ],
+    "SpawnPosition": [ 481.98, 47.33, 273.49 ],
     "Heading": -1.40635,
     "IconId": 11970,
     "NotificationType": 3,

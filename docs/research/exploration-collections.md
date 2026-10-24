@@ -77,9 +77,11 @@ other, so a wrong name meant a wrong `CollectionEntryId`.
   at Perry's Lookout, a Rare place, so it moved to the Rare pool; Penguin Point and Smitty's Hiding Place, listed as
   gaps, are the coins at those places. Seven Elite coins re-paired, and Melted Corner's coin (spawn 4494) placed at
   Ariel's `!whereami`. **Between the Peaks** (Rare) has no coin: its hillside was raised and a camp built where the
-  coin stood, so it needs a reachable spot.
+  coin stood. Since 2026-10-24 it stands at the nearest place Ariel could reach (spawn 4495).
 - **Between Ninjas And Graveyards** (Blackspore Elite) is at the right place, but the ground around it has changed
-  and it can't be reached on foot. It needs moving to the nearest spot a player can stand on.
+  and it can't be reached on foot. Since 2026-10-24 it stands at the nearest spot Ariel could reach.
+- **Round 3 (2026-10-24)** on a fresh character: Blackspore Elite, Briarwood Rare and Snowhill Rare and Elite all
+  correct after the re-pairing; Snowhill Rare's reward came out as the girls' Pathfinder's Capris.
 
 `ExplorationCollectionTests.CoinsCheckedInGame_TickTheEntryNamedForTheirPlace` pins these pairs. The other regions'
 pairings are still the id-order guess, so expect the same kind of shift there.

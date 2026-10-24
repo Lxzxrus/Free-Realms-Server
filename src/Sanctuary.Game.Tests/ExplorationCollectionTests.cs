@@ -60,7 +60,7 @@ public sealed class ExplorationCollectionTests
     // one Blackspore Elite, all eight Sacred Grove Elite (that hub isn't in our world), and one of each Sunstone
     // Valley collection (eight entries, seven coins).
     private static readonly int[] EntriesWithoutACoin =
-        [1947, 1954, 1955, 1985, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90018];
+        [1954, 1955, 1985, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90018];
 
     private static string FindSourcePath(params string[] relativePath)
     {
@@ -197,7 +197,7 @@ public sealed class ExplorationCollectionTests
                 $"Coin {spawn.Id} in {region} ticks collection {match.Definition.Id}, which belongs to {expected.Region}.");
         }
 
-        Assert.AreEqual(120, seen.Count, "The number of coins with an entry changed.");
+        Assert.AreEqual(121, seen.Count, "The number of coins with an entry changed.");
     }
 
     [TestMethod]
@@ -221,6 +221,7 @@ public sealed class ExplorationCollectionTests
     [DataRow(4442, 2013, "Beyond the Nameless Peak")]
     [DataRow(4444, 2015, "Leafy Retreat")]
     [DataRow(4494, 2012, "Melted Corner")]
+    [DataRow(4495, 1947, "Between the Peaks")]
     [DataRow(4421, 1966, "A Place to Pond-er")]
     [DataRow(4422, 1939, "Gather Round the Campfire")]
     [DataRow(4423, 1965, "Scouting the Pathway")]

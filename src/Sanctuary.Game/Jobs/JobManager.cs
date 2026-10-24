@@ -9,6 +9,7 @@ using Sanctuary.Database.Entities;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Interactions;
+using Sanctuary.Game.Quests;
 
 namespace Sanctuary.Game.Jobs;
 
@@ -17,14 +18,16 @@ public sealed class JobManager : IJobManager
     private readonly IResourceManager _resourceManager;
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
     private readonly IZoneManager _zoneManager;
+    private readonly IQuestManager _questManager;
     private readonly ILogger<JobManager> _logger;
 
     public JobManager(IResourceManager resourceManager, IDbContextFactory<DatabaseContext> dbContextFactory,
-        IZoneManager zoneManager, ILogger<JobManager> logger)
+        IZoneManager zoneManager, IQuestManager questManager, ILogger<JobManager> logger)
     {
         _resourceManager = resourceManager;
         _dbContextFactory = dbContextFactory;
         _zoneManager = zoneManager;
+        _questManager = questManager;
         _logger = logger;
     }
 
@@ -61,6 +64,10 @@ public sealed class JobManager : IJobManager
         // accepting a job's first quest switched you into it in the live game; the jobs window should pick it up from
         // there (to be checked in game).
         ProfileHelper.Activate(player, profileId, _zoneManager);
+
+        // A trainer with nothing left to teach this character loses its marker.
+        foreach (var trainer in JobTrainers.All.Where(trainer => trainer.ProfileId == profileId))
+            _questManager.RefreshQuestNotification(player, trainer.NpcGuid);
 
         _logger.LogInformation("Character {characterId} got job {profileId}.", player.CharacterId, profileId);
 
