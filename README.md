@@ -1,9 +1,5 @@
 <div align="center">
-  <img src="launcher/assets/icon.png" alt="Free Realms Evergrove" width="96" height="96">
-
-  <h1>Free Realms Evergrove</h1>
-
-  <p>A community server for Free Realms, built around creative housing.</p>
+  <img src="images/banner.svg" alt="Free Realms Evergrove: a Free Realms server built around creative housing" width="100%">
 
   <p>
     <a href="https://github.com/Lxzxrus/Free-Realms-Server/releases/latest"><strong>Download the launcher</strong></a>
@@ -18,10 +14,17 @@ Free Realms Evergrove is a fan-run server for Free Realms, the free-to-play game
 2009 to 2014. It runs **Sanctuary**, the [Open Source Free Realms](https://github.com/Open-Source-Free-Realms/Sanctuary)
 server emulator, with our own work on top.
 
+## What makes Evergrove different
+
 - **Creative housing:** a free lot for everyone and 1,700+ building pieces in every colour, with search in the
   Decorate panel. Visit friends' homes, or publish yours to the housing directory.
-- **Membership for everyone:** there is nothing to buy.
-- Quests, trading, chat and more, with new content as volunteers make it.
+- **Ranked plots:** enter a house in the weekly vote, where players rate each other's builds.
+- **No real money:** everyone is a member and there is nothing to buy. Station Cash will be earned through play,
+  never bought.
+- **Open about how it's made:** the code is open source under the AGPL, and we're open about the AI help behind it
+  (see [How it's made](#how-its-made)).
+
+Quests, fishing, Mining, trading, chat and more come with it, with new content as volunteers make it.
 
 ## Playing
 
@@ -97,6 +100,9 @@ Evergrove stands on other people's work, all published under the AGPL:
 - **raisingkaines**: the housing system, from his Sanctuary fork.
 - **JadenY**: the quest system, from Sulphural's fork.
 - Everyone who contributed to Sanctuary upstream; the git history credits each of them.
+
+The Evergrove wordmark is set in **Almendra** by Ana Sanfelippo, under the SIL Open Font License
+([images/Almendra-OFL.txt](images/Almendra-OFL.txt)). The banner and logo are original artwork for Evergrove.
 
 ## How it's made
 
