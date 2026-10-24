@@ -17,6 +17,8 @@
 
       <!-- Additional Resources -->
       <FontFamily x:Key="FontDefault">fonts:Inter#Inter</FontFamily>
+      <!-- Headings, the wordmark and Play: Almendra by Ana Sanfelippo, SIL Open Font License (Assets/Fonts/OFL.txt). -->
+      <FontFamily x:Key="FontDisplay">avares://Launcher/Assets/Fonts#Almendra</FontFamily>
     </ResourceDictionary>
   </Application.Resources>
 

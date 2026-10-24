@@ -16,10 +16,10 @@
   <path d="M700 310 L750 174 L800 310 Z M820 318 L876 148 L932 318 Z M1040 310 L1084 188 L1128 310 Z M1180 314 L1220 198 L1260 314 Z" fill="#0f2618"/>
   <path d="M0 338 C300 320 640 344 1280 324 V360 H0 Z" fill="#0e1a14"/>
   <g transform="translate(72 52) scale(1.75)">
+    <path d="M16 14 V30" stroke="#d9c38a" stroke-width="2.5" stroke-linecap="round" fill="none"/>
     <path d="M16 2 C24 8 26 17 16 24 C6 17 8 8 16 2 Z" fill="#8cc56a"/>
     <path d="M16 13 C21 10 26 11 29 14 C25 19 19 18 16 15 Z" fill="#5f9a46"/>
     <path d="M16 13 C11 10 6 11 3 14 C7 19 13 18 16 15 Z" fill="#5f9a46"/>
-    <path d="M16 14 V30" stroke="#d9c38a" stroke-width="2.5" stroke-linecap="round" fill="none"/>
   </g>
   <text class="eyebrow" x="140" y="88">FREE REALMS</text>
   <text class="wordmark" x="68" y="200">Evergrove</text>

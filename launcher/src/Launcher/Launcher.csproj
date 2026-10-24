@@ -41,6 +41,8 @@
     <!-- Files the game loads on the spot that the official client lacks, with their SHA-256 (tools/client-mods/precache). -->
     <EmbeddedResource Include="Mods\precache.txt" LogicalName="Launcher.Mods.precache.txt" />
     <AvaloniaResource Include="Assets\**" />
+    <!-- The display font's license travels with every build, as the SIL Open Font License asks. -->
+    <None Include="Assets\Fonts\OFL.txt" Link="Licenses\Almendra-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

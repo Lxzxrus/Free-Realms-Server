@@ -17,8 +17,9 @@
     <Grid Grid.Row="0"
           HorizontalAlignment="Center"
           VerticalAlignment="Center">
-      <TextBlock FontFamily="{StaticResource FontDefault}"
-                 FontSize="18"
+      <TextBlock FontFamily="{StaticResource FontDisplay}"
+                 FontSize="24"
+                 FontWeight="Bold"
                  Text="{StaticResource Text.Delete_Server}" />
     </Grid>
 
@@ -28,7 +29,7 @@
                HorizontalAlignment="Center"
                FontFamily="{StaticResource FontDefault}"
                FontSize="15"
-               Foreground="Yellow"
+               Foreground="{StaticResource Color.Warning}"
                Text="{StaticResource Text.Delete_Server.Confirm}" />
 
     <!-- Buttons -->
@@ -44,13 +45,6 @@
               Content="{StaticResource Text.Yes}"
               FontFamily="{StaticResource FontDefault}">
 
-        <Button.Background>
-          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-            <GradientStop Offset="0.0" Color="#96B9D9" />
-            <GradientStop Offset="4.0" Color="#202959" />
-            <GradientStop Offset="0.8" Color="#37538C" />
-          </LinearGradientBrush>
-        </Button.Background>
       </Button>
 
       <Button Grid.Column="1"
@@ -58,13 +52,6 @@
               Command="{Binding CancelCommand}"
               Content="{StaticResource Text.No}"
               FontFamily="{StaticResource FontDefault}">
-        <Button.Background>
-          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-            <GradientStop Offset="0.0" Color="#96B9D9" />
-            <GradientStop Offset="4.0" Color="#202959" />
-            <GradientStop Offset="0.8" Color="#37538C" />
-          </LinearGradientBrush>
-        </Button.Background>
       </Button>
     </Grid>
   </Grid>

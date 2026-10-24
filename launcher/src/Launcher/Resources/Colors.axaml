@@ -5,16 +5,32 @@
     <Border Padding="20" Background="{StaticResource Color.FG1}" />
   </Design.PreviewWith>
 
-  <SolidColorBrush x:Key="Color.Window">#FF252525</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.Popup">#2A3A61</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.Contents">#FF181818</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.Server">#0D000000</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.Description">#000000</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.Border">#3C4C74</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.FlatButton.PrimaryBackground">#3C4C74</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.FlatButton.PrimaryBackgroundHovered">#3C4C74</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.FG1">#ffffff</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.FG2">#40F1F1F1</SolidColorBrush>
-  <SolidColorBrush x:Key="Color.Accent1">#3C4C74</SolidColorBrush>
+  <!-- Evergrove's "Deep Forest" look: night under the pines, a warm sunbeam for Play. -->
+  <SolidColorBrush x:Key="Color.Window">#FF0E1A14</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Popup">#FF15251C</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Contents">#FF0B1510</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Server">#E60B1510</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Description">#E615251C</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Border">#FF2A4535</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.FlatButton.PrimaryBackground">#FF1F3A2A</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.FlatButton.PrimaryBackgroundHovered">#FF2A4D38</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.FG1">#FFE8F0E6</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.FG2">#40E8F0E6</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Muted">#FFA9BFAE</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Accent1">#FF8CC56A</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Selected">#FF1B3024</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Field">#FF0B1510</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.FieldBorder">#FF355A42</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Sun">#FFF0C75E</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.SunHovered">#FFF6D683</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.SunText">#FF1A1405</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Warning">#FFF0C75E</SolidColorBrush>
+
+  <!-- The forest drawn behind the window (Views/Main.axaml): farthest to nearest. -->
+  <SolidColorBrush x:Key="Color.Forest.Sky">#FF12241A</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Forest.Hills">#FF183324</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Forest.FarPines">#FF1F4430</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Forest.NearHills">#FF14301F</SolidColorBrush>
+  <SolidColorBrush x:Key="Color.Forest.NearPines">#FF0F2618</SolidColorBrush>
 
 </ResourceDictionary>

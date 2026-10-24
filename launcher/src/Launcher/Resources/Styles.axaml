@@ -54,7 +54,33 @@
   </Style>
   <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderBrush" Value="#991D6BFF" />
+    <Setter Property="BorderBrush" Value="{StaticResource Color.Accent1}" />
+  </Style>
+
+  <!-- A form field (login, register, add server): dark well, green edge, brighter when focused. -->
+  <Style Selector="TextBox.field">
+    <Setter Property="Width" Value="256" />
+    <Setter Property="Height" Value="36" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{StaticResource Color.FG1}" />
+    <Setter Property="CaretBrush" Value="{StaticResource Color.FG1}" />
+    <Setter Property="Background" Value="{StaticResource Color.Field}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Color.FieldBorder}" />
+  </Style>
+  <Style Selector="TextBox.field /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{StaticResource Color.Field}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Color.FieldBorder}" />
+  </Style>
+  <Style Selector="TextBox.field:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{StaticResource Color.Field}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Color.Accent1}" />
+  </Style>
+  <Style Selector="TextBox.field:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{StaticResource Color.Field}" />
+    <Setter Property="BorderBrush" Value="{StaticResource Color.Accent1}" />
   </Style>
   <Style Selector="TextBox:disabled /template/ Border#PART_BorderElement">
     <Setter Property="Opacity" Value=".6" />
@@ -90,10 +116,39 @@
   <!-- Button Styles -->
   <Style Selector="Button.flat.primary">
     <Setter Property="Background" Value="{StaticResource Color.FlatButton.PrimaryBackground}" />
+    <Setter Property="Foreground" Value="{StaticResource Color.FG1}" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="CornerRadius" Value="4" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Color.Border}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="14,7" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Color.FieldBorder}" />
     <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!-- Play: the sunbeam in the forest. -->
+  <Style Selector="Button.play">
+    <Setter Property="Background" Value="{StaticResource Color.Sun}" />
+    <Setter Property="Foreground" Value="{StaticResource Color.SunText}" />
+    <Setter Property="FontFamily" Value="{StaticResource FontDisplay}" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="FontSize" Value="26" />
+    <Setter Property="MinWidth" Value="180" />
+    <Setter Property="Padding" Value="28,6,28,8" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.play:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource Color.SunHovered}" />
+    <Setter Property="Foreground" Value="{StaticResource Color.SunText}" />
+  </Style>
+  <Style Selector="Button.play:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource Color.Sun}" />
+    <Setter Property="Foreground" Value="{StaticResource Color.SunText}" />
+  </Style>
+  <Style Selector="Button.play:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource Color.FlatButton.PrimaryBackground}" />
+    <Setter Property="Foreground" Value="{StaticResource Color.Muted}" />
   </Style>
   <Style Selector="Button.flat.primary:pointerover /template/ Border#PART_Border">
     <Setter Property="Background" Value="{StaticResource Color.FlatButton.PrimaryBackgroundHovered}" />

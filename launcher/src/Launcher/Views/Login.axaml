@@ -15,7 +15,7 @@
 
     <!-- Warning -->
     <TextBlock HorizontalAlignment="Center"
-               Foreground="Yellow"
+               Foreground="{StaticResource Color.Warning}"
                IsVisible="{Binding Warning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                MaxWidth="440"
                Text="{Binding Warning, Mode=OneWay}"
@@ -27,19 +27,13 @@
 
       <TextBlock HorizontalAlignment="Center"
                  FontFamily="{StaticResource FontDefault}"
-                 FontSize="18"
+                 FontSize="14"
+                 Foreground="{StaticResource Color.Muted}"
                  Text="{StaticResource Text.Login.Username}" />
 
-      <Image Source="/Assets/fr_asset4.png" Stretch="None" />
-
-      <TextBox Width="256"
-               Height="22"
-               Margin="0,-38,0,0"
+      <TextBox Margin="0,4,0,0"
+               Classes="field"
                v:AutoFocusBehaviour.IsEnabled="{Binding AutoFocusUsername}"
-               CaretBrush="Black"
-               FontSize="13"
-               FontWeight="SemiBold"
-               Foreground="Black"
                Text="{Binding Username, Mode=TwoWay}" />
     </StackPanel>
 
@@ -55,19 +49,13 @@
 
       <TextBlock HorizontalAlignment="Center"
                  FontFamily="{StaticResource FontDefault}"
-                 FontSize="18"
+                 FontSize="14"
+                 Foreground="{StaticResource Color.Muted}"
                  Text="{StaticResource Text.Login.Password}" />
 
-      <Image Source="/Assets/fr_asset4.png" Stretch="None" />
-
-      <TextBox Width="256"
-               Height="22"
-               Margin="0,-38,0,0"
+      <TextBox Margin="0,4,0,0"
+               Classes="field"
                v:AutoFocusBehaviour.IsEnabled="{Binding AutoFocusPassword}"
-               CaretBrush="Black"
-               FontSize="13"
-               FontWeight="SemiBold"
-               Foreground="Black"
                PasswordChar="•"
                Text="{Binding Password, Mode=TwoWay}" />
     </StackPanel>
@@ -82,26 +70,12 @@
               Content="{StaticResource Text.Login}"
               FontFamily="{StaticResource FontDefault}"
               HotKey="Enter">
-        <Button.Background>
-          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-            <GradientStop Offset="0.0" Color="#96B9D9" />
-            <GradientStop Offset="4.0" Color="#202959" />
-            <GradientStop Offset="0.8" Color="#37538C" />
-          </LinearGradientBrush>
-        </Button.Background>
       </Button>
 
       <Button Classes="flat primary"
               Command="{Binding CancelCommand}"
               Content="{StaticResource Text.Cancel}"
               FontFamily="{StaticResource FontDefault}">
-        <Button.Background>
-          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-            <GradientStop Offset="0.0" Color="#96B9D9" />
-            <GradientStop Offset="4.0" Color="#202959" />
-            <GradientStop Offset="0.8" Color="#37538C" />
-          </LinearGradientBrush>
-        </Button.Background>
       </Button>
     </StackPanel>
 
@@ -119,13 +93,6 @@
               Command="{Binding RegisterCommand}"
               Content="{StaticResource Text.Register}"
               FontFamily="{StaticResource FontDefault}">
-        <Button.Background>
-          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-            <GradientStop Offset="0.0" Color="#96B9D9" />
-            <GradientStop Offset="4.0" Color="#202959" />
-            <GradientStop Offset="0.8" Color="#37538C" />
-          </LinearGradientBrush>
-        </Button.Background>
       </Button>
     </StackPanel>
   </StackPanel>
