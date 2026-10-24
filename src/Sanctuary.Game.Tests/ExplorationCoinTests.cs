@@ -64,9 +64,10 @@ public sealed class ExplorationCoinTests
 
     /// <summary>
     /// Coins placed by hand where the 2014 npc list had none, from Ariel's <c>!whereami</c>: Oberyn's Broken Home
-    /// (Blackspore Elite, 2026-10-20) and Melted Corner (Snowhill Elite, 2026-10-21).
+    /// (Blackspore Elite, 2026-10-20), Melted Corner (Snowhill Elite, 2026-10-21) and Between the Peaks (Snowhill Rare,
+    /// 2026-10-24: its old spot was built over, so it stands at the nearest place a player can reach).
     /// </summary>
-    private static readonly int[] PlacedCoinIds = [4493, 4494];
+    private static readonly int[] PlacedCoinIds = [4493, 4494, 4495];
 
     /// <summary>
     /// 2014 coins whose place belongs to the other kind's collection, so they sit in that kind's pool: the elite coin
