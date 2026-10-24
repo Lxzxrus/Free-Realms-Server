@@ -51,7 +51,9 @@ Elite collections, and that is what they do now.
 Entry ids are **not** the coin npc ids. They are their own id space (1935 to 1989 Rare, 2012 to 2066 Elite,
 2170 to 2177 Sacred Grove). The entries' creation order matches the coins' npc id order in the one region where both
 show a gap (Seaside: one early, four later), so entries were paired with coins in that order, region by region, with
-the Wilds quarters split by quadrant around Sanctuary (x grows east, z grows south). **That pairing is only partly
+the Wilds quarters split by quadrant around Sanctuary, assuming x grows east and z grows south. That compass was
+wrong (x grows north, z grows east; see "Coin research" below), so until 2026-10-24 each quarter had another
+quarter's coins. **That pairing is only partly
 verified in game** (see "Checked in game" below). The collection and entry name ids are in `Collections.json` for `tools/client-strings/strings.py`.
 
 ## Gaps
@@ -85,3 +87,34 @@ other, so a wrong name meant a wrong `CollectionEntryId`.
 
 `ExplorationCollectionTests.CoinsCheckedInGame_TickTheEntryNamedForTheirPlace` pins these pairs. The other regions'
 pairings are still the id-order guess, so expect the same kind of shift there.
+
+## Coin research (2026-10-24)
+
+For the sets nobody had checked, each coin was matched by its surroundings: the nearest points of interest
+(`PointOfInterests.json`), the nearest named npcs (`FabledRealms.lua`), the client's ambient areas around it
+(`FabledRealmsAreas.xml`: waterfalls, rivers, rainbows, the Roadhouse sign) and the wiki's location notes
+([Exploration (Collections)](https://freerealms.fandom.com/wiki/Exploration_(Collections)) and its Sunstone Valley
+page). The script is kept out of the repo, like the capture decoder.
+
+**The map's compass: x grows north, z grows east.** Three checks agree: Sunstone Valley lies north of Briarwood and
+north-east of Shrouded Glade (the wiki's words); the Forest Troll camp is north of Lakeshore ("the first camp walking
+north from Lakeshore"); the Snowhill soccer field is south of Snowhill ("overlooks the soccer field ... to the south").
+Turning the old quadrants by a quarter makes the Wilds names fit their coins.
+
+| Set | Change | Confidence |
+|---|---|---|
+| Sanctuary Rare | Break my Fall: the coin by Lorna under the caverns' waterfall (2483). Over the Rainbow: the coin in the rainbow and waterfall spray at the moat's west end (2473). Darvon's Spot and Break Free unchanged. Pixiewood Mist and A Royal Way In have no coin | high |
+| Wilds Northeast | Took the five coins that were "Southeast": Troll Scope by the Forest Troll Fort (4492), Perfect Robgoblin View by the Robgoblin Treasure Trove (4491), Rushing Twin Falls in two waterfalls (4489), Rocking the River on the river (4488), Swimmer's Haven at Lakeshore (4490) | high |
+| Wilds Southeast | Took the "Southwest" coins: Wildwood Shroud by Wildwood Speedway (4477), Pixiewood Stare just south of Sanctuary (4480); Serpent's Climb, Atop Spore Flow and Peace of Mind guessed (4474, 4478, 4479) | medium, then low |
+| Wilds Southwest | Took four "Northwest" coins: Spying on Bandits by the Bandit Hideout (4470), Shepherd's Watch on Farnum Farmstead (4473); Towering the Toll and Ancient Dig Site guessed (4465, 4467); Tent Dent has no coin | medium, then low |
+| Wilds Northwest | Took the "Northeast" coins and Merry Notch by Merry Vale (4471); Tin Man's Nest, Bridge View, A Path Less Traveled and Gazing Beyond guessed (4481, 4482, 4484, 4485) | medium, then low |
+| Sunstone Valley Rare | Wheelie Pete's Roadhouse under the Roadhouse sign (4446), Noggle's Retreat by Noggle Cogloose (4463), The Dig by Sarkin Stonehearth (4448), Scorch Stream Falls at the waterfall (4451); Abandoned Mine and Sunstone Arch guessed (4445, 4453); Mystical Barrier unchanged; The Great Rift has no coin | high, then low |
+| Sunstone Valley Elite | Sandspear's Stand by Sandspear (4450), The Scrap Yard by Scrapmaster Fizzbang (4452), Skullz Base Camp among the Skullz (4455), Sandscale Tribal Lands among the Sandscale (4454); Drake Boneyard and Drakewind Peak guessed (4447, 4449); Vulture Alley unchanged; Glimmerdeep Pass Overlook has no coin | high, then low |
+
+Unchanged, because the evidence fits the id-order pairing or doesn't decide it: Seaside Rare (Behind the Weeds by Amai
+and Seaspray Hideaway by the inn fit; Bridging the Gap and Under the Boardwalk can't be told apart without the
+volleyball net), Shrouded Glade Rare (all three fit the wiki), Wugachug Rare (Two Trees by the warpstone fits), Merry
+Vale Rare, Blackspore Rare, and the Elite sets of Wugachug (Stage Presence on the stage fits), Shrouded Glade, Seaside
+(Sea-cret Spot behind the small waterfall and Oceanfront Property among the houses fit), Merry Vale and Sanctuary
+(Darvon's Hook fits). The guesses and these sets still need a check in game; the old guides' coin videos are the
+quickest way to tell each place.
