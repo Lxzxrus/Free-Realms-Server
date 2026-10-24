@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -73,4 +74,17 @@ public static class JobTrainers
 
     /// <summary>The jobs the npc gives; empty for anyone who isn't a trainer.</summary>
     public static IEnumerable<int> JobsTaughtBy(ulong npcGuid) => JobsByNpc[npcGuid];
+
+    /// <summary>
+    /// The marker over a trainer: the quests' "available" one (image 2), so new players know to click them. Ariel asked
+    /// for it in the playtest of 2026-10-24.
+    /// </summary>
+    public const int NotificationImageId = 2;
+
+    /// <summary>
+    /// <see cref="NotificationImageId"/> while the trainer still has a job to teach this character, else 0. A job the
+    /// server doesn't know is never offered, so it doesn't count.
+    /// </summary>
+    public static int NotificationImageFor(ulong npcGuid, Func<int, bool> hasJob, Func<int, bool> jobExists) =>
+        JobsTaughtBy(npcGuid).Any(profileId => jobExists(profileId) && !hasJob(profileId)) ? NotificationImageId : 0;
 }

@@ -151,6 +151,22 @@ public sealed class JobGrantTests
     }
 
     [TestMethod]
+    public void Trainer_ShowsTheMarker_OnlyWhileItHasAJobToTeach()
+    {
+        const ulong reed = 100000002968; // Fisherman
+        const ulong therin = 100000001201; // Miner
+        const ulong stranger = 100000000001;
+        static bool Known(int profileId) => true;
+
+        Assert.AreEqual(JobTrainers.NotificationImageId, JobTrainers.NotificationImageFor(reed, _ => false, Known));
+        Assert.AreEqual(0, JobTrainers.NotificationImageFor(reed, profileId => profileId == 137, Known), "Already a Fisherman.");
+        Assert.AreEqual(JobTrainers.NotificationImageId, JobTrainers.NotificationImageFor(therin, profileId => profileId == 137, Known),
+            "A Fisherman can still learn Miner.");
+        Assert.AreEqual(0, JobTrainers.NotificationImageFor(stranger, _ => false, Known), "Not a trainer.");
+        Assert.AreEqual(0, JobTrainers.NotificationImageFor(reed, _ => false, _ => false), "A job the server doesn't know.");
+    }
+
+    [TestMethod]
     public void SecondGrant_ChangesNothing()
     {
         Assert.AreEqual(JobGrantResult.Granted, Grant(MaleCharacterId, Fisherman));
