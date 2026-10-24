@@ -17,8 +17,9 @@
     <Grid Grid.Row="0"
           HorizontalAlignment="Center"
           VerticalAlignment="Center">
-      <TextBlock FontFamily="{StaticResource FontDefault}"
-                 FontSize="18"
+      <TextBlock FontFamily="{StaticResource FontDisplay}"
+                 FontSize="24"
+                 FontWeight="Bold"
                  Text="{StaticResource Text.Add_Server.ServerUrl}" />
     </Grid>
 
@@ -27,17 +28,11 @@
           HorizontalAlignment="Center"
           VerticalAlignment="Center">
 
-      <Image Source="/Assets/fr_asset4.png" Stretch="None" />
-
-      <TextBox Width="254"
-               Height="22"
+      <TextBox Margin="0,4,0,0"
+               Classes="field"
                HorizontalAlignment="Center"
                VerticalAlignment="Center"
                v:AutoFocusBehaviour.IsEnabled="True"
-               CaretBrush="Black"
-               FontSize="13"
-               FontWeight="SemiBold"
-               Foreground="Black"
                Text="{Binding ServerUrl, Mode=TwoWay}" />
     </Grid>
 
@@ -55,13 +50,6 @@
               Content="{StaticResource Text.Add}"
               FontFamily="{StaticResource FontDefault}"
               HotKey="Enter">
-        <Button.Background>
-          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-            <GradientStop Offset="0.0" Color="#96B9D9" />
-            <GradientStop Offset="4.0" Color="#202959" />
-            <GradientStop Offset="0.8" Color="#37538C" />
-          </LinearGradientBrush>
-        </Button.Background>
       </Button>
 
       <Button Grid.Column="1"
@@ -70,13 +58,6 @@
               Command="{Binding CancelCommand}"
               Content="{StaticResource Text.Cancel}"
               FontFamily="{StaticResource FontDefault}">
-        <Button.Background>
-          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-            <GradientStop Offset="0.0" Color="#96B9D9" />
-            <GradientStop Offset="4.0" Color="#202959" />
-            <GradientStop Offset="0.8" Color="#37538C" />
-          </LinearGradientBrush>
-        </Button.Background>
       </Button>
     </Grid>
   </Grid>

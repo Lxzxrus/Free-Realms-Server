@@ -28,21 +28,78 @@
 
   <!-- Background -->
   <Window.Background>
-    <ImageBrush Source="/Assets/background.png" />
+    <StaticResource ResourceKey="Color.Window" />
   </Window.Background>
 
   <Grid ColumnDefinitions="200,*" RowDefinitions="*">
 
+    <!-- The forest: a low sun, hills and two rows of pines (original artwork, the same scene as images/banner.svg) -->
+    <Canvas Grid.ColumnSpan="2"
+            Width="800"
+            Height="550"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            IsHitTestVisible="False">
+      <Rectangle Width="800"
+                 Height="550"
+                 Fill="{StaticResource Color.Forest.Sky}" />
+      <Ellipse Canvas.Left="736"
+               Canvas.Top="-26"
+               Width="80"
+               Height="80"
+               Fill="{StaticResource Color.Sun}"
+               Opacity="0.85" />
+      <Path Data="M0 380 C120 350 230 372 340 356 C460 338 570 366 690 350 C740 344 780 346 800 342 L800 550 L0 550 Z"
+            Fill="{StaticResource Color.Forest.Hills}"
+            Stretch="None" />
+      <Path Data="M210 396 L238 330 L266 396 Z M280 400 L314 312 L348 400 Z M520 394 L548 326 L576 394 Z M600 398 L636 300 L672 398 Z M720 396 L746 332 L772 396 Z"
+            Fill="{StaticResource Color.Forest.FarPines}"
+            Stretch="None" />
+      <Path Data="M0 440 C140 414 260 436 400 422 C540 408 680 436 800 418 L800 550 L0 550 Z"
+            Fill="{StaticResource Color.Forest.NearHills}"
+            Stretch="None" />
+      <Path Data="M240 470 L272 384 L304 470 Z M310 476 L348 366 L386 476 Z M640 470 L670 392 L700 470 Z M730 474 L762 380 L794 474 Z"
+            Fill="{StaticResource Color.Forest.NearPines}"
+            Stretch="None" />
+      <Path Data="M0 500 C200 488 420 506 800 492 L800 550 L0 550 Z"
+            Fill="{StaticResource Color.Window}"
+            Stretch="None" />
+    </Canvas>
+
     <!-- Left Panel -->
     <DockPanel Background="{StaticResource Color.Server}">
 
-      <!-- Header -->
-      <TextBlock Margin="17"
-                 HorizontalAlignment="Center"
-                 DockPanel.Dock="Top"
-                 FontFamily="{StaticResource FontDefault}"
-                 FontSize="15"
-                 Text="{StaticResource Text.Servers}" />
+      <!-- Header: the Evergrove leaf and wordmark, then the list's label -->
+      <StackPanel Margin="16,18,16,8"
+                  DockPanel.Dock="Top"
+                  Spacing="14">
+        <StackPanel HorizontalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="8">
+          <Canvas Width="32"
+                  Height="32"
+                  VerticalAlignment="Center">
+            <Path Data="{StaticResource Icons.LeafStem}"
+                  Fill="#FFD9C38A"
+                  Stretch="None" />
+            <Path Data="{StaticResource Icons.Leaf}"
+                  Fill="{StaticResource Color.Accent1}"
+                  Stretch="None" />
+          </Canvas>
+          <TextBlock VerticalAlignment="Center"
+                     FontFamily="{StaticResource FontDisplay}"
+                     FontSize="26"
+                     FontWeight="Bold"
+                     Text="Evergrove" />
+        </StackPanel>
+        <TextBlock Margin="4,0,0,0"
+                   FontFamily="{StaticResource FontDefault}"
+                   FontSize="12"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource Color.Muted}"
+                   LetterSpacing="1.2"
+                   Text="{StaticResource Text.Servers}" />
+      </StackPanel>
 
       <!-- Buttons -->
       <StackPanel Margin="0,10,15,10"
@@ -76,25 +133,7 @@
         <Button Classes="flat primary"
                 Command="{Binding ShowAddServerCommand}"
                 FontFamily="{StaticResource FontDefault}">
-          <Button.Background>
-            <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-              <GradientStop Offset="0.0" Color="#96B9D9" />
-              <GradientStop Offset="4.0" Color="#202959" />
-              <GradientStop Offset="0.8" Color="#37538C" />
-            </LinearGradientBrush>
-          </Button.Background>
-          <Grid>
-            <TextBlock Margin="2,2,2,2"
-                       FontSize="14"
-                       Foreground="#202959"
-                       RenderTransformOrigin="0.0,0.0"
-                       Text="{StaticResource Text.Main.AddServer}">
-              <TextBlock.RenderTransform>
-                <TranslateTransform X="-2" Y="0" />
-              </TextBlock.RenderTransform>
-            </TextBlock>
-            <TextBlock FontSize="14" Text="{StaticResource Text.Main.AddServer}" />
-          </Grid>
+          <TextBlock FontSize="14" Text="{StaticResource Text.Main.AddServer}" />
         </Button>
       </StackPanel>
 
@@ -108,16 +147,26 @@
             <TextBlock HorizontalAlignment="Stretch"
                        VerticalAlignment="Center"
                        FontFamily="{StaticResource FontDefault}"
-                       FontSize="16"
-                       FontStyle="Oblique"
+                       FontSize="15"
+                       FontWeight="SemiBold"
                        Text="{Binding Info.Name, Mode=OneWay}"
                        TextTrimming="CharacterEllipsis"
                        TextWrapping="NoWrap" />
           </DataTemplate>
         </ListBox.ItemTemplate>
         <ListBox.Styles>
+          <Style Selector="ListBoxItem">
+            <Setter Property="Margin" Value="10,2" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="CornerRadius" Value="10" />
+          </Style>
           <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="#8037538C" />
+            <Setter Property="Background" Value="{StaticResource Color.Selected}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Color.FieldBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+          </Style>
+          <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource Color.Selected}" />
           </Style>
           <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
             <Setter Property="Cursor" Value="Hand" />
@@ -145,13 +194,6 @@
               Command="{Binding OpenLogsCommand}"
               FontFamily="{StaticResource FontDefault}"
               IsVisible="{Binding $parent[Window].((vm:Main)DataContext).ActiveServer, Converter={x:Static ObjectConverters.IsNull}}">
-        <Button.Background>
-          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-            <GradientStop Offset="0.0" Color="#96B9D9" />
-            <GradientStop Offset="4.0" Color="#202959" />
-            <GradientStop Offset="0.8" Color="#37538C" />
-          </LinearGradientBrush>
-        </Button.Background>
         <TextBlock Text="{StaticResource Text.Logs}" />
       </Button>
 
@@ -160,13 +202,6 @@
               Command="{Binding DeleteServerCommand}"
               IsVisible="{Binding $parent[Window].((vm:Main)DataContext).ActiveServer, Converter={x:Static ObjectConverters.IsNotNull}}"
               ToolTip.Tip="{StaticResource Text.Server.DeleteServer.Tooltip}">
-        <Button.Background>
-          <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
-            <GradientStop Offset="0.0" Color="#96B9D9" />
-            <GradientStop Offset="4.0" Color="#202959" />
-            <GradientStop Offset="0.8" Color="#37538C" />
-          </LinearGradientBrush>
-        </Button.Background>
         <Path Width="16"
               Height="16"
               Data="{StaticResource Icons.Delete}"
@@ -277,9 +312,12 @@
                               IsVisible="{Binding IsError}"
                               Orientation="Horizontal">
 
-                    <Image HorizontalAlignment="Left"
-                           Source="/Assets/fr_asset2.png"
-                           Stretch="None" />
+                    <Path Width="18"
+                          Height="18"
+                          HorizontalAlignment="Left"
+                          Data="{StaticResource Icons.Leaf}"
+                          Fill="{StaticResource Color.Accent1}"
+                          Stretch="Uniform" />
 
                     <TextBlock Margin="5,0,0,0"
                                FontFamily="{StaticResource FontDefault}"
@@ -293,9 +331,12 @@
                               IsVisible="{Binding IsError, Converter={x:Static BoolConverters.Not}}"
                               Orientation="Horizontal">
 
-                    <Image HorizontalAlignment="Left"
-                           Source="/Assets/fr_asset2.png"
-                           Stretch="None" />
+                    <Path Width="18"
+                          Height="18"
+                          HorizontalAlignment="Left"
+                          Data="{StaticResource Icons.Leaf}"
+                          Fill="{StaticResource Color.Accent1}"
+                          Stretch="Uniform" />
 
                     <TextBlock Margin="5,0,0,0"
                                FontFamily="{StaticResource FontDefault}"

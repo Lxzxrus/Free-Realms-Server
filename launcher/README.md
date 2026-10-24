@@ -176,10 +176,24 @@ folder button) instead of downloading 852 MB. That folder gets the same check an
 `clientmanifest.xml` (size and XXHash64); local copies that match are reused, anything else is downloaded. Update
 `ClientExecutableSha256` to the new `FreeRealms.exe` line (a test checks they agree).
 
+## The look
+
+Evergrove's "Deep Forest" look, the same as the repository's banner (`images/banner.svg`):
+
+- **Colours** in `src/Launcher/Resources/Colors.axaml`: night greens, a moss accent and a sun-gold Play button.
+- **The forest** behind the window (a low sun, hills and two rows of pines) is drawn in `Views/Main.axaml`, so the
+  launcher ships no background image. OSFR's starry backdrop, glossy "Play Now!" button and text-box images are gone.
+- **Fonts:** Inter for text, and **Almendra** by Ana Sanfelippo for the wordmark, headings and Play
+  (`src/Launcher/Assets/Fonts`, under the SIL Open Font License, whose text ships beside the launcher as
+  `Licenses/Almendra-OFL.txt`).
+- **The icon,** a leaf on a dark green tile (`assets/icon.png`, `src/Launcher/App.ico`), is drawn by
+  `tools/make-icon.cs`: `cd launcher/tools`, then `dotnet run make-icon.cs`. The leaf is also `Icons.Leaf` in
+  `Resources/Icons.axaml`. All of it is original artwork for Evergrove; none comes from the game client.
+
 ## Changes from OSFR's launcher
 
-- **Ours, not OSFR's:** our name, id, icon and default server, all set in `src/Directory.Build.props`. OSFR's
-  tree logo is replaced by a plain icon. The settings folder is our own, so it never mixes with an OSFR install.
+- **Ours, not OSFR's:** our name, id and default server, all set in `src/Directory.Build.props`, and our own look
+  ("Deep Forest", see [The look](#the-look)). The settings folder is our own, so it never mixes with an OSFR install.
 - **Updates from this repository's GitHub Releases** instead of OSFR's, which would have replaced our launcher
   with theirs, and only from an `https://github.com/` address. A release workflow publishes them from `main`.
 - **The game's executable is pinned** to one SHA-256 (`ClientExecutableSha256`).
@@ -205,8 +219,8 @@ folder button) instead of downloading 852 MB. That folder gets the same check an
   is Velopack's install folder. OSFR's launcher kept them in the install folder: the installer took a launcher
   that had only been run for an existing install, and uninstalling removes that folder, with every downloaded game in it. The
   first start moves an old folder's settings and servers over (`Helpers/DataFolder.cs`).
-- **Font:** OSFR bundled Maiandra GD, a commercial Microsoft font that can't be redistributed. The launcher now
-  uses Inter, which Avalonia ships.
+- **Fonts:** OSFR bundled Maiandra GD, a commercial Microsoft font that can't be redistributed. The launcher now
+  uses Inter, which Avalonia ships, and Almendra for headings (SIL Open Font License, see [The look](#the-look)).
 - Error notifications stay 8 seconds instead of 3, and the missing `Text.Main.Info` text that info notifications
   need was added.
 - Tests in `src/Launcher.Tests` for the WebAPI contract, the HTTPS rule, the launch arguments, the path checks, the
