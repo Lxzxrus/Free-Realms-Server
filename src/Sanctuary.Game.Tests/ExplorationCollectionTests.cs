@@ -56,11 +56,11 @@ public sealed class ExplorationCollectionTests
         [9002] = ("sunstone-valley", 8, [])
     };
 
-    // Entries the 2014 npc list has no coin for: two in Snowhill, two in Sanctuary, one in the Wilds Northeast,
-    // one Blackspore Elite, all eight Sacred Grove Elite (that hub isn't in our world), and one of each Sunstone
-    // Valley collection (eight entries, seven coins).
+    // Entries no coin stands for (docs/research/exploration-collections.md): Pixiewood Mist and A Royal Way In
+    // (Sanctuary Rare), Tent Dent (Wilds Southwest), all eight Sacred Grove Elite (that hub isn't in our world), and
+    // one of each Sunstone Valley collection (eight entries, seven coins): The Great Rift and Glimmerdeep Pass Overlook.
     private static readonly int[] EntriesWithoutACoin =
-        [1954, 1955, 1985, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90018];
+        [1953, 1954, 1981, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90016];
 
     private static string FindSourcePath(params string[] relativePath)
     {
