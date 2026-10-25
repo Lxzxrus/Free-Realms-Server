@@ -16,6 +16,14 @@ public enum MatchThreeResult
     Stopped
 }
 
+/// <summary>How a game went, for the log line when the player closes it.</summary>
+/// <param name="Result">None if the player left before it was won or lost.</param>
+/// <param name="Level">The level reached, 1 first; 0 if no level was started.</param>
+/// <param name="Score">Points from every level, the one in progress included.</param>
+/// <param name="Seconds">From the game's start (the tutorial closed) to now, paused time included.</param>
+public sealed record MatchThreeSummary(string Name, int GameNumber, MatchThreeResult Result, int Level, int Levels, int LevelsWon,
+    long Score, int Desyncs, double Seconds);
+
 /// <summary>
 /// The server side of one match-three game (a port of SOE's <c>GameServer</c> and its <c>SoeGameFramework</c>): takes
 /// the Flash's messages, runs the levels in order and says when each starts and ends.
@@ -44,6 +52,7 @@ public sealed class MatchThreeGame
     private readonly ILogger _logger;
 
     private long _lastTick;
+    private long? _startedAt;
     private bool _serverReadySent;
 
     public MatchThreeGame(MatchThreeGameDefinition definition, IMatchThreeOutput output, Func<long> clock, Random random, ILogger? logger = null)
@@ -66,6 +75,11 @@ public sealed class MatchThreeGame
 
     /// <summary>Points from every level played this game.</summary>
     public long TotalScore { get; private set; }
+
+    public int LevelsWon { get; private set; }
+
+    /// <summary>Times the client's board fell out of step, every level counted.</summary>
+    public int Desyncs { get; private set; }
 
     private bool CanPlay => IsInProgress && Level is { IsInProgress: true, IsPaused: false, Grid: not null };
 
@@ -170,8 +184,11 @@ public sealed class MatchThreeGame
 
         Level = null;
         TotalScore = 0;
+        LevelsWon = 0;
+        Desyncs = 0;
         Result = MatchThreeResult.None;
         IsInProgress = true;
+        _startedAt = _clock();
 
         NextLevel(1);
     }
@@ -206,6 +223,8 @@ public sealed class MatchThreeGame
             return;
 
         TotalScore += level.Score;
+        if (level.Succeeded)
+            LevelsWon++;
 
         _output.Send("OnActiveMsg", false);
         _output.Send("OnStopLevel", level.Number, level.Succeeded);
@@ -321,6 +340,7 @@ public sealed class MatchThreeGame
     {
         var level = Level!;
         level.Desyncs++;
+        Desyncs++;
 
         _logger.LogWarning("Match three ({game}, level {level}): {reason}; desync {count} of {max}.",
             Name, level.Number, reason, level.Desyncs, MaxDesyncsPerLevel);
@@ -336,6 +356,10 @@ public sealed class MatchThreeGame
 
         level.Grid!.LevelReshuffle();
     }
+
+    public MatchThreeSummary Summarize() => new(Name, _definition.GameNumber, Result, Level?.Number ?? 0, _definition.Levels.Count,
+        LevelsWon, TotalScore + (Level is { IsInProgress: true } level ? level.Score : 0), Desyncs,
+        _startedAt is { } startedAt ? (_clock() - startedAt) / 1000.0 : 0);
 
     /// <summary>Comma-separated numbers; the client ends most lists with a comma.</summary>
     public static bool TryParseList(string text, out List<int> numbers)

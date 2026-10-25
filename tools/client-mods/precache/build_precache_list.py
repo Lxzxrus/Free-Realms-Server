@@ -14,7 +14,8 @@
 import glob, hashlib, os, re, struct, sys, tarfile, zlib
 
 # game_wheel.gfx and its pictures are all in the official packs, so it adds nothing; it stays as a check.
-FLASH = ["game_mining.gfx", "mining_tutorial.gfx", "game_wheel.gfx"]
+FLASH = ["game_mining.gfx", "mining_tutorial.gfx", "game_farming.gfx", "farming_tutorial.gfx", "game_forging.gfx",
+         "forging_tutorial.gfx", "game_mailsorting.gfx", "mailsorting_tutorial.gfx", "game_wheel.gfx"]
 ZONES = ["sg_fishing_medpond", "sg_fishing_stream", "bw_fishing_medpond", "bw_fishing_stream", "sh_fishing_medpond",
          "sh_fishing_stream"]
 

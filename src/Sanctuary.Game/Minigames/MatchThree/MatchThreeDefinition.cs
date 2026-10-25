@@ -26,6 +26,9 @@ public sealed class MatchThreeDefinitions
             if (string.IsNullOrWhiteSpace(game.Name))
                 yield return "a game has no name";
 
+            if (game.GameNumber <= 0)
+                yield return $"game \"{game.Name}\" needs its GameNumber";
+
             if (game.Levels.Count == 0)
                 yield return $"game \"{game.Name}\" has no levels";
 
@@ -36,6 +39,9 @@ public sealed class MatchThreeDefinitions
 
         foreach (var name in Games.GroupBy(game => game.Name, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1))
             yield return $"game \"{name.Key}\" is defined twice";
+
+        foreach (var number in Games.Where(game => game.GameNumber > 0).GroupBy(game => game.GameNumber).Where(group => group.Count() > 1))
+            yield return $"game number {number.Key} is used twice";
     }
 
     public static bool TryLoad(string filePath, ILogger logger, out MatchThreeDefinitions definitions)
@@ -77,8 +83,17 @@ public sealed class MatchThreeDefinitions
 
 public sealed class MatchThreeGameDefinition
 {
-    /// <summary>The client's name for the game (<c>GameData.sGAME</c>): "mining" picks the ore and gem pictures.</summary>
+    /// <summary>
+    /// The client's name for the game (<c>GameData.sGAME</c>, set by each Flash's first frame): it picks the pictures.
+    /// "mining", "farming", "forging" and "mail".
+    /// </summary>
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// SOE's number for the game (the Flash's <c>ConfigServer.GAME_ID</c>): Mining 1, Mail Sorting 12, Farming 60,
+    /// Forging 62. It picked the game's rows in SOE's level tables; the client never asks for it.
+    /// </summary>
+    public int GameNumber { get; set; }
 
     /// <summary>Played in order; winning the last wins the game.</summary>
     public List<MatchThreeLevelDefinition> Levels { get; set; } = [];
@@ -112,13 +127,19 @@ public sealed class MatchThreeLevelDefinition
     /// </summary>
     public List<int[]> Grid { get; set; } = [];
 
-    /// <summary>The rocks the player chains, 1 to 5 in Mining.</summary>
+    /// <summary>
+    /// The tiles the player chains: rocks 1 to 5 in Mining and Forging, crops 1 to 16 in Farming, letters 1 to 8 in Mail
+    /// Sorting. With a quota, chained tiles fill a bin.
+    /// </summary>
     public List<MatchThreeSpawnDefinition> Selectables { get; set; } = [];
 
-    /// <summary>Ore pieces that fall out through the drop zone: 0 to 14 in Mining (iron, tin, silver, gold, copper).</summary>
+    /// <summary>
+    /// Pieces that fall out through the drop zone: ore 0 to 14 in Mining (iron, tin, silver, gold, copper), weapon pieces
+    /// 0 to 26 in Forging. Farming and Mail Sorting have none.
+    /// </summary>
     public List<MatchThreeSpawnDefinition> Collectables { get; set; } = [];
 
-    /// <summary>Gems: 0 to 9 in Mining.</summary>
+    /// <summary>Gems: 0 to 9 in Mining. The other games have none.</summary>
     public List<MatchThreeSpawnDefinition> Bonuses { get; set; } = [];
 
     /// <summary>
