@@ -58,8 +58,8 @@ public sealed class PlayerFishingHost(Player player, IResourceManager resourceMa
         {
             using var dbContext = dbContextFactory.CreateDbContext();
 
-            // Catches aren't tintable and have no icon tint, so their stack's tint is 0, as for quest rewards.
-            return RewardHelper.TryGrantItem(resourceManager, dbContext, logger, player, itemDefinitionId, tint: 0, quantity: 1)
+            // A catch takes its own tint, as every reward does.
+            return RewardHelper.TryGrantItem(resourceManager, dbContext, logger, player, itemDefinitionId, tint: null, quantity: 1)
                 ? FishingGrantResult.Granted
                 : FishingGrantResult.Failed;
         }

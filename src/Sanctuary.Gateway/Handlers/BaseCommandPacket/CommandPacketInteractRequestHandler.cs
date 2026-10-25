@@ -248,7 +248,7 @@ public static class CommandPacketInteractRequestHandler
                 return true;
             }
 
-            var dropped = AddItemToCharacter(dbCharacter, itemDefinition, tint: 0);
+            var dropped = AddItemToCharacter(dbCharacter, itemDefinition, ItemTints.Default(itemDefinition));
 
             // The owned set is the live one from the player, but the client item is only added below; count the
             // drop in by hand to see whether it finishes the collection.
@@ -360,9 +360,7 @@ public static class CommandPacketInteractRequestHandler
 
             itemDefinition = _resourceManager.ClientItemDefinitions.ForGender(itemDefinition, gender);
 
-            // The same tint rule as a quest reward.
-            var tint = itemDefinition.IsTintable ? 0 : itemDefinition.Icon.TintId;
-            granted.Add(AddItemToCharacter(dbCharacter, itemDefinition, tint));
+            granted.Add(AddItemToCharacter(dbCharacter, itemDefinition, ItemTints.Default(itemDefinition)));
         }
 
         return granted;

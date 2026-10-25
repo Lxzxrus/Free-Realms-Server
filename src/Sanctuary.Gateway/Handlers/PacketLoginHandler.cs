@@ -194,6 +194,22 @@ public static class PacketLoginHandler
             }
         }
 
+        // Rewards and pickups used to be saved with tint 0 rather than the item's own, which the client draws as a
+        // colour of its own (a white shirt came out neon red). Give those rows their own tint back. Housing items keep
+        // theirs: housing has its own rule for a tint of 0 (HousingFixtureRules.ResolveItemTintId).
+        foreach (var (item, tint) in ItemTints.FindMistinted(character.Items, _resourceManager.ClientItemDefinitions,
+            keep: StoreInventoryPurchasePolicy.IsHousingInventoryItem))
+        {
+            var itemId = item.Id;
+
+            if (dbContext.Items
+                .Where(x => x.CharacterId == character.Id && x.Id == itemId && x.Tint == 0)
+                .ExecuteUpdate(x => x.SetProperty(i => i.Tint, tint)) > 0)
+            {
+                item.Tint = tint;
+            }
+        }
+
         bool isReferee = character.User.IsMod || character.User.IsAdmin;
         if (isReferee)
         {
