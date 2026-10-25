@@ -166,6 +166,10 @@ public sealed class HouseChatCommand : IChatCommand
 
                 ChatHelper.SendSystemMessage(invoker, $"This house is now your account's ranked plot.{replaced}{entered}");
 
+                // Visitors here may now vote. Anyone visiting the old ranked plot keeps a stale panel until they come back,
+                // and a vote from it is refused with a message.
+                zone.Runtime.RefreshInstanceInfo();
+
                 _logger.LogInformation(
                     "{Player} made house {HouseId} their account's ranked plot, replacing {PreviousHouseId}.",
                     invoker.Name.FullName,
@@ -200,6 +204,8 @@ public sealed class HouseChatCommand : IChatCommand
             case PlotChangeResult.Changed:
                 ChatHelper.SendSystemMessage(invoker,
                     "This house is a personal plot again and has left the weekly competition. Its votes this week no longer count, even if you make it your ranked plot again.");
+
+                zone.Runtime.RefreshInstanceInfo();
 
                 _logger.LogInformation(
                     "{Player} made house {HouseId} a personal plot.",

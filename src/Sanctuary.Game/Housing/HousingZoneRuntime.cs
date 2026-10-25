@@ -288,17 +288,90 @@ public sealed class HousingZoneRuntime : IDisposable
             dbContext.ChangeTracker.Clear();
             var refreshedHouse = LoadHouse(dbContext);
             if (refreshedHouse is not null)
+            {
                 BroadcastHouseInfo(refreshedHouse);
 
-            // A locked plot isn't entered in the competition (PlotVoting.IsEntered), so say so.
-            if (setting == HouseSetting.Locked && refreshedHouse is { Plot: HousePlot.Ranked, IsPublished: true })
+                // A lock takes the house out of the directory, so the panels' submitted state and vote button change.
+                if (setting == HouseSetting.Locked)
+                    BroadcastInstanceInfo(dbContext, refreshedHouse);
+            }
+
+            // A locked house isn't in the directory, nor a locked plot in the competition (PlotVoting.IsEntered), so say so.
+            if (setting == HouseSetting.Locked && refreshedHouse is { IsPublished: true })
             {
-                ChatHelper.SendSystemMessage(player, value.Value
-                    ? "Your ranked plot is locked, so it has left this week's competition until you unlock it."
-                    : "Your ranked plot is unlocked and back in this week's competition.");
+                var message = (refreshedHouse.Plot, value.Value) switch
+                {
+                    (HousePlot.Ranked, true) => "Your ranked plot is locked, so it has left the house directory and this week's competition until you unlock it.",
+                    (HousePlot.Ranked, false) => "Your ranked plot is unlocked and back in the house directory and this week's competition.",
+                    (_, true) => "This house is locked, so it has left the house directory until you unlock it.",
+                    (_, false) => "This house is unlocked and back in the house directory."
+                };
+
+                ChatHelper.SendSystemMessage(player, message);
             }
 
             return value;
+        }
+    }
+
+    /// <summary>
+    /// Sends everyone in the house its directory entry again (the client's <c>Housing.InstanceInfo</c>): the name, whether
+    /// it's submitted to the directory and whether they may vote. The client reads them when the player arrives, so after
+    /// a change that isn't sent elsewhere, such as publishing, they'd stay as they were.
+    /// </summary>
+    public void RefreshInstanceInfo()
+    {
+        lock (_mutationLock)
+        {
+            if (_disposed)
+                return;
+
+            using var dbContext = _dbContextFactory.CreateDbContext();
+            var house = LoadHouse(dbContext);
+            if (house is not null)
+                BroadcastInstanceInfo(dbContext, house);
+        }
+    }
+
+    /// <summary>Names the house, if the player's account owns it and the name is allowed (<see cref="HouseNames"/>).</summary>
+    /// <returns>Whether the name changed.</returns>
+    public bool Rename(Player player, string requestedName)
+    {
+        lock (_mutationLock)
+        {
+            if (_disposed || !ReferenceEquals(player.Zone, _zone))
+                return false;
+
+            using var dbContext = _dbContextFactory.CreateDbContext();
+            var house = LoadHouse(dbContext);
+            if (house is null)
+                return false;
+
+            var name = HouseNames.Normalize(requestedName);
+            var result = IsOwner(player)
+                ? HouseNames.Validate(name, _resourceManager.NameFilter)
+                : (HouseNameResult?)null;
+
+            if (result != HouseNameResult.Valid)
+            {
+                if (result is not null)
+                    ChatHelper.SendSystemMessage(player, HouseNames.Describe(result.Value));
+
+                // The client shows its new name before asking, so send the real one back.
+                SendInstanceInfo(player, dbContext, house);
+                return false;
+            }
+
+            dbContext.Houses
+                .Where(candidate => candidate.Id == house.Id)
+                .ExecuteUpdate(setters => setters.SetProperty(candidate => candidate.Name, name));
+            house.Name = name;
+
+            _logger.LogInformation("{Player} named house {HouseId} \"{Name}\".", player.Name.FullName, _zone.HouseId, name);
+
+            BroadcastInstanceInfo(dbContext, house);
+            ChatHelper.SendSystemMessage(player, $"Your house is now called {name}.");
+            return true;
         }
     }
 
@@ -1003,7 +1076,8 @@ public sealed class HousingZoneRuntime : IDisposable
             Unknown21 = _zone.HousingDefinition.DirectorySnapshot,
             Rating = (float)standing.Score,
             Votes = standing.Votes,
-            HasRating = house.IsPublished,
+            // The client shows a house with a rating as submitted to the directory, and gives visitors the rating panel.
+            HasRating = HouseDirectory.IsListed(house.IsPublished, house.IsLocked),
             CanVote = canVote,
             FactoryPlotId = 0,
             WhenCreated = house.Created
@@ -1740,6 +1814,23 @@ public sealed class HousingZoneRuntime : IDisposable
             CurLandmarkCount = 0,
             FurnitureScore = house.FurnitureScore
         });
+    }
+
+    /// <summary>The zone data packet carries the directory entry, which the client keeps as <c>Housing.InstanceInfo</c>.</summary>
+    private void SendInstanceInfo(Player player, DatabaseContext dbContext, DbHouse house)
+    {
+        player.SendTunneled(new HousingPacketZoneData
+        {
+            CanEdit = IsOwner(player),
+            HeadSize = 10,
+            InstanceInfo = BuildInstanceInfo(dbContext, house, player)
+        });
+    }
+
+    private void BroadcastInstanceInfo(DatabaseContext dbContext, DbHouse house)
+    {
+        foreach (var player in _zone.Players)
+            SendInstanceInfo(player, dbContext, house);
     }
 
     private void BroadcastHouseInfo(DbHouse house)

@@ -212,6 +212,7 @@ public static class BaseRatingPacketHandler
         house.IsPublished = true;
         dbContext.SaveChanges();
         SendCandidateInfo(connection, dbContext, house, connection.Player.Guid);
+        RefreshInstanceInfo(connection);
 
         var message = (house.Plot, house.IsLocked) switch
         {
@@ -235,6 +236,7 @@ public static class BaseRatingPacketHandler
         house.IsPublished = false;
         dbContext.SaveChanges();
         SendCandidateInfo(connection, dbContext, house, connection.Player.Guid);
+        RefreshInstanceInfo(connection);
 
         if (house.Plot == HousePlot.Ranked)
         {
@@ -541,7 +543,7 @@ public static class BaseRatingPacketHandler
                 Name = GetHouseName(house),
                 Rating = (float)standing.Score,
                 Votes = standing.Votes,
-                HasRating = house.IsPublished,
+                HasRating = HouseDirectory.IsListed(house.IsPublished, house.IsLocked),
                 CanVote = isActiveHouse &&
                     PlotVoting.IsEntered(house.Plot, house.IsPublished, house.IsLocked) &&
                     HousePlots.FindUserId(dbContext, characterId) is ulong userId &&
@@ -550,6 +552,16 @@ public static class BaseRatingPacketHandler
         }
 
         connection.SendTunneled(response);
+    }
+
+    /// <summary>
+    /// Publishing changes whether the house is submitted, which the owner's panel shows, and whether visitors may rate and
+    /// vote, so everyone in the house gets its directory entry again.
+    /// </summary>
+    private static void RefreshInstanceInfo(GatewayConnection connection)
+    {
+        if (connection.Player.Zone is HousingZone zone)
+            zone.Runtime.RefreshInstanceInfo();
     }
 
     private static RatingDataEntry ToRatingEntry(DbHouse house, WeeklyStandings standings)
