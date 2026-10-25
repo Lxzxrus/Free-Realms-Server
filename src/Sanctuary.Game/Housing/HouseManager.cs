@@ -12,6 +12,7 @@ using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Game.Zones;
+using Sanctuary.Packet;
 
 namespace Sanctuary.Game.Housing;
 
@@ -20,17 +21,20 @@ public sealed class HouseManager : IHouseManager
     private readonly IResourceManager _resourceManager;
     private readonly IZoneManager _zoneManager;
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
+    private readonly HouseInvites _invites;
     private readonly ILogger<HouseManager> _logger;
 
     public HouseManager(
         IResourceManager resourceManager,
         IZoneManager zoneManager,
         IDbContextFactory<DatabaseContext> dbContextFactory,
+        HouseInvites invites,
         ILogger<HouseManager> logger)
     {
         _resourceManager = resourceManager;
         _zoneManager = zoneManager;
         _dbContextFactory = dbContextFactory;
+        _invites = invites;
         _logger = logger;
     }
 
@@ -134,9 +138,11 @@ public sealed class HouseManager : IHouseManager
         if (zone.OwnerId is not ulong ownerId)
             return 0;
 
-        // A snapshot: leaving the house takes each visitor out of the zone's player list.
+        // A snapshot: leaving the house takes each visitor out of the zone's player list. Invited guests stay.
         var visitors = zone.Players
-            .Where(player => !HouseAccess.MayBeInLockedHouse(player.UserId, player.Friends, zone.OwnerUserId, ownerId))
+            .Where(player =>
+                !HouseAccess.MayBeInLockedHouse(player.UserId, player.Friends, zone.OwnerUserId, ownerId) &&
+                !zone.IsGuest(player))
             .ToList();
 
         foreach (var visitor in visitors)
@@ -150,6 +156,73 @@ public sealed class HouseManager : IHouseManager
         return visitors.Count;
     }
 
+    public HouseInviteResult InviteToHouse(Player inviter, ulong inviteeGuid, out Player? invitee)
+    {
+        invitee = null;
+
+        if (inviter.Zone is not HousingZone zone || zone.OwnerId is not ulong ownerId)
+            return HouseInviteResult.NotInHouse;
+
+        if (!zone.IsOwner(inviter))
+            return HouseInviteResult.NotOwner;
+
+        if (!_zoneManager.TryGetPlayer(inviteeGuid, out invitee))
+            return HouseInviteResult.NotOnline;
+
+        if (zone.IsOwner(invitee))
+            return HouseInviteResult.NoInviteNeeded;
+
+        if (ReferenceEquals(invitee.Zone, zone))
+            return HouseInviteResult.AlreadyThere;
+
+        if (invitee.Ignores.Any(ignored => ignored.Guid == inviter.Guid))
+            return HouseInviteResult.Ignored;
+
+        _invites.Add(GuidHelper.GetPlayerId(invitee.Guid), zone.HouseId, GuidHelper.GetPlayerId(inviter.Guid), DateTimeOffset.UtcNow);
+
+        invitee.SendTunneled(new HousingPacketInviteNotification
+        {
+            InviterGuid = inviter.Guid,
+            InviteeGuid = invitee.Guid,
+            HouseGuid = GuidHelper.GetHouseGuid(zone.HouseId),
+            OwnerGuid = GuidHelper.GetPlayerGuid(ownerId),
+            InviterName = inviter.Name,
+            InviteeName = invitee.Name
+        });
+
+        _logger.LogInformation("{Inviter} invited {Invitee} into house {HouseId}.", inviter.Name.FullName, invitee.Name.FullName, zone.HouseId);
+        return HouseInviteResult.Sent;
+    }
+
+    public bool DeclineInvite(Player invitee, ulong houseGuid)
+    {
+        ulong houseId;
+
+        try
+        {
+            houseId = GuidHelper.GetHouseId(houseGuid);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
+        if (!_invites.TryRemove(GuidHelper.GetPlayerId(invitee.Guid), houseId, DateTimeOffset.UtcNow, out var inviterId))
+            return false;
+
+        if (_zoneManager.TryGetPlayer(GuidHelper.GetPlayerGuid(inviterId), out var inviter))
+        {
+            inviter.SendTunneled(new HousingPacketDeclineNotification
+            {
+                PlayerGuid = invitee.Guid,
+                HouseGuid = houseGuid,
+                Name = invitee.Name
+            });
+        }
+
+        return true;
+    }
+
     private EnterHouseResult EnterHouse(Player player, DbHouse? house)
     {
         if (house is null || !IsAvailableHouse(house.ZoneDefinitionId))
@@ -158,8 +231,11 @@ public sealed class HouseManager : IHouseManager
         if (player.Zone is not WorldZone and not HousingZone)
             return EnterHouseResult.UnsupportedSourceZone;
 
-        if (!HouseAccess.MayEnter(player.UserId, player.Friends, player.MembershipStatus != 0, house, FindOwnerUserId(house)))
+        if (!HouseAccess.MayEnter(player.UserId, player.Friends, player.MembershipStatus != 0, house, FindOwnerUserId(house)) &&
+            !_invites.IsInvited(GuidHelper.GetPlayerId(player.Guid), house.Id, DateTimeOffset.UtcNow))
+        {
             return EnterHouseResult.NotAuthorized;
+        }
 
         if (!_resourceManager.Zones.TryGetValue(house.ZoneDefinitionId, out var definition) ||
             definition is not HousingZoneDefinition zoneDefinition)

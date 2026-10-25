@@ -168,7 +168,7 @@ public static class PlotVoting
     /// </summary>
     public static bool IsEntered(HousePlot plot, bool isPublished, bool isLocked)
     {
-        return plot == HousePlot.Ranked && isPublished && !isLocked;
+        return plot == HousePlot.Ranked && HouseDirectory.IsListed(isPublished, isLocked);
     }
 
     /// <summary>

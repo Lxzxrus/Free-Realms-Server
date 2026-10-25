@@ -207,3 +207,27 @@ The numbers are settings in the Gateway's `Competition` section (`gateway.json`,
 
 1 to 5 stars is the client's, not a setting. Phase 4 (results, staff confirmation, prizes, the Hall of Fame, the
 featured winner, reports) is not built.
+
+## 9. As built: invites, house names and the directory panel
+
+- **Invites.** Standing in a house their account owns, a player can invite an online player into it with "Invite to
+  House" on the friends list. The invitee gets the client's prompt, "[Player] has invited you to enter their house."
+  Accepting brings them in **even if the house is locked or unpublished**, which is what the client's own tip promises
+  ("This prevents people from visiting your house without an invitation from you"). An invite lasts 5 minutes and is
+  used up on arrival. Once in, the guest stays when the house is locked, until they leave. Declining tells the inviter.
+  An invite to a player who ignores the inviter is dropped without a word, like a tell. Characters on the house's own
+  account need no invite. Invites live in memory, so a server restart drops unanswered ones.
+- **House names.** The owner names a house from the title bar, from the name picker or typed. A name is 3 to 32
+  characters: letters, numbers, single spaces and `' - ! & , .`. It's checked against the same name filter as character
+  and guild names (`NameFilter.txt`). A refused name gets a chat message saying why, and the client's title bar goes back
+  to the real name. Everyone in the house sees a new name straight away; the directory and My Houses show it.
+- **Directory panel.** A house is in the directory when it's published and unlocked (`HouseDirectory.IsListed`). The
+  owner's panel shows "submitted" only then: a published house that's locked shows as not submitted, since it's out of
+  the directory until it's unlocked. Visitors get the rating panel only for a listed house. Publishing, unpublishing,
+  locking, unlocking and `!house ranked`/`personal` update the panels of everyone in the house straight away; before,
+  they kept what they saw on arrival.
+- **Why a player may see no vote button.** Section 3's eligibility rules don't hide the button: a refused vote says why
+  in chat. The button is missing when the plot isn't entered (not the ranked plot, unpublished or locked) or when the
+  player's account owns the plot. Every character on the owning account gets the owner's panel instead, alts included.
+  So none of a player's characters can vote for their own ranked plot, while anyone else's account can. Staff have no
+  special voting rule.

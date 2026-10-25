@@ -11,7 +11,7 @@ sandbox (`qwen-sandbox/reports/004-ui-calls`).*
 ## Already answered
 
 Guilds (create, invite, promote, demote, kick, quit, name check), houses (enter, the house list, pick up everything,
-lock, flora, pet spawn), trading, quests (accept, decline, abandon, select, take me there), friends (add, remove,
+lock, flora, pet spawn, invites, names), trading, quests (accept, decline, abandon, select, take me there), friends (add, remove,
 ignore), equipping, coin-store buy and sell, character and guild name checks, job switching, abilities, joining
 activities, minigames, fishing, mounts, titles, teleports to points of interest, the strip-effect request, quick chat.
 
@@ -34,7 +34,6 @@ Lua binding table beside each name):
 | **Pets** | `Pet.Summon`, `Dismiss`, `PerformTrick`, `PlayWithToy`, `RaiseNeed`, `StartGroom`, `EquipItem`, `SetName`, `WasGood` | The whole pet system; no pet handler exists |
 | **Groups (parties)** | `Ui.InviteToGroup`, `GroupScreen.DepartGroup`, `RemovePlayerFromGroupByGuid`, `Ui.TargetGroupMember` | No group handler; matters for group activities |
 | **Storage (bank)** | `Ui.InitializeStorage`, `RequestStorageUsage`, `SendItemToStorage` | No storage handler |
-| **House invites and names** | `House.InviteToHouse`, `House.SetName`, `SetNameCustom` | The rest of housing is handled |
 | **Coin-store buy-back** | `CoinStoreScreen.BuyBackItem` | Buying back something you sold |
 | **Use an item** | `EquipScreen.UseImmediateActivationItem`, `CheckImmediateActivationItem` | Consumables used from the inventory |
 | **Crafting** | `Ui.RecipeStart`, `Factory.CreateBlueprint`, `AddBlueprintToFoundation`, `RequestToolData` | Recipes and the blueprint factory |

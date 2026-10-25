@@ -126,6 +126,7 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<IQuestManager, QuestManager>();
     serviceCollection.AddSingleton<IJobManager, JobManager>();
     serviceCollection.AddSingleton<IHouseManager, HouseManager>();
+    serviceCollection.AddSingleton<HouseInvites>();
     serviceCollection.AddSingleton<HousingCreativeCatalog>();
     serviceCollection.AddSingleton<TradeOptions>();
     serviceCollection.AddSingleton<ITradeCommitter, TradeCommitter>();
