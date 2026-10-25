@@ -11,6 +11,7 @@ using Sanctuary.Core.IO;
 using Sanctuary.Game;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
+using Sanctuary.Game.Minigames.Mimic;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -20,7 +21,8 @@ namespace Sanctuary.Gateway.Handlers;
 /// <summary>
 /// Launches the Flash minigames the server knows about, with the client's start screen, and carries their messages.
 /// A match-three game (Mining, Farming, Forging, Mail Sorting) is played by <see cref="MatchThreeGame"/> with the levels
-/// in <c>Resources/MatchThree.json</c>; see docs/research/mining.md.
+/// in <c>Resources/MatchThree.json</c>; see docs/research/mining.md. A Mimic game (Cooking) is a recipe in
+/// <c>Resources/Mimic.json</c>, served by <see cref="MimicHandler"/>; see docs/research/mimic.md.
 /// </summary>
 /// <remarks>
 /// Flow (FreeRealms.exe, docs/research/daily-wheel.md): MiniGameInfo with the start-screen flag on opens a session
@@ -68,7 +70,7 @@ public static class FlashMinigameHandler
     /// <summary>Opens the start screen for a known Flash minigame. False if the activity isn't one.</summary>
     public static bool TryOpen(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
     {
-        if (!Definitions.TryGetValue(activity.Id, out var definition))
+        if (!Definitions.TryGetValue(activity.Id, out var definition) && !MimicHandler.TryDefine(activity.Id, out definition))
             return false;
 
         var player = connection.Player;
@@ -163,6 +165,9 @@ public static class FlashMinigameHandler
                 _logger.LogError("Minigame: no match-three game \"{name}\" in MatchThree.json; {swf} will have no board.", name, session.Definition.Swf);
         }
 
+        if (session.Definition.MimicGame is not null)
+            MimicHandler.Start(connection, session, new Output(connection, session.StateId));
+
         _logger.LogInformation("Minigame: session {stateId} started; sending {swf}.", stateId, session.Definition.Swf);
 
         connection.SendTunneled(new MiniGameGameStartPacket(stateId, -1, -1));
@@ -197,6 +202,8 @@ public static class FlashMinigameHandler
             game.Handle(message);
             LogResult(connection, session, game);
         }
+        else if (session.Mimic is not null)
+            MimicHandler.Handle(connection, session, message);
         else if (message[0] == "FRServer_Connect")
             Send(connection, session, "OnServerReadyMsg");
 
@@ -246,7 +253,7 @@ public static class FlashMinigameHandler
         new Output(connection, session.StateId).Send(name, args);
 
     /// <summary>Messages to the game's Flash: minigame payloads, tab-separated and NUL-terminated.</summary>
-    private sealed class Output(GatewayConnection connection, int stateId) : IMatchThreeOutput
+    private sealed class Output(GatewayConnection connection, int stateId) : IMatchThreeOutput, IMimicOutput
     {
         public void Send(string name, params object[] args)
         {

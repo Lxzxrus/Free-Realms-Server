@@ -8,7 +8,9 @@ namespace Sanctuary.Game.Minigames;
 /// <param name="Type">The client's MiniGameTypeData.txt type, e.g. 8 for match three.</param>
 /// <param name="Swf">The Flash file the client loads, from its packs or the asset server.</param>
 /// <param name="MatchThreeGame">The game in <c>Resources/MatchThree.json</c> the server plays, if it's a match three.</param>
-public sealed record FlashMinigameDefinition(int ActivityId, int GameId, int Type, string Swf, string? MatchThreeGame = null);
+/// <param name="MimicGame">The game in <c>Resources/Mimic.json</c> whose recipe the activity plays, if it's a Mimic game.</param>
+public sealed record FlashMinigameDefinition(int ActivityId, int GameId, int Type, string Swf, string? MatchThreeGame = null,
+    string? MimicGame = null);
 
 /// <summary>One Flash minigame a player has open: from the start screen to closing it.</summary>
 public sealed class FlashMinigameSession
@@ -36,6 +38,12 @@ public sealed class FlashMinigameSession
 
     /// <summary>The result already logged, so each is logged once.</summary>
     public MatchThree.MatchThreeResult LoggedResult { get; set; }
+
+    /// <summary>The server's side of a Mimic game (Cooking), from Go on.</summary>
+    public Mimic.MimicGame? Mimic { get; set; }
+
+    /// <summary>The Mimic result already logged and paid, so each game pays once.</summary>
+    public Mimic.MimicResult SettledMimicResult { get; set; }
 
     /// <summary>True the first time a message name is seen, while the per-session limit allows.</summary>
     public bool ShouldLog(string messageName)
