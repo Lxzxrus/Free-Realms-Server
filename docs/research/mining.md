@@ -78,6 +78,39 @@ locked rock arrives as 500 plus its type), 400 rocks, 600 ore, 700 gems, 800 blo
 spawns, 3 a blocker, 4 drop zone. Row 0 and column 0 must be 0: the fall code on both sides starts new tiles in the
 row above the first full one and never looks at column 0. Mining Practice is 8 by 8 rocks over a row of drop zone.
 
+## Farming, Forging and Mail Sorting
+
+Found on 2026-10-25 by diffing each game's decompiled Flash against Mining's and listing what each `.gfx` exports. The
+three run the same server code as Mining byte for byte (only `ConfigServer.GAME_ID` differs) and the same client code
+apart from sounds, music, the tutorial and the game name their first frame passes to `GameClient`. What does differ is
+the art, and that decides how each game plays:
+
+| Game | Activity wired (MiniGameData row) | Game name (`sGAME`) | GAME_ID | Tiles it can draw | Bins | Mold meter |
+|---|---|---|---|---|---|---|
+| Mining | Mining Practice 1113 (375) | `mining` | 1 | rocks 1-5, ore 0-14, gems 0-9 | 5 | no |
+| Farming | Queensfields Harvesting 410 (109) | `farming` | 60 | crops 1-16 | 5 | no |
+| Mail Sorting | Sanctuary Mail Sorting 414 (376) | `mail` | 12 | letters 1-8 | 5 | no |
+| Forging | Forging: Quick Shot Bow 420 (138) | `forging` | 62 | metals 1-5, weapon pieces 0-26 | 2 | yes, molds 1-27 |
+
+- **Farming and Mail Sorting have no ore or gem pictures at all** (no `Collectible_Combined_*` clip). Their bins count
+  the tiles the player chains: the client flies each chained tile into the bin of its value (`Grid` calls `TileToBin`
+  for every tile of a chain), and the server counts chained rocks against their quota. So their levels put quotas on
+  selectables.
+- **Forging** drops weapon pieces through the drop zone like Mining's ore, and has a **mold meter**: `OnLevelEventMsg
+  32 mold total` shows clip `mold<mold>` (mold N is the outline of weapon piece N - 1; 14 is the bow, checked by
+  rendering the pictures), and each piece in a bin fills it by `100 / total` frames. With a mold meter the bins show no
+  label or count, only the filling mold.
+- **No game draws the score power-ups.** Every `PowerUp_Combined` holds more time, dynamite, wild tiles, destruct and
+  shuffle; double and five-times score (901, 902) show its first picture instead. The shipped levels leave them out.
+- **Bin labels are one off.** A bin's label is the client's `<game>Value<value>` string (`Resources/CodeStringMappings.txt`,
+  then the locale). SOE numbered them from 1 where the pictures count from 0: `miningValue612` (copper's low-quality
+  picture) says Gold, and 613-614 say Copper; `forgingValue601` is Sword, the picture of piece 0. Farming's 401-416
+  (Gummyfruit to Tumtumnip) and Mail Sorting's 401-408 (Sealed Envelope to Box) match their pictures.
+- **The game number is only the server's.** `GAME_ID` picked the game's rows in SOE's level tables; no message carries
+  it. Evergrove keeps it as `GameNumber` in `MatchThree.json` and logs it.
+- Each `.gfx`, its tutorial (`<game>_tutorial.gfx`, `GameTutorialData.txt` rows 2 to 5) and their `img*.dds` pictures
+  are on the launcher's pre-cache list.
+
 ## Where Evergrove's server differs from SOE's
 
 SOE's server trusted its own client. Evergrove's checks, and recovers instead of ending the game:
@@ -115,8 +148,9 @@ packs or on the pre-cache list.
 - **What the client does at the end of a game.** It sends `FRServer_GameOver` after a win or loss; the live server
   probably answered with a results screen and rewards (`OnShowEndRoundScreenMsg`?). Evergrove sends nothing yet: the
   player leaves with the exit button.
-- **What the quota bin's icon id is.** Mining Practice sends 698, the Copper Ore item's icon; check the bin.
+- **What the quota bin's icon id is.** Mining Practice sends 698, the Copper Ore item's icon. The client stores it and
+  never draws it; the bin shows the tile's own picture.
 - **Rewards.** Practice pays nothing. Real Mining (copper to gold) should pay the ore collected, through
   `RewardHelper`, once the economy pass sets amounts.
-- Strings the client looks up by name (`miningValue612`, the tutorial) come from its own tables; any missing show
-  blank.
+- Strings the client looks up by name (`miningValue613`, `MatchThreeReady`...) are in its own
+  `Resources/CodeStringMappings.txt`, which maps each name to a string id; see the section on the other games.

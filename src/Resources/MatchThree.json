@@ -1,22 +1,40 @@
-// Evergrove's match-three levels (Mining and, later, the other match-three games). SOE's level tables never shipped
-// with the client, so every number here is ours. The fields are explained in
-// src/Sanctuary.Game/Minigames/MatchThree/MatchThreeDefinition.cs and docs/research/mining.md.
+// Evergrove's match-three levels. SOE's level tables never shipped with the client, so every number here is ours. The
+// fields are explained in src/Sanctuary.Game/Minigames/MatchThree/MatchThreeDefinition.cs and docs/research/mining.md.
 //
-// Mining's pictures: rocks 1 to 5; ore 0-2 iron, 3-5 tin, 6-8 silver, 9-11 gold, 12-14 copper (low, medium, high
-// quality); gems 0 tourmaline, 1 topaz, 2 onyx, 3 moonstone, 4 turquoise, 5 amethyst, 6 garnet, 7 ruby, 8 fire agate,
-// 9 malachite. Power-ups: 0 more time, 1 double score, 2 five times score, 50 dynamite, 51 wild tiles, 52 destruct,
-// 53 shuffle.
+// "Name" is the client's own name for the game (the Flash's GameData.sGAME), which picks the pictures; "GameNumber" is
+// SOE's number for it (the Flash's ConfigServer.GAME_ID), which picked its rows in SOE's lost level tables.
+//
+// What each game's Flash can draw (a type it can't draw shows a blank or a wrong picture):
+// - mining: rocks 1 to 5; ore 0-2 iron, 3-5 tin, 6-8 silver, 9-11 gold, 12-14 copper (low, medium, high quality);
+//   gems 0 tourmaline, 1 topaz, 2 onyx, 3 moonstone, 4 turquoise, 5 amethyst, 6 garnet, 7 ruby, 8 fire agate,
+//   9 malachite. A bin's label is the client's string "miningValue<value>", and SOE's are one off from the pictures:
+//   601-603 say Iron, 604-606 Tin, 607-609 Silver, 610-612 Gold, 613-614 Copper. So copper ore is 13 or 14.
+// - farming: crops 1 to 16 (1 Gummyfruit, 2 Snowberry, 3 Spiralmint, 4 Moonbean, 5 Choychoy, 6 Sunleaf, 7 Honeytwig,
+//   8 Punkin, 9 Briarmelon, 10 Rainleaf, 11 Stickfruit, 12 Starnut, 13 Stainberry, 14 Chugaroot, 15 Bumbleberry,
+//   16 Tumtumnip). No ore or gems: the bins count the crops the player chains.
+// - mail: letters 1 to 8 (1 Sealed Envelope, 2 Blue Envelope, 3 Box with Twine, 4 Gift Box, 5 Stamped Envelope,
+//   6 Opened Envelope, 7 Scroll, 8 Box). No ore or gems: the bins count the letters the player chains.
+// - forging: metals 1 to 5; weapon pieces 0 to 26 (0 Sword, 1 Armor, 2 Chest, 3 Halberd, 4 Katana, 5 Hammer, 6 Pickaxe,
+//   7 Pan, 8 Wand, 9 Reflex, 10 Hockey, 11 Baseball, 12 Crowbar, 13 Bow, 14 Bonesaw, 15 Scalpel, 16 Scythe,
+//   17 Chest2, 18 Potions, 19 Feet, 20 Rune, 21 Housing, 22 Hands, 23 Head, 24 Legs, 25 Shoulders, 26 Pets); no gems.
+//   Two bins only, and a mold meter instead of bin labels: MoldId N is the mold of weapon piece N - 1 (14 is the bow),
+//   and it fills by 100 / (the level's total quota) per piece, so keep that total a divisor of 100.
+//
+// Power-ups: 0 more time, 1 double score, 2 five times score, 50 dynamite, 51 wild tiles, 52 destruct, 53 shuffle. None
+// of the four games has a picture for 1 or 2 (they show the first power-up picture instead), so the levels leave them
+// out. More time falls out through the drop zone like ore, which is why every board keeps a drop-zone row.
 {
   "Games": [
     {
       "Name": "mining",
+      "GameNumber": 1,
       "Levels": [
         {
           "Comment": "Mining Practice: chain rocks so copper ore falls out through the bottom; five pieces win.",
           "DurationSeconds": 60,
           "ChainSecondsPerTile": 1,
           "StopAtQuota": true,
-          "SpawnChances": { "Selectable": 85, "Collectable": 8, "Powerup": 3, "Hazard": 2, "Wildcard": 2 },
+          "SpawnChances": { "Selectable": 78, "Collectable": 15, "Powerup": 3, "Hazard": 2, "Wildcard": 2 },
           "Grid": [
             [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
             [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
@@ -37,12 +55,319 @@
             { "Type": 5, "Chance": 20 }
           ],
           "Collectables": [
-            { "Comment": "Copper ore, low quality. Icon 698 is the Copper Ore item's (a guess at what the bin shows).", "Type": 12, "Chance": 1, "Quota": 5, "IconId": 698 }
+            {
+              "Comment": "Copper ore, medium quality: 613's bin says Copper (612's says Gold). Icon 698 is the Copper Ore item's (a guess at what the bin shows).",
+              "Type": 13,
+              "Chance": 1,
+              "Quota": 5,
+              "IconId": 698
+            }
           ],
           "Powerups": [
-            { "Comment": "More time", "Type": 0, "Chance": 40, "Duration": 5 },
-            { "Comment": "Double score", "Type": 1, "Chance": 30, "Duration": 10 },
-            { "Comment": "Dynamite", "Type": 50, "Chance": 30, "Power": 5 }
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "farming",
+      "GameNumber": 60,
+      "Levels": [
+        {
+          "Comment": "Farming 1: chained crops go into the baskets; fill Gummyfruit and Snowberry.",
+          "DurationSeconds": 90,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "SpawnChances": { "Selectable": 92, "Powerup": 4, "Hazard": 2, "Wildcard": 2 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Comment": "Gummyfruit", "Type": 1, "Chance": 20, "Quota": 15 },
+            { "Comment": "Snowberry", "Type": 2, "Chance": 20, "Quota": 15 },
+            { "Type": 3, "Chance": 20 },
+            { "Type": 4, "Chance": 20 },
+            { "Type": 5, "Chance": 20 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
+          ]
+        },
+        {
+          "Comment": "Farming 2: three baskets.",
+          "DurationSeconds": 90,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "SpawnChances": { "Selectable": 90, "Powerup": 4, "Hazard": 3, "Wildcard": 3 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Comment": "Sunleaf", "Type": 6, "Chance": 20, "Quota": 18 },
+            { "Type": 7, "Chance": 20 },
+            { "Comment": "Punkin", "Type": 8, "Chance": 20, "Quota": 18 },
+            { "Comment": "Briarmelon", "Type": 9, "Chance": 20, "Quota": 18 },
+            { "Type": 10, "Chance": 20 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
+          ]
+        },
+        {
+          "Comment": "Farming 3: six crops on the field and four baskets.",
+          "DurationSeconds": 120,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "SpawnChances": { "Selectable": 88, "Powerup": 4, "Hazard": 4, "Wildcard": 4 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Type": 11, "Chance": 20 },
+            { "Comment": "Starnut", "Type": 12, "Chance": 20, "Quota": 15 },
+            { "Comment": "Stainberry", "Type": 13, "Chance": 20, "Quota": 15 },
+            { "Comment": "Chugaroot", "Type": 14, "Chance": 20, "Quota": 15 },
+            { "Type": 15, "Chance": 20 },
+            { "Comment": "Tumtumnip", "Type": 16, "Chance": 20, "Quota": 15 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "mail",
+      "GameNumber": 12,
+      "Levels": [
+        {
+          "Comment": "Mail Sorting 1: chained letters go into the mail bags; fill the Sealed and Blue Envelope bags.",
+          "DurationSeconds": 90,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "SpawnChances": { "Selectable": 92, "Powerup": 4, "Hazard": 2, "Wildcard": 2 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Comment": "Sealed Envelope", "Type": 1, "Chance": 20, "Quota": 15 },
+            { "Comment": "Blue Envelope", "Type": 2, "Chance": 20, "Quota": 15 },
+            { "Type": 3, "Chance": 20 },
+            { "Type": 4, "Chance": 20 },
+            { "Type": 5, "Chance": 20 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
+          ]
+        },
+        {
+          "Comment": "Mail Sorting 2: the parcels.",
+          "DurationSeconds": 90,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "SpawnChances": { "Selectable": 90, "Powerup": 4, "Hazard": 3, "Wildcard": 3 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Comment": "Box with Twine", "Type": 3, "Chance": 20, "Quota": 18 },
+            { "Type": 4, "Chance": 20 },
+            { "Comment": "Opened Envelope", "Type": 6, "Chance": 20, "Quota": 18 },
+            { "Comment": "Scroll", "Type": 7, "Chance": 20, "Quota": 18 },
+            { "Type": 8, "Chance": 20 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
+          ]
+        },
+        {
+          "Comment": "Mail Sorting 3: six kinds of post and four bags.",
+          "DurationSeconds": 120,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "SpawnChances": { "Selectable": 88, "Powerup": 4, "Hazard": 4, "Wildcard": 4 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Type": 1, "Chance": 20 },
+            { "Comment": "Blue Envelope", "Type": 2, "Chance": 20, "Quota": 15 },
+            { "Comment": "Gift Box", "Type": 4, "Chance": 20, "Quota": 15 },
+            { "Comment": "Stamped Envelope", "Type": 5, "Chance": 20, "Quota": 15 },
+            { "Type": 7, "Chance": 20 },
+            { "Comment": "Box", "Type": 8, "Chance": 20, "Quota": 15 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "forging",
+      "GameNumber": 62,
+      "Levels": [
+        {
+          "Comment": "Forging 1 (Quick Shot Bow): chain metals so bow pieces fall out through the bottom; ten fill the bow's mold (MoldId 14).",
+          "DurationSeconds": 90,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "MoldId": 14,
+          "SpawnChances": { "Selectable": 73, "Collectable": 18, "Powerup": 5, "Hazard": 2, "Wildcard": 2 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Type": 1, "Chance": 20 },
+            { "Type": 2, "Chance": 20 },
+            { "Type": 3, "Chance": 20 },
+            { "Type": 4, "Chance": 20 },
+            { "Type": 5, "Chance": 20 }
+          ],
+          "Collectables": [
+            { "Comment": "Bow pieces", "Type": 13, "Chance": 1, "Quota": 10 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
+          ]
+        },
+        {
+          "Comment": "Forging 2: twenty bow pieces.",
+          "DurationSeconds": 90,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "MoldId": 14,
+          "SpawnChances": { "Selectable": 71, "Collectable": 18, "Powerup": 5, "Hazard": 3, "Wildcard": 3 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Type": 1, "Chance": 20 },
+            { "Type": 2, "Chance": 20 },
+            { "Type": 3, "Chance": 20 },
+            { "Type": 4, "Chance": 20 },
+            { "Type": 5, "Chance": 20 }
+          ],
+          "Collectables": [
+            { "Comment": "Bow pieces", "Type": 13, "Chance": 1, "Quota": 20 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
+          ]
+        },
+        {
+          "Comment": "Forging 3: twenty-five bow pieces, and more locked metal.",
+          "DurationSeconds": 120,
+          "ChainSecondsPerTile": 1,
+          "StopAtQuota": true,
+          "MoldId": 14,
+          "SpawnChances": { "Selectable": 69, "Collectable": 18, "Powerup": 5, "Hazard": 4, "Wildcard": 4 },
+          "Grid": [
+            [ 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 0, 4, 4, 4, 4, 4, 4, 4, 4 ]
+          ],
+          "Selectables": [
+            { "Type": 1, "Chance": 20 },
+            { "Type": 2, "Chance": 20 },
+            { "Type": 3, "Chance": 20 },
+            { "Type": 4, "Chance": 20 },
+            { "Type": 5, "Chance": 20 }
+          ],
+          "Collectables": [
+            { "Comment": "Bow pieces", "Type": 13, "Chance": 1, "Quota": 25 }
+          ],
+          "Powerups": [
+            { "Comment": "More time", "Type": 0, "Chance": 50, "Duration": 5 },
+            { "Comment": "Dynamite", "Type": 50, "Chance": 50, "Power": 5 }
           ]
         }
       ]

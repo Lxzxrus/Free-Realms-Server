@@ -44,10 +44,19 @@ public sealed class MatchThreeTests
         throw new FileNotFoundException("src/Resources/MatchThree.json not found above the test output.");
     }
 
-    private static MatchThreeGameDefinition Mining()
+    private static MatchThreeGameDefinition Game(string name)
     {
         Assert.IsTrue(MatchThreeDefinitions.TryLoad(FindShipped(), NullLogger.Instance, out var definitions));
-        return definitions.Find("mining") ?? throw new AssertFailedException("No mining game.");
+        return definitions.Find(name) ?? throw new AssertFailedException($"No {name} game.");
+    }
+
+    private static MatchThreeGameDefinition Mining() => Game("mining");
+
+    /// <summary>One shipped level on its own, as level 1 of a game.</summary>
+    private static MatchThreeGameDefinition OnlyLevel(string name, int level)
+    {
+        var game = Game(name);
+        return new MatchThreeGameDefinition { Name = game.Name, GameNumber = game.GameNumber, Levels = [game.Levels[level - 1]] };
     }
 
     private static (MatchThreeGame Game, Recorder Output, Clock Clock) Start(MatchThreeGameDefinition definition, int seed = 7)
@@ -68,9 +77,10 @@ public sealed class MatchThreeTests
     /// then chains three touching rocks of one kind (wildcards join any), or else clicks a dynamite, picking its
     /// tiles with the shared random numbers the way the client's own code does.
     /// </summary>
-    private sealed class ScriptedClient(MatchThreeGame game, Recorder output)
+    /// <remarks>A new level builds a new board, so a client per level reads only what was sent from <paramref name="from"/> on.</remarks>
+    private sealed class ScriptedClient(MatchThreeGame game, Recorder output, int from = 0)
     {
-        private int _seen;
+        private int _seen = from;
         private int _randomIndex;
 
         public MatchThreeGrid Grid => game.Level!.Grid!;
@@ -121,7 +131,7 @@ public sealed class MatchThreeTests
 
         private int NextRandom()
         {
-            var numbers = output.Named("OnRandomQueueMsg").SelectMany(message => ((string)message.Args[0]).Split(',')).Select(int.Parse).ToList();
+            var numbers = output.Messages.Skip(from).Where(message => message.Name == "OnRandomQueueMsg").SelectMany(message => ((string)message.Args[0]).Split(',')).Select(int.Parse).ToList();
             return numbers[_randomIndex++];
         }
 
@@ -296,8 +306,8 @@ public sealed class MatchThreeTests
 
         Assert.AreEqual(5 + 1, output.Named("OnTileInfoMsg").Count(), "Five rocks and one ore.");
         Assert.AreEqual("OnLevelInitMsg\t1\t60\t2", MatchThreeGame.Format("OnLevelInitMsg", output.Named("OnLevelInitMsg").Single().Args));
-        Assert.AreEqual("OnQuotaInitMsg\t0\t612\t5\t1\t698", MatchThreeGame.Format("OnQuotaInitMsg", output.Named("OnQuotaInitMsg").Single().Args));
-        Assert.AreEqual(3, output.Named("OnPowerupInitMsg").Count());
+        Assert.AreEqual("OnQuotaInitMsg\t0\t613\t5\t1\t698", MatchThreeGame.Format("OnQuotaInitMsg", output.Named("OnQuotaInitMsg").Single().Args));
+        Assert.AreEqual(2, output.Named("OnPowerupInitMsg").Count());
 
         // Every playable cell holds a tile the client can see.
         for (var y = 1; y < grid.Height - 1; y++)
@@ -404,8 +414,10 @@ public sealed class MatchThreeTests
         Assert.AreEqual(0, level.Desyncs);
         Assert.IsFalse(level.IsInProgress, "The quota ends the level (StopAtQuota).");
         Assert.IsTrue(level.Succeeded);
-        Assert.AreEqual(5, level.Collectables[12].Collected);
-        Assert.AreEqual(5, output.Named("OnQuotaUpdateMsg").Count());
+        // Two pieces can fall out in one move, so the last move may take the count past the quota.
+        var copper = level.Collectables[13].Collected;
+        Assert.IsTrue(copper >= 5, $"{copper} copper collected.");
+        Assert.AreEqual(copper, output.Named("OnQuotaUpdateMsg").Count());
         Assert.AreEqual("OnStopLevel\t1\ttrue", MatchThreeGame.Format("OnStopLevel", output.Named("OnStopLevel").Single().Args));
 
         game.Handle(["OnNextLevelMsg"]);
@@ -421,7 +433,7 @@ public sealed class MatchThreeTests
         game.Handle(["OnLevelEventMsg", "50", "3", "3"]);
 
         Assert.AreEqual(1, game.Level!.Desyncs);
-        Assert.AreEqual(0, game.Level.Collectables[12].Collected);
+        Assert.AreEqual(0, game.Level.Collectables[13].Collected);
     }
 
     [TestMethod]
@@ -528,5 +540,238 @@ public sealed class MatchThreeTests
         Assert.AreEqual(0, game.Level.Desyncs);
         Assert.IsTrue(game.Level.Wave > 1, "Waves come every hundred tiles.");
         Assert.IsTrue(output.Named("OnRandomQueueMsg").Any());
+    }
+
+    private static int[] Range(int first, int last) => [.. Enumerable.Range(first, last - first + 1)];
+
+    /// <summary>
+    /// What each game's Flash can draw, read from its .gfx: the frame labels of its <c>Selectable_Combined</c>,
+    /// <c>Collectible_Combined_Reg</c> and <c>_Bonus</c> clips, under the names its <c>TileGenerator</c> gives each type.
+    /// Farming and Mail Sorting have no ore or gem clips at all, and Forging no gem clip. Then the quota bins on screen
+    /// (<c>mBin1</c> to <c>mBin5</c>; Forging has two).
+    /// </summary>
+    private static readonly Dictionary<string, (int[] Selectables, int[] Collectables, int[] Bonuses, int Bins)> Art = new()
+    {
+        ["mining"] = (Range(1, 5), Range(0, 14), Range(0, 9), 5),
+        ["farming"] = (Range(1, 16), [], [], 5),
+        ["mail"] = (Range(1, 8), [], [], 5),
+        ["forging"] = (Range(1, 5), Range(0, 26), [], 2)
+    };
+
+    /// <summary>Every game's <c>PowerUp_Combined</c> draws more time, dynamite, wild tiles, destruct and shuffle; no score multipliers.</summary>
+    private static readonly int[] PowerupArt = [0, 50, 51, 52, 53];
+
+    [TestMethod]
+    [DataRow("mining", 1, 1)]
+    [DataRow("farming", 60, 3)]
+    [DataRow("forging", 62, 3)]
+    [DataRow("mail", 12, 3)]
+    public void ShippedGames_HaveTheirNumbersAndLevels(string name, int number, int levels)
+    {
+        var game = Game(name);
+
+        Assert.AreEqual(number, game.GameNumber, "The Flash's ConfigServer.GAME_ID.");
+        Assert.AreEqual(levels, game.Levels.Count);
+    }
+
+    [TestMethod]
+    public void ShippedLevels_OnlyUseWhatTheirGameCanDraw()
+    {
+        Assert.IsTrue(MatchThreeDefinitions.TryLoad(FindShipped(), NullLogger.Instance, out var definitions));
+
+        foreach (var game in definitions.Games)
+        {
+            Assert.IsTrue(Art.TryGetValue(game.Name, out var art), $"{game.Name} isn't a match-three Flash the client has.");
+
+            foreach (var (level, number) in game.Levels.Select((level, i) => (level, i + 1)))
+            {
+                var where = $"{game.Name} level {number}";
+
+                CollectionAssert.IsSubsetOf(level.Selectables.Select(spawn => spawn.Type).ToList(), art.Selectables, where);
+                CollectionAssert.IsSubsetOf(level.Collectables.Select(spawn => spawn.Type).ToList(), art.Collectables, where);
+                CollectionAssert.IsSubsetOf(level.Bonuses.Select(spawn => spawn.Type).ToList(), art.Bonuses, where);
+                CollectionAssert.IsSubsetOf(level.Powerups.Select(spawn => spawn.Type).ToList(), PowerupArt, where);
+
+                var bins = level.Selectables.Concat(level.Collectables).Count(spawn => spawn.Quota > 0 || spawn.RequiredPerReward > 0) + level.Bonuses.Count;
+                Assert.IsTrue(bins <= art.Bins, $"{where}: {bins} quota bins, the screen has {art.Bins}.");
+
+                // Ore and the more-time power-up leave through the drop zone.
+                if (level.Collectables.Count > 0 || level.Powerups.Any(spawn => spawn.Type < 50))
+                    Assert.IsTrue(level.Grid.Any(row => row.Contains(MatchThreeTiles.ShapeDropZone)), $"{where} needs a drop zone.");
+            }
+        }
+    }
+
+    [TestMethod]
+    public void MiningsCopperBin_SaysCopper()
+    {
+        // The bin's label is the client's "miningValue<value>": 612 says Gold, 613 and 614 say Copper.
+        foreach (var level in Mining().Levels)
+            foreach (var ore in level.Collectables.Where(spawn => spawn.Quota > 0))
+                CollectionAssert.Contains(new[] { 13, 14 }, ore.Type);
+    }
+
+    [TestMethod]
+    public void ForgingsMold_FillsExactly()
+    {
+        // MoldId 14 is the bow's mold (N is weapon piece N - 1, the bow is 13), and the meter moves 100 / total per piece.
+        foreach (var level in Game("forging").Levels)
+        {
+            var total = level.Collectables.Sum(spawn => spawn.Quota) + level.Selectables.Sum(spawn => spawn.Quota);
+
+            Assert.AreEqual(14, level.MoldId);
+            Assert.IsTrue(level.Collectables.All(spawn => spawn.Type == 13), "Bow pieces for the bow's mold.");
+            Assert.AreEqual(0, 100 % total, $"A total quota of {total} leaves the mold part-filled.");
+        }
+    }
+
+    [TestMethod]
+    public void Problems_NeedAGameNumberUsedOnce()
+    {
+        var definitions = new MatchThreeDefinitions { Games = [Game("farming"), Game("mail")] };
+        Assert.AreEqual(0, definitions.Problems().Count());
+
+        definitions.Games[1].GameNumber = 0;
+        Assert.IsTrue(definitions.Problems().Any(problem => problem.Contains("GameNumber")));
+
+        definitions.Games[1].GameNumber = definitions.Games[0].GameNumber;
+        Assert.IsTrue(definitions.Problems().Any(problem => problem.Contains("used twice")));
+    }
+
+    [TestMethod]
+    [DataRow("farming", 1)]
+    [DataRow("farming", 2)]
+    [DataRow("farming", 3)]
+    [DataRow("forging", 1)]
+    [DataRow("forging", 2)]
+    [DataRow("forging", 3)]
+    [DataRow("mail", 1)]
+    [DataRow("mail", 2)]
+    [DataRow("mail", 3)]
+    public void EveryLevel_StartsWithAWholeBoard(string name, int number)
+    {
+        var definition = OnlyLevel(name, number);
+        var level = definition.Levels[0];
+        var (game, output, _) = Start(definition);
+        var grid = game.Level!.Grid!;
+
+        Assert.AreEqual(level.Selectables.Count + level.Collectables.Count + level.Bonuses.Count, output.Named("OnTileInfoMsg").Count());
+        Assert.AreEqual(level.Selectables.Concat(level.Collectables).Count(spawn => spawn.Quota > 0), output.Named("OnQuotaInitMsg").Count());
+        Assert.AreEqual(level.MoldId, output.Events(MatchThreeEvents.MeterInit).Single()[1]);
+        Assert.AreEqual(level.Powerups.Count, output.Named("OnPowerupInitMsg").Count());
+
+        // The bins come in tile-value order, one each.
+        var bins = output.Named("OnQuotaInitMsg").Select(message => (int)message.Args[0]).ToList();
+        CollectionAssert.AreEqual(Enumerable.Range(0, bins.Count).ToList(), bins);
+
+        for (var y = 1; y < grid.Height - 1; y++)
+            for (var x = 1; x < grid.Width; x++)
+                Assert.IsTrue(grid.At(x, y)?.Category >= MatchThreeTiles.Visible, $"{x},{y} is empty.");
+
+        Assert.IsTrue(grid.HasMove());
+        Assert.AreEqual("OnActiveMsg", output.Messages[^1].Name);
+    }
+
+    [TestMethod]
+    [DataRow("farming", 3)]
+    [DataRow("forging", 5)]
+    [DataRow("mail", 7)]
+    public void AWholeGame_IsWonLevelByLevel_InLockstep(string name, int seed)
+    {
+        // The shipped quotas, with time that never runs out: each level ends when its bins are full.
+        var definition = Game(name);
+        foreach (var level in definition.Levels)
+            level.DurationSeconds = 100_000;
+
+        var (game, output, _) = Start(definition, seed);
+        var from = 0;
+
+        for (var number = 1; ; number++)
+        {
+            var client = new ScriptedClient(game, output, from);
+
+            for (var turn = 0; turn < 3_000 && game.Level!.IsInProgress; turn++)
+            {
+                Assert.IsTrue(client.PlayTurn(), $"Level {number}: no move on turn {turn}.");
+                game.Tick();
+            }
+
+            var level = game.Level!;
+            Assert.AreEqual(number, level.Number);
+            Assert.AreEqual(0, level.Desyncs, $"Level {number} fell out of step.");
+            Assert.IsFalse(level.IsInProgress, $"Level {number} never filled its bins.");
+            Assert.IsTrue(level.Succeeded, $"Level {number} wasn't won.");
+
+            foreach (var spawn in level.Selectables.Values.Concat(level.Collectables.Values).Where(spawn => spawn.Definition.Quota > 0))
+                Assert.IsTrue(spawn.Collected >= spawn.Definition.Quota, $"Level {number}: bin {spawn.Value} isn't full.");
+
+            // The client's end-of-level animation asks for the next level.
+            game.Handle(["OnNextLevelMsg"]);
+            if (number == definition.Levels.Count)
+                break;
+
+            Assert.AreEqual(number + 1, (int)output.Named("OnNextLevelMsg").Last().Args[0]);
+            from = output.Messages.Count;
+            game.Handle(["OnStartLevelMsg", "0"]);
+        }
+
+        Assert.AreEqual(MatchThreeResult.Won, game.Result);
+        Assert.AreEqual(1, output.Named("OnGameWonMsg").Count());
+        Assert.AreEqual(definition.Levels.Count, output.Named("OnStopLevel").Count());
+
+        var summary = game.Summarize();
+        Assert.AreEqual(name, summary.Name);
+        Assert.AreEqual(definition.GameNumber, summary.GameNumber);
+        Assert.AreEqual(MatchThreeResult.Won, summary.Result);
+        Assert.AreEqual(definition.Levels.Count, summary.LevelsWon);
+        Assert.AreEqual(game.TotalScore, summary.Score);
+        Assert.AreEqual(0, summary.Desyncs);
+    }
+
+    [TestMethod]
+    [DataRow("farming", 1)]
+    [DataRow("farming", 2)]
+    [DataRow("farming", 3)]
+    [DataRow("forging", 1)]
+    [DataRow("forging", 2)]
+    [DataRow("forging", 3)]
+    [DataRow("mail", 1)]
+    [DataRow("mail", 2)]
+    [DataRow("mail", 3)]
+    public void LongRandomPlay_KeepsEveryLevelsBoardWhole(string name, int number)
+    {
+        var definition = OnlyLevel(name, number);
+        definition.Levels[0].DurationSeconds = 100_000;
+        definition.Levels[0].StopAtQuota = false;
+
+        var (game, output, _) = Start(definition, seed: number);
+        var client = new ScriptedClient(game, output);
+        var grid = game.Level!.Grid!;
+
+        for (var turn = 0; turn < 400; turn++)
+        {
+            Assert.IsTrue(client.PlayTurn(), $"No move on turn {turn}, and the board wasn't reshuffled.");
+
+            for (var y = 1; y < grid.Height - 1; y++)
+                for (var x = 1; x < grid.Width; x++)
+                    Assert.IsNotNull(grid.At(x, y), $"Turn {turn}: {x},{y} is empty.");
+        }
+
+        Assert.AreEqual(0, game.Level.Desyncs);
+        Assert.IsTrue(game.Level.Wave > 1, "Waves come every hundred tiles.");
+    }
+
+    [TestMethod]
+    public void Summary_OfAGameLeftMidLevel()
+    {
+        var (game, _, clock) = Start(Mining());
+        var chain = FindChain(game.Level!.Grid!) ?? throw new AssertInconclusiveException("No chain on this board.");
+
+        game.Handle(["OnChainMsg", Chain(chain)]);
+        clock.Now += 12_500;
+
+        var summary = game.Summarize();
+        Assert.AreEqual(new MatchThreeSummary("mining", 1, MatchThreeResult.None, Level: 1, Levels: 1, LevelsWon: 0,
+            Score: MatchThreeLevel.ChainScore, Desyncs: 0, Seconds: 12.5), summary);
     }
 }

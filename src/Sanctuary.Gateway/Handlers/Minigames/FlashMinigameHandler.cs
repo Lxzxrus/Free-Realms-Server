@@ -19,8 +19,8 @@ namespace Sanctuary.Gateway.Handlers;
 
 /// <summary>
 /// Launches the Flash minigames the server knows about, with the client's start screen, and carries their messages.
-/// A match-three game (Mining) is played by <see cref="MatchThreeGame"/> with the levels in
-/// <c>Resources/MatchThree.json</c>; see docs/research/mining.md.
+/// A match-three game (Mining, Farming, Forging, Mail Sorting) is played by <see cref="MatchThreeGame"/> with the levels
+/// in <c>Resources/MatchThree.json</c>; see docs/research/mining.md.
 /// </summary>
 /// <remarks>
 /// Flow (FreeRealms.exe, docs/research/daily-wheel.md): MiniGameInfo with the start-screen flag on opens a session
@@ -33,10 +33,21 @@ public static class FlashMinigameHandler
 {
     private const string LuaClass = "MiniGameFlash";
 
-    /// <summary>Activity id → game. Mining Practice: activity 1113, MiniGameData row 375, type 8 (match three).</summary>
+    /// <summary>
+    /// Activity id → game: the activity's MiniGameData row (its <c>Unknown</c> in ClientActivityDefinitions.json), type 8
+    /// (match three). One entry-level activity per game; each game's other activities (the other ores, farms, towns and
+    /// weapons) aren't wired yet.
+    /// </summary>
     public static readonly IReadOnlyDictionary<int, FlashMinigameDefinition> Definitions = new Dictionary<int, FlashMinigameDefinition>
     {
-        [1113] = new(ActivityId: 1113, GameId: 375, Type: 8, Swf: "game_mining.gfx", MatchThreeGame: "mining")
+        // Mining Practice.
+        [1113] = new(ActivityId: 1113, GameId: 375, Type: 8, Swf: "game_mining.gfx", MatchThreeGame: "mining"),
+        // Queensfields Harvesting.
+        [410] = new(ActivityId: 410, GameId: 109, Type: 8, Swf: "game_farming.gfx", MatchThreeGame: "farming"),
+        // Sanctuary Mail Sorting.
+        [414] = new(ActivityId: 414, GameId: 376, Type: 8, Swf: "game_mailsorting.gfx", MatchThreeGame: "mail"),
+        // Forging: Quick Shot Bow.
+        [420] = new(ActivityId: 420, GameId: 138, Type: 8, Swf: "game_forging.gfx", MatchThreeGame: "forging")
     };
 
     private static int _nextStateId = 20_000;
@@ -205,8 +216,8 @@ public static class FlashMinigameHandler
     /// <summary>A game that threw: the player's minigame is closed rather than left half-working.</summary>
     public static void Fail(GatewayConnection connection, FlashMinigameSession session)
     {
-        session.MatchThree = null;
         Close(connection, session);
+        session.MatchThree = null;
     }
 
     private static void LogResult(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game)
@@ -250,6 +261,17 @@ public static class FlashMinigameHandler
     private static void Close(GatewayConnection connection, FlashMinigameSession session)
     {
         _logger.LogInformation("Minigame: session {stateId} closed.", session.StateId);
+
+        if (session.MatchThree is { } game)
+        {
+            var summary = game.Summarize();
+
+            _logger.LogInformation("Minigame: {player} closed {game} (game {number}): {result}, level {level} of {levels} reached, " +
+                "{won} won, {score} points in {seconds:0} s, {desyncs} desyncs.",
+                connection.Player.Guid, summary.Name, summary.GameNumber,
+                summary.Result == MatchThreeResult.None ? "left unfinished" : summary.Result.ToString().ToLowerInvariant(),
+                summary.Level, summary.Levels, summary.LevelsWon, summary.Score, summary.Seconds, summary.Desyncs);
+        }
 
         connection.Player.FlashMinigame = null;
         connection.SendTunneled(new MiniGameLeavePacket(session.StateId));
