@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -83,5 +84,30 @@ public sealed class StaffChatCommandTests
         Assert.IsFalse(ChatCommandManager.CanUse(ChatCommandRole.Player, command));
         Assert.IsTrue(ChatCommandManager.CanUse(ChatCommandRole.Mod, command));
         Assert.IsTrue(ChatCommandManager.CanUse(ChatCommandRole.Admin, command));
+    }
+
+    /// <summary>
+    /// <c>!teleport</c> moves the player on the server to the coordinates it names; it used to pass the old position.
+    /// </summary>
+    [TestMethod]
+    public void Teleport_TargetsTheNamedCoordinates()
+    {
+        var current = new Vector4(1f, 2f, 3f, 1f);
+
+        Assert.IsTrue(TeleportCommand.TryGetTarget(["-1351.77", "-39.2", "411"], current, out var target));
+        Assert.AreEqual(new Vector4(-1351.77f, -39.2f, 411f, 1f), target);
+    }
+
+    [TestMethod]
+    [DataRow("1,5", "2", "3")]
+    [DataRow("x", "2", "3")]
+    [DataRow("NaN", "2", "3")]
+    [DataRow("1", "Infinity", "3")]
+    public void Teleport_RefusesCoordinatesThatAreNotNumbers(string x, string y, string z)
+    {
+        var current = new Vector4(1f, 2f, 3f, 1f);
+
+        Assert.IsFalse(TeleportCommand.TryGetTarget([x, y, z], current, out var target));
+        Assert.AreEqual(current, target);
     }
 }

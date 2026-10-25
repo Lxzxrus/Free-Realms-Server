@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Numerics;
+
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 
@@ -22,24 +25,46 @@ public class TeleportCommand : IChatCommand
             return false;
         }
 
-        if (!float.TryParse(args[0], out float x) || !float.TryParse(args[1], out float y) || !float.TryParse(args[2], out float z))
+        if (!TryGetTarget(args, invoker.Position, out var position))
         {
             ChatHelper.SendSystemMessage(invoker, "Invalid coordinates. Please enter valid numbers.");
             return false;
         }
 
-        var position = invoker.Position;
+        // The server moves the player first, as the other teleports do. It used to pass the old position here, so
+        // until the player next moved, who they could see and the position saved on logout were where they had left.
+        var rotation = invoker.Rotation;
 
-        invoker.UpdatePosition(position, System.Numerics.Quaternion.Identity, false);
+        invoker.UpdatePosition(position, rotation, false);
 
         var clientUpdatePacketUpdateLocation = new ClientUpdatePacketUpdateLocation
         {
-            Position = new System.Numerics.Vector4(x, y, z, position.W),
-            Rotation = System.Numerics.Quaternion.Identity,
+            Position = position,
+            Rotation = rotation,
             Teleport = true
         };
         invoker.SendTunneled(clientUpdatePacketUpdateLocation);
-        ChatHelper.SendSystemMessage(invoker, $"Teleported to ({x:F2}, {y:F2}, {z:F2})");
+        ChatHelper.SendSystemMessage(invoker, $"Teleported to ({position.X:F2}, {position.Y:F2}, {position.Z:F2})");
+        return true;
+    }
+
+    /// <summary>
+    /// The position <c>!teleport x y z</c> names, keeping <paramref name="current"/>'s W. Numbers are read with a dot,
+    /// whatever the server's culture, as <c>/whereami</c> prints them.
+    /// </summary>
+    public static bool TryGetTarget(string[] args, Vector4 current, out Vector4 target)
+    {
+        target = current;
+
+        if (args.Length != 3 ||
+            !float.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) || !float.IsFinite(x) ||
+            !float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y) || !float.IsFinite(y) ||
+            !float.TryParse(args[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var z) || !float.IsFinite(z))
+        {
+            return false;
+        }
+
+        target = new Vector4(x, y, z, current.W);
         return true;
     }
 }
