@@ -816,7 +816,7 @@
   },
   {
     "Name": "Missing Homework",
-    "Comment": "Five pages: on the ground by the bridge south of the warpstone, by the vendor carts, with the squirrel far south over the bridge (an unnamed squirrel, the only one there), with Amalia, who fished one out of the northern stream, and Vroomba, who used one as a handkerchief. The client's page text, not the wiki's (a dog and a fish there).",
+    "Comment": "Five pages: on the ground by the bridge south of the warpstone, by the vendor carts, with the squirrel far south over the bridge (NPC 4313, named Thieving Squirrel, client string 401111), with Amalia, who fished one out of the northern stream, and Vroomba, who used one as a handkerchief. The client's page text, not the wiki's (a dog and a fish there).",
     "QuestId": 3074,
     "TitleId": 46489,
     "DescriptionId": 46490,

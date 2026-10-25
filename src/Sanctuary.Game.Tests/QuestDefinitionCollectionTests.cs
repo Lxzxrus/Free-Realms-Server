@@ -109,6 +109,29 @@ public sealed class QuestDefinitionCollectionTests
     }
 
     [TestMethod]
+    public void ShippedQuests_NameOnlyNpcsThatHaveAName()
+    {
+        // The npc a quest sends the player to shows its name in the interaction pop-up; without one the pop-up is
+        // blank, as for Missing Homework's squirrel (4313).
+        var script = File.ReadAllText(FindSourceFile("Scripts", "Zone", "FabledRealms.lua"));
+        var npcIdByGuid = Regex.Matches(script, @"spawnNpcWithGuid\(\s*(\d+)\s*,\s*(\d+)")
+            .GroupBy(match => ulong.Parse(match.Groups[2].Value))
+            .ToDictionary(group => group.Key, group => int.Parse(group.First().Groups[1].Value));
+
+        var npcs = new NpcDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(npcs.Load(FindSourceFile("Resources", "Npcs.json")));
+
+        var unnamed = LoadQuests(FindShippedQuests()).Quests.Values
+            .SelectMany(quest => NpcGuidsNamedBy(quest)
+                .Where(named => npcIdByGuid.TryGetValue(named.Guid, out var npcId) &&
+                    npcs.TryGetValue(npcId, out var npc) && npc.NameId == 0 && string.IsNullOrEmpty(npc.Name))
+                .Select(named => $"{quest.QuestId} {named.Field} {named.Guid}"))
+            .ToList();
+
+        Assert.AreEqual(0, unnamed.Count, "Quests name npcs with no name in Npcs.json: " + string.Join(", ", unnamed));
+    }
+
+    [TestMethod]
     public void ShippedQuests_ReferenceOnlyShippedQuests()
     {
         var quests = LoadQuests(FindShippedQuests());
