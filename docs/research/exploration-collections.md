@@ -58,7 +58,7 @@ verified in game** (see "Checked in game" below). The collection and entry name 
 
 ## Gaps
 
-The 2014 npc list (hence PR 66's spawns) lacked coins for 14 entries: Snowhill Rare 4 and 5, Sanctuary Rare 5 and 6,
+The 2014 npc list (hence PR 66's spawns) lacked coins for 14 entries: Snowhill Rare 4 and 5, Sanctuary Rare 4 and 5 (placed on 2026-10-25, see below),
 Wilds Northeast Rare 5, one Blackspore Elite entry (Oberyn's Broken Home, placed on 2026-10-20, see below), and all of
 Sacred Grove Elite (that hub isn't in our world). Those
 collections cannot be finished until the coins are placed (`!admin collection place <pool>` writes a spawn; the
@@ -84,6 +84,11 @@ other, so a wrong name meant a wrong `CollectionEntryId`.
   and it can't be reached on foot. Since 2026-10-24 it stands at the nearest spot Ariel could reach.
 - **Round 3 (2026-10-24)** on a fresh character: Blackspore Elite, Briarwood Rare and Snowhill Rare and Elite all
   correct after the re-pairing; Snowhill Rare's reward came out as the girls' Pathfinder's Capris.
+- **Sanctuary Rare** (266) and **Elite** (291), 2026-10-24: Rare's four coins were right after the research below;
+  Pixiewood Mist and A Royal Way In, listed as gaps, now have coins at Ariel's `!whereami` (spawns 4496 and 4497).
+  Elite's A Small Cell and Darvon's Hook were right; four coins were one place round a loop (Left Falls, Tree Cover,
+  Shallow Water, Up the Palace Walls) and Spying on the Warriors and Sunset Cliffs were swapped. All re-paired; the
+  backpack was granted.
 
 `ExplorationCollectionTests.CoinsCheckedInGame_TickTheEntryNamedForTheirPlace` pins these pairs. The other regions'
 pairings are still the id-order guess, so expect the same kind of shift there.

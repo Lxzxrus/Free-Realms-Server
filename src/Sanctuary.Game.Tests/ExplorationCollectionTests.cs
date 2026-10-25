@@ -56,11 +56,11 @@ public sealed class ExplorationCollectionTests
         [9002] = ("sunstone-valley", 8, [])
     };
 
-    // Entries no coin stands for (docs/research/exploration-collections.md): Pixiewood Mist and A Royal Way In
-    // (Sanctuary Rare), Tent Dent (Wilds Southwest), all eight Sacred Grove Elite (that hub isn't in our world), and
-    // one of each Sunstone Valley collection (eight entries, seven coins): The Great Rift and Glimmerdeep Pass Overlook.
+    // Entries no coin stands for (docs/research/exploration-collections.md): Tent Dent (Wilds Southwest), all eight
+    // Sacred Grove Elite (that hub isn't in our world), and one of each Sunstone Valley collection (eight entries, seven
+    // coins): The Great Rift and Glimmerdeep Pass Overlook.
     private static readonly int[] EntriesWithoutACoin =
-        [1953, 1954, 1981, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90016];
+        [1981, 2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90016];
 
     private static string FindSourcePath(params string[] relativePath)
     {
@@ -197,7 +197,7 @@ public sealed class ExplorationCollectionTests
                 $"Coin {spawn.Id} in {region} ticks collection {match.Definition.Id}, which belongs to {expected.Region}.");
         }
 
-        Assert.AreEqual(121, seen.Count, "The number of coins with an entry changed.");
+        Assert.AreEqual(123, seen.Count, "The number of coins with an entry changed.");
     }
 
     [TestMethod]
@@ -222,6 +222,20 @@ public sealed class ExplorationCollectionTests
     [DataRow(4444, 2015, "Leafy Retreat")]
     [DataRow(4494, 2012, "Melted Corner")]
     [DataRow(4495, 1947, "Between the Peaks")]
+    [DataRow(2483, 1936, "Break my Fall")]
+    [DataRow(2481, 1951, "Darvon's Spot")]
+    [DataRow(2482, 1952, "Break Free")]
+    [DataRow(4496, 1953, "Pixiewood Mist")]
+    [DataRow(4497, 1954, "A Royal Way In")]
+    [DataRow(2473, 1955, "Over the Rainbow")]
+    [DataRow(2474, 2060, "Spying On The Warriors")]
+    [DataRow(2475, 2059, "Sunset Cliffs")]
+    [DataRow(2476, 2062, "Shallow Water")]
+    [DataRow(2477, 2063, "Tree Cover")]
+    [DataRow(2478, 2064, "Left Falls")]
+    [DataRow(2479, 2061, "Up The Palace Walls")]
+    [DataRow(2480, 2065, "Darvon's Hook")]
+    [DataRow(2484, 2066, "A Small Cell")]
     [DataRow(4421, 1966, "A Place to Pond-er")]
     [DataRow(4422, 1939, "Gather Round the Campfire")]
     [DataRow(4423, 1965, "Scouting the Pathway")]
@@ -229,7 +243,7 @@ public sealed class ExplorationCollectionTests
     [DataRow(4425, 1964, "Xandril's Nook")]
     public void CoinsCheckedInGame_TickTheEntryNamedForTheirPlace(int coinId, int entryId, string place)
     {
-        // Ariel collected every Blackspore Elite and Briarwood Rare coin on 2026-10-20 (Snowhill on 2026-10-21) and named each coin's place from
+        // Ariel collected every Blackspore Elite and Briarwood Rare coin on 2026-10-20 (Snowhill on 2026-10-21, Sanctuary on 2026-10-24) and named each coin's place from
         // the original game's guides. The coins had been paired with entries by id order, which put five of them one
         // place off and left Oberyn's Broken Home without a coin.
         Assert.IsTrue(LoadSpawns().TryGetValue(coinId, out var spawn), $"No coin {coinId} ({place}).");
