@@ -32,6 +32,7 @@ public interface IResourceManager
     ClientActivityDefinitionCollection ClientActivityDefinitions { get; }
     Minigames.DailyWheel DailyWheel { get; }
     Minigames.MatchThree.MatchThreeDefinitions MatchThree { get; }
+    Minigames.Mimic.MimicDefinitions Mimic { get; }
 
     ZoneDefinitionCollection Zones { get; }
     MountDefinitionCollection Mounts { get; }

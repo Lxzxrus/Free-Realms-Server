@@ -46,6 +46,7 @@ public class ResourceManager : IResourceManager
     public static readonly string ClientActivityDefinitionsFile = Path.Combine(BaseDirectory, "ClientActivityDefinitions.json");
     public static readonly string DailyWheelFile = Path.Combine(BaseDirectory, "DailyWheel.json");
     public static readonly string MatchThreeFile = Path.Combine(BaseDirectory, "MatchThree.json");
+    public static readonly string MimicFile = Path.Combine(BaseDirectory, "Mimic.json");
 
     public static readonly string ZonesDirectory = Path.Combine(BaseDirectory, "Zones");
     public static readonly string HousesFile = Path.Combine(BaseDirectory, "Houses.json");
@@ -93,6 +94,7 @@ public class ResourceManager : IResourceManager
     public ClientActivityDefinitionCollection ClientActivityDefinitions { get; }
     public DailyWheel DailyWheel { get; private set; } = new();
     public Minigames.MatchThree.MatchThreeDefinitions MatchThree { get; private set; } = new();
+    public Minigames.Mimic.MimicDefinitions Mimic { get; private set; } = new();
 
     public ZoneDefinitionCollection Zones { get; }
     public HouseDefinitionCollection Houses { get; }
@@ -318,6 +320,11 @@ public class ResourceManager : IResourceManager
 
         MatchThree = matchThree;
 
+        if (!Minigames.Mimic.MimicDefinitions.TryLoad(MimicFile, _logger, out var mimic))
+            return false;
+
+        Mimic = mimic;
+
         if (!Zones.Load(ZonesDirectory))
             return false;
 
@@ -435,6 +442,8 @@ public class ResourceManager : IResourceManager
                 (DailyWheel, loaded) = (dailyWheel, true);
             else if (e.FullPath == MatchThreeFile && Minigames.MatchThree.MatchThreeDefinitions.TryLoad(MatchThreeFile, _logger, out var matchThree))
                 (MatchThree, loaded) = (matchThree, true);
+            else if (e.FullPath == MimicFile && Minigames.Mimic.MimicDefinitions.TryLoad(MimicFile, _logger, out var mimic))
+                (Mimic, loaded) = (mimic, true);
             else if (e.FullPath == HousesFile)
                 loaded = Houses.Load(HousesFile);
             else if (e.FullPath == MountsFile)

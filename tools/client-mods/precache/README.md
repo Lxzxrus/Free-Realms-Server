@@ -77,6 +77,14 @@ pictures, each zone its `.gzne` and `Areas.xml`. Anything already in the officia
    cd /srv/assets && tar -cf ~/precache.tar $(while read -r n; do ls -d */"$n"; done < ~/precache.txt.fetch)
    ```
 
+   Or stream it, which leaves nothing on the VPS:
+
+   ```bash
+   ssh ubuntu@play.evergrove.fyi 'cd /srv/assets && while read -r n; do ls -d */"$n"; done | tar -cf - -T -' < precache.txt.fetch > precache.tar
+   ```
+
+   A Flash file that isn't in the official packs (`game_cooking.gfx`) has to be fetched first, the same way: the script
+   reads it to learn its pictures, and stops with "not found" until it has it.
 4. Copy `precache.tar` back and run again with it (several tars are fine):
 
    ```bash

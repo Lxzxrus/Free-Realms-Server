@@ -98,6 +98,8 @@ public sealed class AssetPrecacheTests
         Assert.IsTrue(names.Contains("sg_fishing_medpond.gzne.z"));
         Assert.IsTrue(names.Contains("game_mining.gfx"));
         Assert.IsTrue(names.Contains("mining_tutorial.gfx"));
+        Assert.IsTrue(names.Contains("game_cooking.gfx"));
+        Assert.IsTrue(names.Contains("game_cooking.lst.z"));
     }
 
     [TestMethod]
