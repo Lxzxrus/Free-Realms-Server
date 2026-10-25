@@ -15,6 +15,18 @@ lock, flora, pet spawn), trading, quests (accept, decline, abandon, select, take
 ignore), equipping, coin-store buy and sell, character and guild name checks, job switching, abilities, joining
 activities, minigames, fishing, mounts, titles, teleports to points of interest, the strip-effect request, quick chat.
 
+Two leads from the first draft of this list turned out to be answered, checked in `FreeRealms.exe` (Ghidra, the
+Lua binding table beside each name):
+
+- **Un-ignore** (`Ui.StopIgnoringPlayer`, `0xc24c00`) is `Ui.IgnorePlayer` (`0xc24b00`) with one argument changed: both
+  build `CommandPacketIgnoreRequest` (command `0x1e`, `0xc1dc10`) and only its last field differs, 1 to ignore and 0
+  to stop. `CommandPacketIgnoreRequestHandler` answers both through `Ignore`.
+- **`QuestScreen.EndQuest`** (`0xc0a1a0`) isn't a turn-in from the quest book. The Lua calls it when the quest end
+  screen (`Main.wndQuestEnd`, the reward window an npc's turn-in opens) closes, and it sends `QuestEndReplyPacket`
+  (quest sub-opcode `0xe`, `0xa864c0`) with the quest id, once, only while one is pending. That's
+  `QuestEndPacket.SubOpCode + 1` in `BaseQuestPacketHandler`, which hands the pending quest in. The quest book has no
+  turn-in of its own.
+
 ## Not answered: worth building
 
 | Feature | Calls (UI module) | Notes |
@@ -32,8 +44,6 @@ activities, minigames, fishing, mounts, titles, teleports to points of interest,
 | **Mystery chests** | `Ui.GetMysteryChestInfo` | |
 | **Progressive quests** | `Ui.ProgressiveQuestRequestStartQuest`, `RequestClaimSlot`, `RequestClaimPrize` | |
 | **Codes and claims** | `PromotionalScreen.RedeemCode`, `ClaimScreen:StartClaim`, `AddClaimItem` | Could serve Evergrove's own event codes |
-| **Quest turn-in from the book** | `QuestScreen.EndQuest` | Check whether it reaches the existing quest reply |
-| **Un-ignore** | `Ui.StopIgnoringPlayer` | Check whether it's the same packet as ignore |
 | **Social zones** | `Ui.EnterSocialZone` | |
 
 ## Not answered: combat, for later
