@@ -195,6 +195,12 @@ public static class FlashMinigameHandler
             case "FRServer_GameQuit":
                 Close(connection, session);
                 return true;
+
+            // The Flash has finished its game (won, lost or stopped; a win after its end animation) and waits for the
+            // server to end it. Without this the game froze with its own mouse pointer stuck on screen.
+            case "FRServer_GameOver":
+                GameOver(connection, session);
+                return true;
         }
 
         if (session.MatchThree is { } game)
@@ -263,6 +269,31 @@ public static class FlashMinigameHandler
                 Payload = Encoding.UTF8.GetBytes(MatchThreeGame.Format(name, args) + "\0")
             });
         }
+    }
+
+    /// <summary>
+    /// Ends the game: the result, then the leave. On the leave the client shows its end screen if the game's own data
+    /// asks for one (FreeRealms.exe, <c>MiniGame:LeaveMiniGame</c> at 0x9bf190), or quits straight back to the world.
+    /// </summary>
+    private static void GameOver(GatewayConnection connection, FlashMinigameSession session)
+    {
+        var over = new MiniGameGameOverPacket(session.StateId);
+
+        if (session.MatchThree is { } game)
+        {
+            over.Won = game.Result == MatchThreeResult.Won;
+            over.Score = (int)Math.Clamp(game.TotalScore, 0, int.MaxValue);
+            over.Seconds = (int)game.Summarize().Seconds;
+        }
+        else if (session.Mimic is { } mimic)
+        {
+            over.Won = mimic.Result == MimicResult.Won;
+            over.Score = (int)Math.Clamp(mimic.Score, 0, int.MaxValue);
+            over.Seconds = Math.Max(mimic.ReportedSeconds, 0);
+        }
+
+        connection.SendTunneled(over);
+        Close(connection, session);
     }
 
     private static void Close(GatewayConnection connection, FlashMinigameSession session)

@@ -143,11 +143,25 @@ only read the packs on disk. The official client lacks them, so before the launc
 picture. A minigame added later needs its `.gfx` checked the same way: every picture it names must be in the official
 packs or on the pre-cache list.
 
+## The end of a game
+
+When its game is over (won, after the end animation; lost; or stopped from the pause menu), the Flash sends
+`FRServer_GameOver` and waits. Until 2026-10-25 Evergrove didn't answer, so the game sat with its own mouse pointer
+frozen on screen and the player had to find the exit button blind. From FreeRealms.exe, the server's answer is two
+packets:
+
+1. `MiniGameGameOverPacket` (39/18): the base fields, then a bool (won), and three ints: stars earned, a time in
+   seconds and the score. `MiniGame:OnGameOver` (0x9ad480) keeps them with the game.
+2. `MiniGameLeavePacket` (39/19). `MiniGame:LeaveMiniGame` (0x9bf190) then shows the end screen, if the game's own
+   client data has its end-screen flag set (game offset 0x908, copied from the client's minigame definition by
+   0xc42c60). Otherwise it calls the UI's `QuitGameWithNoEndGameScreen`, the same as the exit button.
+
+`MiniGame:ShowMiniGameEndDialog` (0x9b7170) fills the end screen through the UI's `setMiniGameEndData(status, goals,
+bonus goals, time, stars, score)`. Goals come from the game's objectives, which Evergrove doesn't send, so they show
+0/0. Closing the end screen sends `CommandPacketClosedMinigameEndScreen` (command 42), which nothing handles yet.
+
 ## Still unknown
 
-- **What the client does at the end of a game.** It sends `FRServer_GameOver` after a win or loss; the live server
-  probably answered with a results screen and rewards (`OnShowEndRoundScreenMsg`?). Evergrove sends nothing yet: the
-  player leaves with the exit button.
 - **What the quota bin's icon id is.** Mining Practice sends 698, the Copper Ore item's icon. The client stores it and
   never draws it; the bin shows the tile's own picture.
 - **Rewards.** Practice pays nothing. Real Mining (copper to gold) should pay the ore collected, through
