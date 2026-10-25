@@ -178,7 +178,8 @@ public sealed class HouseManager : IHouseManager
         if (invitee.Ignores.Any(ignored => ignored.Guid == inviter.Guid))
             return HouseInviteResult.Ignored;
 
-        _invites.Add(GuidHelper.GetPlayerId(invitee.Guid), zone.HouseId, GuidHelper.GetPlayerId(inviter.Guid), DateTimeOffset.UtcNow);
+        if (!_invites.Add(GuidHelper.GetPlayerId(invitee.Guid), zone.HouseId, GuidHelper.GetPlayerId(inviter.Guid), DateTimeOffset.UtcNow))
+            return HouseInviteResult.TooSoon;
 
         invitee.SendTunneled(new HousingPacketInviteNotification
         {

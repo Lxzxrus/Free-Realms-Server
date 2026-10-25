@@ -49,6 +49,17 @@ public sealed class HouseInvitesTests
     }
 
     [TestMethod]
+    public void InvitingAgainTooSoon_IsRefused()
+    {
+        var invites = new HouseInvites();
+
+        Assert.IsTrue(invites.Add(Guest, House, Owner, Now));
+        Assert.IsFalse(invites.Add(Guest, House, Owner, Now + HouseInvites.Cooldown - TimeSpan.FromSeconds(1)));
+        Assert.IsTrue(invites.Add(Guest, OtherHouse, Owner, Now));
+        Assert.IsTrue(invites.Add(Guest, House, Owner, Now + HouseInvites.Cooldown));
+    }
+
+    [TestMethod]
     public void Invite_IsUsedOnce()
     {
         var invites = new HouseInvites();

@@ -44,6 +44,7 @@ public static class ClientHousingPacketInvitePlayerHandler
             HouseInviteResult.NotOnline => "That player isn't online, so the invite wasn't sent.",
             HouseInviteResult.NoInviteNeeded => "Your own characters can always come into your houses.",
             HouseInviteResult.AlreadyThere => $"{invitee?.Name.FullName} is already here.",
+            HouseInviteResult.TooSoon => $"You've just invited {invitee?.Name.FullName}. Give them a moment to answer.",
             _ => null
         };
 

@@ -36,7 +36,10 @@ public enum HouseInviteResult
     AlreadyThere,
 
     /// <summary>The player invited ignores the inviter. The inviter isn't told, as with a tell.</summary>
-    Ignored
+    Ignored,
+
+    /// <summary>The same player was invited into this house moments ago (<see cref="HouseInvites.Cooldown"/>).</summary>
+    TooSoon
 }
 
 public interface IHouseManager

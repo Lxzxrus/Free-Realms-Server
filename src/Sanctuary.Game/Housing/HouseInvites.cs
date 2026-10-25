@@ -14,21 +14,30 @@ public sealed class HouseInvites
 {
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(5);
 
+    /// <summary>How soon the same player can be invited into the same house again, so nobody is flooded with prompts.</summary>
+    public static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(15);
+
     private readonly record struct Key(ulong InviteeCharacterId, ulong HouseId);
-    private readonly record struct Invite(ulong InviterCharacterId, DateTimeOffset Expires);
+    private readonly record struct Invite(ulong InviterCharacterId, DateTimeOffset Sent, DateTimeOffset Expires);
 
     private readonly Dictionary<Key, Invite> _invites = [];
     private readonly object _lock = new();
 
     /// <summary>Records an invite, or renews the player's invite into that house.</summary>
-    public void Add(ulong inviteeCharacterId, ulong houseId, ulong inviterCharacterId, DateTimeOffset now)
+    /// <returns>False, and nothing changes, if the last invite was sent less than <see cref="Cooldown"/> ago.</returns>
+    public bool Add(ulong inviteeCharacterId, ulong houseId, ulong inviterCharacterId, DateTimeOffset now)
     {
         lock (_lock)
         {
             foreach (var expired in _invites.Where(entry => entry.Value.Expires <= now).Select(entry => entry.Key).ToList())
                 _invites.Remove(expired);
 
-            _invites[new Key(inviteeCharacterId, houseId)] = new Invite(inviterCharacterId, now + Lifetime);
+            var key = new Key(inviteeCharacterId, houseId);
+            if (_invites.TryGetValue(key, out var previous) && now - previous.Sent < Cooldown)
+                return false;
+
+            _invites[key] = new Invite(inviterCharacterId, now, now + Lifetime);
+            return true;
         }
     }
 
