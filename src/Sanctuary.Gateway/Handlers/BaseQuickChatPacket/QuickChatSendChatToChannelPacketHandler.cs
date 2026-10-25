@@ -82,9 +82,25 @@ public static class QuickChatSendChatToChannelPacketHandler
                 }
                 break;
 
+            // Server-wide, as typed shouts are (PacketChatHandler).
+            case ChatChannel.WorldShout:
+                {
+                    foreach (var onlinePlayer in _zoneManager.Zones.SelectMany(zone => zone.Players))
+                    {
+                        if (onlinePlayer.Ignores.Any(x => x.Guid == connection.Player.Guid))
+                            continue;
+
+                        onlinePlayer.SendTunneled(packet);
+                    }
+                }
+                break;
+
+            // Say, and anything unexpected: the sender and the players near them, as typed chat does.
             default:
                 {
-                    _logger.LogWarning("Unhandled chat channel {channel}.", packet.Channel);
+                    if (packet.Channel != ChatChannel.WorldSay)
+                        _logger.LogWarning("Unhandled chat channel {channel}.", packet.Channel);
+
                     connection.Player.SendTunneled(packet);
 
                     foreach (var visiblePlayer in connection.Player.VisiblePlayers)
