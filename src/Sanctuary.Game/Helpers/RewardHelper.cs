@@ -39,14 +39,18 @@ public static class RewardHelper
         return drop switch
         {
             ItemRewardDropDefinition item => TryGrantItem(resourceManager, dbContext, logger, player,
-                item.ItemDefinitionId, item.TintTable?.SelectRandom().TintId ?? 0, item.Quantity, sourceGuid),
+                item.ItemDefinitionId, item.TintTable?.SelectRandom().TintId, item.Quantity, sourceGuid),
             CurrencyRewardDropDefinition currency => TryGrantCurrency(dbContext, logger, player, currency.CurrencyType, currency.Amount, sourceGuid),
             _ => false
         };
     }
 
+    /// <summary>
+    /// Pays <paramref name="quantity"/> of an item at <paramref name="tint"/>, or at the item's own tint
+    /// (<see cref="ItemTints.Default"/>) when that's null.
+    /// </summary>
     public static bool TryGrantItem(IResourceManager resourceManager, DatabaseContext dbContext, ILogger logger,
-        Player player, int itemDefinitionId, int tint, int quantity, ulong sourceGuid = 0)
+        Player player, int itemDefinitionId, int? tint, int quantity, ulong sourceGuid = 0)
     {
         // TODO: I think similar logic lives in the shop + collections stuff. We should eventually extract
         // and generalize that to avoid repeats.
@@ -57,6 +61,8 @@ public static class RewardHelper
             return false;
         }
 
+        var itemTint = tint ?? ItemTints.Default(itemDefinition);
+
         var characterId = player.CharacterId;
 
         var dbCharacter = dbContext.Characters
@@ -66,7 +72,7 @@ public static class RewardHelper
         if (dbCharacter is null)
             return false;
 
-        var dbItem = dbCharacter.Items.SingleOrDefault(item => item.Definition == itemDefinitionId && item.Tint == tint);
+        var dbItem = dbCharacter.Items.SingleOrDefault(item => item.Definition == itemDefinitionId && item.Tint == itemTint);
 
         if (dbItem is null)
         {
@@ -75,7 +81,7 @@ public static class RewardHelper
                 Id = dbCharacter.Items.Select(item => item.Id).DefaultIfEmpty(0).Max() + 1,
                 Definition = itemDefinitionId,
                 Count = quantity,
-                Tint = tint
+                Tint = itemTint
             };
 
             dbCharacter.Items.Add(dbItem);

@@ -2736,71 +2736,99 @@
   },
   {
     "Id": 1714,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1715,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1716,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1717,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1718,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1719,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1720,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1721,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1722,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1723,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1724,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1725,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1726,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
   {
     "Id": 1727,
+    "NameId": 434506,
+    "Name": "Chugaroot Plant",
     "ModelId": 3630,
     "ModelFileName": "overworld_root_chugaroot_harvestable_01.adr"
   },
@@ -17455,6 +17483,8 @@
   },
   {
     "Id": 4313,
+    "NameId": 401111,
+    "Name": "Thieving Squirrel",
     "ModelId": 402,
     "ModelFileName": "squirrel.adr"
   },

@@ -106,7 +106,9 @@ The pickups are collection nodes, the same system as mushrooms and exploration c
 doesn't place them. Three files do:
 
 - `CollectionNodeTypes.json`: the node type. `Key` is what `CollectNodeType` names; `ModelId` is a
-  `Models.txt` id (`748` = `sg_log_wFirefly`); `NameId` is the hover text ("Stick of Firewood");
+  `Models.txt` id (`156` = `sg_treasure_hunter_plank_01`, since `748` = `sg_log_wFirefly` has no mesh on the
+  asset mirror); `Scale` sizes it (that plank is a 14 m bridge board, so `0.07` makes a stick about 1 m long);
+  `NameId` is the hover text ("Stick of Firewood");
   `DropTable` is empty, so gathering one gives nothing but the quest credit.
 - `CollectionNodePools.json`: a pool of that type in a zone (`merry-vale-firewood`).
   `MaxActiveNodes` `0` puts a node on every spawn point; `RespawnSeconds` is how long a gathered one

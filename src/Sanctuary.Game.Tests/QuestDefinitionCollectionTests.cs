@@ -109,6 +109,29 @@ public sealed class QuestDefinitionCollectionTests
     }
 
     [TestMethod]
+    public void ShippedQuests_NameOnlyNpcsThatHaveAName()
+    {
+        // The npc a quest sends the player to shows its name in the interaction pop-up; without one the pop-up is
+        // blank, as for Missing Homework's squirrel (4313).
+        var script = File.ReadAllText(FindSourceFile("Scripts", "Zone", "FabledRealms.lua"));
+        var npcIdByGuid = Regex.Matches(script, @"spawnNpcWithGuid\(\s*(\d+)\s*,\s*(\d+)")
+            .GroupBy(match => ulong.Parse(match.Groups[2].Value))
+            .ToDictionary(group => group.Key, group => int.Parse(group.First().Groups[1].Value));
+
+        var npcs = new NpcDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(npcs.Load(FindSourceFile("Resources", "Npcs.json")));
+
+        var unnamed = LoadQuests(FindShippedQuests()).Quests.Values
+            .SelectMany(quest => NpcGuidsNamedBy(quest)
+                .Where(named => npcIdByGuid.TryGetValue(named.Guid, out var npcId) &&
+                    npcs.TryGetValue(npcId, out var npc) && npc.NameId == 0 && string.IsNullOrEmpty(npc.Name))
+                .Select(named => $"{quest.QuestId} {named.Field} {named.Guid}"))
+            .ToList();
+
+        Assert.AreEqual(0, unnamed.Count, "Quests name npcs with no name in Npcs.json: " + string.Join(", ", unnamed));
+    }
+
+    [TestMethod]
     public void ShippedQuests_ReferenceOnlyShippedQuests()
     {
         var quests = LoadQuests(FindShippedQuests());
@@ -165,6 +188,23 @@ public sealed class QuestDefinitionCollectionTests
         }
 
         Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
+    }
+
+    [TestMethod]
+    public void ShippedFirewood_IsScaledToAStick()
+    {
+        // The firewood pickup borrows sg_treasure_hunter_plank_01 (model 156), a bridge board whose mesh is 14.3 m
+        // long. At full size each stick was as long as a tree.
+        var resources = Path.GetDirectoryName(FindShippedQuests())!;
+
+        var types = new CollectionNodeTypeDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(types.Load(Path.Combine(resources, "CollectionNodeTypes.json")));
+
+        var firewood = types["firewood"];
+        Assert.AreEqual(156, firewood.ModelId, "The model changed: measure the new one and set Scale to match.");
+        Assert.IsTrue(firewood.Scale * 14.3f is > 0.5f and < 1.5f,
+            $"A stick of firewood should be about a metre long, and Scale {firewood.Scale} makes it " +
+            $"{firewood.Scale * 14.3f:0.0} m.");
     }
 
     private static string WriteQuestFile(string json)

@@ -1067,7 +1067,7 @@ public sealed class QuestManager : IQuestManager
         itemDef = _resourceManager.ClientItemDefinitions.ForGender(itemDef, player.Gender);
         definitionId = itemDef.Id;
 
-        int tint = itemDef.IsTintable ? 0 : itemDef.Icon.TintId;
+        int tint = ItemTints.Default(itemDef);
 
         int itemId, count;
         using (var db = _dbContextFactory.CreateDbContext())
