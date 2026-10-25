@@ -379,7 +379,7 @@
     "Name": "Stick of Firewood",
     "NameId": 41754,
     "ModelId": 156,
-    "Scale": 1.0,
+    "Scale": 0.07,
     "CompositeEffectId": 5386,
     "InteractRange": 12,
     "CursorId": 17,

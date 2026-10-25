@@ -167,6 +167,23 @@ public sealed class QuestDefinitionCollectionTests
         Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
     }
 
+    [TestMethod]
+    public void ShippedFirewood_IsScaledToAStick()
+    {
+        // The firewood pickup borrows sg_treasure_hunter_plank_01 (model 156), a bridge board whose mesh is 14.3 m
+        // long. At full size each stick was as long as a tree.
+        var resources = Path.GetDirectoryName(FindShippedQuests())!;
+
+        var types = new CollectionNodeTypeDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(types.Load(Path.Combine(resources, "CollectionNodeTypes.json")));
+
+        var firewood = types["firewood"];
+        Assert.AreEqual(156, firewood.ModelId, "The model changed: measure the new one and set Scale to match.");
+        Assert.IsTrue(firewood.Scale * 14.3f is > 0.5f and < 1.5f,
+            $"A stick of firewood should be about a metre long, and Scale {firewood.Scale} makes it " +
+            $"{firewood.Scale * 14.3f:0.0} m.");
+    }
+
     private static string WriteQuestFile(string json)
     {
         var path = Path.Combine(Path.GetTempPath(), $"quests-{Guid.NewGuid():N}.json");
