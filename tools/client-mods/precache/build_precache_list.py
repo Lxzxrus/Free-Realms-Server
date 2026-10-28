@@ -17,7 +17,7 @@ import glob, hashlib, os, re, struct, sys, tarfile, zlib
 # A .lst beside a .gfx is its picture list; game_cooking.lst, unlike game_mining.lst, isn't in the official packs.
 FLASH = ["game_mining.gfx", "mining_tutorial.gfx", "game_farming.gfx", "farming_tutorial.gfx", "game_forging.gfx",
          "forging_tutorial.gfx", "game_mailsorting.gfx", "mailsorting_tutorial.gfx", "game_wheel.gfx", "game_cooking.gfx",
-         "game_cooking.lst"]
+         "game_cooking.lst", "tutorial_cooking.gfx"]
 ZONES = ["sg_fishing_medpond", "sg_fishing_stream", "bw_fishing_medpond", "bw_fishing_stream", "sh_fishing_medpond",
          "sh_fishing_stream"]
 
