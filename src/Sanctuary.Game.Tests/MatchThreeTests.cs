@@ -420,6 +420,13 @@ public sealed class MatchThreeTests
         Assert.AreEqual(copper, output.Named("OnQuotaUpdateMsg").Count());
         Assert.AreEqual("OnStopLevel\t1\ttrue", MatchThreeGame.Format("OnStopLevel", output.Named("OnStopLevel").Single().Args));
 
+        // The level ends inactive but running, so the client's tick plays the end and asks for the next level.
+        var names = output.Messages.Select(message => message.Name).ToList();
+        var stop = names.LastIndexOf("OnStopLevel");
+        CollectionAssert.AreEqual(new[] { "OnActiveMsg", "OnPauseMsg", "OnStopLevel" }, names.GetRange(stop - 2, 3));
+        Assert.AreEqual("OnActiveMsg\tfalse", MatchThreeGame.Format("OnActiveMsg", output.Messages[stop - 2].Args));
+        Assert.AreEqual("OnPauseMsg\ttrue", MatchThreeGame.Format("OnPauseMsg", output.Messages[stop - 1].Args));
+
         game.Handle(["OnNextLevelMsg"]);
         Assert.AreEqual(MatchThreeResult.Won, game.Result);
         Assert.AreEqual(1, output.Named("OnGameWonMsg").Count());
