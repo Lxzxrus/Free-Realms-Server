@@ -226,7 +226,12 @@ public sealed class MatchThreeGame
         if (level.Succeeded)
             LevelsWon++;
 
+        // Inactive, so the board takes no more moves, but not paused: OnActiveMsg(false) also pauses the client, and
+        // its tick, which runs the end-of-level animation, the "next level" fallback timer and the end-of-game timer
+        // that sends FRServer_GameOver, does nothing while paused (GameClient.GameApplyTick). Left paused, the client
+        // never asked for level 2 and never ended the game (Ariel, playtest round 4). OnPauseMsg(true) resumes it.
         _output.Send("OnActiveMsg", false);
+        _output.Send("OnPauseMsg", true);
         _output.Send("OnStopLevel", level.Number, level.Succeeded);
 
         // The client shows the loss itself and asks for nothing more.

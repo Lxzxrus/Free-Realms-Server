@@ -160,6 +160,14 @@ packets:
 bonus goals, time, stars, score)`. Goals come from the game's objectives, which Evergrove doesn't send, so they show
 0/0. Closing the end screen sends `CommandPacketClosedMinigameEndScreen` (command 42), which nothing handles yet.
 
+**The client must not be left paused.** `OnActiveMsg(false)` makes the client inactive *and* paused
+(`SoeClient.OnActiveMsg` calls `OnPauseMsg(false)`), and `GameClient.GameApplyTick` returns at once while paused. That
+tick runs the end-of-level animation, the fallback timer that asks for the next level (`mEndStageTimer`) and the
+end-of-game timer that sends `FRServer_GameOver` (`mEndGameTimer`). SOE's built-in server sends `OnActiveMsg(false)`
+when a level stops and nothing resumes the client, so after #113 the game still never ended and level 2 never started
+(round 4). Evergrove follows it with `OnPauseMsg(true)` (resume), leaving the client inactive but running. Whether
+SOE's live server did the same is unknown; this is the fix to check in game.
+
 ## Still unknown
 
 - **What the quota bin's icon id is.** Mining Practice sends 698, the Copper Ore item's icon. The client stores it and
