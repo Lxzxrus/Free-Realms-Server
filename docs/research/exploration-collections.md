@@ -59,7 +59,7 @@ verified in game** (see "Checked in game" below). The collection and entry name 
 ## Gaps
 
 The 2014 npc list (hence PR 66's spawns) lacked coins for 14 entries: Snowhill Rare 4 and 5, Sanctuary Rare 4 and 5 (placed on 2026-10-25, see below),
-Wilds Northeast Rare 5, one Blackspore Elite entry (Oberyn's Broken Home, placed on 2026-10-20, see below), and all of
+Wilds Northeast Rare 5 (the coin was really Bridge View's, Wilds Northwest; placed on 2026-10-27, see below), one Blackspore Elite entry (Oberyn's Broken Home, placed on 2026-10-20, see below), and all of
 Sacred Grove Elite (that hub isn't in our world). Those
 collections cannot be finished until the coins are placed (`!admin collection place <pool>` writes a spawn; the
 spawn then needs its `CollectionEntryId`).
@@ -89,6 +89,21 @@ other, so a wrong name meant a wrong `CollectionEntryId`.
   Elite's A Small Cell and Darvon's Hook were right; four coins were one place round a loop (Left Falls, Tree Cover,
   Shallow Water, Up the Palace Walls) and Spying on the Warriors and Sunset Cliffs were swapped. All re-paired; the
   backpack was granted.
+
+- **Merry Vale, Wugachug and the Wilds**, 2026-10-27:
+  - Merry Vale Rare (271): all three coins one place round a loop. Merry Vale Elite (290): all five round a loop.
+    Both rewards were granted.
+  - Wugachug Rare (270): The Ledge of Relaxation and Snowy Peaks swapped. Wugachug Elite (285): Wugachug Lookout and
+    Pine for Cover swapped. Both rewards were granted.
+  - Wilds Southeast (273): Peace of Mind and Atop Spore Flow swapped. Wilds Northeast (275): Rocking the River and
+    Swimmer's Haven swapped; the reward was granted.
+  - Wilds Southwest (274) and Northwest (276) were tangled across the two sets. The coin we called Merry Notch (4471)
+    stands at Ancient Dig Site, Ancient Dig Site's (4467) at Spying on Bandits, and Spying on Bandits' (4470) at Tent
+    Dent, so **Tent Dent has a coin** and the Southwest set is whole. In the Northwest, A Path Less Traveled, Merry
+    Notch and Gazing Beyond were one place round a loop, and **Bridge View** really had no coin: it now stands at
+    Ariel's `!whereami` (spawn 4498).
+  - Rewards from these sets showed the dye problem: the Seeker's pants (Wugachug Rare) and the Traveler's Tank Top
+    (Wilds Southeast) came out bright red, like the Pathfinder boots from Sanctuary Rare.
 
 `ExplorationCollectionTests.CoinsCheckedInGame_TickTheEntryNamedForTheirPlace` pins these pairs. The other regions'
 pairings are still the id-order guess, so expect the same kind of shift there.

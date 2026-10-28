@@ -71,7 +71,7 @@
   },
   {
     "Id": 4467,
-    "CollectionEntryId": 1980,
+    "CollectionEntryId": 1978,
     "Position": [
       -1680.455,
       10.25717,
@@ -81,7 +81,7 @@
   },
   {
     "Id": 4470,
-    "CollectionEntryId": 1978,
+    "CollectionEntryId": 1981,
     "Position": [
       -1641.038,
       -25.68873,
@@ -91,7 +91,7 @@
   },
   {
     "Id": 4471,
-    "CollectionEntryId": 1988,
+    "CollectionEntryId": 1980,
     "Position": [
       -1104.144,
       -15.65859,
@@ -131,7 +131,7 @@
   },
   {
     "Id": 4478,
-    "CollectionEntryId": 1976,
+    "CollectionEntryId": 1977,
     "Position": [
       -1549.254,
       -17.71285,
@@ -141,7 +141,7 @@
   },
   {
     "Id": 4479,
-    "CollectionEntryId": 1977,
+    "CollectionEntryId": 1976,
     "Position": [
       -1577.994,
       -21.39863,
@@ -171,7 +171,7 @@
   },
   {
     "Id": 4482,
-    "CollectionEntryId": 1986,
+    "CollectionEntryId": 1988,
     "Position": [
       -632.3554,
       21.02245,
@@ -181,7 +181,7 @@
   },
   {
     "Id": 4484,
-    "CollectionEntryId": 1987,
+    "CollectionEntryId": 1989,
     "Position": [
       -676.2494,
       38.73971,
@@ -191,7 +191,7 @@
   },
   {
     "Id": 4485,
-    "CollectionEntryId": 1989,
+    "CollectionEntryId": 1987,
     "Position": [
       -157.3301,
       23.47604,
@@ -201,7 +201,7 @@
   },
   {
     "Id": 4488,
-    "CollectionEntryId": 1984,
+    "CollectionEntryId": 1985,
     "Position": [
       -127.0754,
       -7.864396,
@@ -221,7 +221,7 @@
   },
   {
     "Id": 4490,
-    "CollectionEntryId": 1985,
+    "CollectionEntryId": 1984,
     "Position": [
       -607.2869,
       22.17525,
@@ -248,5 +248,15 @@
       1294.216
     ],
     "Heading": 1.726751
+  },
+  {
+    "Id": 4498,
+    "CollectionEntryId": 1986,
+    "Position": [
+      -135.18,
+      32.33,
+      -485.29
+    ],
+    "Heading": 0
   }
 ]
