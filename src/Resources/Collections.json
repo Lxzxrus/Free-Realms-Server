@@ -33,8 +33,8 @@
     "RewardExperience": 0,
     "RewardProfileId": 0,
     "RewardTextId": 5309,
-    "RewardItemIds": [18040],
-    "RewardItemIdsGirls": [16529],
+    "RewardItemIds": [18022],
+    "RewardItemIdsGirls": [16511],
     "Entries": [
       { "Id": 1935, "NameId": 386279, "IconId": 2239, "IconTintId": 0 },
       { "Id": 1947, "NameId": 386448, "IconId": 2239, "IconTintId": 0 },
@@ -55,6 +55,7 @@
     "RewardProfileId": 0,
     "RewardTextId": 5306,
     "RewardItemIds": [17460],
+    "RewardItemIdsGirls": [15762],
     "Entries": [
       { "Id": 1936, "NameId": 386335, "IconId": 2236, "IconTintId": 0 },
       { "Id": 1951, "NameId": 386452, "IconId": 2236, "IconTintId": 0 },
@@ -135,7 +136,7 @@
     "RewardExperience": 0,
     "RewardProfileId": 0,
     "RewardTextId": 5314,
-    "RewardItemIds": [18267],
+    "RewardItemIds": [18243],
     "Entries": [
       { "Id": 1940, "NameId": 386347, "IconId": 2234, "IconTintId": 0 },
       { "Id": 1968, "NameId": 386472, "IconId": 2234, "IconTintId": 0 },
@@ -190,8 +191,8 @@
     "RewardExperience": 0,
     "RewardProfileId": 0,
     "RewardTextId": 5312,
-    "RewardItemIds": [1496],
-    "RewardItemIdsGirls": [1415],
+    "RewardItemIds": [17146],
+    "RewardItemIdsGirls": [15652],
     "Entries": [
       { "Id": 1943, "NameId": 386356, "IconId": 2236, "IconTintId": 0 },
       { "Id": 1974, "NameId": 386482, "IconId": 2236, "IconTintId": 0 },

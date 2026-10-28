@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -49,6 +50,23 @@ public sealed class ItemTintsTests
         var shirt = definitions[StripedTShirt];
         Assert.IsTrue(shirt.IsTintable);
         Assert.AreEqual(228, ItemTints.Default(shirt));
+    }
+
+    [TestMethod]
+    public void MissingHomework_RewardsTheWhiteStripedTShirt()
+    {
+        // Item 248 is the dyeable Striped T-Shirt, whose icon tint (228, thunderbird red) is only a placeholder: at
+        // that tint it was still red (Ariel, 2026-10-27). The quest gives the fixed-colour white one instead.
+        using var quests = JsonDocument.Parse(File.ReadAllText(FindResource("Quests.json")));
+        var missingHomework = quests.RootElement.EnumerateArray().Single(quest => quest.GetProperty("QuestId").GetInt32() == 3074);
+        var reward = missingHomework.GetProperty("RewardItems").EnumerateArray().Single().GetInt32();
+
+        var definitions = new ClientItemDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(definitions.Load(FindResource("ClientItemDefinitions.json")));
+
+        Assert.AreEqual(definitions[StripedTShirt].NameId, definitions[reward].NameId, "Still the Striped T-Shirt.");
+        Assert.IsFalse(definitions[reward].IsTintable);
+        Assert.AreEqual(263, ItemTints.Default(definitions[reward]), "Snowfall, the client's white.");
     }
 
     [TestMethod]
