@@ -15,6 +15,7 @@ Found on 2026-10-19 and confirmed in game on Nate's PC:
 |---|---|---|
 | Mining | `game_mining.gfx`'s 75 pictures (`img<n>.dds`), `mining_tutorial.gfx` | No copper, no bin, no frame; blank tutorial |
 | Fishing holes | `<zone>.gzne` and `<zone>Areas.xml` of `sg_`, `bw_` and `sh_fishing_*` | Crash while zoning in |
+| Cooking's tutorial (2026-10-27) | `tutorial_cooking.gfx` (tutorial 6 in the client's `GameTutorialData.txt`) and 36 of its pictures | Every tutorial pop-up blank |
 
 The official OSFR client doesn't carry these files; the asset server (`tools/asset-mirror`) does. With them in a
 cache pack in the client folder, Mining draws fully and fishing works. The daily wheel is **not** this problem:
