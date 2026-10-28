@@ -38,6 +38,15 @@ to. `Collections.json` now names them (`RewardCoins`, `RewardExperience`, `Rewar
 | 284 to 291, 309 | 9 | Elite Exploration: Snowhill, Wugachug, Shrouded Glade, Briarwood, Blackspore, Seaside, Merry Vale, Sanctuary, Sacred Grove | "Elite Explorer Backpack of <region>" plus a Token entry (type 12, definition 520 to 527; not a player title, meaning unknown, not granted) |
 | 244 to 264 | 21 | The "Explorer" collections of whole regions and places (Token rewards), out of scope | |
 
+**Reward colours (2026-10-27).** Each clothing name exists as dozens of item ids: fixed-colour versions, whose colour
+is their icon tint, and a few dyeable ones (`IsTintable`), whose icon tint is 227 or 228, the first tint of the
+client's two dye groups (`Resources/TintGroupMappings.txt`), so a placeholder. The capture's Pathfinder's Pants and
+Capris (265), Seeker's Pants (270) and Traveler's Shirt and Tank Top (273) are dyeable ones and came out bright red
+whatever tint we saved. They are now the fixed-colour versions in their set's colour, the colour of the set's other
+rewards: Traveler's 234 (commoner), Seeker's 243 (cloverleaf), Pathfinder's 237 (turbo). No girls' Pathfinder's Boots
+come in turbo, so girls get sunrise (231, in `RewardItemIdsGirls`) rather than the first girls' version, which
+was red. Missing Homework's Striped T-Shirt is likewise the fixed white one (32532, snowfall 263).
+
 Regions were matched through the collection icon (2232 Blackspore, 2233 Briarwood, 2234 Wugachug, 2235 Merry Vale,
 2236 Sanctuary and the Wilds, 2237 Seaside, 2238 Shrouded Glade, 2239 Snowhill), which the coin npc models confirm,
 and through the wiki's reward list, which agrees with the capture on all twelve Rare collections. The capture has no

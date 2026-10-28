@@ -21,18 +21,19 @@ public sealed class ExplorationCollectionTests
 {
     // Collection id -> (coin pool region, entry count, reward item ids). Ids, counts and rewards are the capture's;
     // the regions are the wiki's and match the capture's region icons. The four Wilds quarters share Sanctuary's
-    // coin model, so their coins live in the sanctuary pool.
+    // coin model, so their coins live in the sanctuary pool. Three rewards are the fixed-colour version of the
+    // capture's dyeable item, in its set's colour (EveryClothingReward_HasAColourOfItsOwn): 265, 270 and 273.
     private static readonly Dictionary<int, (string Region, int Entries, int[] Rewards)> Rare = new()
     {
-        [265] = ("snowhill", 5, [18040]),
+        [265] = ("snowhill", 5, [18022]),
         [266] = ("sanctuary", 6, [17460]),
         [267] = ("seaside", 5, [17300]),
         [268] = ("blackspore", 5, [17370]),
         [269] = ("briarwood", 5, [18219]),
-        [270] = ("wugachug", 3, [18267]),
+        [270] = ("wugachug", 3, [18243]),
         [271] = ("merry-vale", 3, [17210]),
         [272] = ("shrouded-glade", 3, [15322, 17820]),
-        [273] = ("sanctuary", 5, [1496]),
+        [273] = ("sanctuary", 5, [17146]),
         [274] = ("sanctuary", 5, [17271]),
         [275] = ("sanctuary", 5, [15248, 17786]),
         [276] = ("sanctuary", 5, [15281, 17932]),
@@ -148,6 +149,39 @@ public sealed class ExplorationCollectionTests
 
         Assert.AreEqual(15783, items.ForGender(items[17300], 2).Id, "Traveler's Boots, girls' version in the same colour.");
         Assert.AreEqual(17300, items.ForGender(items[17300], 1).Id);
+    }
+
+    [TestMethod]
+    public void EveryClothingReward_HasAColourOfItsOwn()
+    {
+        // A dyeable item's icon tint (227 or 228, the first of the client's dye groups) is a placeholder, and the
+        // capture's Seeker's Pants, Traveler's Shirt and Tank Top, and Pathfinder's Pants and Capris were dyeable:
+        // they came out bright red (Ariel, 2026-10-27). Rewards are the fixed-colour versions in their set's colour,
+        // as the rest of each set is (Traveler's 234, Seeker's 243, Pathfinder's 237).
+        var items = new ClientItemDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(items.Load(FindSourcePath("Resources", "ClientItemDefinitions.json")));
+
+        foreach (var collection in LoadCollections().Values)
+        {
+            foreach (var gender in new[] { 1, 2 })
+            {
+                foreach (var itemId in collection.RewardItemIdsFor(gender))
+                {
+                    var fitted = items.ForGender(items[itemId], gender);
+
+                    Assert.IsFalse(fitted.IsTintable, $"Collection {collection.Id} gives dyeable item {fitted.Id} (gender {gender}).");
+                    Assert.AreEqual(items[itemId].Icon.TintId, fitted.Icon.TintId,
+                        $"Collection {collection.Id}'s reward {itemId} changes colour for gender {gender}.");
+                }
+            }
+        }
+
+        var sanctuary = LoadCollections()[266];
+
+        // No girls' Pathfinder's Boots come in the set's yellow (237); sunrise orange (231) is the nearest. Picking
+        // the first girls' version instead gave a red pair (Ariel, 2026-10-27).
+        CollectionAssert.AreEqual(new[] { 15762 }, sanctuary.RewardItemIdsFor(2));
+        Assert.AreEqual(231, items[15762].Icon.TintId);
     }
 
     [TestMethod]
