@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -124,8 +125,17 @@ public sealed class MatchThreeLevelDefinition
     /// Rows of cell codes, top row first: 0 nothing, 1 a rock (or a hazard or wildcard), 2 anything the level spawns,
     /// 3 a blocker, 4 the drop zone ore falls out through. Row 0 and column 0 must be 0: the board's falls start
     /// from the row above the first full one and never look at column 0 (both the client's and SOE's server's).
+    /// The cells also decide where the board appears: see <see cref="BoardCentreColumn"/>.
     /// </summary>
     public List<int[]> Grid { get; set; } = [];
+
+    /// <summary>
+    /// The column a board must be centred on. Each match-three Flash draws cell (x, y) at (40x, 40y) in its game clip
+    /// and never centres the board itself; its frame (rock, field, mail rack, furnace), bins and meters are drawn around
+    /// columns 1 to 12, where SOE's boards sat (2009 screenshots). So an 8-wide board uses columns 3 to 10. One that
+    /// starts at column 1 sits two columns left of its frame, and left of the middle of the screen.
+    /// </summary>
+    public const double BoardCentreColumn = 6.5;
 
     /// <summary>
     /// The tiles the player chains: rocks 1 to 5 in Mining and Forging, crops 1 to 16 in Farming, letters 1 to 8 in Mail
@@ -172,6 +182,20 @@ public sealed class MatchThreeLevelDefinition
 
             if (Grid.SelectMany(row => row).Any(cell => cell is < MatchThreeTiles.ShapeEmpty or > MatchThreeTiles.ShapeDropZone))
                 yield return "grid cells must be 0 to 4";
+
+            var columns = Enumerable.Range(0, Grid[0].Length)
+                .Where(x => Grid.Any(row => x < row.Length && row[x] != MatchThreeTiles.ShapeEmpty))
+                .ToList();
+
+            if (columns.Count > 0 && Math.Abs((columns[0] + columns[^1]) / 2.0 - BoardCentreColumn) > 0.5)
+            {
+                var width = columns[^1] - columns[0] + 1;
+                var first = (int)Math.Ceiling(BoardCentreColumn - (width - 1) / 2.0);
+
+                yield return string.Create(CultureInfo.InvariantCulture,
+                    $"the board spans columns {columns[0]} to {columns[^1]}, off the middle of the Flash's frame: " +
+                    $"centre it on column {BoardCentreColumn} (columns {first} to {first + width - 1})");
+            }
         }
 
         if (SpawnChances.Selectable <= 0 || Selectables.All(spawn => spawn.Chance <= 0))

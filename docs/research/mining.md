@@ -76,7 +76,26 @@ locked rock arrives as 500 plus its type), 400 rocks, 600 ore, 700 gems, 800 blo
 
 `Grid` in `MatchThree.json` is rows of cell codes: 0 nothing, 1 a rock (or a hazard or wildcard), 2 anything the level
 spawns, 3 a blocker, 4 drop zone. Row 0 and column 0 must be 0: the fall code on both sides starts new tiles in the
-row above the first full one and never looks at column 0. Mining Practice is 8 by 8 rocks over a row of drop zone.
+row above the first full one and never looks at column 0. Mining Practice is 8 by 8 rocks (columns 3 to 10, rows 2 to
+9) over a row of drop zone (row 10).
+
+### Where the board appears on screen
+
+Found on 2026-10-28: every match-three board opened left of centre, where the 2009 screenshots show it in the middle.
+The server doesn't place the window. The client loads the Flash, asks for its stage size (`getResizeInfo`, answered
+with `Resize`), fits the window to the screen and centres it (`MiniGameFlash` in the UI's Lua), and GFx draws the movie
+centred in it (its default "show all" mode; no Flash answers `getXYOffset`). StartFlashGame's flag never reaches that
+Lua, and MiniGameInfo's start-screen flag only picks `Show` (with the backdrop) or `ShowMicro`, which centre alike.
+
+The level places the board. The Flash draws cell (x, y) at (40x, 40y) in its game clip (`mcGame`) and centres
+nothing, and each game's frame (rock, field, furnace, mail rack), bins and meters are drawn around columns 1 to 12. On
+the 2009 screenshots Mining's board covers columns 1 to 12 and rows 1 to 9, Harvesting's columns 1 to 12 and rows 2
+to 11, Forging's columns 2 to 11 and rows 2 to 11: all centred on column 6.5. Our first boards used columns 1 to 8,
+two columns (about 100 pixels on a 1080p screen) left of the frame's middle.
+
+So a board is centred on column 6.5 (columns 3 to 10 for 8 wide), and `MatchThreeLevelDefinition.Problems` refuses one
+that isn't. Mining, Farming and Forging use rows 2 to 10; Mail Sorting keeps rows 1 to 9, because its bins start 427
+pixels down its game clip (Mining's 474, Farming's 516, Forging's mold meter 545) and row 10 would overlap them.
 
 ## Farming, Forging and Mail Sorting
 

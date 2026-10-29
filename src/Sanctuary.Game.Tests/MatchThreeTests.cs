@@ -52,6 +52,13 @@ public sealed class MatchThreeTests
 
     private static MatchThreeGameDefinition Mining() => Game("mining");
 
+    /// <summary>The cells of a level's grid that hold a tile once the board is built: all but empty and drop-zone cells.</summary>
+    private static IEnumerable<(int X, int Y)> BoardCells(MatchThreeLevelDefinition level) =>
+        from y in Enumerable.Range(0, level.Grid.Count)
+        from x in Enumerable.Range(0, level.Grid[y].Length)
+        where level.Grid[y][x] is not (MatchThreeTiles.ShapeEmpty or MatchThreeTiles.ShapeDropZone)
+        select (x, y);
+
     /// <summary>One shipped level on its own, as level 1 of a game.</summary>
     private static MatchThreeGameDefinition OnlyLevel(string name, int level)
     {
@@ -310,9 +317,8 @@ public sealed class MatchThreeTests
         Assert.AreEqual(2, output.Named("OnPowerupInitMsg").Count());
 
         // Every playable cell holds a tile the client can see.
-        for (var y = 1; y < grid.Height - 1; y++)
-            for (var x = 1; x < grid.Width; x++)
-                Assert.IsTrue(grid.At(x, y)?.Category >= MatchThreeTiles.Visible, $"{x},{y} is empty.");
+        foreach (var (x, y) in BoardCells(Mining().Levels[0]))
+            Assert.IsTrue(grid.At(x, y)?.Category >= MatchThreeTiles.Visible, $"{x},{y} is empty.");
 
         Assert.IsTrue(grid.HasMove());
     }
@@ -334,9 +340,8 @@ public sealed class MatchThreeTests
         var time = output.Events(MatchThreeEvents.TimerIncrement).Single();
         Assert.AreEqual(3.0, (double)time[1], "One second per tile on this level.");
 
-        for (var y = 1; y < grid.Height - 1; y++)
-            for (var x = 1; x < grid.Width; x++)
-                Assert.IsNotNull(grid.At(x, y), $"{x},{y} wasn't refilled.");
+        foreach (var (x, y) in BoardCells(Mining().Levels[0]))
+            Assert.IsNotNull(grid.At(x, y), $"{x},{y} wasn't refilled.");
     }
 
     [TestMethod]
@@ -539,9 +544,8 @@ public sealed class MatchThreeTests
         {
             Assert.IsTrue(client.PlayTurn(), $"No move on turn {turn}, and the board wasn't reshuffled.");
 
-            for (var y = 1; y < grid.Height - 1; y++)
-                for (var x = 1; x < grid.Width; x++)
-                    Assert.IsNotNull(grid.At(x, y), $"Turn {turn}: {x},{y} is empty.");
+            foreach (var (x, y) in BoardCells(definition.Levels[0]))
+                Assert.IsNotNull(grid.At(x, y), $"Turn {turn}: {x},{y} is empty.");
         }
 
         Assert.AreEqual(0, game.Level.Desyncs);
@@ -555,14 +559,15 @@ public sealed class MatchThreeTests
     /// What each game's Flash can draw, read from its .gfx: the frame labels of its <c>Selectable_Combined</c>,
     /// <c>Collectible_Combined_Reg</c> and <c>_Bonus</c> clips, under the names its <c>TileGenerator</c> gives each type.
     /// Farming and Mail Sorting have no ore or gem clips at all, and Forging no gem clip. Then the quota bins on screen
-    /// (<c>mBin1</c> to <c>mBin5</c>; Forging has two).
+    /// (<c>mBin1</c> to <c>mBin5</c>; Forging has two), and how far down the game clip (<c>mcGame</c>, where cell (x, y)
+    /// is drawn at (40x, 40y)) they start: the top of the bins' pictures, and of Forging's mold meter.
     /// </summary>
-    private static readonly Dictionary<string, (int[] Selectables, int[] Collectables, int[] Bonuses, int Bins)> Art = new()
+    private static readonly Dictionary<string, (int[] Selectables, int[] Collectables, int[] Bonuses, int Bins, int BinsTop)> Art = new()
     {
-        ["mining"] = (Range(1, 5), Range(0, 14), Range(0, 9), 5),
-        ["farming"] = (Range(1, 16), [], [], 5),
-        ["mail"] = (Range(1, 8), [], [], 5),
-        ["forging"] = (Range(1, 5), Range(0, 26), [], 2)
+        ["mining"] = (Range(1, 5), Range(0, 14), Range(0, 9), 5, 474),
+        ["farming"] = (Range(1, 16), [], [], 5, 516),
+        ["mail"] = (Range(1, 8), [], [], 5, 427),
+        ["forging"] = (Range(1, 5), Range(0, 26), [], 2, 545)
     };
 
     /// <summary>Every game's <c>PowerUp_Combined</c> draws more time, dynamite, wild tiles, destruct and shuffle; no score multipliers.</summary>
@@ -607,6 +612,63 @@ public sealed class MatchThreeTests
                     Assert.IsTrue(level.Grid.Any(row => row.Contains(MatchThreeTiles.ShapeDropZone)), $"{where} needs a drop zone.");
             }
         }
+    }
+
+    [TestMethod]
+    public void ShippedBoards_SitInTheMiddleOfTheirFrame()
+    {
+        Assert.IsTrue(MatchThreeDefinitions.TryLoad(FindShipped(), NullLogger.Instance, out var definitions));
+
+        foreach (var game in definitions.Games)
+        {
+            foreach (var (level, number) in game.Levels.Select((level, i) => (level, i + 1)))
+            {
+                var where = $"{game.Name} level {number}";
+                var used = (from y in Enumerable.Range(0, level.Grid.Count)
+                            from x in Enumerable.Range(0, level.Grid[y].Length)
+                            where level.Grid[y][x] != MatchThreeTiles.ShapeEmpty
+                            select (X: x, Y: y)).ToList();
+
+                // The client draws cell (x, y) at (40x, 40y) and centres nothing: SOE's boards sat on columns 1 to 12.
+                Assert.AreEqual(MatchThreeLevelDefinition.BoardCentreColumn, (used.Min(cell => cell.X) + used.Max(cell => cell.X)) / 2.0, where);
+
+                // The drop zone is the board's bottom row, and the board ends above the bins.
+                Assert.IsTrue(level.Grid[used.Max(cell => cell.Y)].All(cell => cell is MatchThreeTiles.ShapeEmpty or MatchThreeTiles.ShapeDropZone), where);
+                Assert.IsTrue((used.Max(cell => cell.Y) + 1) * 40 <= Art[game.Name].BinsTop, $"{where}: the board runs into the bins.");
+            }
+        }
+    }
+
+    [TestMethod]
+    public void Problems_CatchABoardLeftOfItsFrame()
+    {
+        // Rocks in the given columns, rows 2 to 9, over a drop zone in row 10.
+        static List<int[]> Board(int first, int last) =>
+            [.. Enumerable.Range(0, 11).Select(y => Enumerable.Range(0, 13).Select(x =>
+                x < first || x > last || y < 2 ? MatchThreeTiles.ShapeEmpty
+                : y == 10 ? MatchThreeTiles.ShapeDropZone : MatchThreeTiles.ShapeRegular).ToArray())];
+
+        var level = Mining().Levels[0];
+        Assert.AreEqual(0, level.Problems().Count());
+
+        // The first boards: eight wide from column 1, two columns left of the middle of the frame.
+        level.Grid = Board(1, 8);
+        var problem = level.Problems().Single();
+        StringAssert.Contains(problem, "columns 1 to 8");
+        StringAssert.Contains(problem, "centre it on column 6.5 (columns 3 to 10)");
+
+        level.Grid = Board(3, 10);
+        Assert.AreEqual(0, level.Problems().Count());
+        level.Grid = Board(1, 12);
+        Assert.AreEqual(0, level.Problems().Count(), "SOE's own width.");
+
+        // An odd width can't be exactly centred: half a column either way is fine.
+        level.Grid = Board(2, 10);
+        Assert.AreEqual(0, level.Problems().Count());
+        level.Grid = Board(3, 11);
+        Assert.AreEqual(0, level.Problems().Count());
+        level.Grid = Board(1, 9);
+        StringAssert.Contains(level.Problems().Single(), "(columns 3 to 11)");
     }
 
     [TestMethod]
@@ -671,9 +733,8 @@ public sealed class MatchThreeTests
         var bins = output.Named("OnQuotaInitMsg").Select(message => (int)message.Args[0]).ToList();
         CollectionAssert.AreEqual(Enumerable.Range(0, bins.Count).ToList(), bins);
 
-        for (var y = 1; y < grid.Height - 1; y++)
-            for (var x = 1; x < grid.Width; x++)
-                Assert.IsTrue(grid.At(x, y)?.Category >= MatchThreeTiles.Visible, $"{x},{y} is empty.");
+        foreach (var (x, y) in BoardCells(level))
+            Assert.IsTrue(grid.At(x, y)?.Category >= MatchThreeTiles.Visible, $"{x},{y} is empty.");
 
         Assert.IsTrue(grid.HasMove());
         Assert.AreEqual("OnActiveMsg", output.Messages[^1].Name);
@@ -759,9 +820,8 @@ public sealed class MatchThreeTests
         {
             Assert.IsTrue(client.PlayTurn(), $"No move on turn {turn}, and the board wasn't reshuffled.");
 
-            for (var y = 1; y < grid.Height - 1; y++)
-                for (var x = 1; x < grid.Width; x++)
-                    Assert.IsNotNull(grid.At(x, y), $"Turn {turn}: {x},{y} is empty.");
+            foreach (var (x, y) in BoardCells(definition.Levels[0]))
+                Assert.IsNotNull(grid.At(x, y), $"Turn {turn}: {x},{y} is empty.");
         }
 
         Assert.AreEqual(0, game.Level.Desyncs);
