@@ -169,6 +169,9 @@ public static class ProfileHelper
         if (profile is null)
             return false;
 
+        // Let each weapon use its own attachment effect during the job transition (upstream OSFR, merged here
+        // because Evergrove moved this switch out of CommandPacketSetProfileHandler).
+        player.ClearWeaponFlairOverride();
         player.ActiveProfileId = profileId;
 
         var clientUpdatePacketActivateProfile = new ClientUpdatePacketActivateProfile();
