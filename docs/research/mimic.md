@@ -132,7 +132,8 @@ Five recipes to start, from the client's own Cooking activities: Simone's Spiral
 Sundae (easy), the Savory Spiralmint Soup and the Crispy Choychoy Delight (medium), and the Oddly Colored Omelette
 (hard: tighter timers, more eggs and cuts). The other 23 Cooking activities still do nothing when clicked.
 
-A win pays the recipe's coins and Chef stars through `RewardHelper`; the amounts are placeholders.
+A win pays the recipe's coins and Chef stars through `MinigameReward.Pay` and `RewardHelper`, as a match-three win
+pays its game's; the amounts are placeholders.
 
 ### Where Evergrove differs from SOE
 

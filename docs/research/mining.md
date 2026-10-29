@@ -187,11 +187,30 @@ when a level stops and nothing resumes the client, so after #113 the game still 
 (round 4). Evergrove follows it with `OnPauseMsg(true)` (resume), leaving the client inactive but running. Whether
 SOE's live server did the same is unknown; this is the fix to check in game.
 
+## What a win pays
+
+In the original game a won match-three game showed "YOU WIN!" and paid coins, stars, ore, gems and a Treasure Ticket
+(2009 Mining video). The amounts are lost with SOE's server data. Since 2026-10-29 Evergrove pays a win of the whole
+game, every level, the way Cooking pays a recipe: the game's `Coins`, and its `Experience` (job stars) on its
+`RewardProfileId` job if the player has that job, both from `MatchThree.json`, through `MinigameReward.Pay` (shared
+with `MimicHandler`) and `RewardHelper`, with a reward toast for each. Mining pays Miner stars, Mail Sorting Postman,
+Forging Blacksmith, and Farming Chef: Harvesting was the Chef's, and its crops are Cooking's ingredients; there is no
+Farmer job. Every amount is a placeholder for the economy pass. Mining Practice pays a little although the
+original's practice may have paid nothing, because for now it's the only mining there is. Ore, gems and the ticket
+aren't paid.
+
+The end messages come from the client (`FRServer_GameOver`, `OnNextLevelMsg`...), so none of them decides a win: the
+server's own game does (`MatchThreeGame.Result`, won only when the client asks for the level after the last one and
+the server counted that level's quotas met). `FlashMinigameSession.TryTakeMatchThreeReward` hands the reward over the
+first time, and never again in that session, however often the Flash repeats or replays its end; the Gateway asks
+after every message and tick. A loss, a game stopped for falling out of step, a quit and `FRServer_GameOver` pay
+nothing.
+
 ## Still unknown
 
 - **What the quota bin's icon id is.** Mining Practice sends 698, the Copper Ore item's icon. The client stores it and
   never draws it; the bin shows the tile's own picture.
-- **Rewards.** Practice pays nothing. Real Mining (copper to gold) should pay the ore collected, through
-  `RewardHelper`, once the economy pass sets amounts.
+- **The real rewards.** What each game paid, and whether practice paid at all. Real Mining (copper to gold) should
+  also pay the ore collected, once the economy pass sets amounts.
 - Strings the client looks up by name (`miningValue613`, `MatchThreeReady`...) are in its own
   `Resources/CodeStringMappings.txt`, which maps each name to a string id; see the section on the other games.

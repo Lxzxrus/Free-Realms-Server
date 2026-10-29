@@ -33,6 +33,12 @@ public sealed class MatchThreeDefinitions
             if (game.Levels.Count == 0)
                 yield return $"game \"{game.Name}\" has no levels";
 
+            if (game.Coins < 0 || game.Experience < 0 || game.RewardProfileId < 0)
+                yield return $"game \"{game.Name}\": rewards can't be negative";
+
+            if (game.Experience > 0 && game.RewardProfileId == 0)
+                yield return $"game \"{game.Name}\": Experience needs a RewardProfileId, the job its stars go to";
+
             for (var i = 0; i < game.Levels.Count; i++)
                 foreach (var problem in game.Levels[i].Problems())
                     yield return $"game \"{game.Name}\", level {i + 1}: {problem}";
@@ -98,6 +104,18 @@ public sealed class MatchThreeGameDefinition
 
     /// <summary>Played in order; winning the last wins the game.</summary>
     public List<MatchThreeLevelDefinition> Levels { get; set; } = [];
+
+    /// <summary>Coins for winning the whole game, every level. A placeholder until the economy pass.</summary>
+    public int Coins { get; set; }
+
+    /// <summary>Stars for a win, on the <see cref="RewardProfileId"/> job, paid only if the player has it. A placeholder.</summary>
+    public int Experience { get; set; }
+
+    /// <summary>The job a win's stars go to (Profiles.json: 14 Miner, 4 Postman, 16 Blacksmith, 45 Chef); 0 for none.</summary>
+    public int RewardProfileId { get; set; }
+
+    /// <summary>What winning the game pays.</summary>
+    public MinigameReward Reward => new(Coins, RewardProfileId, Experience);
 }
 
 public sealed class MatchThreeLevelDefinition

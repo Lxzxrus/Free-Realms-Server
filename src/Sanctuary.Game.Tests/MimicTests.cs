@@ -8,6 +8,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
 using Sanctuary.Game.Minigames.Mimic;
 
@@ -16,6 +17,8 @@ namespace Sanctuary.Game.Tests;
 [TestClass]
 public sealed class MimicTests
 {
+    private const int ChefProfileId = 45;
+
     /// <summary>What the server sent, as the Flash receives it: one tab-separated line per message.</summary>
     private sealed class Wire : IMimicOutput
     {
@@ -282,6 +285,9 @@ public sealed class MimicTests
             Assert.AreEqual(23 * recipe.Phases.Count, game.ReportedSeconds);
             Assert.IsTrue(client.Ended);
             Assert.AreEqual("OnGameWonMsg", client.EndedWith);
+
+            // What MimicHandler pays for it: the recipe's coins, and its stars as a Chef.
+            Assert.AreEqual(new MinigameReward(recipe.Coins, ChefProfileId, recipe.Experience), game.Reward, recipe.Name);
 
             // The Flash's EndOfGame answers with FRServer_GameOver; a second "won" pays nothing more.
             client.Send("FRServer_GameOver");

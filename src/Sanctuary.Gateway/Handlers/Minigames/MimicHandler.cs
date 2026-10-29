@@ -7,18 +7,17 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Database;
 using Sanctuary.Game;
-using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.Mimic;
-using Sanctuary.Game.Resources.Definitions.Rewards;
 using Sanctuary.Packet.Common.Attributes;
 
 namespace Sanctuary.Gateway.Handlers;
 
 /// <summary>
 /// The Mimic minigames (Cooking): which Games menu entries are recipes in <c>Resources/Mimic.json</c>, the server's
-/// side of each game (<see cref="MimicGame"/>), and the reward for a win. <see cref="FlashMinigameHandler"/> opens,
-/// starts and closes them like any Flash minigame. See docs/research/mimic.md.
+/// side of each game (<see cref="MimicGame"/>), and the reward for a win (<see cref="MinigameReward.Pay"/>, as the
+/// match-three games pay). <see cref="FlashMinigameHandler"/> opens, starts and closes them like any Flash minigame.
+/// See docs/research/mimic.md.
 /// </summary>
 [PacketHandler]
 public static class MimicHandler
@@ -102,9 +101,6 @@ public static class MimicHandler
 
         using var dbContext = _dbContextFactory.CreateDbContext();
 
-        RewardHelper.TryGrantCurrency(dbContext, _logger, player, CurrencyType.Coins, game.Recipe.Coins);
-
-        if (game.Game.RewardProfileId > 0)
-            RewardHelper.TryGrantExperience(_resourceManager, dbContext, _logger, player, game.Game.RewardProfileId, game.Recipe.Experience);
+        game.Reward.Pay(_resourceManager, dbContext, _logger, player);
     }
 }

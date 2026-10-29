@@ -67,6 +67,9 @@ public sealed class MatchThreeGame
 
     public string Name => _definition.Name;
 
+    /// <summary>What a win pays, from the definition the game was started with.</summary>
+    public MinigameReward Reward => _definition.Reward;
+
     /// <summary>The level being played or just finished, 1 first.</summary>
     public MatchThreeLevel? Level { get; private set; }
 
