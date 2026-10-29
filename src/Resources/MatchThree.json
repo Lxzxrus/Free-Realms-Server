@@ -30,11 +30,29 @@
 // Power-ups: 0 more time, 1 double score, 2 five times score, 50 dynamite, 51 wild tiles, 52 destruct, 53 shuffle. None
 // of the four games has a picture for 1 or 2 (they show the first power-up picture instead), so the levels leave them
 // out. More time falls out through the drop zone like ore, which is why every board keeps a drop-zone row.
+//
+// Rewards: winning the whole game (every level, as the server counts the board) pays the game's Coins, and its
+// Experience (job stars) on the RewardProfileId job if the player has that job, the way Cooking pays (Mimic.json).
+// Jobs are Profiles.json's: 14 Miner, 45 Chef, 4 Postman, 16 Blacksmith. Every amount is a placeholder for the economy
+// pass, on Cooking's scale: a game of three levels pays what an easy recipe does. The original's wins also paid ore,
+// gems and a Treasure Ticket (2009 Mining video); those wait for the economy pass too.
+//
+// MinSecondsPerLevel: a game won faster than this per level (from its start to the win, on the server's clock) still
+// ends as a win, but pays nothing, like Cooking's MinSecondsPerPhase. 5 is a conservative placeholder no honest player
+// gets under: the Flash itself spends about 4.5 s of every level (the board dropping in, then a 3-second wait after the
+// level ends before it asks for the next one), and no level took fewer than 11 chains in 300 scripted plays of it.
+// How it was chosen: docs/research/mining.md, "What a win pays".
 {
   "Games": [
     {
       "Name": "mining",
       "GameNumber": 1,
+      // Mining Practice, one short level: a small placeholder. The original's practice may have paid nothing, but for
+      // now it's the only mining there is.
+      "Coins": 10,
+      "Experience": 5,
+      "RewardProfileId": 14,
+      "MinSecondsPerLevel": 5,
       "Levels": [
         {
           "Comment": "Mining Practice: chain rocks so copper ore falls out through the bottom; five pieces win.",
@@ -81,6 +99,11 @@
     {
       "Name": "farming",
       "GameNumber": 60,
+      // Harvesting was the Chef's: its crops are cooking ingredients (docs/research/minigames-scout.md). No Farmer job.
+      "Coins": 25,
+      "Experience": 15,
+      "RewardProfileId": 45,
+      "MinSecondsPerLevel": 5,
       "Levels": [
         {
           "Comment": "Farming 1: chained crops go into the baskets; fill Gummyfruit and Snowberry.",
@@ -181,6 +204,10 @@
     {
       "Name": "mail",
       "GameNumber": 12,
+      "Coins": 25,
+      "Experience": 15,
+      "RewardProfileId": 4,
+      "MinSecondsPerLevel": 5,
       "Levels": [
         {
           "Comment": "Mail Sorting 1: chained letters go into the mail bags; fill the Sealed and Blue Envelope bags.",
@@ -278,6 +305,10 @@
     {
       "Name": "forging",
       "GameNumber": 62,
+      "Coins": 25,
+      "Experience": 15,
+      "RewardProfileId": 16,
+      "MinSecondsPerLevel": 5,
       "Levels": [
         {
           "Comment": "Forging 1 (Quick Shot Bow): chain metals so bow pieces fall out through the bottom; ten fill the bow's mold (MoldId 14).",

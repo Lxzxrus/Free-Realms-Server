@@ -67,6 +67,21 @@ public sealed class MatchThreeGame
 
     public string Name => _definition.Name;
 
+    /// <summary>What a win pays, from the definition the game was started with.</summary>
+    public MinigameReward Reward => _definition.Reward;
+
+    /// <summary>Seconds from the game's start (the tutorial closed) to its win, on the server's clock; null until won.</summary>
+    public double? SecondsToWin { get; private set; }
+
+    /// <summary>The fewest seconds an honest win takes: the game's <c>MinSecondsPerLevel</c> for every level.</summary>
+    public int MinSecondsToWin => _definition.MinSecondsPerLevel * _definition.Levels.Count;
+
+    /// <summary>
+    /// Won in less time than the levels can be played. The game still ends as a win for the client, but the win pays
+    /// nothing.
+    /// </summary>
+    public bool WonTooFast => Result == MatchThreeResult.Won && SecondsToWin < MinSecondsToWin;
+
     /// <summary>The level being played or just finished, 1 first.</summary>
     public MatchThreeLevel? Level { get; private set; }
 
@@ -187,6 +202,7 @@ public sealed class MatchThreeGame
         LevelsWon = 0;
         Desyncs = 0;
         Result = MatchThreeResult.None;
+        SecondsToWin = null;
         IsInProgress = true;
         _startedAt = _clock();
 
@@ -199,6 +215,7 @@ public sealed class MatchThreeGame
         {
             IsInProgress = false;
             Result = MatchThreeResult.Won;
+            SecondsToWin = _startedAt is { } startedAt ? (_clock() - startedAt) / 1000.0 : 0;
             _output.Send("OnGameWonMsg");
             return;
         }
