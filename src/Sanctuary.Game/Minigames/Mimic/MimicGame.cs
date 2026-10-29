@@ -65,6 +65,9 @@ public sealed class MimicGame
 
     public MimicRecipeDefinition Recipe => _recipe;
 
+    /// <summary>What a win pays: the recipe's coins, and its stars on the game's job.</summary>
+    public MinigameReward Reward => new(_recipe.Coins, _game.RewardProfileId, _recipe.Experience);
+
     public bool DataSent { get; private set; }
 
     /// <summary>Rounds the Flash said it finished, by whichever of its two signals it uses.</summary>

@@ -76,7 +76,26 @@ locked rock arrives as 500 plus its type), 400 rocks, 600 ore, 700 gems, 800 blo
 
 `Grid` in `MatchThree.json` is rows of cell codes: 0 nothing, 1 a rock (or a hazard or wildcard), 2 anything the level
 spawns, 3 a blocker, 4 drop zone. Row 0 and column 0 must be 0: the fall code on both sides starts new tiles in the
-row above the first full one and never looks at column 0. Mining Practice is 8 by 8 rocks over a row of drop zone.
+row above the first full one and never looks at column 0. Mining Practice is 8 by 8 rocks (columns 3 to 10, rows 2 to
+9) over a row of drop zone (row 10).
+
+### Where the board appears on screen
+
+Found on 2026-10-28: every match-three board opened left of centre, where the 2009 screenshots show it in the middle.
+The server doesn't place the window. The client loads the Flash, asks for its stage size (`getResizeInfo`, answered
+with `Resize`), fits the window to the screen and centres it (`MiniGameFlash` in the UI's Lua), and GFx draws the movie
+centred in it (its default "show all" mode; no Flash answers `getXYOffset`). StartFlashGame's flag never reaches that
+Lua, and MiniGameInfo's start-screen flag only picks `Show` (with the backdrop) or `ShowMicro`, which centre alike.
+
+The level places the board. The Flash draws cell (x, y) at (40x, 40y) in its game clip (`mcGame`) and centres
+nothing, and each game's frame (rock, field, furnace, mail rack), bins and meters are drawn around columns 1 to 12. On
+the 2009 screenshots Mining's board covers columns 1 to 12 and rows 1 to 9, Harvesting's columns 1 to 12 and rows 2
+to 11, Forging's columns 2 to 11 and rows 2 to 11: all centred on column 6.5. Our first boards used columns 1 to 8,
+two columns (about 100 pixels on a 1080p screen) left of the frame's middle.
+
+So a board is centred on column 6.5 (columns 3 to 10 for 8 wide), and `MatchThreeLevelDefinition.Problems` refuses one
+that isn't. Mining, Farming and Forging use rows 2 to 10; Mail Sorting keeps rows 1 to 9, because its bins start 427
+pixels down its game clip (Mining's 474, Farming's 516, Forging's mold meter 545) and row 10 would overlap them.
 
 ## Farming, Forging and Mail Sorting
 
@@ -168,11 +187,47 @@ when a level stops and nothing resumes the client, so after #113 the game still 
 (round 4). Evergrove follows it with `OnPauseMsg(true)` (resume), leaving the client inactive but running. Whether
 SOE's live server did the same is unknown; this is the fix to check in game.
 
+## What a win pays
+
+In the original game a won match-three game showed "YOU WIN!" and paid coins, stars, ore, gems and a Treasure Ticket
+(2009 Mining video). The amounts are lost with SOE's server data. Since 2026-10-29 Evergrove pays a win of the whole
+game, every level, the way Cooking pays a recipe: the game's `Coins`, and its `Experience` (job stars) on its
+`RewardProfileId` job if the player has that job, both from `MatchThree.json`, through `MinigameReward.Pay` (shared
+with `MimicHandler`) and `RewardHelper`, with a reward toast for each. Mining pays Miner stars, Mail Sorting Postman,
+Forging Blacksmith, and Farming Chef: Harvesting was the Chef's, and its crops are Cooking's ingredients; there is no
+Farmer job. Every amount is a placeholder for the economy pass. Mining Practice pays a little although the
+original's practice may have paid nothing, because for now it's the only mining there is. Ore, gems and the ticket
+aren't paid.
+
+The end messages come from the client (`FRServer_GameOver`, `OnNextLevelMsg`...), so none of them decides a win: the
+server's own game does (`MatchThreeGame.Result`, won only when the client asks for the level after the last one and
+the server counted that level's quotas met). `FlashMinigameSession.TryTakeMatchThreeReward` hands the reward over the
+first time, and never again in that session, however often the Flash repeats or replays its end; the Gateway asks
+after every message and tick. A loss, a game stopped for falling out of step, a quit and `FRServer_GameOver` pay
+nothing.
+
+**A win must take time**, as in Cooking (`MinSecondsPerPhase`). A game won in less than its `MinSecondsPerLevel` times
+its levels, from its start (the tutorial closed) to the win on the server's clock, still ends as a win for the client
+but pays nothing, and the Gateway logs a warning with the player and the time. Only a client that skips the Flash's
+own animations gets under it. Every game uses 5 s a level, a conservative placeholder:
+
+- The Flash spends about 4.5 s of every level on its own. The board drops in row by row before the countdown ends
+  (`Grid.nROW_SPAWNING_TIME`, 0.13 s a row, then a 25-frame fall: 1.5 s or more for 8 rows), and after a level ends
+  the client waits `ConfigClientCommon.END_STAGE_DELAY`, 3 s, before it asks for the next one.
+- Then the play. Two scripted players, the tests' own (the first chain it finds, 200 boards a level) and a greedy one
+  (the chain with the most tiles still needed, or that drops the most ore, 100 boards a level), never finished a
+  level in fewer than 11 chains: Harvesting and Mail Sorting level 1. Mining Practice took at least 24, Forging level
+  1 at least 28. Eleven chains at an inhuman four a second is almost 3 s.
+
+So the quickest honest level takes over 7 s, and 5 s leaves room for a lucky board. A bot that waits out the minimum
+still wins a Mining Practice every few seconds, so a daily cap is left to the economy pass. The Gateway logs every paid
+win's time, so real players' times can tune the minimum.
+
 ## Still unknown
 
 - **What the quota bin's icon id is.** Mining Practice sends 698, the Copper Ore item's icon. The client stores it and
   never draws it; the bin shows the tile's own picture.
-- **Rewards.** Practice pays nothing. Real Mining (copper to gold) should pay the ore collected, through
-  `RewardHelper`, once the economy pass sets amounts.
+- **The real rewards.** What each game paid, and whether practice paid at all. Real Mining (copper to gold) should
+  also pay the ore collected, once the economy pass sets amounts.
 - Strings the client looks up by name (`miningValue613`, `MatchThreeReady`...) are in its own
   `Resources/CodeStringMappings.txt`, which maps each name to a string id; see the section on the other games.
