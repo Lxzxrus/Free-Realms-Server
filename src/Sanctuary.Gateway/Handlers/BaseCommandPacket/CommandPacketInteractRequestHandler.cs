@@ -72,32 +72,25 @@ public static class CommandPacketInteractRequestHandler
             return true;
         }
 
-        if (entity is Npc npc && (_questManager.IsQuestNpc(npc.Guid) || JobTrainers.IsTrainer(npc.Guid)))
+        // Evergrove: a job trainer always shows a menu, even with a single job to teach, so taking a job is picked
+        // and never done by the click alone. Quest NPCs go through upstream's own interaction (Npc.OnInteract).
+        if (entity is Npc npc && JobTrainers.IsTrainer(npc.DefinitionId))
         {
-            // The same reach as picking from an npc's menu (CommandPacketInteractionSelectHandler).
-            if (!Positions.IsWithinRange(connection.Player.Position, npc.Position, npc.InteractRange))
-                return true;
-
-            connection.Player.LastInteractNpcGuid = npc.Guid;
-            connection.Player.LastInteractAt = DateTime.UtcNow;
-
             var trainerOptions = _jobManager.GetTrainerOptions(connection.Player, npc);
 
-            if (trainerOptions.Count == 0)
+            if (trainerOptions.Count > 0)
             {
-                if (_questManager.IsQuestNpc(npc.Guid))
-                    _questManager.OnNpcInteract(connection.Player, npc);
-                else
-                    entity.OnInteract(connection.Player);
+                if (!InteractionMenuHelper.CanInteract(npc, connection.Player))
+                    return true;
 
+                connection.Player.LastInteractNpcGuid = npc.Guid;
+                connection.Player.LastInteractAt = DateTime.UtcNow;
+
+                var options = connection.Player.Zone.GetInteractionOptions(connection.Player, npc).ToList();
+                options.AddRange(trainerOptions);
+                connection.Player.SendInteractionMenu(npc, options, npc.InteractionList?.Interactions ?? npc.Interactions);
                 return true;
             }
-
-            // Taking a job is always picked from the menu, never done by the click alone.
-            var options = _questManager.GetInteractionOptions(connection.Player, npc);
-            options.AddRange(trainerOptions);
-            connection.Player.SendInteractionMenu(npc, options);
-            return true;
         }
 
         entity.OnInteract(connection.Player);
@@ -141,7 +134,7 @@ public static class CommandPacketInteractRequestHandler
         {
             // A node that exists for a quest's Collect goal (homework, ore): nothing to give, so just gather it.
             node.CompleteCollection();
-            _questManager.OnCollectionNodeGathered(connection.Player, node);
+            _questManager.OnEvent(connection.Player, new NodeGatheredEvent(node));
             return true;
         }
 
@@ -223,7 +216,7 @@ public static class CommandPacketInteractRequestHandler
 
         node.HideFromCollector(player);
 
-        _questManager.OnCollectionNodeGathered(player, node);
+        _questManager.OnEvent(player, new NodeGatheredEvent(node));
 
         // The client has every collection since login (SendSelfToClient), so this only ticks the entry.
         SendCollectionEntryUpdate(connection, definition, match.Entry, match.Index);
@@ -301,7 +294,7 @@ public static class CommandPacketInteractRequestHandler
             node.CompleteCollection();
             nodeCompleted = true;
 
-            _questManager.OnCollectionNodeGathered(player, node);
+            _questManager.OnEvent(player, new NodeGatheredEvent(node));
 
             if (hasEntry && !collectionEntryWasCollected)
             {
@@ -515,10 +508,8 @@ public static class CommandPacketInteractRequestHandler
     {
         var notificationId = Environment.TickCount & int.MaxValue;
 
-        var packet = new RewardBundlePacket
-        {
-            Unknown8 = itemDefinition.DescriptionId
-        };
+        var packet = new RewardBundlePacket();
+        packet.RewardBundle.DescriptionId = itemDefinition.DescriptionId;
         packet.RewardBundle.SourceGuid = node.Guid ^ (uint)notificationId;
         packet.RewardBundle.PlayerGuid = connection.Player.Guid;
         packet.RewardBundle.IconId = itemDefinition.Icon.Id;

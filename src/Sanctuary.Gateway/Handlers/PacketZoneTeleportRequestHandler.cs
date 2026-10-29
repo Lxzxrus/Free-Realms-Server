@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Numerics;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -55,7 +55,9 @@ public static class PacketZoneTeleportRequestHandler
             return true;
         }
 
-        connection.Player.UpdatePosition(position, rotation, updateZoneArea: false);
+        connection.Player.UpdatePosition(position, rotation);
+
+        connection.Player.UpdatePointOfInterest();
 
         var clientUpdatePacketUpdateLocation = new ClientUpdatePacketUpdateLocation
         {

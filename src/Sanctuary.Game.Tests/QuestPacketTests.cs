@@ -25,7 +25,7 @@ public sealed class QuestPacketTests
     [TestMethod]
     public void QuestReply_ReadsBackWhatTheClientSent()
     {
-        var data = Wire(BaseQuestPacket.OpCode, QuestReplyPacket.SubOpCode, 2563, true);
+        var data = Wire(BaseQuestPacket.OpCode, QuestReplyPacket.OpCode, 2563, true);
 
         Assert.IsTrue(QuestReplyPacket.TryDeserialize(data, out var packet));
         Assert.AreEqual(2563, packet.QuestId);
@@ -35,7 +35,7 @@ public sealed class QuestPacketTests
     [TestMethod]
     public void QuestReply_KeepsRefusalsDistinctFromAcceptances()
     {
-        var data = Wire(BaseQuestPacket.OpCode, QuestReplyPacket.SubOpCode, 2564, false);
+        var data = Wire(BaseQuestPacket.OpCode, QuestReplyPacket.OpCode, 2564, false);
 
         Assert.IsTrue(QuestReplyPacket.TryDeserialize(data, out var packet));
         Assert.AreEqual(2564, packet.QuestId);
@@ -49,7 +49,7 @@ public sealed class QuestPacketTests
     [TestMethod]
     public void QuestReply_RefusesAPacketFromAnotherFamily()
     {
-        var data = Wire(BaseQuestPacket.OpCode + 1, QuestReplyPacket.SubOpCode, 2563, true);
+        var data = Wire(BaseQuestPacket.OpCode + 1, QuestReplyPacket.OpCode, 2563, true);
 
         Assert.IsFalse(QuestReplyPacket.TryDeserialize(data, out _));
     }
@@ -57,7 +57,7 @@ public sealed class QuestPacketTests
     [TestMethod]
     public void QuestReply_RefusesAnotherQuestPacketsSubOpCode()
     {
-        var data = Wire(BaseQuestPacket.OpCode, QuestAbandonedPacket.SubOpCode, 2563, true);
+        var data = Wire(BaseQuestPacket.OpCode, QuestAbandonedPacket.OpCode, 2563, true);
 
         Assert.IsFalse(QuestReplyPacket.TryDeserialize(data, out _));
     }
@@ -65,7 +65,7 @@ public sealed class QuestPacketTests
     [TestMethod]
     public void QuestReply_RefusesATruncatedPacket()
     {
-        var full = Wire(BaseQuestPacket.OpCode, QuestReplyPacket.SubOpCode, 2563, true);
+        var full = Wire(BaseQuestPacket.OpCode, QuestReplyPacket.OpCode, 2563, true);
 
         Assert.IsFalse(QuestReplyPacket.TryDeserialize(full.AsSpan(0, 6), out _));
     }
@@ -76,7 +76,7 @@ public sealed class QuestPacketTests
         using var writer = new PacketWriter();
 
         writer.Write(BaseQuestPacket.OpCode);
-        writer.Write(QuestAbandonedPacket.SubOpCode);
+        writer.Write(QuestAbandonedPacket.OpCode);
         writer.Write(2563);
 
         Assert.IsTrue(QuestAbandonedPacket.TryDeserialize(writer.Buffer, out var packet));
@@ -84,7 +84,7 @@ public sealed class QuestPacketTests
     }
 
     /// <summary>
-    /// Both packets used to call their sub-opcode <c>OpCode</c>, hiding the quest family's opcode.
+    /// Upstream OSFR names each sub-opcode <c>new const OpCode</c>, hiding the quest family's opcode in the class.
     /// Writing them must still lead with the family (49), then the sub-opcode.
     /// </summary>
     [TestMethod]
@@ -96,7 +96,7 @@ public sealed class QuestPacketTests
         Assert.AreEqual(BaseQuestPacket.OpCode, opCode);
 
         Assert.IsTrue(reader.TryRead(out int subOpCode));
-        Assert.AreEqual(QuestAbandonedPacket.SubOpCode, subOpCode);
+        Assert.AreEqual(QuestAbandonedPacket.OpCode, subOpCode);
 
         Assert.IsTrue(reader.TryRead(out int questId));
         Assert.AreEqual(2563, questId);
@@ -111,39 +111,9 @@ public sealed class QuestPacketTests
         Assert.AreEqual(BaseQuestPacket.OpCode, opCode);
 
         Assert.IsTrue(reader.TryRead(out int subOpCode));
-        Assert.AreEqual(QuestCompletePacket.SubOpCode, subOpCode);
+        Assert.AreEqual(QuestCompletePacket.OpCode, subOpCode);
 
         Assert.IsTrue(reader.TryRead(out int questId));
         Assert.AreEqual(2563, questId);
-    }
-
-    private static byte[] TakeMeThereWire(short opCode)
-    {
-        using var writer = new PacketWriter();
-
-        writer.Write(opCode);
-        writer.Write(1);
-        writer.Write(2);
-        writer.Write("TakeMeThere");
-        writer.Write(7);
-
-        return writer.Buffer;
-    }
-
-    [TestMethod]
-    public void TakeMeThere_ReadsBackTheRequestId()
-    {
-        Assert.IsTrue(TakeMeThereRequestPacket.TryDeserialize(TakeMeThereWire(TakeMeThereRequestPacket.OpCode), out var packet));
-        Assert.AreEqual("TakeMeThere", packet.ActionName);
-        Assert.AreEqual(7, packet.RequestId);
-    }
-
-    /// <summary>
-    /// Same &amp;&amp;-for-|| guard as the quest family: any opcode was accepted.
-    /// </summary>
-    [TestMethod]
-    public void TakeMeThere_RefusesAnotherOpCode()
-    {
-        Assert.IsFalse(TakeMeThereRequestPacket.TryDeserialize(TakeMeThereWire(TakeMeThereRequestPacket.OpCode + 1), out _));
     }
 }

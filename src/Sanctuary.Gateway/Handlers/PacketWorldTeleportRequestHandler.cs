@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -67,7 +67,9 @@ public static class PacketWorldTeleportRequestHandler
             return true;
         }
 
-        connection.Player.UpdatePosition(position, rotation, updateZoneArea: false);
+        connection.Player.UpdatePosition(position, rotation);
+
+        connection.Player.UpdatePointOfInterest();
 
         var clientUpdatePacketUpdateLocation = new ClientUpdatePacketUpdateLocation
         {

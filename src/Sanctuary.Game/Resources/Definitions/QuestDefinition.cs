@@ -1,6 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
 
+using Sanctuary.Game.Entities;
+using Sanctuary.Game.Quests;
+using Sanctuary.Game.Resources.Definitions.QuestGoals;
+
 namespace Sanctuary.Game.Resources.Definitions;
 
 public sealed class QuestDefinition
@@ -11,95 +15,140 @@ public sealed class QuestDefinition
     public int DescriptionId { get; set; }
     public int GiverDialogueId { get; set; }
 
+    // The line above the goal rows in the tracker and journal.
     public int ObjectiveDescriptionId { get; set; }
 
     public int IconId { get; set; }
 
+    public float? CameraDistance { get; set; }
+
+    // In the order they complete. A quest with none is rejected at load.
     public List<QuestGoal> Goals { get; set; } = [];
 
-    public ulong GiverGuid { get; set; }
+    public int GiverNpcId { get; set; }
 
-    public ulong TargetGuid { get; set; }
+    // The turn-in NPC, and the fallback for a goal that names no NPC of its own.
+    public int TargetNpcId { get; set; }
 
     public int RewardCoins { get; set; }
 
+    // Goes to the player's active profile.
     public int RewardExperience { get; set; }
 
+    // Item definition ids.
     public List<int> RewardItems { get; set; } = [];
 
     public int RewardCollectionId { get; set; }
 
-    public int PrerequisiteQuestId { get; set; }
-    public int NextQuestId { get; set; }
+    public int? PrerequisiteQuestId { get; set; }
+    public int? NextQuestId { get; set; }
 
+    public bool HideObjectiveTarget { get; set; }
+
+    // Quests that block this one while active or completed, for mutually exclusive quests such as the
+    // two race-specific introductions. Each lists the other so the check is symmetric.
     public List<int> ExcludesQuestIds { get; set; } = [];
 
+    // Badge on the giver: "!" while available, "?" while in progress.
     public int NotificationAvailable { get; set; } = 2;
     public int NotificationActive { get; set; } = 6;
 
-    public int TurnInDialogueId => Goals.Count > 0 ? Goals[^1].DialogueId : 0;
+    // The final goal's line, since a quest can end back at its giver.
+    public int TurnInDialogueId =>
+        Goals.Count > 0 && Goals[^1].ConversationFor(TargetNpcId) is { Count: > 0 } lines ? lines[^1].TextId : 0;
 
-    /// <summary>The NPC a talk goal is with: its own target, or the quest's target when it names none.</summary>
-    public ulong GoalTargetGuid(int goalIndex)
+    // Shared by the offer flow and the giver's badge so the two can't drift.
+    public int GoalTargetNpcId(int goalIndex)
+        => goalIndex >= 0 && goalIndex < Goals.Count && Goals[goalIndex] is TalkToNpcGoal talkGoal
+            ? talkGoal.TargetNpcId(this)
+            : TargetNpcId;
+
+    public IEnumerable<int> StateNpcIds()
+        => Goals.SelectMany(goal => goal.HideNpcIdsWhenDone.Concat(goal.NpcEffectsUntilDone.Select(effect => effect.NpcId))).Distinct();
+
+    public int StepEnd(int stepStart)
     {
-        if (goalIndex >= 0 && goalIndex < Goals.Count && Goals[goalIndex].TargetGuid != 0)
-            return Goals[goalIndex].TargetGuid;
+        if (stepStart >= Goals.Count)
+            return stepStart;
 
-        return TargetGuid;
+        var end = stepStart + 1;
+        while (end < Goals.Count && Goals[end].WithPrevious)
+            end++;
+
+        return end;
     }
 
-    /// <summary>
-    /// Whether a player on goal <paramref name="goalIndex"/> still has to talk to this NPC, so it shows the quest's
-    /// "?". Only the current step's NPC does: Diggy kept his after his step was done, while Brenna and Seaspray
-    /// showed none (Ariel, 2026-10-12).
-    /// </summary>
-    public bool WaitsOn(int goalIndex, ulong npcGuid, IReadOnlySet<ulong> talkedNpcs)
+    public int StepStartOf(int goalIndex)
     {
-        if (goalIndex < 0 || goalIndex >= Goals.Count)
-            return false;
+        while (goalIndex > 0 && goalIndex < Goals.Count && Goals[goalIndex].WithPrevious)
+            goalIndex--;
 
-        var goal = Goals[goalIndex];
-
-        if (goal.Type != QuestGoalType.TalkToNpc)
-            return false;
-
-        if (goal.IsCountedTalk)
-            return goal.AllTalkTargetGuids().Contains(npcGuid) && !talkedNpcs.Contains(npcGuid);
-
-        return GoalTargetGuid(goalIndex) == npcGuid;
+        return goalIndex;
     }
 
-    /// <summary>Every NPC whose marker can depend on this quest: the giver, the target and each step's NPCs.</summary>
-    public IEnumerable<ulong> NpcGuids()
+    private bool IsGoalDoneFor(QuestLog playerQuests, int goalIndex)
     {
-        var seen = new HashSet<ulong>();
-
-        if (GiverGuid != 0 && seen.Add(GiverGuid))
-            yield return GiverGuid;
-
-        if (TargetGuid != 0 && seen.Add(TargetGuid))
-            yield return TargetGuid;
-
-        foreach (var goal in Goals)
-            foreach (var guid in goal.AllTalkTargetGuids())
-                if (seen.Add(guid))
-                    yield return guid;
-    }
-
-    public bool IsOfferableFor(IReadOnlyDictionary<int, bool> playerQuests)
-    {
-        if (playerQuests.ContainsKey(QuestId))
+        if (!playerQuests.Contains(QuestId))
             return false;
 
-        // Exclusions first: two quests that exclude each other can share a prerequisite, and checking the
-        // prerequisite first returned before the exclusion was ever looked at, so both were offered. (Found by
-        // ImAlko reviewing Sulphural's upstream PR #130.)
+        return !playerQuests.TryGetInProgress(QuestId, out var progress) || progress.IsGoalDone(goalIndex);
+    }
+
+    public bool HidesNpcFor(QuestLog playerQuests, int npcId)
+    {
+        for (var i = 0; i < Goals.Count; i++)
+        {
+            if (Goals[i].HideNpcIdsWhenDone.Contains(npcId) && IsGoalDoneFor(playerQuests, i))
+                return true;
+        }
+
+        return false;
+    }
+
+    public int NpcEffectIdFor(QuestLog playerQuests, int npcId)
+    {
+        for (var i = 0; i < Goals.Count; i++)
+        {
+            if (IsGoalDoneFor(playerQuests, i))
+                continue;
+
+            foreach (var effect in Goals[i].NpcEffectsUntilDone)
+            {
+                if (effect.NpcId == npcId)
+                    return effect.EffectId;
+            }
+        }
+
+        return 0;
+    }
+
+    public bool IsWaitingOn(QuestProgress progress, Npc npc)
+    {
+        if (progress.GoalIndex >= Goals.Count)
+            return GoalTargetNpcId(Goals.Count - 1) == npc.DefinitionId;
+
+        foreach (var (goalIndex, goalProgress) in progress.OpenGoals)
+        {
+            if (Goals[goalIndex].Matches(this, new NpcTalkedEvent(npc))
+                && !(goalProgress is TalkProgress talkProgress && talkProgress.HasTalkedTo(npc.DefinitionId)))
+                return true;
+        }
+
+        return false;
+    }
+
+    public bool IsOfferableFor(QuestLog playerQuests)
+    {
+        if (playerQuests.Contains(QuestId))
+            return false;
+
+        // Before the prerequisite, so exclusive branches that share one still lock each other out.
         foreach (var excludedId in ExcludesQuestIds)
-            if (playerQuests.ContainsKey(excludedId))
+            if (playerQuests.Contains(excludedId))
                 return false;
 
-        if (PrerequisiteQuestId != 0)
-            return playerQuests.TryGetValue(PrerequisiteQuestId, out var prerequisiteDone) && prerequisiteDone;
+        if (PrerequisiteQuestId is { } prerequisiteQuestId)
+            return playerQuests.IsCompleted(prerequisiteQuestId);
 
         return true;
     }

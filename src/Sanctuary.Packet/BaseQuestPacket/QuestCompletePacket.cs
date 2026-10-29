@@ -4,11 +4,11 @@ namespace Sanctuary.Packet;
 
 public class QuestCompletePacket : BaseQuestPacket, ISerializablePacket
 {
-    public const int SubOpCode = 4;
+    public new const int OpCode = 4;
 
     public int QuestId;
 
-    public QuestCompletePacket() : base(SubOpCode)
+    public QuestCompletePacket() : base(OpCode)
     {
     }
 

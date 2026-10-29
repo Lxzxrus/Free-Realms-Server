@@ -5,10 +5,11 @@ using System.Linq;
 namespace Sanctuary.Game.Jobs;
 
 /// <summary>A job trainer: an npc spawned by <c>FabledRealms.lua</c> who gives one job.</summary>
-/// <param name="NpcGuid">The spawn's guid (100000000000 plus the <c>Npcs.json</c> id).</param>
+/// <param name="NpcId">The spawn's <c>Npcs.json</c> id. Upstream OSFR's quests name NPCs by it (and its PR #164
+/// derives NPC GUIDs from it), so trainers are matched on <c>Npc.DefinitionId</c>, never on a GUID.</param>
 /// <param name="ProfileId">The job, from <c>Profiles.json</c>.</param>
 /// <param name="Name">The npc's name in <c>Npcs.json</c>.</param>
-public readonly record struct JobTrainer(ulong NpcGuid, int ProfileId, string Name);
+public readonly record struct JobTrainer(int NpcId, int ProfileId, string Name);
 
 /// <summary>
 /// Who teaches which job. In the live game "most jobs unlock by simply talking to a basic trainer for that
@@ -33,47 +34,47 @@ public static class JobTrainers
     public static readonly IReadOnlyList<JobTrainer> All =
     [
         // Stillwater Crossing, "next to the fishing boat".
-        new(100000002968, Fisherman, "Reed Stillwater"),
+        new(2968, Fisherman, "Reed Stillwater"),
 
         // Singing Crystal Mines, Snowhill: "east side of the first cavern". Which of the spawns stands there is a
         // guess, so each of them teaches it. Upstream OSFR dropped spawn 1202, a second Therin standing exactly where
         // 1201 stands (merged 2026-10-28).
-        new(100000001201, Miner, "Therin"),
-        new(100000001697, Miner, "Therin"),
-        new(100000003602, Miner, "Therin"),
+        new(1201, Miner, "Therin"),
+        new(1697, Miner, "Therin"),
+        new(3602, Miner, "Therin"),
 
         // Highroad Junction and Stillwater Crossing. Allakhazam names Merigold for Harold's quests; Fandom names Harold.
-        new(100000002910, Brawler, "Harold"),
-        new(100000002943, Brawler, "Caitlyn Gravefog"),
+        new(2910, Brawler, "Harold"),
+        new(2943, Brawler, "Caitlyn Gravefog"),
 
-        new(100000003467, Archer, "Lugabow"),        // Greenwood Camp
-        new(100000001327, Wizard, "Fizzlesticks"),   // Robgoblin Camp
-        new(100000002340, Medic, "Nurse Naia"),      // Sanctuary hospital
-        new(100000003599, Blacksmith, "Smitty"),     // Snowhill
+        new(3467, Archer, "Lugabow"),        // Greenwood Camp
+        new(1327, Wizard, "Fizzlesticks"),   // Robgoblin Camp
+        new(2340, Medic, "Nurse Naia"),      // Sanctuary hospital
+        new(3599, Blacksmith, "Smitty"),     // Snowhill
 
-        new(100000002069, Chef, "Simone"),           // Cobblestone Village
-        new(100000002896, Chef, "Auguste Frydaze"),  // Highroad Junction
-        new(100000002416, Chef, "Bordon Cloo"),      // Sanctuary
-        new(100000002948, Chef, "Helena"),           // Stillwater Crossing
+        new(2069, Chef, "Simone"),           // Cobblestone Village
+        new(2896, Chef, "Auguste Frydaze"),  // Highroad Junction
+        new(2416, Chef, "Bordon Cloo"),      // Sanctuary
+        new(2948, Chef, "Helena"),           // Stillwater Crossing
 
         // One at each speedway.
-        new(100000002986, KartDriver, "Mustang Alli"),
-        new(100000003039, KartDriver, "Dane Blueshift"),
-        new(100000003010, KartDriver, "Johnny Thunder"),
-        new(100000002684, KartDriver, "Cale Yardbird"),
+        new(2986, KartDriver, "Mustang Alli"),
+        new(3039, KartDriver, "Dane Blueshift"),
+        new(3010, KartDriver, "Johnny Thunder"),
+        new(2684, KartDriver, "Cale Yardbird"),
 
-        new(100000002988, DemoDerbyDriver, "Burt 'Wrecking' Crewe"),
-        new(100000003043, DemoDerbyDriver, "Crash Davis"),
-        new(100000002680, DemoDerbyDriver, "Rip Ringa"),
-        new(100000003009, DemoDerbyDriver, "Mad Jack"),
+        new(2988, DemoDerbyDriver, "Burt 'Wrecking' Crewe"),
+        new(3043, DemoDerbyDriver, "Crash Davis"),
+        new(2680, DemoDerbyDriver, "Rip Ringa"),
+        new(3009, DemoDerbyDriver, "Mad Jack"),
     ];
 
-    private static readonly ILookup<ulong, int> JobsByNpc = All.ToLookup(trainer => trainer.NpcGuid, trainer => trainer.ProfileId);
+    private static readonly ILookup<int, int> JobsByNpc = All.ToLookup(trainer => trainer.NpcId, trainer => trainer.ProfileId);
 
-    public static bool IsTrainer(ulong npcGuid) => JobsByNpc.Contains(npcGuid);
+    public static bool IsTrainer(int npcId) => JobsByNpc.Contains(npcId);
 
     /// <summary>The jobs the npc gives; empty for anyone who isn't a trainer.</summary>
-    public static IEnumerable<int> JobsTaughtBy(ulong npcGuid) => JobsByNpc[npcGuid];
+    public static IEnumerable<int> JobsTaughtBy(int npcId) => JobsByNpc[npcId];
 
     /// <summary>
     /// The marker over a trainer: the quests' "available" one (image 2), so new players know to click them. Ariel asked
@@ -94,8 +95,8 @@ public static class JobTrainers
     /// server doesn't know is never offered, and one in <see cref="JobsWithNothingToDoYet"/> isn't advertised, so
     /// neither counts.
     /// </summary>
-    public static int NotificationImageFor(ulong npcGuid, Func<int, bool> hasJob, Func<int, bool> jobExists) =>
-        JobsTaughtBy(npcGuid).Any(profileId => !JobsWithNothingToDoYet.Contains(profileId) && jobExists(profileId) && !hasJob(profileId))
+    public static int NotificationImageFor(int npcId, Func<int, bool> hasJob, Func<int, bool> jobExists) =>
+        JobsTaughtBy(npcId).Any(profileId => !JobsWithNothingToDoYet.Contains(profileId) && jobExists(profileId) && !hasJob(profileId))
             ? NotificationImageId
             : 0;
 }

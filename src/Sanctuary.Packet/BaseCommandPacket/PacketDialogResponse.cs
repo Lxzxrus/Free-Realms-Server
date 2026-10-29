@@ -20,15 +20,12 @@ public class PacketDialogResponse : BaseCommandPacket, IDeserializable<PacketDia
 
         var reader = new PacketReader(data);
 
-        if (!reader.TryRead(out short opCode))
-            return false;
-
-        if (!reader.TryRead(out short subOpCode))
+        if (!value.TryRead(ref reader))
             return false;
 
         if (!reader.TryRead(out value.ResponseId))
             return false;
 
-        return true;
+        return reader.RemainingLength == 0;
     }
 }

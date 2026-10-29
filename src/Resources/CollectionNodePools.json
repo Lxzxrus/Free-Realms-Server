@@ -242,216 +242,6 @@
     ]
   },
   {
-    "Key": "briarwood-hastis-homework",
-    "ZoneDefinitionId": 1,
-    "NodeType": "hastis-homework",
-    "MaxActiveNodes": 8,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "briarwood-smashing-hammers",
-    "ZoneDefinitionId": 1,
-    "NodeType": "smashing-hammers",
-    "MaxActiveNodes": 5,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "briarwood-smashing-chisels",
-    "ZoneDefinitionId": 1,
-    "NodeType": "smashing-chisels",
-    "MaxActiveNodes": 5,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "briarwood-box-o-rocks",
-    "ZoneDefinitionId": 1,
-    "NodeType": "box-o-rocks",
-    "MaxActiveNodes": 3,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "briarwood-tin-ore",
-    "ZoneDefinitionId": 1,
-    "NodeType": "tin-ore",
-    "MaxActiveNodes": 5,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "briarwood-exploration-coins-rare",
-    "ZoneDefinitionId": 1,
-    "NodeType": "briarwood-rare-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "briarwood-exploration-coins-elite",
-    "ZoneDefinitionId": 1,
-    "NodeType": "briarwood-elite-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "wugachug-exploration-coins-rare",
-    "ZoneDefinitionId": 1,
-    "NodeType": "wugachug-rare-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "wugachug-exploration-coins-elite",
-    "ZoneDefinitionId": 1,
-    "NodeType": "wugachug-elite-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "merry-vale-exploration-coins-rare",
-    "ZoneDefinitionId": 1,
-    "NodeType": "merry-vale-rare-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "merry-vale-exploration-coins-elite",
-    "ZoneDefinitionId": 1,
-    "NodeType": "merry-vale-elite-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "sanctuary-exploration-coins-rare",
-    "ZoneDefinitionId": 1,
-    "NodeType": "sanctuary-rare-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "sanctuary-exploration-coins-elite",
-    "ZoneDefinitionId": 1,
-    "NodeType": "sanctuary-elite-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "seaside-exploration-coins-rare",
-    "ZoneDefinitionId": 1,
-    "NodeType": "seaside-rare-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "seaside-exploration-coins-elite",
-    "ZoneDefinitionId": 1,
-    "NodeType": "seaside-elite-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "snowhill-exploration-coins-rare",
-    "ZoneDefinitionId": 1,
-    "NodeType": "snowhill-rare-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "snowhill-exploration-coins-elite",
-    "ZoneDefinitionId": 1,
-    "NodeType": "snowhill-elite-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "blackspore-exploration-coins-rare",
-    "ZoneDefinitionId": 1,
-    "NodeType": "blackspore-rare-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "blackspore-exploration-coins-elite",
-    "ZoneDefinitionId": 1,
-    "NodeType": "blackspore-elite-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "shrouded-glade-exploration-coins-rare",
-    "ZoneDefinitionId": 1,
-    "NodeType": "shrouded-glade-rare-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "shrouded-glade-exploration-coins-elite",
-    "ZoneDefinitionId": 1,
-    "NodeType": "shrouded-glade-elite-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "sunstone-valley-exploration-coins-rare",
-    "ZoneDefinitionId": 1,
-    "NodeType": "sunstone-valley-rare-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "sunstone-valley-exploration-coins-elite",
-    "ZoneDefinitionId": 1,
-    "NodeType": "sunstone-valley-elite-exploration-coin",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 300
-  },
-  {
-    "Key": "wugachug-sasparilla-samples",
-    "ZoneDefinitionId": 1,
-    "NodeType": "sasparilla-sample",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "wugachug-sugar",
-    "ZoneDefinitionId": 1,
-    "NodeType": "sugar",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "wugachug-sweet-honey",
-    "ZoneDefinitionId": 1,
-    "NodeType": "sweet-honey",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "wugachug-sweet-smelling-flower",
-    "ZoneDefinitionId": 1,
-    "NodeType": "sweet-smelling-flower",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "merry-vale-firewood",
-    "ZoneDefinitionId": 1,
-    "NodeType": "firewood",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "merry-vale-homework-page-1",
-    "ZoneDefinitionId": 1,
-    "NodeType": "ronnies-homework-page-1",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 30
-  },
-  {
-    "Key": "merry-vale-homework-page-2",
-    "ZoneDefinitionId": 1,
-    "NodeType": "ronnies-homework-page-2",
-    "MaxActiveNodes": 0,
-    "RespawnSeconds": 30
-  },
-  {
     "Key": "blackspore-fossils",
     "ZoneDefinitionId": 1,
     "NodeType": "fossils",
@@ -8308,5 +8098,250 @@
         "Weight": 100
       }
     ]
+  },
+  {
+    "Key": "briarwood-hastis-homework",
+    "ZoneDefinitionId": 1,
+    "NodeType": "hastis-homework",
+    "MaxActiveNodes": 8,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "briarwood-smashing-hammers",
+    "ZoneDefinitionId": 1,
+    "NodeType": "smashing-hammers",
+    "MaxActiveNodes": 5,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "briarwood-smashing-chisels",
+    "ZoneDefinitionId": 1,
+    "NodeType": "smashing-chisels",
+    "MaxActiveNodes": 5,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "briarwood-box-o-rocks",
+    "ZoneDefinitionId": 1,
+    "NodeType": "box-o-rocks",
+    "MaxActiveNodes": 3,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "briarwood-tin-ore",
+    "ZoneDefinitionId": 1,
+    "NodeType": "tin-ore",
+    "MaxActiveNodes": 5,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "briarwood-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "briarwood-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "briarwood-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "briarwood-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "wugachug-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "wugachug-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "wugachug-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "wugachug-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "merry-vale-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "merry-vale-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "merry-vale-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "merry-vale-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "sanctuary-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sanctuary-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "sanctuary-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sanctuary-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "seaside-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "seaside-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "seaside-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "seaside-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "snowhill-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "snowhill-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "snowhill-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "snowhill-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "blackspore-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "blackspore-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "blackspore-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "blackspore-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "shrouded-glade-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "shrouded-glade-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "shrouded-glade-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "shrouded-glade-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "sunstone-valley-exploration-coins-rare",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sunstone-valley-rare-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "sunstone-valley-exploration-coins-elite",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sunstone-valley-elite-exploration-coin",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 300
+  },
+  {
+    "Key": "wugachug-sasparilla-samples",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sasparilla-sample",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "wugachug-sugar",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sugar",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "wugachug-sweet-honey",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sweet-honey",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "wugachug-sweet-smelling-flower",
+    "ZoneDefinitionId": 1,
+    "NodeType": "sweet-smelling-flower",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "merry-vale-firewood",
+    "ZoneDefinitionId": 1,
+    "NodeType": "firewood",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "merry-vale-homework-page-1",
+    "ZoneDefinitionId": 1,
+    "NodeType": "ronnies-homework-page-1",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "merry-vale-homework-page-2",
+    "ZoneDefinitionId": 1,
+    "NodeType": "ronnies-homework-page-2",
+    "MaxActiveNodes": 0,
+    "RespawnSeconds": 30
+  },
+  {
+    "Key": "pixie-nursery-woe-is-willie-flowers",
+    "ZoneDefinitionId": 1,
+    "NodeType": "woe-is-willie-flowers",
+    "MaxActiveNodes": 1,
+    "RespawnSeconds": 10
+  },
+  {
+    "Key": "merryvale-one-mans-trash-camp",
+    "ZoneDefinitionId": 1,
+    "NodeType": "one-mans-trash-camp",
+    "MaxActiveNodes": 1,
+    "RespawnSeconds": 10
+  },
+  {
+    "Key": "merryvale-one-mans-trash-chugawug",
+    "ZoneDefinitionId": 1,
+    "NodeType": "one-mans-trash-chugawug",
+    "MaxActiveNodes": 1,
+    "RespawnSeconds": 10
+  },
+  {
+    "Key": "merryvale-one-mans-trash-vendors",
+    "ZoneDefinitionId": 1,
+    "NodeType": "one-mans-trash-vendors",
+    "MaxActiveNodes": 1,
+    "RespawnSeconds": 10
+  },
+  {
+    "Key": "merryvale-one-mans-trash-stage",
+    "ZoneDefinitionId": 1,
+    "NodeType": "one-mans-trash-stage",
+    "MaxActiveNodes": 1,
+    "RespawnSeconds": 10
   }
 ]
