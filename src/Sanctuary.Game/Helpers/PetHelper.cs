@@ -18,6 +18,18 @@ namespace Sanctuary.Game.Helpers;
 
 public static class PetHelper
 {
+    /// <summary>How long after a pet digs up treasure the player's pets find none.</summary>
+    public static readonly TimeSpan TreasureCooldown = TimeSpan.FromHours(8);
+
+    /// <summary>
+    /// Whether the player's pets are still resting from treasure. Upstream OSFR timed it per pet; Evergrove times it per
+    /// player too, from the latest find of any of the player's pets (each pet's time is saved with the pet, and pets
+    /// are never deleted). Pets cost as little as 10 coins in the coin store and a chest pays up to 500, so a per-pet
+    /// timer alone let a player buy pets and cycle through them for unlimited coins. The economy pass may tune it.
+    /// </summary>
+    public static bool IsTreasureOnCooldown(IReadOnlyDictionary<int, DateTimeOffset> treasureFoundAtByPet, DateTimeOffset now) =>
+        treasureFoundAtByPet.Values.Any(foundAt => now - foundAt < TreasureCooldown);
+
     private const int FirstTreasureSpringItemDefinitionId = 23427;
     private const int NoTint = 0;
     private const int LastTreasureSpringItemDefinitionId = 23458;

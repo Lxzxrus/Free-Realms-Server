@@ -220,7 +220,6 @@ public sealed class PlayerPet
     private const int PetDiggingAnimationGroupId = 5525;
     private const int PetDigDurationMs = 4000;
     private const int PetTreasureChestDigDelayMs = 3670;
-    private static readonly TimeSpan PetTreasureCooldown = TimeSpan.FromHours(8);
     private const int PetNoticeMinDelayMs = 45000;
     private const int PetNoticeMaxDelayMs = 90000;
     private const float PetNoticeRange = 10f;
@@ -857,8 +856,9 @@ public sealed class PlayerPet
         if (_petState.TreasurePending)
             return;
 
+        // Evergrove: the cooldown holds for the player, not only this pet (PetHelper.IsTreasureOnCooldown).
         if (!IsOnPetTreasureSpot() || petClientInfo.Mood < PetTreasureMinMood
-            || _player.PetTreasureFoundAt.TryGetValue(_player.ActivePetId, out var treasureFoundAt) && DateTimeOffset.UtcNow - treasureFoundAt < PetTreasureCooldown)
+            || PetHelper.IsTreasureOnCooldown(_player.PetTreasureFoundAt, DateTimeOffset.UtcNow))
         {
             _petState.TreasureAt = 0;
             return;
