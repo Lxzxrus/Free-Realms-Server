@@ -198,6 +198,13 @@ build. Even in Release it widens the blast radius of a compromised or careless a
 **Fix:** open only the safe Lua libraries (base, table, string, math) and deliberately omit `os` and `io`; keep
 script management Admin-only; fix F1 so Debug cannot grant Admin. Estimate: medium.
 
+**Since the OSFR catch-up (2026-10-28):** upstream's event scripts (Bruce's concert, the Halloween dance-off, NPC
+greetings) need `require` and `os.date`. `ScriptRuntime.OpenSafeLibraries` opens them narrowly: `require` loads
+only a plain module name (letters, digits, `_`, `-`) from `Scripts/Shared` (`ScriptModuleLoader`), and the
+`package` table that could reconfigure it stays closed; `os` keeps only `clock`, `date`, `difftime` and `time`.
+`SandboxTests` checks that `io`, `package`, `debug`, `dofile`, `loadfile` and `os.execute`/`exit`/`getenv`/
+`remove`/`rename`/`tmpname` stay unreachable and that `require` can't leave `Scripts/Shared`.
+
 **Correction (Task 16, measured):** Lua-CSharp 0.5.5 doesn't implement `os.execute`; it throws "not supported".
 The `os` table it opened still had `exit` (stops the server), `getenv` (reads secrets such as
 `Server__LoginGatewayChallenge`) and `remove`/`rename`, and `io` read and wrote any file the server account can,
@@ -379,7 +386,7 @@ can't read the item and coin replies that would prove the coin-store one.
 | F8 | Medium | **Unchanged, documented.** A client-protocol limitation; no server secret crosses these channels | Task 9 |
 | F9 | Medium | **Fixed.** Launch economy values in tracked config (1,000 coins, 0 Station Cash, nothing unlocked, not a member); playtest values in local files | Task 13 |
 | F10 | Medium | **Fixed.** `FaultLimit` 5 per minute disconnects a connection that keeps throwing | Task 14 |
-| F11 | Medium | **Fixed.** Lua opens base, table, string and math only | Task 16 |
+| F11 | Medium | **Fixed.** Lua opens base, table, string and math; since the OSFR catch-up (2026-10-28) also `require`, for plain module names in `Scripts/Shared` only (no `package` table), and the clock half of `os` (`clock`, `date`, `difftime`, `time`), never `execute`, `exit`, `getenv`, `remove`, `rename`, `tmpname` or `io` | Task 16; upstream catch-up 1, `SandboxTests` |
 | F12 | Medium | **Fixed.** EF Core 9.0.20; the vulnerability scan is clean | Task 16 |
 | F13 | Medium | **Fixed.** Compose requires credentials from `.env` and publishes no database port | Task 13 |
 

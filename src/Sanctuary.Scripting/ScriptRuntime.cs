@@ -21,12 +21,15 @@ public sealed class ScriptRuntime
 
         OpenSafeLibraries(_state);
 
+        _state.ModuleLoader = new ScriptModuleLoader();
+
         logger.LogInformation("Scripting initialized");
     }
 
     /// <summary>
-    /// Opens only the libraries a script needs to compute: base, table, string and math.
-    /// <c>os</c>, <c>io</c>, <c>package</c> and <c>debug</c> stay closed, because they reach the
+    /// Opens only the libraries a script needs to compute: base, table, string and math, plus <c>require</c>
+    /// for Scripts/Shared modules and the clock half of <c>os</c> (see below).
+    /// <c>io</c>, <c>package</c>, <c>debug</c> and the rest of <c>os</c> stay closed, because they reach the
     /// process, the file system and the interpreter's internals. The base library's
     /// <c>dofile</c> and <c>loadfile</c> read any path on disk, so they are removed too.
     /// Scripts are loaded by the server through <see cref="ExecuteFileAsync"/>, not by Lua.
@@ -40,6 +43,22 @@ public sealed class ScriptRuntime
 
         state.Environment["dofile"] = LuaValue.Nil;
         state.Environment["loadfile"] = LuaValue.Nil;
+
+        // Upstream OSFR's event scripts (Bruce's concert, the Halloween dance-off, NPC greetings; merged 2026-10-28)
+        // need require and os.date. require stays limited to plain module names in Scripts/Shared
+        // (ScriptModuleLoader), and the package table that could reconfigure it stays closed. os keeps only its
+        // clock functions: nothing that runs a program, reads the environment or touches a file.
+        state.OpenModuleLibrary();
+        state.Environment["package"] = LuaValue.Nil;
+
+        state.OpenOperatingSystemLibrary();
+        var os = state.Environment["os"].Read<LuaTable>();
+        var clockOnly = new LuaTable();
+
+        foreach (var name in new[] { "clock", "date", "difftime", "time" })
+            clockOnly[name] = os[name];
+
+        state.Environment["os"] = clockOnly;
     }
 
     internal LuaTable CreateEnv()

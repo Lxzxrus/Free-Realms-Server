@@ -328,10 +328,8 @@ public static class RewardHelper
     {
         var notificationId = Environment.TickCount & int.MaxValue;
 
-        var packet = new RewardBundlePacket
-        {
-            Unknown8 = descriptionId
-        };
+        var packet = new RewardBundlePacket();
+        packet.RewardBundle.DescriptionId = descriptionId;
         packet.RewardBundle.SourceGuid = sourceGuid ^ (uint)notificationId;
         packet.RewardBundle.PlayerGuid = player.Guid;
         packet.RewardBundle.IconId = iconId;

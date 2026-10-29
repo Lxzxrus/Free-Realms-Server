@@ -28,14 +28,10 @@ public static class PacketDialogResponseHandler
             return false;
         }
 
-        if (QuestDialogue.TryAdvance(connection.Player, packet.ResponseId, out var onFinished))
+        if (QuestDialogue.TryAdvance(connection.Player, packet.ResponseId))
             return true;
 
         connection.Player.SendTunneled(new CommandPacketEndDialog());
-
-        // After the dialog closes, so a quest step completed by the conversation (Brenna's quiz) shows its updates,
-        // or its turn-in window, on a clear screen.
-        onFinished?.Invoke();
         return true;
     }
 }

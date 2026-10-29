@@ -349,6 +349,8 @@ public class UdpParams
     /// <remarks>default = 20</remarks>
     public int ThreadSleepTime;
 
+    public bool ParallelConnectionGiveTime;
+
     /// <summary>
     /// This settings allows you to bind the socket used by the library to a specific IP address on the machine.
     /// Normally, and by default, the library will bind the socket to any address in the machine.  This setting should
@@ -561,6 +563,7 @@ public class UdpParams
         CallbackEventPoolMax = 5000;
         EventQueuing = false;
         ThreadSleepTime = 20;
+        ParallelConnectionGiveTime = false;
         IncomingLogicalPacketMax = 20 * 1024 * 1024;
         IncomingFragmentBytesMax = 0;
         MaxConnectionsPerIp = 0;

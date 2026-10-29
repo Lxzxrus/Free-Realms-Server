@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -26,15 +26,15 @@ public static class CommandPacketSetProfileHandler
 
     public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
     {
-        if (!CommandPacketSetProfile.TryDeserialize(data, out var packet))
+        if (!CommandPacketSetProfile.TryDeserialize(data, out var commandPacketSetProfile))
         {
             _logger.LogError("Failed to deserialize {packet}.", nameof(CommandPacketSetProfile));
             return false;
         }
 
-        _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(CommandPacketSetProfile), packet);
+        _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(CommandPacketSetProfile), commandPacketSetProfile);
 
-        ProfileHelper.Activate(connection.Player, packet.Id, _zoneManager);
+        ProfileHelper.Activate(connection.Player, commandPacketSetProfile.Id, _zoneManager);
 
         return true;
     }

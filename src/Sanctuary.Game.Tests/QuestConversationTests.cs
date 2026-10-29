@@ -1,156 +1,102 @@
 using System.Collections.Generic;
-using System.Linq;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Game.Quests;
-using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Game.Resources.Definitions.QuestGoals;
 
 namespace Sanctuary.Game.Tests;
 
 [TestClass]
 public sealed class QuestConversationTests
 {
-    private const int Ready = 1;
+    private const int Intro = 1;
     private const int Question = 2;
-    private const int TryAgain = 3;
-    private const int WellDone = 4;
-
-    private static QuestDialogueLine Line(int textId) => new() { TextId = textId };
-
-    // "Ready?", then a question whose second answer is right; a wrong answer says "try again?" and asks again.
-    private static List<QuestDialogueLine> Quiz() =>
-    [
-        Line(Ready),
-        new QuestDialogueLine
-        {
-            TextId = Question,
-            Choices =
-            [
-                new QuestDialogueChoice { ResponseTextId = 10, Retry = true, Then = [Line(TryAgain)] },
-                new QuestDialogueChoice { ResponseTextId = 11, Then = [Line(WellDone)] },
-            ]
-        }
-    ];
+    private const int Wrong = 3;
+    private const int Right = 4;
+    private const int Outro = 5;
 
     [TestMethod]
-    public void RightAnswer_PlaysItsLinesThenFinishes()
+    public void Answer_WalksPlainLinesInOrderThenFinishes()
     {
-        var conversation = new QuestConversation(Quiz(), npcGuid: 7);
+        var conversation = Start(Line(Intro), Line(Outro));
+
+        Assert.AreEqual(Intro, conversation.Current!.TextId);
+        Assert.IsFalse(conversation.IsLastLine);
 
         Assert.AreEqual(QuestConversationStep.Next, conversation.Answer(1));
-        Assert.AreEqual(Question, conversation.Current.TextId);
-
-        Assert.AreEqual(QuestConversationStep.Next, conversation.Answer(2));
-        Assert.AreEqual(WellDone, conversation.Current.TextId);
+        Assert.AreEqual(Outro, conversation.Current!.TextId);
         Assert.IsTrue(conversation.IsLastLine);
 
         Assert.AreEqual(QuestConversationStep.Finished, conversation.Answer(1));
     }
 
     [TestMethod]
-    public void WrongAnswer_AsksTheQuestionAgain()
+    public void Answer_AWrongChoicePlaysItsLinesThenAsksTheQuestionAgain()
     {
-        var conversation = new QuestConversation(Quiz(), npcGuid: 7);
-        conversation.Answer(1);
+        var conversation = Start(Quiz(), Line(Outro));
 
         Assert.AreEqual(QuestConversationStep.Next, conversation.Answer(1));
-        Assert.AreEqual(TryAgain, conversation.Current.TextId);
-        Assert.IsFalse(conversation.IsLastLine);
+        Assert.AreEqual(Wrong, conversation.Current!.TextId);
 
         Assert.AreEqual(QuestConversationStep.Next, conversation.Answer(1));
-        Assert.AreEqual(Question, conversation.Current.TextId);
-
-        conversation.Answer(2);
-        Assert.AreEqual(WellDone, conversation.Current.TextId);
+        Assert.AreEqual(Question, conversation.Current!.TextId);
     }
 
     [TestMethod]
-    public void AnswerTheQuestionDoesNotOffer_AbandonsWithoutFinishing()
+    public void Answer_TheRightChoicePlaysItsLinesThenMovesOn()
     {
-        // A closed window, or a made-up response, must not count as passing the quiz.
-        var conversation = new QuestConversation(Quiz(), npcGuid: 7);
-        conversation.Answer(1);
+        var conversation = Start(Quiz(), Line(Outro));
+
+        Assert.AreEqual(QuestConversationStep.Next, conversation.Answer(2));
+        Assert.AreEqual(Right, conversation.Current!.TextId);
+
+        Assert.AreEqual(QuestConversationStep.Next, conversation.Answer(1));
+        Assert.AreEqual(Outro, conversation.Current!.TextId);
+
+        Assert.AreEqual(QuestConversationStep.Finished, conversation.Answer(1));
+    }
+
+    [TestMethod]
+    public void Answer_AResponseTheQuestionDoesNotOfferAbandons()
+    {
+        var conversation = Start(Quiz());
 
         Assert.AreEqual(QuestConversationStep.Abandoned, conversation.Answer(0));
-        Assert.AreEqual(QuestConversationStep.Abandoned, new QuestConversation(Quiz()[1..], 7).Answer(3));
+        Assert.AreEqual(QuestConversationStep.Abandoned, conversation.Answer(3));
     }
 
     [TestMethod]
-    public void QuestionNeverShowsTheLeaveButton()
+    public void Finish_ReturnsTheCallbackOnceAndClears()
     {
-        var conversation = new QuestConversation([Quiz()[1]], npcGuid: 7);
+        var finished = 0;
+        var conversation = new QuestConversation();
+        conversation.Start([Line(Outro)], 7, () => finished++);
 
-        Assert.IsFalse(conversation.IsLastLine);
+        Assert.AreEqual(QuestConversationStep.Finished, conversation.Answer(1));
+        conversation.Finish()?.Invoke();
+
+        Assert.AreEqual(1, finished);
+        Assert.IsNull(conversation.Current);
+        Assert.IsNull(conversation.Finish());
     }
 
-    [TestMethod]
-    public void ConversationProblems_CatchAQuestionThatCanNeverBePassed()
+    private static QuestConversation Start(params QuestDialogueLine[] lines)
     {
-        var goal = new QuestGoal
-        {
-            Dialogue =
-            [
-                new QuestDialogueLine
-                {
-                    TextId = Question,
-                    Choices = [new QuestDialogueChoice { ResponseTextId = 10, Retry = true }]
-                }
-            ]
-        };
-
-        Assert.AreEqual(1, goal.ConversationProblems().Count());
-        Assert.AreEqual(0, new QuestGoal { Dialogue = Quiz() }.ConversationProblems().Count());
+        var conversation = new QuestConversation();
+        conversation.Start(lines, 7);
+        return conversation;
     }
 
-    private static QuestDefinition Tour() => new()
+    private static QuestDialogueLine Line(int textId) => new() { TextId = textId };
+
+    private static QuestDialogueLine Quiz() => new()
     {
-        QuestId = 1,
-        GiverGuid = 100,
-        TargetGuid = 100,
-        Goals =
+        TextId = Question,
+        Choices =
         [
-            new QuestGoal { Type = QuestGoalType.ReachLocation },
-            new QuestGoal { TargetGuid = 200 },
-            new QuestGoal { TargetGuid = 300 },
-            new QuestGoal()
+            new QuestDialogueChoice { ResponseTextId = 10, Retry = true, Then = new List<QuestDialogueLine> { Line(Wrong) } },
+            new QuestDialogueChoice { ResponseTextId = 11, Then = new List<QuestDialogueLine> { Line(Right) } }
         ]
     };
-
-    [TestMethod]
-    public void OnlyTheCurrentStepsNpc_WaitsForThePlayer()
-    {
-        var quest = Tour();
-        var talked = new HashSet<ulong>();
-
-        Assert.IsFalse(quest.WaitsOn(0, 200, talked), "Nobody waits during a reach step.");
-
-        Assert.IsTrue(quest.WaitsOn(1, 200, talked));
-        Assert.IsFalse(quest.WaitsOn(1, 300, talked), "A later step's NPC shows nothing yet.");
-
-        Assert.IsFalse(quest.WaitsOn(2, 200, talked), "An earlier step's NPC loses its marker.");
-        Assert.IsTrue(quest.WaitsOn(2, 300, talked));
-
-        Assert.IsTrue(quest.WaitsOn(3, 100, talked), "A step naming nobody is with the quest's target.");
-        Assert.IsFalse(quest.WaitsOn(4, 100, talked), "Nothing waits once every step is done.");
-    }
-
-    [TestMethod]
-    public void CountedTalk_WaitsOnlyOnNpcsNotYetTalkedTo()
-    {
-        var quest = new QuestDefinition
-        {
-            Goals = [new QuestGoal { TargetGuids = [200, 300], RequiredCount = 2 }]
-        };
-
-        Assert.IsTrue(quest.WaitsOn(0, 200, new HashSet<ulong>()));
-        Assert.IsFalse(quest.WaitsOn(0, 200, new HashSet<ulong> { 200 }));
-        Assert.IsTrue(quest.WaitsOn(0, 300, new HashSet<ulong> { 200 }));
-    }
-
-    [TestMethod]
-    public void NpcGuids_ListEveryNpcOnce()
-    {
-        CollectionAssert.AreEqual(new ulong[] { 100, 200, 300 }, Tour().NpcGuids().ToArray());
-    }
 }

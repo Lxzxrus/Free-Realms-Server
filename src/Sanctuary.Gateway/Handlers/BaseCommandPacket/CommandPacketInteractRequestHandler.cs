@@ -31,6 +31,7 @@ public static class CommandPacketInteractRequestHandler
     private static ILogger _logger = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
     private static IResourceManager _resourceManager = null!;
+    private static IRewardManager _rewardManager = null!;
     private static IQuestManager _questManager = null!;
     private static IJobManager _jobManager = null!;
 
@@ -40,6 +41,7 @@ public static class CommandPacketInteractRequestHandler
         _logger = loggerFactory.CreateLogger(nameof(CommandPacketInteractRequestHandler));
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _rewardManager = serviceProvider.GetRequiredService<IRewardManager>();
         _questManager = serviceProvider.GetRequiredService<IQuestManager>();
         _jobManager = serviceProvider.GetRequiredService<IJobManager>();
     }
@@ -60,33 +62,35 @@ public static class CommandPacketInteractRequestHandler
         if (entity is CollectionNode collectionNode)
             return HandleCollectionNode(connection, collectionNode);
 
-
-        if (entity is Npc npc && (_questManager.IsQuestNpc(npc.Guid) || JobTrainers.IsTrainer(npc.Guid)))
+        // Upstream OSFR: a pet's treasure chest pays its owner. (A chest item that is a collection entry ticks the
+        // collection on the next login, not at once: Evergrove's collection updates are not wired to it yet.)
+        if (entity is PetTreasureChest petTreasureChest)
         {
-            // The same reach as picking from an npc's menu (CommandPacketInteractionSelectHandler).
-            if (!Positions.IsWithinRange(connection.Player.Position, npc.Position, npc.InteractRange))
-                return true;
+            if (PetHelper.TryOpenTreasureChest(connection.Player, petTreasureChest, _rewardManager, _resourceManager, out var itemDrop) && itemDrop is not null)
+                _rewardManager.TryGrantReward(connection.Player, itemDrop, petTreasureChest.Guid);
 
-            connection.Player.LastInteractNpcGuid = npc.Guid;
-            connection.Player.LastInteractAt = DateTime.UtcNow;
+            return true;
+        }
 
+        // Evergrove: a job trainer always shows a menu, even with a single job to teach, so taking a job is picked
+        // and never done by the click alone. Quest NPCs go through upstream's own interaction (Npc.OnInteract).
+        if (entity is Npc npc && JobTrainers.IsTrainer(npc.DefinitionId))
+        {
             var trainerOptions = _jobManager.GetTrainerOptions(connection.Player, npc);
 
-            if (trainerOptions.Count == 0)
+            if (trainerOptions.Count > 0)
             {
-                if (_questManager.IsQuestNpc(npc.Guid))
-                    _questManager.OnNpcInteract(connection.Player, npc);
-                else
-                    entity.OnInteract(connection.Player);
+                if (!InteractionMenuHelper.CanInteract(npc, connection.Player))
+                    return true;
 
+                connection.Player.LastInteractNpcGuid = npc.Guid;
+                connection.Player.LastInteractAt = DateTime.UtcNow;
+
+                var options = connection.Player.Zone.GetInteractionOptions(connection.Player, npc).ToList();
+                options.AddRange(trainerOptions);
+                connection.Player.SendInteractionMenu(npc, options, npc.InteractionList?.Interactions ?? npc.Interactions);
                 return true;
             }
-
-            // Taking a job is always picked from the menu, never done by the click alone.
-            var options = _questManager.GetInteractionOptions(connection.Player, npc);
-            options.AddRange(trainerOptions);
-            connection.Player.SendInteractionMenu(npc, options);
-            return true;
         }
 
         entity.OnInteract(connection.Player);
@@ -96,16 +100,28 @@ public static class CommandPacketInteractRequestHandler
     private static bool HandleCollectionNode(GatewayConnection connection, CollectionNode node)
     {
         // "Too far away" is written as "not within range", so a NaN position, which compares false with
-        // everything, is out of range rather than in it.
+        // everything, is out of range rather than in it. Out of range, the player is walked in (upstream OSFR).
         if (!Positions.IsWithinRange(connection.Player.Position, node.Position, node.InteractRange))
+        {
+            if (Positions.IsFinite(connection.Player.Position))
+            {
+                connection.SendTunneled(new CommandPacketMoveAndInteract
+                {
+                    Position = node.Position,
+                    Guid = node.Guid
+                });
+            }
+
             return true;
+        }
 
         if (node.SpawnDefinition.HasCollectionEntry)
             return HandleCollectionEntryNode(connection, node);
 
         // A pickup with nothing to give exists only for a quest's Collect step (homework, buckets, firewood): it can
-        // be taken only while a quest needs it, or it disappears for 30 seconds for nothing.
-        if (!node.TypeDefinition.HasDrop && !_questManager.NeedsCollectionNode(connection.Player, node.TypeDefinition.Key))
+        // be taken only while a quest needs it, or it disappears for 30 seconds for nothing. Drop tables live on
+        // pools since upstream OSFR #151.
+        if (!node.PoolDefinition.HasDrop && !_questManager.NeedsCollectionNode(connection.Player, node.TypeDefinition.Key))
         {
             ChatHelper.SendSystemMessage(connection.Player, "You don't need this right now.");
             return true;
@@ -114,11 +130,11 @@ public static class CommandPacketInteractRequestHandler
         if (!node.TryReserve())
             return true;
 
-        if (!node.TypeDefinition.HasDrop)
+        if (!node.PoolDefinition.HasDrop)
         {
             // A node that exists for a quest's Collect goal (homework, ore): nothing to give, so just gather it.
             node.CompleteCollection();
-            _questManager.OnCollectionNodeGathered(connection.Player, node);
+            _questManager.OnEvent(connection.Player, new NodeGatheredEvent(node));
             return true;
         }
 
@@ -200,7 +216,7 @@ public static class CommandPacketInteractRequestHandler
 
         node.HideFromCollector(player);
 
-        _questManager.OnCollectionNodeGathered(player, node);
+        _questManager.OnEvent(player, new NodeGatheredEvent(node));
 
         // The client has every collection since login (SendSelfToClient), so this only ticks the entry.
         SendCollectionEntryUpdate(connection, definition, match.Entry, match.Index);
@@ -222,7 +238,7 @@ public static class CommandPacketInteractRequestHandler
 
         try
         {
-            var drop = node.TypeDefinition.Table.SelectRandom();
+            var drop = node.PoolDefinition.Table.SelectRandom();
             var itemDefinitionId = drop.ItemDefinitionId;
 
             if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var itemDefinition))
@@ -278,7 +294,7 @@ public static class CommandPacketInteractRequestHandler
             node.CompleteCollection();
             nodeCompleted = true;
 
-            _questManager.OnCollectionNodeGathered(player, node);
+            _questManager.OnEvent(player, new NodeGatheredEvent(node));
 
             if (hasEntry && !collectionEntryWasCollected)
             {
@@ -492,10 +508,8 @@ public static class CommandPacketInteractRequestHandler
     {
         var notificationId = Environment.TickCount & int.MaxValue;
 
-        var packet = new RewardBundlePacket
-        {
-            Unknown8 = itemDefinition.DescriptionId
-        };
+        var packet = new RewardBundlePacket();
+        packet.RewardBundle.DescriptionId = itemDefinition.DescriptionId;
         packet.RewardBundle.SourceGuid = node.Guid ^ (uint)notificationId;
         packet.RewardBundle.PlayerGuid = connection.Player.Guid;
         packet.RewardBundle.IconId = itemDefinition.Icon.Id;

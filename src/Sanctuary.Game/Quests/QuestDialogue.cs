@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Game.Resources.Definitions.QuestGoals;
 using Sanctuary.Packet;
 
 namespace Sanctuary.Game.Quests;
@@ -30,12 +30,11 @@ public static class QuestDialogue
         if (npcGuid == 0)
             return;
 
-        if (player.TalkingNpcGuid != 0 && player.TalkingNpcGuid != npcGuid)
+        if (player.QuestConversation.TalkingNpcGuid != 0 && player.QuestConversation.TalkingNpcGuid != npcGuid)
             StopTalkAnimation(player);
 
-        player.TalkingNpcGuid = npcGuid;
-
-        var ticket = ++player.TalkAnimationTicket;
+        player.QuestConversation.TalkingNpcGuid = npcGuid;
+        player.QuestConversation.TalkAnimationEndsAt = DateTimeOffset.UtcNow.AddMilliseconds(TalkAnimationMs);
 
         player.SendTunneled(new PlayerUpdatePacketSetAnimation
         {
@@ -43,24 +42,15 @@ public static class QuestDialogue
             AnimationId = TalkAnimationId,
             Flags = SetBaseAnimation
         });
-
-        _ = Task.Run(async () =>
-        {
-            await Task.Delay(TalkAnimationMs);
-
-            if (player.TalkAnimationTicket == ticket)
-                StopTalkAnimation(player);
-        });
     }
 
     public static void StopTalkAnimation(Player player)
     {
-        if (player.TalkingNpcGuid == 0)
+        if (player.QuestConversation.TalkingNpcGuid == 0)
             return;
 
-        var npcGuid = player.TalkingNpcGuid;
-        player.TalkingNpcGuid = 0;
-        player.TalkAnimationTicket++;
+        var npcGuid = player.QuestConversation.TalkingNpcGuid;
+        player.QuestConversation.TalkingNpcGuid = 0;
 
         player.SendTunneled(new PlayerUpdatePacketSetAnimation
         {
@@ -70,70 +60,60 @@ public static class QuestDialogue
         });
     }
 
-    /// <summary>
-    /// Starts a conversation with an NPC, replacing any other. <paramref name="onFinished"/> runs once its last line is
-    /// answered (at once when there are no lines), never if the player walks off or it's replaced.
-    /// </summary>
     public static void Begin(Player player, IReadOnlyList<QuestDialogueLine> lines, ulong npcGuid, Action? onFinished = null)
     {
-        player.Conversation = null;
+        player.QuestConversation.Start(lines, npcGuid, onFinished);
 
-        if (lines.Count == 0)
+        if (player.QuestConversation.Current is null)
         {
             onFinished?.Invoke();
             return;
         }
 
-        var conversation = new QuestConversation(lines, npcGuid, onFinished);
-        player.Conversation = conversation;
-
-        Show(player, conversation);
+        Show(player);
     }
 
-    /// <summary>
-    /// Answers the line on screen with the response the player picked. Returns false when there is nothing more to
-    /// show; the caller closes the dialog and then runs <paramref name="onFinished"/>, if the conversation finished
-    /// rather than being abandoned.
-    /// </summary>
-    public static bool TryAdvance(Player player, int responseId, out Action? onFinished)
+    public static bool TryAdvance(Player player, int responseId)
     {
-        onFinished = null;
+        var conversation = player.QuestConversation;
 
-        var conversation = player.Conversation;
-        if (conversation is null)
-        {
-            StopTalkAnimation(player);
+        if (conversation.Current is null)
             return false;
-        }
 
-        var step = conversation.Answer(responseId);
-        if (step == QuestConversationStep.Next)
+        switch (conversation.Answer(responseId))
         {
-            Show(player, conversation);
-            return true;
+            case QuestConversationStep.Next:
+                Show(player);
+                return true;
+
+            case QuestConversationStep.Finished:
+                var onFinished = conversation.Finish();
+                StopTalkAnimation(player);
+                onFinished?.Invoke();
+                return conversation.Current is not null;
+
+            default:
+                Clear(player);
+                return false;
         }
-
-        if (step == QuestConversationStep.Finished)
-            onFinished = conversation.OnFinished;
-
-        Clear(player);
-        return false;
     }
 
     public static void Clear(Player player)
     {
-        player.Conversation = null;
+        player.QuestConversation.Clear();
         StopTalkAnimation(player);
     }
 
-    private static void Show(Player player, QuestConversation conversation)
+    private static void Show(Player player)
     {
-        var line = conversation.Current;
+        var conversation = player.QuestConversation;
+        var line = conversation.Current!;
 
         var dialog = new CommandPacketShowDialog
         {
             DialogueTextId = line.TextId,
             NpcGuid = conversation.NpcGuid,
+            Closable = line.Closable,
             CameraFocusParam = 1f,
         };
 

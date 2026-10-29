@@ -33,8 +33,13 @@ public sealed class ClientCollection : ISerializableType
     /// <summary>
     /// Follows the reward bundle in every captured row (5604 for the Briarwood mushrooms, 5301 to 5314 for the Rare
     /// Exploration collections). Probably a string id for the reward line; the client shows the window either way.
+    /// It is the bundle's own trailing <see cref="RewardBundleBase.DescriptionId"/>, which the bundle writes.
     /// </summary>
-    public int RewardTextId;
+    public int RewardTextId
+    {
+        get => Reward.DescriptionId;
+        set => Reward.DescriptionId = value;
+    }
 
     public List<ClientCollectionEntry> Entries = [];
 
@@ -55,9 +60,8 @@ public sealed class ClientCollection : ISerializableType
 
         writer.Write(Unknown1);
 
+        // Writes RewardTextId as the bundle's trailing DescriptionId.
         Reward.Serialize(writer);
-
-        writer.Write(RewardTextId);
 
         writer.Write(Entries);
     }

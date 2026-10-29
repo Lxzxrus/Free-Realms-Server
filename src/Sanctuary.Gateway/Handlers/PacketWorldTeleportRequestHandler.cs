@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Linq;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -38,6 +39,9 @@ public static class PacketWorldTeleportRequestHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PacketWorldTeleportRequest), packet);
 
+        if (!connection.Player.Friends.Any(friend => friend.Guid == packet.Guid))
+            return true;
+
         if (!_zoneManager.TryGetPlayer(packet.Guid, out var player) || !player.Visible)
             return true;
 
@@ -63,7 +67,9 @@ public static class PacketWorldTeleportRequestHandler
             return true;
         }
 
-        connection.Player.UpdatePosition(position, rotation, updateZoneArea: false);
+        connection.Player.UpdatePosition(position, rotation);
+
+        connection.Player.UpdatePointOfInterest();
 
         var clientUpdatePacketUpdateLocation = new ClientUpdatePacketUpdateLocation
         {

@@ -169,6 +169,8 @@ public sealed class DailyWheelTests
         const int before = 6 * 4 + 1;
         const int after = 4 + 5 + 4 + 4 + 1 + 4 + 4 + 4;
 
-        Assert.AreEqual(before + 3 * (bundle.Buffer.Length + 4) + after, writer.Buffer.Length);
+        // The int after each bundle is the bundle's own DescriptionId now (upstream OSFR moved it into
+        // RewardBundleBase), so it is already in bundle.Buffer; the bytes on the wire are the same.
+        Assert.AreEqual(before + 3 * bundle.Buffer.Length + after, writer.Buffer.Length);
     }
 }

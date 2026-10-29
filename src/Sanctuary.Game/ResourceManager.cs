@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 
@@ -10,7 +10,7 @@ using Sanctuary.Game.Resources.Definitions.Rewards;
 
 namespace Sanctuary.Game;
 
-public class ResourceManager : IResourceManager
+public class ResourceManager : IResourceManager, IDisposable
 {
     private ILogger _logger;
     private FileSystemWatcher _fileSystemWatcher;
@@ -27,6 +27,7 @@ public class ResourceManager : IResourceManager
 
     public static readonly string ClientItemDefinitionsFile = Path.Combine(BaseDirectory, "ClientItemDefinitions.json");
     public static readonly string CollectionsFile = Path.Combine(BaseDirectory, "Collections.json");
+    public static readonly string CollectionCoinsFile = Path.Combine(BaseDirectory, "CollectionCoins.json");
     public static readonly string CollectionNodePoolsFile = Path.Combine(BaseDirectory, "CollectionNodePools.json");
     public static readonly string CollectionNodeTypesFile = Path.Combine(BaseDirectory, "CollectionNodeTypes.json");
     public static readonly string CollectionNodeSpawnsDirectory = Path.Combine(BaseDirectory, "CollectionNodeSpawns");
@@ -34,6 +35,7 @@ public class ResourceManager : IResourceManager
     public static readonly string CoinStoreItemsFile = Path.Combine(BaseDirectory, "CoinStoreItems.json");
 
     public static readonly string ItemClassesFile = Path.Combine(BaseDirectory, "ItemClasses.txt");
+    public static readonly string EquipmentSlotDefinitionsFile = Path.Combine(BaseDirectory, "EquipmentSlotDefinitions.txt");
     public static readonly string ItemCategoriesFile = Path.Combine(BaseDirectory, "ItemCategories.txt");
     public static readonly string ItemCategoryGroupsFile = Path.Combine(BaseDirectory, "ItemCategoryGroups.txt");
 
@@ -49,7 +51,9 @@ public class ResourceManager : IResourceManager
     public static readonly string MimicFile = Path.Combine(BaseDirectory, "Mimic.json");
 
     public static readonly string ZonesDirectory = Path.Combine(BaseDirectory, "Zones");
+    public static readonly string ZoneEnvironmentsDirectory = Path.Combine(ZonesDirectory, "Environments");
     public static readonly string HousesFile = Path.Combine(BaseDirectory, "Houses.json");
+    public static readonly string PetsFile = Path.Combine(BaseDirectory, "Pets.json");
     public static readonly string MountsFile = Path.Combine(BaseDirectory, "Mounts.json");
     public static readonly string ProfilesFile = Path.Combine(BaseDirectory, "Profiles.json");
     public static readonly string QuickChatsFile = Path.Combine(BaseDirectory, "QuickChats.json");
@@ -57,9 +61,13 @@ public class ResourceManager : IResourceManager
     public static readonly string PointOfInterestsFile = Path.Combine(BaseDirectory, "PointOfInterests.json");
     public static readonly string ConsumablesFile = Path.Combine(BaseDirectory, "Consumables.json");
     public static readonly string NpcsFile = Path.Combine(BaseDirectory, "Npcs.json");
+    public static readonly string NpcMovementsFile = Path.Combine(BaseDirectory, "NpcMovements.json");
+    public static readonly string NpcAmbientFile = Path.Combine(BaseDirectory, "NpcAmbient.json");
     public static readonly string NameFilterFile = Path.Combine(BaseDirectory, "NameFilter.txt");
     public static readonly string QuestsFile = Path.Combine(BaseDirectory, "Quests.json");
     public static readonly string MapsDirectory = Path.Combine(BaseDirectory, "Maps");
+    public static readonly string TerrainDirectory = Path.Combine(BaseDirectory, "Terrain");
+    public static readonly string NavMeshDirectory = Path.Combine(BaseDirectory, "NavMeshes");
     public static readonly string RewardTablesFile = Path.Combine(BaseDirectory, "Rewards.json");
     public static readonly string RankLevelsFile = Path.Combine(BaseDirectory, "RankLevels.json");
     public static readonly string CombatAbilitiesFile = Path.Combine(BaseDirectory, "CombatAbilities.json");
@@ -76,6 +84,7 @@ public class ResourceManager : IResourceManager
 
     public ClientItemDefinitionCollection ClientItemDefinitions { get; }
     public CollectionDefinitionCollection Collections { get; }
+    public CollectionCoinDefinitionCollection CollectionCoins { get; }
     public CollectionNodePoolDefinitionCollection CollectionNodePools { get; }
     public CollectionNodeTypeDefinitionCollection CollectionNodeTypes { get; }
     public CollectionNodeSpawnDefinitionCollection CollectionNodeSpawns { get; }
@@ -83,6 +92,7 @@ public class ResourceManager : IResourceManager
     public CoinStoreItemCollection CoinStoreItems { get; }
 
     public ItemClassDefinitionCollection ItemClasses { get; }
+    public EquipmentSlotDefinitionCollection EquipmentSlots { get; }
     public ItemCategoryDefinitionCollection ItemCategories { get; }
     public ItemCategoryGroupDefinitionCollection ItemCategoryGroups { get; }
 
@@ -97,8 +107,10 @@ public class ResourceManager : IResourceManager
     public Minigames.Mimic.MimicDefinitions Mimic { get; private set; } = new();
 
     public ZoneDefinitionCollection Zones { get; }
+    public ZoneEnvironmentCollection ZoneEnvironments { get; }
     public HouseDefinitionCollection Houses { get; }
     public MountDefinitionCollection Mounts { get; }
+    public PetDefinitionCollection Pets { get; }
     public PlayerTitleCollection PlayerTitles { get; }
     public ProfileDefinitionCollection Profiles { get; }
     public QuickChatDefinitionCollection QuickChats { get; }
@@ -106,8 +118,12 @@ public class ResourceManager : IResourceManager
     public ConsumableCollection Consumables { get; }
     public NpcDefinitionCollection Npcs { get; }
     public NameFilterCollection NameFilter { get; }
+    public NpcMovementDefinitionCollection NpcMovements { get; }
+    public NpcAmbientDefinitionCollection NpcAmbient { get; }
     public QuestDefinitionCollection Quests { get; }
     public MapGraphCollection Maps { get; }
+    public TerrainCollection Terrains { get; }
+    public NavMeshCollection NavMeshes { get; }
 
     public RewardTableDefinitionCollection RewardTables { get; }
 
@@ -137,6 +153,7 @@ public class ResourceManager : IResourceManager
 
         ClientItemDefinitions = new(_logger);
         Collections = new(_logger);
+        CollectionCoins = new(_logger);
         CollectionNodePools = new(_logger);
         CollectionNodeTypes = new(_logger);
         CollectionNodeSpawns = new(_logger);
@@ -144,6 +161,7 @@ public class ResourceManager : IResourceManager
         CoinStoreItems = new(_logger);
 
         ItemClasses = new(_logger);
+        EquipmentSlots = new(_logger);
         ItemCategories = new(_logger);
         ItemCategoryGroups = new(_logger);
 
@@ -155,8 +173,10 @@ public class ResourceManager : IResourceManager
         ClientActivityDefinitions = new(_logger);
 
         Zones = new(_logger);
+        ZoneEnvironments = new(_logger);
         Houses = new(_logger);
         Mounts = new(_logger);
+        Pets = new(_logger);
         Profiles = new(_logger);
         QuickChats = new(_logger);
         PlayerTitles = new(_logger);
@@ -164,8 +184,12 @@ public class ResourceManager : IResourceManager
         Consumables = new(_logger);
         Npcs = new(_logger);
         NameFilter = new(_logger);
+        NpcMovements = new(_logger);
+        NpcAmbient = new(_logger);
         Quests = new(_logger);
         Maps = new(_logger);
+        Terrains = new(_logger);
+        NavMeshes = new(_logger);
         RewardTables = new(_logger);
         RankLevels = new(_logger);
         CombatAbilities = new(_logger);
@@ -201,6 +225,9 @@ public class ResourceManager : IResourceManager
         if (!Collections.Load(CollectionsFile))
             return false;
 
+        if (!CollectionCoins.Load(CollectionCoinsFile))
+            return false;
+
         if (!CollectionNodeTypes.Load(CollectionNodeTypesFile))
             return false;
 
@@ -221,12 +248,17 @@ public class ResourceManager : IResourceManager
             }
         }
 
+        var collectionItemDefinitionIds = Collections.Values
+            .SelectMany(collection => collection.Entries)
+            .Where(entry => entry.ItemDefinitionId > 0)
+            .Select(entry => entry.ItemDefinitionId)
+            .ToHashSet();
+
         foreach (var type in CollectionNodeTypes.Values)
         {
-            if (!Models.ContainsKey(type.ModelId) ||
-                type.DropTable.Any(drop => !ClientItemDefinitions.ContainsKey(drop.ItemDefinitionId)))
+            if (!Models.ContainsKey(type.ModelId))
             {
-                _logger.LogError("Collection node type {type} has an invalid model or drop reference.", type.Key);
+                _logger.LogError("Collection node type {type} references an unknown model.", type.Key);
                 return false;
             }
         }
@@ -243,9 +275,12 @@ public class ResourceManager : IResourceManager
 
         foreach (var pool in CollectionNodePools.Values)
         {
-            if (!CollectionNodeTypes.ContainsKey(pool.NodeType))
+            if (!CollectionNodeTypes.ContainsKey(pool.NodeType) ||
+                pool.DropTable.Any(drop => !ClientItemDefinitions.ContainsKey(drop.ItemDefinitionId) ||
+                    !collectionItemDefinitionIds.Contains(drop.ItemDefinitionId)))
             {
-                _logger.LogError("Collection node pool {pool} references an unknown node type.", pool.Key);
+                _logger.LogError("Collection node pool {pool} has an invalid node type or collection drop reference.",
+                    pool.Key);
                 return false;
             }
         }
@@ -287,6 +322,9 @@ public class ResourceManager : IResourceManager
         if (!ItemClasses.Load(ItemClassesFile))
             return false;
 
+        if (!EquipmentSlots.Load(EquipmentSlotDefinitionsFile))
+            return false;
+
         if (!ItemCategories.Load(ItemCategoriesFile))
             return false;
 
@@ -325,6 +363,9 @@ public class ResourceManager : IResourceManager
 
         Mimic = mimic;
 
+        if (!ZoneEnvironments.Load(ZoneEnvironmentsDirectory))
+            return false;
+
         if (!Zones.Load(ZonesDirectory))
             return false;
 
@@ -339,6 +380,9 @@ public class ResourceManager : IResourceManager
         }
 
         if (!Houses.Load(HousesFile))
+            return false;
+
+        if (!Pets.Load(PetsFile))
             return false;
 
         if (!Mounts.Load(MountsFile))
@@ -362,14 +406,57 @@ public class ResourceManager : IResourceManager
         if (!Npcs.Load(NpcsFile))
             return false;
 
+        if (!NpcMovements.Load(NpcMovementsFile))
+            return false;
+
+        if (!NpcAmbient.Load(NpcAmbientFile))
+            return false;
+
         if (!Quests.Load(QuestsFile))
             return false;
 
-        if (!Maps.Load(MapsDirectory))
-            return false;
+        foreach (var coin in CollectionCoins.Values)
+        {
+            Collections.TryGetValue(coin.CollectionId, out var collection);
+            var entry = collection?.Entries.SingleOrDefault(entry => entry.Id == coin.EntryId);
+
+            if (!Npcs.ContainsKey(coin.NpcDefinitionId) ||
+                entry is null || entry.ItemDefinitionId > 0)
+            {
+                _logger.LogError(
+                    "Collection coin NPC {npc} references an unknown NPC or a non-direct collection entry.",
+                    coin.NpcDefinitionId);
+                return false;
+            }
+
+        }
 
         if (!RankLevels.Load(RankLevelsFile))
             return false;
+
+        return true;
+    }
+
+    public bool LoadZoneGeometry()
+    {
+        if (!Maps.Load(MapsDirectory))
+            return false;
+
+        if (!Terrains.Load(TerrainDirectory))
+            return false;
+
+        if (!NavMeshes.Load(NavMeshDirectory))
+            return false;
+
+        // Evergrove keeps upstream OSFR's converted zone geometry out of the repository; a deploy fetches it
+        // (tools/deploy/fetch-zone-geometry.sh). Without it the server still runs: wandering NPCs stand at their spawn
+        // points, patrols keep to their authored points, and pets and Take Me There fall back to straight lines and roads.
+        if (Terrains.Count == 0 || NavMeshes.Count == 0)
+        {
+            _logger.LogWarning("Zone geometry is missing ({terrains} terrain, {navMeshes} navmesh files in {terrainDirectory} " +
+                "and {navMeshDirectory}): NPCs won't wander. Run tools/deploy/fetch-zone-geometry.sh to fetch it.",
+                Terrains.Count, NavMeshes.Count, TerrainDirectory, NavMeshDirectory);
+        }
 
         return true;
     }
@@ -413,6 +500,8 @@ public class ResourceManager : IResourceManager
                 loaded = ClientItemDefinitions.Load(ClientItemDefinitionsFile);
             else if (e.FullPath == CollectionsFile)
                 loaded = Collections.Load(CollectionsFile);
+            else if (e.FullPath == CollectionCoinsFile)
+                loaded = CollectionCoins.Load(CollectionCoinsFile);
             else if (e.FullPath == CollectionNodePoolsFile)
                 loaded = CollectionNodePools.Load(CollectionNodePoolsFile);
             else if (e.FullPath == CollectionNodeTypesFile)
@@ -422,6 +511,8 @@ public class ResourceManager : IResourceManager
                 loaded = CollectionNodeSpawns.Load(CollectionNodeSpawnsDirectory);
             else if (e.FullPath == ItemClassesFile)
                 loaded = ItemClasses.Load(ItemClassesFile);
+            else if (e.FullPath == EquipmentSlotDefinitionsFile)
+                loaded = EquipmentSlots.Load(EquipmentSlotDefinitionsFile);
             else if (e.FullPath == ItemCategoriesFile)
                 loaded = ItemCategories.Load(ItemCategoriesFile);
             else if (e.FullPath == ItemCategoryGroupsFile)
@@ -446,6 +537,8 @@ public class ResourceManager : IResourceManager
                 (Mimic, loaded) = (mimic, true);
             else if (e.FullPath == HousesFile)
                 loaded = Houses.Load(HousesFile);
+            else if (e.FullPath == PetsFile)
+                loaded = Pets.Load(PetsFile);
             else if (e.FullPath == MountsFile)
                 loaded = Mounts.Load(MountsFile);
             else if (e.FullPath == ProfilesFile)
@@ -458,10 +551,12 @@ public class ResourceManager : IResourceManager
                 loaded = PointOfInterests.Load(PointOfInterestsFile);
             else if (e.FullPath == NpcsFile)
                 loaded = Npcs.Load(NpcsFile);
+            else if (e.FullPath == NpcMovementsFile)
+                loaded = NpcMovements.Load(NpcMovementsFile);
+            else if (e.FullPath == NpcAmbientFile)
+                loaded = NpcAmbient.Load(NpcAmbientFile);
             else if (e.FullPath == NameFilterFile)
                 loaded = NameFilter.Load(NameFilterFile);
-            else if (e.FullPath == QuestsFile)
-                loaded = Quests.Load(QuestsFile);
             else if (e.FullPath == RewardTablesFile)
                 loaded = RewardTables.Load(RewardTablesFile);
             else if (e.FullPath == RankLevelsFile)
@@ -470,6 +565,8 @@ public class ResourceManager : IResourceManager
                 loaded = CombatAbilities.Load(CombatAbilitiesFile);
             else if (e.FullPath == CombatJobsFile)
                 loaded = CombatJobs.Load(CombatJobsFile);
+            else if (e.FullPath == QuestsFile)
+                loaded = Quests.Load(QuestsFile);
             else
                 _logger.LogWarning("Unknown file changed. File: {filepath}", e.FullPath);
 
@@ -487,5 +584,11 @@ public class ResourceManager : IResourceManager
         {
             _fileSystemWatcher.EnableRaisingEvents = true;
         }
+    }
+
+    public void Dispose()
+    {
+        _fileSystemWatcher.Changed -= _fileSystemWatcher_Changed;
+        _fileSystemWatcher.Dispose();
     }
 }

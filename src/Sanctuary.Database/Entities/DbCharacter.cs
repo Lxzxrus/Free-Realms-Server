@@ -67,11 +67,13 @@ public class DbCharacter
     public ulong? GuildMemberId { get; set; }
     public DbGuildMember? GuildMember { get; set; }
 
+    // The tracked quest, or null when none is.
     public int? ActiveQuestId { get; set; }
 
     public ICollection<DbItem> Items { get; set; } = new HashSet<DbItem>();
     public ICollection<DbTitle> Titles { get; set; } = new HashSet<DbTitle>();
     public ICollection<DbMount> Mounts { get; set; } = new HashSet<DbMount>();
+    public ICollection<DbPet> Pets { get; set; } = new HashSet<DbPet>();
     public ICollection<DbFriend> Friends { get; set; } = new HashSet<DbFriend>();
     public ICollection<DbIgnore> Ignores { get; set; } = new HashSet<DbIgnore>();
     public ICollection<DbProfile> Profiles { get; set; } = new HashSet<DbProfile>();

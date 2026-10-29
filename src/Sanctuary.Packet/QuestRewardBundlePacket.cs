@@ -9,8 +9,6 @@ public class QuestRewardBundlePacket : RewardBasePacket, ISerializablePacket
 
     public RewardBundleBase RewardBundle { get; } = new();
 
-    public int Unknown15;
-
     public QuestRewardBundlePacket() : base(SubOpCode)
     {
     }
@@ -21,9 +19,8 @@ public class QuestRewardBundlePacket : RewardBasePacket, ISerializablePacket
 
         Write(writer);
 
+        // The trailing int (formerly Unknown15) is RewardBundle.DescriptionId, written by the bundle itself.
         RewardBundle.Serialize(writer);
-
-        writer.Write(Unknown15);
 
         return writer.Buffer;
     }

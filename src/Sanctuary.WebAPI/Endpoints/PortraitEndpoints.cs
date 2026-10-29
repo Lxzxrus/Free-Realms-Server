@@ -197,7 +197,7 @@ public static class PortraitEndpoints
         }
 
         // Check every file before writing any, so a bad request leaves the stored portrait untouched.
-        var images = new List<(string FileName, Image<Rgba32> Image)>();
+        var images = new List<(string FileName, Image<Rgba32> Image, uint Crc)>();
 
         try
         {
@@ -213,7 +213,7 @@ public static class PortraitEndpoints
 
             Directory.CreateDirectory(saveDirectory);
 
-            foreach (var (fileName, image) in images)
+            foreach (var (fileName, image, _) in images)
             {
                 var savePath = Path.Combine(saveDirectory, fileName);
 
@@ -239,8 +239,19 @@ public static class PortraitEndpoints
         }
         finally
         {
-            foreach (var (_, image) in images)
+            foreach (var (_, image, _) in images)
                 image.Dispose();
+        }
+
+        // Upstream OSFR: the Gateway refreshes a player's portrait when this file changes (Player, portrait.crc).
+        // Its folder is PortraitStorage's (SANCTUARY_PORTRAIT_IMAGE_ROOT, else "Images"), so set that variable to
+        // the same folder as WebAPI:ImagesDirectory when they differ.
+        var portrait = images.FirstOrDefault(image => image.FileName == "portrait.png");
+
+        if (portrait.Image is not null)
+        {
+            await File.WriteAllBytesAsync(Path.Combine(options.ImagesDirectory, characterGuid.ToString(), "portrait.crc"),
+                BitConverter.GetBytes(portrait.Crc), cancellationToken);
         }
 
         _logger.LogDebug("Successfully uploaded portrait for character {CharacterGuid}.", characterGuid);
@@ -249,7 +260,7 @@ public static class PortraitEndpoints
     }
 
     /// <summary>Validates one file and adds it to <paramref name="images"/>, or returns the error to send.</summary>
-    private static async Task<IResult?> TryLoadImageAsync(IFormFile file, List<(string FileName, Image<Rgba32> Image)> images, CancellationToken cancellationToken)
+    private static async Task<IResult?> TryLoadImageAsync(IFormFile file, List<(string FileName, Image<Rgba32> Image, uint Crc)> images, CancellationToken cancellationToken)
     {
         if (file.Length == 0)
         {
@@ -313,11 +324,19 @@ public static class PortraitEndpoints
                 return Results.BadRequest($"Invalid {file.Name} size.");
             }
 
+            // The CRC of the bytes as the client sent them, which the Gateway compares with the client's own
+            // (upstream OSFR's portrait refresh, portrait.crc). The request size limit bounds this copy.
+            stream.Position = 0;
+
+            using var uploaded = new MemoryStream();
+            await stream.CopyToAsync(uploaded, cancellationToken);
+            var crc = PortraitStorage.GetPortraitCrc(uploaded.GetBuffer().AsSpan(0, (int)uploaded.Length));
+
             stream.Position = 0;
 
             using var decoded = await Image.LoadAsync<Rgba32>(PngOnly, stream, cancellationToken);
 
-            images.Add((fileName, PixelsOnly(decoded)));
+            images.Add((fileName, PixelsOnly(decoded), crc));
 
             return null;
         }

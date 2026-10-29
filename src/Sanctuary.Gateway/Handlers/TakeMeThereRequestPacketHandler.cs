@@ -36,9 +36,10 @@ public static class TakeMeThereRequestPacketHandler
         if (!_questManager.TryGetActiveObjectiveTarget(player, out var goalPosition))
             return true;
 
-        var reply = new ClientPathReplyPacket { RequestId = request.RequestId };
+        // Upstream OSFR's names for the reply's fields (Type was our ResultType, 1; Id our RequestId; Points our Path).
+        var reply = new ClientPathReplyPacket { Type = 1, Id = request.RequestId };
 
-        reply.Path.Add(player.Position);
+        reply.Points.Add(player.Position);
 
         var pathfinder = player.Zone.Pathfinder;
         if (pathfinder is not null)
@@ -46,10 +47,10 @@ public static class TakeMeThereRequestPacketHandler
             var start = new Vector3(player.Position.X, player.Position.Y, player.Position.Z);
 
             foreach (var node in pathfinder.FindPath(start, goalPosition))
-                reply.Path.Add(new Vector4(node.Position.X, node.Position.Y, node.Position.Z, 1f));
+                reply.Points.Add(new Vector4(node.Position.X, node.Position.Y, node.Position.Z, 1f));
         }
 
-        reply.Path.Add(new Vector4(goalPosition.X, goalPosition.Y, goalPosition.Z, 1f));
+        reply.Points.Add(new Vector4(goalPosition.X, goalPosition.Y, goalPosition.Z, 1f));
 
         player.SendTunneled(reply);
 

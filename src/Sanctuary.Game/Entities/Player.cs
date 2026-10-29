@@ -3,11 +3,17 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.IO;
 using System.Numerics;
+using System.Threading;
 using System.Threading.Tasks;
 
+using Microsoft.Extensions.Logging;
+
 using Sanctuary.Core.Collections;
+using Sanctuary.Core.Extensions;
 using Sanctuary.Core.IO;
+using Sanctuary.Core.Helpers;
 using Sanctuary.Game;
 using Sanctuary.Game.ChatCommands;
 using Sanctuary.Game.Helpers;
@@ -27,6 +33,22 @@ namespace Sanctuary.Game.Entities;
 
 public sealed class Player : ClientPcData, IEntity
 {
+    private enum PacketSendType
+    {
+        All,
+        AllAndSelf,
+        SelfOnly
+    }
+
+    private const int WeaponSlot = 7;
+    private const int FlairShardSlot = 13;
+    private const int IdleCharacterState = 1;
+    private const int ActionBarSlotUnknown5 = 1;
+    private const int ActionBarSlotUnknown6 = 4;
+    private const int ActionBarSlotUnknown7 = 15;
+    private const float OnFootMovementSpeed = 8f;
+    private const long AreaSettleMilliseconds = 1500;
+
     private readonly UdpConnection _connection;
     private readonly IResourceManager _resourceManager;
     private readonly IZoneManager _zoneManager;
@@ -39,7 +61,15 @@ public sealed class Player : ClientPcData, IEntity
     public ConcurrentDictionary<ulong, Npc> VisibleNpcs { get; } = [];
     public ConcurrentDictionary<ulong, Player> VisiblePlayers { get; } = [];
 
-    private int ZoneAreaId { get; set; }
+    private uint? _portraitCrc;
+    private uint? _pendingPortraitCrc;
+    private DateTimeOffset _portraitUpdateExpiresAt;
+
+    public int PointOfInterestId { get; private set; }
+    public int ChatAreaNameId { get; private set; }
+
+    private ZoneAreaDefinition? _pendingZoneArea;
+    private long _pendingZoneAreaSince;
 
     public int ChatBubbleForegroundColor { get; set; }
     public int ChatBubbleBackgroundColor { get; set; }
@@ -54,6 +84,15 @@ public sealed class Player : ClientPcData, IEntity
         Profiles.FirstOrDefault(x => x.Id == ActiveProfileId) ?? Profiles.First();
 
     public Mount? Mount { get; set; }
+    public PlayerPet PlayerPet { get; }
+    public Npc? Pet => PlayerPet.Pet;
+    public Dictionary<int, int> PetDefinitions { get; } = [];
+    public Dictionary<int, PetTrait> PetTraits { get; } = [];
+    public Dictionary<int, DateTimeOffset> PetTreasureFoundAt { get; } = [];
+
+    public PetClientInfo? GetPetClientInfo(int petId) => Pets.FirstOrDefault(petClientInfo => petClientInfo.Id == petId);
+
+    public PetClientInfo? GetActivePetClientInfo() => GetPetClientInfo(ActivePetId);
 
     public List<FriendData> Friends { get; set; } = [];
     public List<IgnoreData> Ignores { get; set; } = [];
@@ -70,30 +109,20 @@ public sealed class Player : ClientPcData, IEntity
     public ulong LastInteractNpcGuid { get; set; }
     public DateTime LastInteractAt { get; set; }
 
-    public DateTime LastQuestAcceptedAt { get; set; }
-
-    public Dictionary<int, bool> Quests { get; } = new();
-
-    public Dictionary<int, int> QuestGoalProgress { get; } = new();
-
-    public Dictionary<int, int> QuestCollectProgress { get; } = new();
-
-    public HashSet<ulong> TalkedQuestNpcs { get; } = new();
-
     /// <summary>
     /// Collection entries this character picked up directly (exploration coins). Loaded at login and kept in step
     /// with the CharacterCollectionEntries table. Read on the zone thread when nodes come into view.
     /// </summary>
     public ConcurrentSet<int> CollectedCollectionEntries { get; } = [];
 
-    public QuestConversation? Conversation { get; set; }
+    /// <summary>Upstream OSFR's name for <see cref="CollectedCollectionEntries"/> (its collection coins read it).</summary>
+    public ConcurrentSet<int> CollectedCollectionEntryIds => CollectedCollectionEntries;
 
-    public ulong TalkingNpcGuid { get; set; }
-    public int TalkAnimationTicket { get; set; }
+    public QuestLog Quests { get; } = new();
 
-    public int ActiveQuestId { get; set; }
+    public QuestConversation QuestConversation { get; } = new();
 
-    public PendingQuestTurnIns PendingQuestTurnIns { get; } = new();
+    public ulong ObjectiveTaskId { get; } = (ulong)Random.Shared.NextInt64();
 
     /// <summary>When this character last spun the daily wheel; one spin per UTC day.</summary>
     public DateTimeOffset? LastWheelSpin { get; set; }
@@ -111,6 +140,13 @@ public sealed class Player : ClientPcData, IEntity
     public Minigames.Fishing.FishingSession? FishingSession { get; set; }
 
     public ConcurrentDictionary<ChatChannel, bool> ChatChannelStatus { get; set; } = [];
+
+    private static readonly ChatChannel[] DefaultEnabledChatChannels = [ChatChannel.WorldArea, ChatChannel.WorldMembersOnly];
+
+    public DateTimeOffset LoginStartedAt { get; set; }
+
+    public long NextClientPathRequestAt { get; set; }
+    public int SecondsSinceLastLogin { get; set; } = -1;
 
     public int StationCash { get; set; }
     public List<CoinStoreTransactionRecord> CoinStoreTransactions { get; set; } = [];
@@ -132,31 +168,71 @@ public sealed class Player : ClientPcData, IEntity
 
     public int TemporaryAppearance { get; private set; }
 
+    public int BoomboxDancePriority { get; set; }
+    public ulong BoomboxDanceOwner { get; set; }
+    public byte PositionState { get; set; }
+
+    private const int CrowdedVisiblePlayerCount = 50;
+    private const int CrowdedRelayIntervalMs = 500;
+
+    public RelayedPosition? LatestPosition { get; private set; }
+    private long _positionVersion;
+    private readonly ConcurrentDictionary<ulong, (long Version, byte State, long NextDueAt)> _sentPositions = new();
+    public int BoomboxDanceAnimation { get; set; }
+    public bool BoomboxDanceIsStanding { get; set; }
+    public int BoomboxDanceTransform { get; set; }
+
+    public const float DefaultScale = 1f;
+
+    public float Scale { get; private set; } = DefaultScale;
+
     public ulong LastSillyStringTarget { get; set; }
 
     public int ActiveFoodEffectId { get; set; }
 
-    private readonly ConcurrentDictionary<int, DateTimeOffset> _itemCooldowns = new();
+    private readonly ConcurrentDictionary<int, (DateTimeOffset ExpiresAt, int TotalMs)> _itemCooldowns = new();
 
     public bool IsItemOnCooldown(int itemDefinitionId) =>
-        _itemCooldowns.TryGetValue(itemDefinitionId, out var expiresAt) && DateTimeOffset.UtcNow < expiresAt;
+        _itemCooldowns.TryGetValue(itemDefinitionId, out var cooldown) && DateTimeOffset.UtcNow < cooldown.ExpiresAt;
 
     public void StartItemCooldown(int itemDefinitionId, int cooldownMs) =>
-        _itemCooldowns[itemDefinitionId] = DateTimeOffset.UtcNow.AddMilliseconds(cooldownMs);
+        _itemCooldowns[itemDefinitionId] = (DateTimeOffset.UtcNow.AddMilliseconds(cooldownMs), cooldownMs);
+
+    public bool TryGetItemCooldown(int itemDefinitionId, out int totalMs, out int elapsedMs)
+    {
+        if (_itemCooldowns.TryGetValue(itemDefinitionId, out var cooldown) && DateTimeOffset.UtcNow < cooldown.ExpiresAt)
+        {
+            totalMs = cooldown.TotalMs;
+            elapsedMs = totalMs - (int)(cooldown.ExpiresAt - DateTimeOffset.UtcNow).TotalMilliseconds;
+            return true;
+        }
+
+        totalMs = 0;
+        elapsedMs = 0;
+        return false;
+    }
+
+    private readonly ConcurrentDictionary<int, int> _lastRandomTransformIndex = new();
+
+    public int LastRandomTransformIndex(int itemDefinitionId) =>
+        _lastRandomTransformIndex.TryGetValue(itemDefinitionId, out var index) ? index : -1;
+
+    public void SetLastRandomTransformIndex(int itemDefinitionId, int index) =>
+        _lastRandomTransformIndex[itemDefinitionId] = index;
 
     // For one-off delayed packets unrelated to tracked effects (e.g. a silly string reset
     // animation, a boombox poof) - see PlayerEffect/AddEffect for anything with its own state.
     // Min-heap ordered by send time.
-    private readonly PriorityQueue<(ISerializablePacket Packet, bool SendToSelf), DateTimeOffset> _delayedPackets = new();
+    private readonly PriorityQueue<(ISerializablePacket Packet, PacketSendType SendType), DateTimeOffset> _delayedPackets = new();
 
     // One scheduled personal-UI packet per action bar slot (the cooldown re-enable) - keyed, not queued,
     // so a slot that gets emptied before its cooldown naturally expires (last item consumed) can cancel
     // its own pending re-enable instead of it firing later and silently un-deleting the slot.
     private readonly ConcurrentDictionary<(int, int), (DateTimeOffset SendAt, ISerializablePacket Packet)> _delayedSlotPackets = new();
 
-    public void ScheduleSlotPacket(int actionBarId, int slotIndex, ISerializablePacket packet, int delayMs)
+    public void ScheduleSlotPacket(int actionBarId, int slotIndex, ISerializablePacket serializablePacket, int delayMs)
     {
-        _delayedSlotPackets[(actionBarId, slotIndex)] = (DateTimeOffset.UtcNow.AddMilliseconds(delayMs), packet);
+        _delayedSlotPackets[(actionBarId, slotIndex)] = (DateTimeOffset.UtcNow.AddMilliseconds(delayMs), serializablePacket);
     }
 
     public void CancelScheduledSlotPacket(int actionBarId, int slotIndex) => _delayedSlotPackets.TryRemove((actionBarId, slotIndex), out _);
@@ -166,6 +242,9 @@ public sealed class Player : ClientPcData, IEntity
 
     public ConcurrentSet<OneTimeNotification> SeenOneTimeNotifications { get; } = [];
 
+    public bool ShopDataSent { get; set; }
+    public ConcurrentSet<int> SentCoinStoreItemDefinitionIds { get; } = [];
+
     public Player(BaseZone zone, UdpConnection connection, IResourceManager resourceManager, IZoneManager zoneManager, ITradeManager tradeManager)
     {
         Zone = zone;
@@ -174,13 +253,14 @@ public sealed class Player : ClientPcData, IEntity
         _resourceManager = resourceManager;
         _zoneManager = zoneManager;
         _tradeManager = tradeManager;
+        PlayerPet = new PlayerPet(this, resourceManager);
     }
 
     #region Connection
 
-    public void Send(ISerializablePacket packet)
+    public void Send(ISerializablePacket serializablePacket)
     {
-        var data = packet.Serialize();
+        var data = serializablePacket.Serialize();
 
         _connection.Send(UdpChannel.Reliable1, data);
     }
@@ -194,9 +274,25 @@ public sealed class Player : ClientPcData, IEntity
         _connection.Send(UdpChannel.Reliable1, data);
     }
 
-    public void SendToVisible(ISerializablePacket packet, bool sendToSelf = false)
+    /// <summary>
+    /// Wraps a packet for tunneling once, so broadcasts don't re-serialize per recipient.
+    /// </summary>
+    public static byte[] SerializeTunneled(ISerializablePacket serializablePacket)
     {
-        var data = packet.Serialize();
+        var packetTunneledClientPacket = new PacketTunneledClientPacket
+        {
+            Payload = serializablePacket.Serialize()
+        };
+
+        return packetTunneledClientPacket.Serialize();
+    }
+
+    public void SendToVisible(ISerializablePacket serializablePacket, bool sendToSelf = false)
+    {
+        if (VisiblePlayers.IsEmpty && !sendToSelf)
+            return;
+
+        var data = serializablePacket.Serialize();
 
         foreach (var visiblePlayer in VisiblePlayers)
             visiblePlayer.Value.SendSerialized(data);
@@ -205,43 +301,33 @@ public sealed class Player : ClientPcData, IEntity
             SendSerialized(data);
     }
 
-    public void SendTunneled(ISerializablePacket packet)
+    public void SendTunneled(ISerializablePacket serializablePacket)
     {
-        var packetTunneled = new PacketTunneledClientPacket
+        var packetTunneledClientPacket = new PacketTunneledClientPacket
         {
-            Payload = packet.Serialize()
+            Payload = serializablePacket.Serialize()
         };
 
-        Send(packetTunneled);
+        Send(packetTunneledClientPacket);
     }
 
     [Obsolete]
     public void SendTunneled(byte[] buffer)
     {
-        var packetTunneled = new PacketTunneledClientPacket
+        var packetTunneledClientPacket = new PacketTunneledClientPacket
         {
             Payload = buffer
         };
 
-        Send(packetTunneled);
+        Send(packetTunneledClientPacket);
     }
 
-    /// <summary>
-    /// Wraps a packet for tunneling once, so broadcasts don't re-serialize per recipient.
-    /// </summary>
-    public static byte[] SerializeTunneled(ISerializablePacket packet)
+    public void SendTunneledToVisible(ISerializablePacket serializablePacket, bool sendToSelf = false)
     {
-        var packetTunneled = new PacketTunneledClientPacket
-        {
-            Payload = packet.Serialize()
-        };
+        if (VisiblePlayers.IsEmpty && !sendToSelf)
+            return;
 
-        return packetTunneled.Serialize();
-    }
-
-    public void SendTunneledToVisible(ISerializablePacket packet, bool sendToSelf = false)
-    {
-        var data = SerializeTunneled(packet);
+        var data = SerializeTunneled(serializablePacket);
 
         foreach (var visiblePlayer in VisiblePlayers)
             visiblePlayer.Value.SendSerialized(data);
@@ -250,11 +336,20 @@ public sealed class Player : ClientPcData, IEntity
             SendSerialized(data);
     }
 
-    public void SendTunneledToVisibleDelayed(ISerializablePacket packet, int delayMs, bool sendToSelf = false)
+    public void SendTunneledToVisibleDelayed(ISerializablePacket serializablePacket, int delayMs, bool sendToSelf = false)
     {
         lock (_delayedPackets)
         {
-            _delayedPackets.Enqueue((packet, sendToSelf), DateTimeOffset.UtcNow.AddMilliseconds(delayMs));
+            var sendType = sendToSelf ? PacketSendType.AllAndSelf : PacketSendType.All;
+            _delayedPackets.Enqueue((serializablePacket, sendType), DateTimeOffset.UtcNow.AddMilliseconds(delayMs));
+        }
+    }
+
+    public void SendTunneledDelayed(ISerializablePacket packet, int delayMs)
+    {
+        lock (_delayedPackets)
+        {
+            _delayedPackets.Enqueue((packet, PacketSendType.SelfOnly), DateTimeOffset.UtcNow.AddMilliseconds(delayMs));
         }
     }
 
@@ -287,22 +382,26 @@ public sealed class Player : ClientPcData, IEntity
         }, sendToSelf: true);
 
         UpdateCharacterStats(
-            CharacterStats.MaxMovementSpeed.Set(8f),
             CharacterStats.GlideEnabled.Set(0),
             CharacterStats.JumpHeight.Set(0f));
 
-        SendTunneledToVisible(new PlayerUpdatePacketRemovePlayerGracefully
-        {
-            Guid = Mount.Guid,
-            Animate = false,
-            Delay = 0,
-            EffectDelay = 0,
-            CompositeEffectId = 0,
-            Duration = 1000
-        }, sendToSelf: true);
+        SetMountMovementSpeed(null);
 
-        Mount.Dispose();
+        EntityHelper.RemovePlayerGracefully(Mount, recipients: VisiblePlayers.Values.Append(this));
+
+        foreach (var mountInfo in Mounts)
+        {
+            if (mountInfo.Guid == Mount.Guid)
+                mountInfo.Guid = 0;
+        }
+
         Mount = null;
+        if (BoomboxDanceTransform != 0 && TemporaryAppearance == BoomboxDanceTransform)
+            SendTunneledToVisible(new PlayerUpdatePacketUpdateTemporaryAppearance
+            {
+                Guid = Guid,
+                TemporaryAppearance = TemporaryAppearance
+            }, true);
     }
 
     #endregion
@@ -315,9 +414,15 @@ public sealed class Player : ClientPcData, IEntity
 
         TickEffects(now);
 
+        if (QuestConversation.TalkingNpcGuid != 0 && now >= QuestConversation.TalkAnimationEndsAt)
+            QuestDialogue.StopTalkAnimation(this);
+
+        PlayerPet.UpdateEveryTick();
+        SendVisiblePositions();
+
         while (true)
         {
-            (ISerializablePacket Packet, bool SendToSelf) due;
+            (ISerializablePacket Packet, PacketSendType SendType) due;
 
             lock (_delayedPackets)
             {
@@ -327,7 +432,18 @@ public sealed class Player : ClientPcData, IEntity
                 due = _delayedPackets.Dequeue();
             }
 
-            SendTunneledToVisible(due.Packet, due.SendToSelf);
+            switch (due.SendType)
+            {
+                case PacketSendType.All:
+                    SendTunneledToVisible(due.Packet);
+                    break;
+                case PacketSendType.AllAndSelf:
+                    SendTunneledToVisible(due.Packet, sendToSelf: true);
+                    break;
+                case PacketSendType.SelfOnly:
+                    SendTunneled(due.Packet);
+                    break;
+            }
         }
 
         foreach (var (key, scheduled) in _delayedSlotPackets)
@@ -340,8 +456,150 @@ public sealed class Player : ClientPcData, IEntity
         }
     }
 
+    public ProjectileHelper Projectiles { get; } = new();
+    public int NpcAbilityEffectId { get; set; }
+
+    public NpcAbilityDefinition? NpcAbility { get; set; }
+    public DateTimeOffset NpcAbilityExpiresAt { get; set; }
+    public DateTimeOffset NpcAbilityNextCastAt { get; set; }
+    public int NpcAbilityProfileId { get; set; }
+
     public void UpdateEverySecond()
     {
+        SnowballInteraction.Update(this);
+        UpdatePortrait();
+        UpdatePendingPointOfInterest();
+    }
+
+    public void RelayPosition(PlayerUpdatePacketUpdatePosition playerUpdatePacketUpdatePosition)
+    {
+        var data = SerializeTunneled(playerUpdatePacketUpdatePosition);
+
+        LatestPosition = new RelayedPosition(data, playerUpdatePacketUpdatePosition.State, Interlocked.Increment(ref _positionVersion));
+    }
+
+    private void SendVisiblePositions()
+    {
+        if (VisiblePlayers.IsEmpty)
+            return;
+
+        var now = Environment.TickCount64;
+        var crowded = VisiblePlayers.Count >= CrowdedVisiblePlayerCount;
+        List<byte[]>? positionData = null;
+
+        foreach (var (guid, visiblePlayer) in VisiblePlayers)
+            QueuePosition(guid, visiblePlayer.LatestPosition, now, crowded, ref positionData);
+
+        if (positionData is not null)
+            _connection.Send(UdpChannel.Reliable1, positionData);
+    }
+
+    private void QueuePosition(ulong guid, RelayedPosition? latestPosition, long now, bool crowded, ref List<byte[]>? positionData)
+    {
+        if (latestPosition is null)
+            return;
+
+        _sentPositions.TryGetValue(guid, out var sentPosition);
+
+        if (latestPosition.Version == sentPosition.Version)
+            return;
+
+        if (latestPosition.State == sentPosition.State && now < sentPosition.NextDueAt)
+            return;
+
+        _sentPositions[guid] = (latestPosition.Version, latestPosition.State, crowded ? now + CrowdedRelayIntervalMs : now);
+
+        (positionData ??= []).Add(latestPosition.Data);
+    }
+
+    private void UpdatePortrait()
+    {
+        if (_pendingPortraitCrc is null)
+            return;
+
+        if (DateTimeOffset.UtcNow >= _portraitUpdateExpiresAt)
+        {
+            _pendingPortraitCrc = null;
+            return;
+        }
+
+        try
+        {
+            var path = Path.Combine(PortraitStorage.GetCharacterDirectory(Guid), "portrait.crc");
+
+            if (!File.Exists(path))
+                return;
+
+            var data = File.ReadAllBytes(path);
+
+            if (data.Length != sizeof(uint) || BitConverter.ToUInt32(data) != _pendingPortraitCrc)
+                return;
+
+            var packetPlayerImageDataHeadshot = GetPortraitPacket(PortraitProvider.Headshot);
+            var packetPlayerImageDataPortrait = GetPortraitPacket(PortraitProvider.Portrait);
+
+            if (packetPlayerImageDataHeadshot is null || packetPlayerImageDataPortrait is null)
+                return;
+
+            SendTunneledToVisible(packetPlayerImageDataHeadshot, true);
+            SendTunneledToVisible(packetPlayerImageDataPortrait, true);
+            _portraitCrc = _pendingPortraitCrc;
+            _pendingPortraitCrc = null;
+        }
+        catch (IOException)
+        {
+            // Retry while the upload is being written.
+        }
+    }
+
+    public void UpdatePortrait(uint portraitCrc)
+    {
+        if (_portraitCrc == portraitCrc)
+            return;
+
+        _pendingPortraitCrc = portraitCrc;
+        _portraitUpdateExpiresAt = DateTimeOffset.UtcNow.AddSeconds(30);
+    }
+
+    public PacketPlayerImageData? GetPortraitPacket(PortraitProvider provider)
+    {
+        var fileName = provider switch
+        {
+            PortraitProvider.Headshot => "headshot.png",
+            PortraitProvider.Portrait => "portrait.png",
+            _ => throw new ArgumentOutOfRangeException(nameof(provider))
+        };
+
+        var path = Path.Combine(PortraitStorage.GetCharacterDirectory(Guid), fileName);
+
+        if (!File.Exists(path))
+            return null;
+
+        return new PacketPlayerImageData
+        {
+            Guid = Guid,
+            Provider = provider.ToString(),
+            Portrait =
+            {
+                Unknown2 = 1,
+                Guid = Guid,
+                ModelId = Model,
+                Attachments = GetAttachments(),
+                Head = Head,
+                Hair = Hair,
+                SkinTone = SkinTone,
+                FacePaint = FacePaint,
+                ModelCustomization = ModelCustomization,
+                HairColor = HairColor,
+                EyeColor = EyeColor,
+                HeadId = HeadId,
+                HairId = HairId,
+                SkinToneId = SkinToneId,
+                FacePaintId = FacePaintId,
+                Provider = provider.ToString()
+            },
+            PngPayload = File.ReadAllBytes(path)
+        };
     }
 
     // The client animates the cooldown sweep itself from TotalRefreshTime -
@@ -349,46 +607,50 @@ public sealed class Player : ClientPcData, IEntity
     // the sweep finishes ("sweep animates but after the sweep I cannot use the ability again") - that
     // needs one explicit packet once the cooldown is actually over. So: one packet now, one packet
     // scheduled for later - not the old repeating-every-second loop, and not silence either.
-    public void StartActionBarCooldown(int actionBarId, int slotIndex, int iconId, int nameId, int count, int cooldownMs, int iconTintId = 0)
+    public void StartActionBarCooldown(int actionBarId, int slotIndex, int iconId, int nameId, int count, int cooldownMs, int iconTintId = 0, int elapsedMs = 0)
     {
-        SendTunneled(BuildActionBarSlotPacket(actionBarId, slotIndex, iconId, iconTintId, nameId, count, cooldownMs, enabled: false, elapsed: 0));
-        ScheduleSlotPacket(actionBarId, slotIndex, BuildActionBarSlotPacket(actionBarId, slotIndex, iconId, iconTintId, nameId, count, cooldownMs, enabled: true, elapsed: cooldownMs), cooldownMs);
+        var remainingMs = Math.Max(0, cooldownMs - elapsedMs);
+
+        SendTunneled(BuildActionBarSlotPacket(actionBarId, slotIndex, iconId, iconTintId, nameId, count, cooldownMs, enabled: false, elapsed: elapsedMs));
+        ScheduleSlotPacket(actionBarId, slotIndex, BuildActionBarSlotPacket(actionBarId, slotIndex, iconId, iconTintId, nameId, count, cooldownMs, enabled: true, elapsed: cooldownMs), remainingMs);
     }
 
     private static ClientUpdatePacketUpdateActionBarSlot BuildActionBarSlotPacket(int actionBarId, int slotIndex, int iconId, int iconTintId, int nameId, int count, int cooldownMs, bool enabled, int elapsed)
     {
-        var packet = new ClientUpdatePacketUpdateActionBarSlot { Data = { Id = actionBarId, Slot = slotIndex } };
-        packet.Slot.IsEmpty = false;
-        packet.Slot.IconId = iconId;
-        packet.Slot.IconTintId = iconTintId;
-        packet.Slot.NameId = nameId;
-        packet.Slot.Unknown5 = 1;
-        packet.Slot.Unknown6 = 4;
-        packet.Slot.Unknown7 = 15;
-        packet.Slot.Enabled = enabled;
-        packet.Slot.Unknown10 = elapsed;
-        packet.Slot.TotalRefreshTime = cooldownMs;
-        packet.Slot.Unknown12 = elapsed;
-        packet.Slot.Quantity = count;
-        packet.Slot.ForceDismount = true;
-        packet.Slot.Unknown15 = elapsed;
-        return packet;
+        var clientUpdatePacketUpdateActionBarSlot = new ClientUpdatePacketUpdateActionBarSlot { Data = { Id = actionBarId, Slot = slotIndex } };
+        clientUpdatePacketUpdateActionBarSlot.Slot.IsEmpty = false;
+        clientUpdatePacketUpdateActionBarSlot.Slot.IconId = iconId;
+        clientUpdatePacketUpdateActionBarSlot.Slot.IconTintId = iconTintId;
+        clientUpdatePacketUpdateActionBarSlot.Slot.NameId = nameId;
+        clientUpdatePacketUpdateActionBarSlot.Slot.Unknown5 = ActionBarSlotUnknown5;
+        clientUpdatePacketUpdateActionBarSlot.Slot.Unknown6 = ActionBarSlotUnknown6;
+        clientUpdatePacketUpdateActionBarSlot.Slot.Unknown7 = ActionBarSlotUnknown7;
+        clientUpdatePacketUpdateActionBarSlot.Slot.Enabled = enabled;
+        clientUpdatePacketUpdateActionBarSlot.Slot.Unknown10 = elapsed;
+        clientUpdatePacketUpdateActionBarSlot.Slot.TotalRefreshTime = cooldownMs;
+        clientUpdatePacketUpdateActionBarSlot.Slot.Unknown12 = elapsed;
+        clientUpdatePacketUpdateActionBarSlot.Slot.Quantity = count;
+        clientUpdatePacketUpdateActionBarSlot.Slot.ForceDismount = true;
+        clientUpdatePacketUpdateActionBarSlot.Slot.Unknown15 = elapsed;
+        return clientUpdatePacketUpdateActionBarSlot;
     }
 
-    public void UpdatePosition(Vector4 position, Quaternion rotation, bool updateZoneArea = true)
+    public void UpdatePosition(Vector4 position, Quaternion rotation)
     {
         Position = position;
         Rotation = rotation;
 
-        Mount?.UpdatePosition(position, rotation, updateZoneArea);
+        Mount?.UpdatePosition(position, rotation);
 
         if (Visible)
-        {
             UpdateZoneTile();
+    }
 
-            if (updateZoneArea)
-                UpdateZoneArea();
-        }
+    public bool IsChatChannelOn(ChatChannel chatChannel)
+    {
+        return ChatChannelStatus.TryGetValue(chatChannel, out var channelStatus)
+            ? channelStatus
+            : DefaultEnabledChatChannels.Contains(chatChannel);
     }
 
     // Nearest other player in the zone within range, excluding excludeGuid if given.
@@ -402,9 +664,7 @@ public sealed class Player : ClientPcData, IEntity
             if (candidate.Guid == Guid || candidate.Guid == excludeGuid)
                 continue;
 
-            var deltaX = candidate.Position.X - Position.X;
-            var deltaZ = candidate.Position.Z - Position.Z;
-            var distance = deltaX * deltaX + deltaZ * deltaZ;
+            var distance = candidate.Position.ToVector3().DistanceSquaredXZ(Position.ToVector3());
 
             if (distance >= nearestDistance)
                 continue;
@@ -416,6 +676,34 @@ public sealed class Player : ClientPcData, IEntity
         return nearest;
     }
 
+    public Vector3 GetFacingDirection()
+    {
+        var direction = Rotation.GetFacing();
+        var lengthSquared = direction.LengthSquared();
+
+        return float.IsFinite(lengthSquared) && lengthSquared > 0
+            ? Vector3.Normalize(direction) : Vector3.UnitZ;
+    }
+
+    public IEntity? FindTarget(ulong guid, float range, ulong excludeGuid = 0)
+    {
+        if (!float.IsFinite(range) || range < 0)
+            return null;
+
+        if (guid == 0 || guid == Guid)
+            return FindNearestPlayer(range, excludeGuid) ?? FindNearestPlayer(range);
+
+        IEntity? target = VisiblePlayers.TryGetValue(guid, out var player) ? player :
+            VisibleNpcs.TryGetValue(guid, out var npc) ? npc : null;
+        if (target is null || !ReferenceEquals(target.Zone, Zone))
+            return null;
+
+        var distance = Vector3.DistanceSquared(Position.ToVector3(),
+            target.Position.ToVector3());
+
+        return float.IsFinite(distance) && distance <= range * range ? target : null;
+    }
+
     private void UpdateZoneTile()
     {
         var newZoneTile = Zone.GetTileFromPosition(Position);
@@ -423,9 +711,14 @@ public sealed class Player : ClientPcData, IEntity
         if (newZoneTile == ZoneTile)
             return;
 
+        if (!Zone.IsOutOfBounds(ZoneTile) && Zone.IsOutOfBounds(newZoneTile))
+            Zone.Logger.LogWarning("{name} entered out of bounds tile {tile} at {position}.", Name.FullName, newZoneTile, Position);
+
         Zone.UpdateEntityZoneTile(this, ZoneTile, newZoneTile);
 
         ZoneTile = newZoneTile;
+
+        QueuePointOfInterest();
     }
 
     public bool TeleportToZone(IZone destinationZone, Vector4 position, Quaternion rotation)
@@ -452,6 +745,9 @@ public sealed class Player : ClientPcData, IEntity
         if (!_zoneManager.TryMovePlayerToZone(zoneDefinitionId, ownerId, this, position, rotation, out var zone))
             return false;
 
+        PointOfInterestId = 0;
+        ChatAreaNameId = 0;
+
         if (_appearanceEffectId != 0 && _effects.TryGetValue(_appearanceEffectId, out var appearanceEffect) && appearanceEffect.ExpiresAt is null)
             RemoveTemporaryAppearance();
 
@@ -471,6 +767,8 @@ public sealed class Player : ClientPcData, IEntity
 
         SendTunneled(packetClientBeginZoning);
 
+        ClearObjectives();
+
         return true;
     }
 
@@ -488,24 +786,76 @@ public sealed class Player : ClientPcData, IEntity
         return TeleportToZone(startingZone, position, rotation);
     }
 
-    private void UpdateZoneArea()
+    private void QueuePointOfInterest()
     {
-        if (Zone is not WorldZone worldZone)
+        var zoneAreaDefinition = Zone is WorldZone worldZone ? worldZone.GetZoneArea(Position, ZoneTile) : null;
+
+        if (zoneAreaDefinition is null || zoneAreaDefinition.Id == PointOfInterestId)
+        {
+            _pendingZoneArea = null;
+            return;
+        }
+
+        if (_pendingZoneArea?.Id == zoneAreaDefinition.Id)
             return;
 
-        var zoneAreaId = worldZone.GetZoneAreaId(Position);
+        _pendingZoneArea = zoneAreaDefinition;
+        _pendingZoneAreaSince = Environment.TickCount64;
+    }
 
-        if (ZoneAreaId == zoneAreaId)
+    private void UpdatePendingPointOfInterest()
+    {
+        if (_pendingZoneArea is null || Environment.TickCount64 - _pendingZoneAreaSince < AreaSettleMilliseconds)
             return;
 
-        ZoneAreaId = zoneAreaId;
+        UpdatePointOfInterest(_pendingZoneArea);
+    }
+
+    public void UpdatePointOfInterest()
+    {
+        if (Zone is WorldZone worldZone && worldZone.GetZoneArea(Position, ZoneTile) is { } zoneAreaDefinition && zoneAreaDefinition.Id != PointOfInterestId)
+            UpdatePointOfInterest(zoneAreaDefinition);
+    }
+
+    public void UpdatePointOfInterest(ZoneAreaDefinition? zoneAreaDefinition)
+    {
+        _pendingZoneArea = null;
+
+        if (zoneAreaDefinition is null || zoneAreaDefinition.Id == PointOfInterestId)
+            return;
+
+        PointOfInterestId = zoneAreaDefinition.Id;
+        ChatAreaNameId = zoneAreaDefinition.ChatAreaNameId;
 
         var packetPOIChangeMessage = new PacketPOIChangeMessage
         {
-            ZoneId = zoneAreaId
+            NameId = zoneAreaDefinition.NameId,
+            ZoneId = zoneAreaDefinition.Id,
+            AreaId = zoneAreaDefinition.AreaId
         };
 
         SendTunneled(packetPOIChangeMessage);
+
+        var chatPacketEnterArea = new ChatPacketEnterArea
+        {
+            AreaNameId = ChatAreaNameId
+        };
+
+        SendTunneled(chatPacketEnterArea);
+    }
+
+    public void SetMountMovementSpeed(float? mountMovementSpeed)
+    {
+        _mountMovementSpeed = mountMovementSpeed;
+
+        RefreshMovementSpeed();
+    }
+
+    private void RefreshMovementSpeed()
+    {
+        var maxMovementSpeed = _mountMovementSpeed ?? OnFootMovementSpeed + _effects.Values.Sum(effect => effect.MovementSpeedBonus);
+
+        UpdateCharacterStats(CharacterStats.MaxMovementSpeed.Set(maxMovementSpeed));
     }
 
     public void UpdateCharacterStats(params CharacterStat[] characterStats)
@@ -542,100 +892,61 @@ public sealed class Player : ClientPcData, IEntity
 
     public void OnAddVisibleNpcs(params IEnumerable<Npc> npcs)
     {
-        // A collection node this character has already collected is not shown to them at all.
-        npcs = npcs.Where(npc => npc is not CollectionNode node || !node.IsCollectedBy(this)).ToArray();
+        // A collection node this character has already collected (an exploration coin) is not shown to them at all.
+        var visibleNpcs = npcs.Where(npc => npc.IsVisibleTo(this) && !Zone.IsHiddenByQuest(this, npc) &&
+            (npc is not CollectionNode node || !node.IsCollectedBy(this))).ToArray();
 
-        foreach (var npc in npcs)
+        foreach (var npc in visibleNpcs)
         {
             if (npc is Mount)
                 continue;
 
             var playerUpdatePacketAddNpc = npc.GetAddNpcPacket();
 
-            playerUpdatePacketAddNpc.NotificationImageSetId = GetNotificationImageId(npc);
+            if (npc is PetTreasureChest petTreasureChest && !petTreasureChest.IsOwner(this))
+                playerUpdatePacketAddNpc.IsInteractable = false;
 
             SendTunneled(playerUpdatePacketAddNpc);
-        }
+            SendTunneled(new PlayerUpdatePacketUpdateCharacterState { Guid = npc.Guid, State = IdleCharacterState });
 
-        var playerUpdatePacketNpcRelevance = new PlayerUpdatePacketNpcRelevance();
-
-        foreach (var npc in npcs)
-        {
-            if (npc.CursorId == 0)
-                continue;
-
-            playerUpdatePacketNpcRelevance.Entries.Add(new PlayerUpdatePacketNpcRelevance.Entry
+            var questEffectId = Zone.GetQuestEffectId(this, npc);
+            if (questEffectId != 0)
             {
-                Guid = npc.Guid,
-                HasCursor = true,
-                CursorId = npc.CursorId
-            });
+                SendTunneled(new PlayerUpdatePacketAddEffectTagCompositeEffect
+                {
+                    Guid = npc.Guid,
+                    TagId = EffectTagIdGenerator.Next(),
+                    CompositeEffectId = questEffectId,
+                    SourceGuid = npc.Guid
+                });
+            }
         }
 
+        var playerUpdatePacketNpcRelevance = InteractionMenuHelper.GetNpcRelevancePacket(
+            visibleNpcs.Where(npc => npc is not PetTreasureChest petTreasureChest || petTreasureChest.IsOwner(this)),
+            npc => Zone.GetQuestBadge(this, npc) is { } badge && !ReferenceEquals(badge, npc.Notification));
         if (playerUpdatePacketNpcRelevance.Entries.Count > 0)
             SendTunneled(playerUpdatePacketNpcRelevance);
 
         var playerUpdatePacketAddNotifications = new PlayerUpdatePacketAddNotifications();
 
-        foreach (var npc in npcs)
-        {
-            var questImageId = GetNotificationImageId(npc);
-            if (questImageId != 0)
-            {
-                playerUpdatePacketAddNotifications.Notifications.Add(new NotificationInfo
-                {
-                    Guid = npc.Guid,
-                    Combat = false,
-                    ImageId = questImageId,
-                    NameId = npc.NameId,
-                    SubTextId = npc.SubTextNameId,
-                });
-            }
-            else if (npc.Notification is not null)
-            {
-                playerUpdatePacketAddNotifications.Notifications.Add(npc.Notification);
-            }
-        }
+        foreach (var npc in visibleNpcs)
+            playerUpdatePacketAddNotifications.Notifications.AddRange(GetNotificationsFor(npc));
 
         if (playerUpdatePacketAddNotifications.Notifications.Count > 0)
             SendTunneled(playerUpdatePacketAddNotifications);
 
-        foreach (var npc in npcs)
+        foreach (var npc in visibleNpcs)
             VisibleNpcs.TryAdd(npc.Guid, npc);
     }
 
-    public int GetNotificationImageId(Npc npc)
+    public IEnumerable<NotificationInfo> GetNotificationsFor(Npc npc)
     {
-        var quests = _resourceManager.Quests;
+        foreach (var notification in npc.Notifications)
+            yield return notification;
 
-        if (quests.ByGiver.TryGetValue(npc.Guid, out var giverQuestIds))
-        {
-            foreach (var questId in giverQuestIds)
-            {
-                if (quests.TryGet(questId, out var quest) && quest.IsOfferableFor(Quests))
-                    return quest.NotificationAvailable;
-            }
-        }
-
-        if (quests.ByTarget.TryGetValue(npc.Guid, out var targetQuestIds))
-        {
-            foreach (var questId in targetQuestIds)
-            {
-                if (Quests.TryGetValue(questId, out var completed) && !completed && quests.TryGet(questId, out var quest)
-                    && quest.WaitsOn(QuestGoalProgress.GetValueOrDefault(questId), npc.Guid, TalkedQuestNpcs))
-                {
-                    return quest.NotificationActive;
-                }
-            }
-        }
-
-        var trainerImageId = JobTrainers.NotificationImageFor(npc.Guid,
-            profileId => Profiles.Any(profile => profile.Id == profileId), _resourceManager.Profiles.ContainsKey);
-
-        if (trainerImageId != 0)
-            return trainerImageId;
-
-        return npc.Notification?.ImageId ?? 0;
+        if ((Zone.GetQuestBadge(this, npc) ?? npc.Notification) is { } badge)
+            yield return badge;
     }
 
     public void OnAddVisiblePlayers(params IEnumerable<Player> players)
@@ -656,6 +967,24 @@ public sealed class Player : ClientPcData, IEntity
             }
             else
                 SendTunneled(player.GetAddPcPacket());
+
+            if (player.Scale != DefaultScale)
+                SendTunneled(new PlayerUpdatePacketUpdateScale { Guid = player.Guid, Scale = player.Scale });
+
+            SendTunneled(new PlayerUpdatePacketUpdateCharacterState { Guid = player.Guid, State = IdleCharacterState });
+
+            SendTunneled(player.GetWeaponFlairOverridePacket());
+
+            foreach (var effect in player._effects.Values.Where(effect => effect.WorldEffectStarted))
+                SendTunneled(player.GetAddEffectTagCompositeEffectPacket(effect));
+
+            if (player.Mount is null && player.BoomboxDanceIsStanding && player.BoomboxDanceAnimation != 0)
+                SendTunneled(new PlayerUpdatePacketSetAnimation
+                {
+                    Guid = player.Guid,
+                    AnimationId = player.BoomboxDanceAnimation,
+                    Flags = 1
+                });
         }
 
         foreach (var player in players)
@@ -664,6 +993,20 @@ public sealed class Player : ClientPcData, IEntity
 
     public void OnRemoveVisibleNpcs(params IEnumerable<Npc> npcs)
     {
+        PlayerUpdatePacketRemoveNotifications? playerUpdatePacketRemoveNotifications = null;
+
+        foreach (var npc in npcs)
+        {
+            foreach (var notification in npc.Notifications)
+                (playerUpdatePacketRemoveNotifications ??= new()).Notifications.Add(GetRemoveNotificationInfo(notification));
+
+            if (npc.Notification is not null)
+                (playerUpdatePacketRemoveNotifications ??= new()).Notifications.Add(GetRemoveNotificationInfo(npc.Notification));
+        }
+
+        if (playerUpdatePacketRemoveNotifications is not null)
+            SendTunneled(playerUpdatePacketRemoveNotifications);
+
         foreach (var npc in npcs)
         {
             // Mounts and already-collected nodes were never sent, so there is nothing to remove.
@@ -677,21 +1020,19 @@ public sealed class Player : ClientPcData, IEntity
             VisibleNpcs.TryRemove(npc.Guid, out _);
     }
 
-    public void OnRemoveVisibleNpcGracefully(Npc npc, bool animate, int delay, int effectDelay,
-        int compositeEffectId, int duration)
+    private static RemoveNotificationInfo GetRemoveNotificationInfo(NotificationInfo notification) => new()
+    {
+        Guid = notification.Guid,
+        ThoughtBubbleIconId = notification.IconState,
+        CompositeEffectId = notification.Unknown2
+    };
+
+    public void OnRemoveVisibleNpcGracefully(Npc npc, bool animate)
     {
         if (npc is Mount)
             return;
 
-        SendTunneled(new PlayerUpdatePacketRemovePlayerGracefully
-        {
-            Guid = npc.Guid,
-            Animate = animate,
-            Delay = delay,
-            EffectDelay = effectDelay,
-            CompositeEffectId = compositeEffectId,
-            Duration = duration
-        });
+        SendTunneled(EntityHelper.GetRemovePlayerGracefullyPacket(npc.Guid, animate));
 
         VisibleNpcs.TryRemove(npc.Guid, out _);
     }
@@ -707,7 +1048,10 @@ public sealed class Player : ClientPcData, IEntity
         }
 
         foreach (var player in players)
+        {
             VisiblePlayers.TryRemove(player.Guid, out _);
+            _sentPositions.TryRemove(player.Guid, out _);
+        }
     }
 
     public void OnInteract(Player player)
@@ -747,22 +1091,73 @@ public sealed class Player : ClientPcData, IEntity
 
     #endregion
 
-    public int GetFlairShardCompositeEffect()
+    public ClientItem? GetEquippedItem(int slot) =>
+        ActiveProfile.Items.TryGetValue(slot, out var profileItem)
+            ? Items.FirstOrDefault(item => item.Id == profileItem.Id)
+            : null;
+
+    public int GetWieldType()
     {
-        const int FlairShardSlot = 13;
-
-        if (ActiveProfile.Items.TryGetValue(FlairShardSlot, out var profileItem))
+        foreach (var equipmentSlot in _resourceManager.EquipmentSlots.ByAnimationPriority)
         {
-            var clientItem = Items.FirstOrDefault(x => x.Id == profileItem.Id);
+            if (GetEquippedItem(equipmentSlot.Id) is not { } item
+                || !_resourceManager.ClientItemDefinitions.TryGetValue(item.Definition, out var definition)
+                || definition.Class == 0)
+                continue;
 
-            if (clientItem is not null)
-            {
-                if (_resourceManager.ClientItemDefinitions.TryGetValue(clientItem.Definition, out var clientItemDefinition))
-                    return clientItemDefinition.CompositeEffectId;
-            }
+            if (!_resourceManager.ItemClasses.TryGetValue(definition.Class, out var itemClass))
+                return 0;
+
+            if (itemClass.WieldType != 0)
+                return itemClass.WieldType;
         }
 
         return 0;
+    }
+
+    public int GetEquippedCompositeEffectId(int slot)
+    {
+        var item = GetEquippedItem(slot);
+        return item is not null && _resourceManager.ClientItemDefinitions.TryGetValue(item.Definition, out var definition)
+            ? Math.Max(0, definition.CompositeEffectId)
+            : 0;
+    }
+
+    public PlayerUpdatePacketSlotCompositeEffectOverride GetSlotCompositeEffectOverridePacket(int slot, int compositeEffect) => new()
+    {
+        Guid = Guid,
+        Slot = slot,
+        CompositeEffect = Math.Max(0, compositeEffect)
+    };
+
+    public PlayerUpdatePacketSlotCompositeEffectOverride GetWeaponFlairOverridePacket() =>
+        GetSlotCompositeEffectOverridePacket(WeaponSlot, GetEquippedCompositeEffectId(FlairShardSlot));
+
+    public void ClearWeaponFlairOverride() =>
+        SendTunneledToVisible(GetSlotCompositeEffectOverridePacket(WeaponSlot, 0), true);
+
+    public void RefreshWeaponFlair(int profileId, int changedSlot)
+    {
+        if (profileId != ActiveProfileId || (changedSlot != WeaponSlot && changedSlot != FlairShardSlot))
+            return;
+
+        // Job switches reuse the cached attachment effect until the new weapon appears.
+        if (GetEquippedItem(WeaponSlot) is { } item
+            && _resourceManager.ClientItemDefinitions.TryGetValue(item.Definition, out var definition)
+            && GetAttachment(WeaponSlot) is { } attachment)
+        {
+            SendTunneledToVisible(new PlayerUpdatePacketEquipItemChange
+            {
+                Guid = Guid,
+                Id = item.Id,
+                Attachment = attachment,
+                ProfileId = ActiveProfileId,
+                ItemClassId = definition.Class,
+                WieldType = GetWieldType()
+            }, true);
+        }
+
+        SendTunneledToVisible(GetWeaponFlairOverridePacket(), true);
     }
 
     public List<CharacterAttachmentData> GetAttachments()
@@ -784,10 +1179,7 @@ public sealed class Player : ClientPcData, IEntity
 
     public CharacterAttachmentData? GetAttachment(int slot)
     {
-        if (!ActiveProfile.Items.TryGetValue(slot, out var profileItem))
-            return null;
-
-        var clientItem = Items.FirstOrDefault(x => x.Id == profileItem.Id);
+        var clientItem = GetEquippedItem(slot);
 
         if (clientItem is null)
             return null;
@@ -797,13 +1189,12 @@ public sealed class Player : ClientPcData, IEntity
 
         var compositeEffectId = clientItemDefinition.CompositeEffectId;
 
-        // Update the Weapon composite effect if we have a Flair Shard equipped.
-        if (slot == 7)
+        if (slot == WeaponSlot)
         {
-            var flairShardcompositeEffectId = GetFlairShardCompositeEffect();
+            var flairEffectId = GetEquippedCompositeEffectId(FlairShardSlot);
 
-            if (flairShardcompositeEffectId > 0)
-                compositeEffectId = flairShardcompositeEffectId;
+            if (flairEffectId > 0)
+                compositeEffectId = flairEffectId;
         }
 
         return new CharacterAttachmentData
@@ -811,7 +1202,7 @@ public sealed class Player : ClientPcData, IEntity
             ModelName = clientItemDefinition.ModelName,
             TextureAlias = clientItemDefinition.TextureAlias,
             TintAlias = clientItemDefinition.TintAlias,
-            TintId = clientItem.Tint,
+            TintId = clientItem.Tint == 0 ? clientItemDefinition.Icon.TintId : clientItem.Tint,
             CompositeEffectId = compositeEffectId,
             Slot = clientItemDefinition.Slot
         };
@@ -820,7 +1211,7 @@ public sealed class Player : ClientPcData, IEntity
     public PlayerUpdatePacketAddPc GetAddPcPacket()
     {
         bool isReferee = IsMod || IsAdmin;
-        var packet = new PlayerUpdatePacketAddPc
+        var playerUpdatePacketAddPc = new PlayerUpdatePacketAddPc
         {
             Guid = Guid,
 
@@ -858,6 +1249,8 @@ public sealed class Player : ClientPcData, IEntity
 
             ActiveProfileId = ActiveProfileId,
 
+            WieldType = GetWieldType(),
+
             MountQueuePosition = -1,
             MountSeat = -1,
         };
@@ -865,21 +1258,21 @@ public sealed class Player : ClientPcData, IEntity
         var activeTitle = Titles.FirstOrDefault(x => x.Id == ActiveTitle);
 
         if (activeTitle is not null)
-            packet.Title = activeTitle;
+            playerUpdatePacketAddPc.Title = activeTitle;
 
         if (Mount is not null)
         {
-            packet.MountGuid = Mount.Guid;
-            packet.MountSeat = Mount.Seat;
-            packet.MountQueuePosition = Mount.QueuePosition;
+            playerUpdatePacketAddPc.MountGuid = Mount.Guid;
+            playerUpdatePacketAddPc.MountSeat = Mount.Seat;
+            playerUpdatePacketAddPc.MountQueuePosition = Mount.QueuePosition;
 
-            packet.NameVerticalOffset = Mount.Definition.NameVerticalOffset;
+            playerUpdatePacketAddPc.NameVerticalOffset = Mount.Definition.NameVerticalOffset;
         }
 
         if (GuildData is not null)
-            packet.Guilds.Add(0, GuildData.Guid);
+            playerUpdatePacketAddPc.Guilds.Add(0, GuildData.Guid);
 
-        return packet;
+        return playerUpdatePacketAddPc;
     }
 
     public const int ChangeFormBuffIconId = 3843;
@@ -906,6 +1299,37 @@ public sealed class Player : ClientPcData, IEntity
             RemoveEffect(_appearanceEffectId);
     }
 
+    public void SetScale(float scale)
+    {
+        if (!float.IsFinite(scale) || scale <= 0)
+            return;
+
+        Scale = scale;
+
+        SendTunneledToVisible(new PlayerUpdatePacketUpdateScale { Guid = Guid, Scale = scale }, true);
+    }
+
+    public void ApplyTemporaryScale(float scale, int durationMs, int buffNameId = 0)
+    {
+        if (_scaleEffectId != 0)
+            RemoveEffect(_scaleEffectId);
+
+        _scaleEffectId = AddEffect(new PlayerEffect
+        {
+            ExpiresAt = durationMs > 0 ? DateTimeOffset.UtcNow.AddMilliseconds(durationMs) : null,
+            Scale = scale,
+            BuffIconId = buffNameId != 0 ? ChangeFormBuffIconId : 0,
+            BuffNameId = buffNameId,
+            OnRemoved = () => _scaleEffectId = 0
+        });
+    }
+
+    public void RemoveTemporaryScale()
+    {
+        if (_scaleEffectId != 0)
+            RemoveEffect(_scaleEffectId);
+    }
+
     #region Effects
 
     // A tracked, timed effect on the player - a transformation, a food effect aura, or both a
@@ -914,6 +1338,8 @@ public sealed class Player : ClientPcData, IEntity
     // a new kind of effect doesn't mean adding another set of ad hoc fields and conditions.
     private readonly ConcurrentDictionary<int, PlayerEffect> _effects = new();
     private int _appearanceEffectId;
+    private int _scaleEffectId;
+    private float? _mountMovementSpeed;
 
     public int AddEffect(PlayerEffect effect)
     {
@@ -970,29 +1396,52 @@ public sealed class Player : ClientPcData, IEntity
             ResyncWorldEffects();
         }
 
+        if (effect.Scale != 0)
+            SetScale(effect.Scale);
+
         if (effect.WorldEffectId != 0 && (effect.WorldEffectStartsAt is null || effect.WorldEffectStartsAt <= DateTimeOffset.UtcNow))
             StartWorldEffect(effect);
 
         if (effect.BuffIconId != 0)
-        {
-            var durationSeconds = effect.ExpiresAt is { } expiresAt
-                ? Math.Max(1, (int)(expiresAt - DateTimeOffset.UtcNow).TotalSeconds)
-                : 0;
+            SendEffectTag(effect);
 
-            SendTunneled(new ClientUpdatePacketAddEffectTag
+        if (effect.MovementSpeedBonus != 0)
+            RefreshMovementSpeed();
+    }
+
+    public bool RefreshEffect(int id, DateTimeOffset expiresAt)
+    {
+        if (!_effects.TryGetValue(id, out var effect))
+            return false;
+
+        effect.ExpiresAt = expiresAt;
+
+        if (effect.BuffIconId != 0)
+            SendEffectTag(effect);
+
+        return true;
+    }
+
+    private void SendEffectTag(PlayerEffect effect)
+    {
+        var durationSeconds = effect.ExpiresAt is { } expiresAt
+            ? Math.Max(1, (int)(expiresAt - DateTimeOffset.UtcNow).TotalSeconds)
+            : 0;
+
+        SendTunneled(new ClientUpdatePacketAddEffectTag
+        {
+            TagId = effect.Id,
+            EffectTag = new EffectTag
             {
-                TagId = effect.Id,
-                EffectTag = new EffectTag
-                {
-                    InstanceId = effect.Id,
-                    Duration = durationSeconds,
-                    StartTime = 0,
-                    StopTime = (uint)-durationSeconds
-                },
-                IconId = effect.BuffIconId,
-                NameId = effect.BuffNameId
-            });
-        }
+                InstanceId = effect.Id,
+                DefinitionId = effect.BuffDefinitionId,
+                Duration = durationSeconds,
+                StartTime = 0,
+                StopTime = (uint)-durationSeconds
+            },
+            IconId = effect.BuffIconId,
+            NameId = effect.BuffNameId
+        });
     }
 
     private void UnapplyEffect(PlayerEffect effect)
@@ -1004,6 +1453,9 @@ public sealed class Player : ClientPcData, IEntity
             ResyncWorldEffects();
         }
 
+        if (effect.Scale != 0)
+            SetScale(_effects.Values.FirstOrDefault(e => e.Id != effect.Id && e.Scale != 0)?.Scale ?? DefaultScale);
+
         if (effect.WorldEffectStarted)
         {
             SendTunneledToVisible(new PlayerUpdatePacketRemoveEffectTagCompositeEffect { Guid = Guid, TagId = effect.WorldTagId }, true);
@@ -1012,6 +1464,9 @@ public sealed class Player : ClientPcData, IEntity
 
         if (effect.BuffIconId != 0)
             SendTunneled(new ClientUpdatePacketRemoveEffectTag { TagId = effect.Id });
+
+        if (effect.MovementSpeedBonus != 0)
+            RefreshMovementSpeed();
     }
 
     private void StartWorldEffect(PlayerEffect effect)
@@ -1019,14 +1474,16 @@ public sealed class Player : ClientPcData, IEntity
         effect.WorldEffectStarted = true;
         effect.WorldTagId = EffectTagIdGenerator.Next();
 
-        SendTunneledToVisible(new PlayerUpdatePacketAddEffectTagCompositeEffect
-        {
-            Guid = Guid,
-            TagId = effect.WorldTagId,
-            CompositeEffectId = effect.WorldEffectId,
-            SourceGuid = Guid
-        }, true);
+        SendTunneledToVisible(GetAddEffectTagCompositeEffectPacket(effect), true);
     }
+
+    private PlayerUpdatePacketAddEffectTagCompositeEffect GetAddEffectTagCompositeEffectPacket(PlayerEffect effect) => new()
+    {
+        Guid = Guid,
+        TagId = effect.WorldTagId,
+        CompositeEffectId = effect.WorldEffectId,
+        SourceGuid = effect.SourceGuid != 0 ? effect.SourceGuid : Guid
+    };
 
     // A temporary appearance change is unreliable about which world-visible effect tags survive
     // it - sometimes a tag keeps playing across it, sometimes it doesn't, and the client also
@@ -1048,7 +1505,6 @@ public sealed class Player : ClientPcData, IEntity
 
     #region Combat
 
-    private const int PrimaryWeaponSlot = 7;
 
     private int _energy = 100;
 
@@ -1069,15 +1525,7 @@ public sealed class Player : ClientPcData, IEntity
 
     private int MaxEnergy { get; set; } = 100;
 
-    public int GetEquippedWeaponDefinitionId()
-    {
-        if (!ActiveProfile.Items.TryGetValue(PrimaryWeaponSlot, out var profileItem))
-            return 0;
-
-        var clientItem = Items.FirstOrDefault(x => x.Id == profileItem.Id);
-
-        return clientItem?.Definition ?? 0;
-    }
+    public int GetEquippedWeaponDefinitionId() => GetEquippedItem(WeaponSlot)?.Definition ?? 0;
 
     public bool SendToolbar()
     {
@@ -1087,7 +1535,7 @@ public sealed class Player : ClientPcData, IEntity
             return false;
         }
 
-        var setDefinition = new AbilityPacketSetDefinition { ProfileId = kit.ProfileId };
+        var abilityPacketSetDefinition = new AbilityPacketSetDefinition { ProfileId = kit.ProfileId };
 
         var weaponDefinitionId = GetEquippedWeaponDefinitionId();
 
@@ -1097,18 +1545,18 @@ public sealed class Player : ClientPcData, IEntity
 
             if (basic is not null)
             {
-                setDefinition.AbilitySet.Abilities[0] = CreateToolbarSlot(kit.BasicSlotDefId, basic.IconId, weaponDefinition.NameId, manaCost: 0);
+                abilityPacketSetDefinition.AbilitySet.Abilities[0] = CreateToolbarSlot(kit.BasicSlotDefId, basic.IconId, weaponDefinition.NameId, manaCost: 0);
                 SendAbilityDefinition(kit.BasicSlotDefId, basic);
             }
 
             if (special is not null)
             {
-                setDefinition.AbilitySet.Abilities[1] = CreateToolbarSlot(kit.SpecialSlotDefId, special.IconId, weaponDefinition.NameId, special.EnergyCost);
+                abilityPacketSetDefinition.AbilitySet.Abilities[1] = CreateToolbarSlot(kit.SpecialSlotDefId, special.IconId, weaponDefinition.NameId, special.EnergyCost);
                 SendAbilityDefinition(kit.SpecialSlotDefId, special);
             }
         }
 
-        SendTunneled(setDefinition);
+        SendTunneled(abilityPacketSetDefinition);
 
         MaxEnergy = kit.Energy.Max;
         // Resync energy against the new max.
@@ -1203,8 +1651,16 @@ public sealed class Player : ClientPcData, IEntity
         }
     }
 
+    public void ClearObjectives()
+    {
+        SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
+        SendTunneled(new ObjectiveClientClearPacket { Unknown = Random.Shared.Next() });
+    }
+
     public void OnZoneChanged(IZone zone, Vector4 position, Quaternion rotation)
     {
+        PlayerPet.RecallPet(remember: zone is not CombatZone);
+
         RemoveFromVisibleEntities(true);
 
         ZoneTile.Entities.Remove(Guid, out _);
@@ -1220,6 +1676,8 @@ public sealed class Player : ClientPcData, IEntity
 
     public void Dispose()
     {
+        PlayerPet.Dispose();
+
         RemoveFromVisibleEntities(false); // no need to notify self since we're DCing
 
         Mount?.Dispose();
@@ -1236,21 +1694,23 @@ public sealed class Player : ClientPcData, IEntity
 
     private const int NpcInteractionIdBase = 1_000_000;
 
-    public void SendInteractionMenu(Npc npc, IReadOnlyList<NpcInteractionOption> options)
+    public void SendInteractionMenu(Npc npc, IReadOnlyList<NpcInteractionOption> options, IEnumerable<InteractionData>? npcInteractions = null)
     {
-        var packet = new CommandPacketInteractionList();
+        var npcInteractionList = npcInteractions?.ToList() ?? [];
+        var usedIds = npcInteractionList.Select(interaction => interaction.Id).ToHashSet();
 
-        packet.List.Guid = npc.Guid;
-        packet.List.Name = npc.Name ?? string.Empty;
-
+        var interactions = new List<InteractionData>(options.Count);
         var actions = new Dictionary<int, Action<Player>>(options.Count);
+        var nextId = NpcInteractionIdBase;
 
-        for (var i = 0; i < options.Count; i++)
+        foreach (var option in options)
         {
-            var option = options[i];
-            var id = NpcInteractionIdBase + i;
+            while (!usedIds.Add(nextId))
+                nextId++;
 
-            packet.List.Interactions.Add(new InteractionData
+            var id = nextId++;
+
+            interactions.Add(new InteractionData
             {
                 Id = id,
                 IconId = option.IconId,
@@ -1261,8 +1721,10 @@ public sealed class Player : ClientPcData, IEntity
             actions[id] = option.Invoke;
         }
 
+        interactions.AddRange(npcInteractionList);
+
         OpenInteractionMenu = new InteractionMenu(npc.Guid, actions);
 
-        SendTunneled(packet);
+        SendTunneled(InteractionMenuHelper.GetInteractionListPacket(npc.Guid, npc.Name, interactions));
     }
 }
