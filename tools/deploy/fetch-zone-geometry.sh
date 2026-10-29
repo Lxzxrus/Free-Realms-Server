@@ -4,9 +4,10 @@
 # pets, the client's path requests). Without them it still runs: it logs one warning at start, wandering NPCs stand
 # at their spawn points, and paths follow the roads.
 #
-# Run it on the server after unpacking a release and before `docker compose build`:
+# Run it on the server after unpacking a release and before `docker compose build`, with sudo, because the unpacked
+# tree (/opt/evergrove/app) belongs to root:
 #
-#   bash /opt/evergrove/app/tools/deploy/fetch-zone-geometry.sh
+#   sudo bash /opt/evergrove/app/tools/deploy/fetch-zone-geometry.sh
 #
 # Each file is downloaded over HTTPS from upstream's GitHub at the pinned commit below, its SHA-256 is checked, and
 # only then is it moved into src/Resources, which Compose mounts into every container (docker-compose.yml). A file

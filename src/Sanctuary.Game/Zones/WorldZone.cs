@@ -53,7 +53,9 @@ public sealed class WorldZone : BaseZone
         SendAdventurersJournalInfo(player);
 
         SendShopData(player);
-        player.SendTunneled(WelcomeScreenHelper.GetAnnouncementsPacket());
+
+        // Upstream OSFR also sends its "Hot New Items!" Marketplace announcement here. Evergrove doesn't: PR #118 took
+        // store ads out of the welcome window, and this is one more (AnnouncementBasePacketHandler answers with none).
 
         if (player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.WelcomeInfo))
             SendWelcomeInfo(player);

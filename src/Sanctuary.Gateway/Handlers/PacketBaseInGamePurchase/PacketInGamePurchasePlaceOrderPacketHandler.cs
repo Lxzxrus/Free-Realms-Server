@@ -121,11 +121,8 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
         var containsHousingInventory = appStoreBundleDefinition.Entries.Any(entry =>
             _resourceManager.ClientItemDefinitions.TryGetValue(entry.MarketingItemId, out var definition) &&
             StoreInventoryPurchasePolicy.IsHousingInventoryItem(definition));
-        var cost = connection.Player.MembershipStatus == 0
-            ? appStoreBundleDefinition.Price
-            : containsHousingInventory
-                ? appStoreBundleDefinition.MembersOnlyPrice
-                : appStoreBundleDefinition.MemberDiscount;
+        var cost = StoreBundlePricing.GetCost(appStoreBundleDefinition, isMember: connection.Player.MembershipStatus != 0,
+            containsHousingInventory);
 
         var totalCostValue = (long)cost * orderDetail.Quantity;
 

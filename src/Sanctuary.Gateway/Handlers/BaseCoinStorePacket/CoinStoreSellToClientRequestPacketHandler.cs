@@ -318,6 +318,15 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
+        // Evergrove: a pet with no coin price (29 in the coin store, among them Domo, the Marshmallows, Landshark and the
+        // pigs) isn't sold for coins. Free, it would hand out any number of pets, a database row each.
+        if (totalCost <= 0)
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+            return true;
+        }
+
         if (!PetHelper.TryGetModel(_resourceManager, clientItemDefinition, out var modelDefinition))
         {
             coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;

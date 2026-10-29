@@ -93,8 +93,9 @@ server, and [tools/asset-mirror](tools/asset-mirror/README.md) how to serve the 
 
 NPC movement uses zone geometry (a navmesh and terrain) that Open Source Free Realms converted from the client.
 It isn't in this repository: after unpacking a release on the server, and before `docker compose build`, run
-`bash tools/deploy/fetch-zone-geometry.sh`. It downloads the files from OSFR's GitHub at a pinned commit, checks
-their SHA-256 and puts them in `src/Resources`. Without them the server still runs; NPCs just don't wander.
+`sudo bash tools/deploy/fetch-zone-geometry.sh` from the unpacked folder (sudo because a release unpacked on the server
+belongs to root). It downloads the files from OSFR's GitHub at a pinned commit, checks their SHA-256 and puts them in
+`src/Resources`. Without them the server still runs; NPCs just don't wander.
 
 ## Credits
 

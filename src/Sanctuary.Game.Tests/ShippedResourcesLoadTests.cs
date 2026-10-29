@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using Sanctuary.Game.Helpers;
 
 namespace Sanctuary.Game.Tests;
 
@@ -87,6 +90,22 @@ public sealed class ShippedResourcesLoadTests
 
             Assert.IsTrue(resourceManager.Load(), "The servers would refuse to start: " + string.Join(" | ", logger.Errors));
             Assert.AreEqual(20, resourceManager.RankLevels.MaxLevel, "Every job levels from 1 to 20.");
+
+            // Pets bought for coins (Nate, 2026-10-29: the coin store keeps the pets upstream OSFR took out of it) are the
+            // pets the Station Cash store hands out: each resolves to the model the pets system spawns.
+            foreach (var restored in new[] { 2152, 2171, 2226 }) // Spaz, Dakota, Screech
+                Assert.IsTrue(resourceManager.CoinStoreItems.ContainsKey(restored), $"Coin store pet {restored} is missing.");
+
+            var coinStorePets = resourceManager.CoinStoreItems.Keys
+                .Select(id => resourceManager.ClientItemDefinitions.TryGetValue(id, out var item) ? item : null)
+                .OfType<Sanctuary.Packet.Common.ClientItemDefinition>()
+                .Where(item => item.Type == ItemDefinitionHelper.PetItemType)
+                .ToList();
+
+            Assert.IsTrue(coinStorePets.Count >= 500, $"Only {coinStorePets.Count} pets in the coin store.");
+
+            foreach (var pet in coinStorePets)
+                Assert.IsTrue(PetHelper.TryGetModel(resourceManager, pet, out _), $"Coin store pet {pet.Id} has no pet model.");
 
             // The Gateway loads the zone geometry next. Without it the server still starts, with one warning.
             logger.Warnings.Clear();
