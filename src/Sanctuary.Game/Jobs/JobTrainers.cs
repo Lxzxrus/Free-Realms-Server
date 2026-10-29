@@ -14,7 +14,7 @@ public readonly record struct JobTrainer(ulong NpcGuid, int ProfileId, string Na
 /// Who teaches which job. In the live game "most jobs unlock by simply talking to a basic trainer for that
 /// profession"; the trainers and where they stood are in <c>docs/research/jobs.md</c>. Each name below matches the
 /// wiki's trainer exactly, but none has been checked in game: the spawn could be the same character standing
-/// somewhere else (Therin has four spawns). Jobs whose trainer isn't in our npcs (Warrior, Postman, Card Duelist), or
+/// somewhere else (Therin has three spawns). Jobs whose trainer isn't in our npcs (Warrior, Postman, Card Duelist), or
 /// is unclear (Ninja, Soccer Star), have none yet; <c>!job grant</c> gives them.
 /// </summary>
 public static class JobTrainers
@@ -35,10 +35,10 @@ public static class JobTrainers
         // Stillwater Crossing, "next to the fishing boat".
         new(100000002968, Fisherman, "Reed Stillwater"),
 
-        // Singing Crystal Mines, Snowhill: "east side of the first cavern". Which of the four spawns stands there is a
-        // guess, so each of them teaches it.
+        // Singing Crystal Mines, Snowhill: "east side of the first cavern". Which of the spawns stands there is a
+        // guess, so each of them teaches it. Upstream OSFR dropped spawn 1202, a second Therin standing exactly where
+        // 1201 stands (merged 2026-10-28).
         new(100000001201, Miner, "Therin"),
-        new(100000001202, Miner, "Therin"),
         new(100000001697, Miner, "Therin"),
         new(100000003602, Miner, "Therin"),
 

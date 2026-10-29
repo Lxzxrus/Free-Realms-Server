@@ -9,11 +9,10 @@ public class ClientPathReplyPacket : ClientPathBasePacket, ISerializablePacket
 {
     public new const byte OpCode = 2;
 
-    public int ResultType = 1;
+    public int Type;
+    public int Id;
 
-    public int RequestId;
-
-    public List<Vector4> Path = new();
+    public List<Vector4> Points = [];
 
     public ClientPathReplyPacket() : base(OpCode)
     {
@@ -25,17 +24,13 @@ public class ClientPathReplyPacket : ClientPathBasePacket, ISerializablePacket
 
         Write(writer);
 
-        writer.Write(ResultType);
-        writer.Write(RequestId);
+        writer.Write(Type);
+        writer.Write(Id);
 
-        writer.Write(Path.Count);
-        foreach (var point in Path)
-        {
-            writer.Write(point.X);
-            writer.Write(point.Y);
-            writer.Write(point.Z);
-            writer.Write(point.W);
-        }
+        writer.Write(Points.Count);
+
+        foreach (var point in Points)
+            writer.Write(point);
 
         return writer.Buffer;
     }

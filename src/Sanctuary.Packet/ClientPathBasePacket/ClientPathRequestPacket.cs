@@ -9,13 +9,15 @@ public class ClientPathRequestPacket : ClientPathBasePacket, IDeserializable<Cli
 {
     public new const byte OpCode = 1;
 
-    public int RequestId;
-    public int Unknown1;
-    public int Mode;
-    public int Unknown3;
-    public Vector4 Start;
-    public Vector4 End;
-    public int Unknown4;
+    public ulong Guid;
+
+    public int Type;
+    public int Id;
+
+    public Vector4 FromPosition;
+    public Vector4 ToPosition;
+
+    public int Unknown;
 
     public ClientPathRequestPacket() : base(OpCode)
     {
@@ -27,17 +29,32 @@ public class ClientPathRequestPacket : ClientPathBasePacket, IDeserializable<Cli
 
         var reader = new PacketReader(data);
 
-        if (!reader.TryRead(out short opCode)) return false;
-        if (!reader.TryRead(out byte subOpCode)) return false;
+        if (!value.TryRead(ref reader))
+            return false;
 
-        if (!reader.TryRead(out value.RequestId)) return false;
-        if (!reader.TryRead(out value.Unknown1)) return false;
-        if (!reader.TryRead(out value.Mode)) return false;
-        if (!reader.TryRead(out value.Unknown3)) return false;
-        if (!reader.TryRead(out value.Start)) return false;
-        if (!reader.TryRead(out value.End)) return false;
-        if (!reader.TryRead(out value.Unknown4)) return false;
+        if (!reader.TryRead(out value.Guid))
+            return false;
 
-        return true;
+        if (!reader.TryRead(out value.Type))
+            return false;
+
+        if (!reader.TryRead(out value.Id))
+            return false;
+
+        if (!reader.TryRead(out value.FromPosition))
+            return false;
+
+        if (!reader.TryRead(out value.ToPosition))
+            return false;
+
+        if (!reader.TryRead(out value.Unknown))
+            return false;
+
+        return reader.RemainingLength == 0;
+    }
+
+    public override string ToString()
+    {
+        return $"{nameof(Guid)}: {Guid}, {nameof(Type)}: {Type}, {nameof(Id)}: {Id}, {nameof(FromPosition)}: {FromPosition}, {nameof(ToPosition)}: {ToPosition}, {nameof(Unknown)}: {Unknown}";
     }
 }

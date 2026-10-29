@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -24,7 +24,7 @@ public static class PacketTunneledClientWorldPacketHandler
 
     public static bool HandlePacket(GatewayConnection connection, Span<byte> data)
     {
-        if (!PacketTunneledClientWorldPacket.TryDeserialize(data, out var packet))
+        if (!PacketTunneledClientWorldPacket.TryDeserialize(data, out var packetTunneledClientWorldPacket))
         {
             _logger.LogError("Failed to deserialize {packet}.", nameof(PacketTunneledClientWorldPacket));
             return false;
@@ -38,7 +38,7 @@ public static class PacketTunneledClientWorldPacketHandler
             return false;
         }
 
-        var reader = new PacketReader(packet.Payload);
+        var reader = new PacketReader(packetTunneledClientWorldPacket.Payload);
 
         if (!reader.TryRead(out short opCode))
         {
@@ -49,19 +49,21 @@ public static class PacketTunneledClientWorldPacketHandler
         var handled = opCode switch
         {
             BaseCommandPacket.OpCode => BaseCommandPacketHandler.HandlePacket(connection, reader),
-            BaseTradePacket.OpCode => BaseTradePacketHandler.HandlePacket(connection, packet.Payload),
-            PacketWorldTeleportRequest.OpCode => PacketWorldTeleportRequestHandler.HandlePacket(connection, packet.Payload),
+            BaseTradePacket.OpCode => BaseTradePacketHandler.HandlePacket(connection, packetTunneledClientWorldPacket.Payload),
+            PacketWorldTeleportRequest.OpCode => PacketWorldTeleportRequestHandler.HandlePacket(connection, packetTunneledClientWorldPacket.Payload),
             PacketBaseInGamePurchase.OpCode => PacketBaseInGamePurchaseHandler.HandlePacket(connection, reader),
-            PacketSetLocale.OpCode => PacketSetLocaleHandler.HandlePacket(connection, packet.Payload),
+            AnnouncementDataSendPacket.OpCode => AnnouncementBasePacketHandler.HandlePacket(connection, reader),
+            PacketSetLocale.OpCode => PacketSetLocaleHandler.HandlePacket(connection, packetTunneledClientWorldPacket.Payload),
             BaseLobbyGameDefinitionPacket.OpCode => BaseLobbyGameDefinitionPacketHandler.HandlePacket(connection, reader),
             BaseHousingPacket.OpCode => BaseHousingPacketHandler.HandlePacket(connection, reader),
             BaseRatingPacket.OpCode => BaseRatingPacketHandler.HandlePacket(connection, reader),
             BaseGuildPacket.OpCode => BaseGuildPacketHandler.HandlePacket(connection, reader),
             BaseMatchmakingPacket.OpCode => BaseMatchmakingPacketHandler.HandlePacket(connection, reader),
+            PacketAddClientPortraitCrc.OpCode => PacketAddClientPortraitCrcHandler.HandlePacket(connection, packetTunneledClientWorldPacket.Payload),
             BaseFotomatPacket.OpCode => BaseFotomatPacketHandler.HandlePacket(connection, reader),
             BaseActivityServicePacket.OpCode => BaseActivityServicePacketHandler.HandlePacket(connection, reader, 1),
             WallOfDataBasePacket.OpCode => WallOfDataBasePacketHandler.HandlePacket(connection, reader),
-            PacketClientLuaMetrics.OpCode => PacketClientLuaMetricsHandler.HandlePacket(connection, packet.Payload),
+            PacketClientLuaMetrics.OpCode => PacketClientLuaMetricsHandler.HandlePacket(connection, packetTunneledClientWorldPacket.Payload),
             _ => false
         };
 

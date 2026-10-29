@@ -8,7 +8,9 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
+using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
 using Sanctuary.Game.Store;
 
@@ -32,27 +34,27 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
     public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
     {
-        if (!CoinStoreBuyFromClientRequestPacket.TryDeserialize(data, out var packet))
+        if (!CoinStoreBuyFromClientRequestPacket.TryDeserialize(data, out var coinStoreBuyFromClientRequestPacket))
         {
             _logger.LogError("Failed to deserialize {packet}.", nameof(CoinStoreBuyFromClientRequestPacket));
             return false;
         }
 
-        _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(CoinStoreBuyFromClientRequestPacket), packet);
+        _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(CoinStoreBuyFromClientRequestPacket), coinStoreBuyFromClientRequestPacket);
 
         var coinStoreTransactionCompletePacket = new CoinStoreTransactionCompletePacket
         {
             TransactionRecord =
             {
-                Type = 2 // Sell
+                Type = CoinStoreTransactionType.Sell
             }
         };
 
-        var clientItem = connection.Player.Items.SingleOrDefault(x => x.Id == packet.ItemGuid);
+        var clientItem = connection.Player.Items.SingleOrDefault(x => x.Id == coinStoreBuyFromClientRequestPacket.ItemGuid);
 
         if (clientItem is null)
         {
-            coinStoreTransactionCompletePacket.Result = 3;
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
 
             connection.SendTunneled(coinStoreTransactionCompletePacket);
 
@@ -62,7 +64,7 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
         if (!_resourceManager.ClientItemDefinitions.TryGetValue(clientItem.Definition, out var clientItemDefinition))
         {
-            coinStoreTransactionCompletePacket.Result = 3;
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
 
             connection.SendTunneled(coinStoreTransactionCompletePacket);
 
@@ -82,7 +84,7 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
         if (dbQuery?.Item is null)
         {
-            coinStoreTransactionCompletePacket.Result = 3;
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
 
             connection.SendTunneled(coinStoreTransactionCompletePacket);
 
@@ -92,12 +94,15 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
         var dbItem = dbQuery.Item;
 
         // The database row decides how many there are and what the coins become; the quantity is the client's word.
-        if (!CoinStoreSale.TryPlan(clientItemDefinition, dbItem.Count, packet.Quantity, dbQuery.Character.Coins, out var plan, out var refusal))
+        if (!CoinStoreSale.TryPlan(clientItemDefinition, dbItem.Count, coinStoreBuyFromClientRequestPacket.Quantity,
+                dbQuery.Character.Coins, out var plan, out var refusal))
         {
             _logger.LogWarning("{player} asked to sell {quantity} of item {item} (definition {definition}, {count} owned): {refusal}.",
-                connection.Player.Guid, packet.Quantity, packet.ItemGuid, clientItem.Definition, dbItem.Count, refusal);
+                connection.Player.Guid, coinStoreBuyFromClientRequestPacket.Quantity, coinStoreBuyFromClientRequestPacket.ItemGuid,
+                clientItem.Definition, dbItem.Count, refusal);
 
-            coinStoreTransactionCompletePacket.Result = (int)refusal;
+            // CoinStoreSaleRefusal uses the client's result codes, which upstream named CoinStoreTransactionResult.
+            coinStoreTransactionCompletePacket.Result = (CoinStoreTransactionResult)(int)refusal;
 
             connection.SendTunneled(coinStoreTransactionCompletePacket);
 
@@ -106,8 +111,18 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
         var deleteItem = plan.RemainingCount == 0;
 
+        var isPetItem = clientItemDefinition.Type == ItemDefinitionHelper.PetClothingItemType || clientItemDefinition.Type == ItemDefinitionHelper.PetUtilityItemType;
+
         if (deleteItem)
+        {
+            if (isPetItem)
+            {
+                foreach (var dbPet in dbContext.Pets.Where(pet => pet.CharacterId == dbQuery.Character.Id))
+                    PetHelper.RemoveItem(dbPet, clientItem.Id);
+            }
+
             dbContext.Items.Remove(dbItem);
+        }
         else
             dbItem.Count = plan.RemainingCount;
 
@@ -115,7 +130,7 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
         if (dbContext.SaveChanges() <= 0)
         {
-            coinStoreTransactionCompletePacket.Result = 8;
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.Error;
 
             connection.SendTunneled(coinStoreTransactionCompletePacket);
 
@@ -123,7 +138,12 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
         }
 
         if (deleteItem)
+        {
             connection.Player.Items.Remove(clientItem);
+
+            if (isPetItem)
+                PetHelper.RemoveItem(connection.Player, clientItem.Id, clientItemDefinition.Slot);
+        }
         else
             clientItem.Count = dbItem.Count;
 
@@ -133,7 +153,7 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
         {
             var clientUpdatePacketItemDelete = new ClientUpdatePacketItemDelete
             {
-                ItemGuid = packet.ItemGuid
+                ItemGuid = coinStoreBuyFromClientRequestPacket.ItemGuid
             };
 
             connection.SendTunneled(clientUpdatePacketItemDelete);
@@ -142,7 +162,7 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
         {
             var clientUpdatePacketItemUpdate = new ClientUpdatePacketItemUpdate
             {
-                ItemGuid = packet.ItemGuid,
+                ItemGuid = coinStoreBuyFromClientRequestPacket.ItemGuid,
                 Count = clientItem.Count,
             };
 
@@ -156,11 +176,11 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
 
         connection.SendTunneled(clientUpdatePacketCoinCount);
 
-        coinStoreTransactionCompletePacket.Result = 1;
+        coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.Success;
 
         coinStoreTransactionCompletePacket.ItemGuid = clientItem.Id;
 
-        coinStoreTransactionCompletePacket.TransactionRecord.Type = 2; // Sell
+        coinStoreTransactionCompletePacket.TransactionRecord.Type = CoinStoreTransactionType.Sell;
 
         coinStoreTransactionCompletePacket.TransactionRecord.Id = connection.Player.CoinStoreTransactions.Count + 1;
 
@@ -169,7 +189,7 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
         coinStoreTransactionCompletePacket.TransactionRecord.ItemRecord.Definition = clientItem.Definition;
         coinStoreTransactionCompletePacket.TransactionRecord.ItemRecord.Tint = clientItem.Tint;
 
-        coinStoreTransactionCompletePacket.TransactionRecord.Quantity = packet.Quantity;
+        coinStoreTransactionCompletePacket.TransactionRecord.Quantity = coinStoreBuyFromClientRequestPacket.Quantity;
 
         connection.SendTunneled(coinStoreTransactionCompletePacket);
 

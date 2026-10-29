@@ -44,11 +44,12 @@ public static class PlayerUpdatePacketUpdatePositionHandler
 
         packet.Guid = connection.Player.Guid;
 
+        connection.Player.PositionState = packet.State;
         connection.Player.UpdatePosition(packet.Position, packet.Rotation);
 
         _questManager.OnPlayerMoved(connection.Player);
 
-        connection.Player.SendTunneledToVisible(packet);
+        connection.Player.RelayPosition(packet);
 
         return true;
     }
