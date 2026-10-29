@@ -33,19 +33,29 @@
     <PackageVersion Include="Refit" Version="13.1.0" />
     <PackageVersion Include="Refit.HttpClientFactory" Version="13.1.0" />
     <PackageVersion Include="Sep" Version="0.15.0" />
-    <!-- Stay on 3.x: ImageSharp 4 refuses to build in Release without a paid Six Labors license key (Debug builds only
-         warn, so tests and CI pass while the Docker build fails). -->
+    <!-- Stay on 3.1.12: ImageSharp 3.2.0 and 4.x refuse to build in Release without a Six Labors license key (a paid
+         one, or a free Community key by application). Their build targets only warn in Debug, so tests pass while the
+         Release build (CI and Docker) fails. -->
     <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageVersion Include="ZLibDotNet" Version="0.1.1" />
   </ItemGroup>
   <ItemGroup>
-    <!-- ImageSharp 3.1.12 advisories, reviewed 2026-10-11: none is reachable from a portrait upload, which decodes PNG
-         only and skips metadata (see PortraitEndpoints.PngOnly). The fixes ship only in 4.x (above). Listed one by
-         one, so a new advisory still shows up in the build. -->
+    <!-- ImageSharp 3.1.12 advisories, reviewed 2026-10-11 and 2026-10-29: none is reachable from a portrait upload, the
+         only place ImageSharp runs. Uploads are identified and decoded with the PNG codec alone and SkipMetadata (see
+         PortraitEndpoints.PngOnly), then saved as PNG. The fixes ship in 3.2.0 and 4.1.2, which both need a license key
+         (above). Listed one by one, so a new advisory still shows up in the build. -->
+    <!-- TIFF CCITT T6 encoder overflow: we only ever encode PNG. -->
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
+    <!-- TIFF CCITT T4 encoder overflow: we only ever encode PNG. -->
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
+    <!-- HistogramEqualization index: never called; nothing here processes images. -->
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j3p4-wp97-rph4" />
+    <!-- BigTIFF IFD loop: uploads have no TIFF decoder, and EXIF is skipped. -->
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
+    <!-- ICC CLUT allocation: 3.x parses a profile's tags only when they are read, and nothing reads them. -->
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
+    <!-- Tiled fax TIFF heap overflow, in the TIFF decoder: uploads have no TIFF decoder, and any non-PNG is refused
+         before its pixels are decoded. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-v76p-62qx-wwq2" />
   </ItemGroup>
 </Project>

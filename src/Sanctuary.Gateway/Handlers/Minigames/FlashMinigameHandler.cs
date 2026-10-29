@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
+using Sanctuary.Database;
 using Sanctuary.Game;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
@@ -21,8 +23,9 @@ namespace Sanctuary.Gateway.Handlers;
 /// <summary>
 /// Launches the Flash minigames the server knows about, with the client's start screen, and carries their messages.
 /// A match-three game (Mining, Farming, Forging, Mail Sorting) is played by <see cref="MatchThreeGame"/> with the levels
-/// in <c>Resources/MatchThree.json</c>; see docs/research/mining.md. A Mimic game (Cooking) is a recipe in
-/// <c>Resources/Mimic.json</c>, served by <see cref="MimicHandler"/>; see docs/research/mimic.md.
+/// in <c>Resources/MatchThree.json</c>, and a win pays the game's reward from there; see docs/research/mining.md. A
+/// Mimic game (Cooking) is a recipe in <c>Resources/Mimic.json</c>, served by <see cref="MimicHandler"/>; see
+/// docs/research/mimic.md.
 /// </summary>
 /// <remarks>
 /// Flow (FreeRealms.exe, docs/research/daily-wheel.md): MiniGameInfo with the start-screen flag on opens a session
@@ -40,6 +43,7 @@ public static class FlashMinigameHandler
     private static ILogger _logger = null!;
     private static ILogger _gameLogger = null!;
     private static IResourceManager _resourceManager = null!;
+    private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -48,6 +52,7 @@ public static class FlashMinigameHandler
         _gameLogger = loggerFactory.CreateLogger(nameof(MatchThreeGame));
 
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
     }
 
     /// <summary>Opens the start screen for a known Flash minigame. False if the activity isn't one.</summary>
@@ -189,7 +194,7 @@ public static class FlashMinigameHandler
         if (session.MatchThree is { } game)
         {
             game.Handle(message);
-            LogResult(connection, session, game);
+            Settle(connection, session, game);
         }
         else if (session.Mimic is not null)
             MimicHandler.Handle(connection, session, message);
@@ -206,7 +211,7 @@ public static class FlashMinigameHandler
             return;
 
         game.Tick();
-        LogResult(connection, session, game);
+        Settle(connection, session, game);
     }
 
     /// <summary>A game that threw: the player's minigame is closed rather than left half-working.</summary>
@@ -216,15 +221,43 @@ public static class FlashMinigameHandler
         session.MatchThree = null;
     }
 
-    private static void LogResult(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game)
+    /// <summary>
+    /// Logs each new result, and pays a won game once, as Cooking pays (<see cref="MinigameReward.Pay"/>). The server's
+    /// own game decides the win (<see cref="FlashMinigameSession.SettleMatchThreeWin"/>), never a message from the
+    /// Flash, so a forged, repeated or replayed "game over" pays nothing more. A win quicker than its levels can be
+    /// played pays nothing either, and is logged as a warning.
+    /// </summary>
+    private static void Settle(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game)
     {
-        if (game.Result == session.LoggedResult)
+        var player = connection.Player;
+
+        if (game.Result != session.LoggedResult)
+        {
+            session.LoggedResult = game.Result;
+
+            _logger.LogInformation("Minigame: {player} {result} {game} on level {level} with {score} points.",
+                player.Guid, game.Result, game.Name, game.Level?.Number, game.TotalScore);
+        }
+
+        var payout = session.SettleMatchThreeWin(out var reward);
+
+        if (payout == MatchThreePayout.TooFast)
+        {
+            _logger.LogWarning("Minigame: {player} won {game} in {seconds:0.0} s, under the {minimum} s its levels take to play; " +
+                "nothing paid.", player.Guid, game.Name, game.SecondsToWin, game.MinSecondsToWin);
+            return;
+        }
+
+        if (payout != MatchThreePayout.Pay)
             return;
 
-        session.LoggedResult = game.Result;
+        using var dbContext = _dbContextFactory.CreateDbContext();
 
-        _logger.LogInformation("Minigame: {player} {result} {game} on level {level} with {score} points.",
-            connection.Player.Guid, game.Result, game.Name, game.Level?.Number, game.TotalScore);
+        var paid = reward.Pay(_resourceManager, dbContext, _logger, player);
+
+        _logger.LogInformation("Minigame: {player} won {game} in {seconds:0.0} s: paid {coins} coins and {stars} stars on job " +
+            "{profileId}.", player.Guid, game.Name, game.SecondsToWin, paid.Coins ? reward.Coins : 0,
+            paid.Stars ? reward.Experience : 0, reward.ProfileId);
     }
 
     /// <summary>The client ended the session (the minigame frame's close button).</summary>
