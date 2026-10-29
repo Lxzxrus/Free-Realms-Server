@@ -39,6 +39,9 @@ public sealed class MatchThreeDefinitions
             if (game.Experience > 0 && game.RewardProfileId == 0)
                 yield return $"game \"{game.Name}\": Experience needs a RewardProfileId, the job its stars go to";
 
+            if (game.MinSecondsPerLevel < 0)
+                yield return $"game \"{game.Name}\": MinSecondsPerLevel can't be negative";
+
             for (var i = 0; i < game.Levels.Count; i++)
                 foreach (var problem in game.Levels[i].Problems())
                     yield return $"game \"{game.Name}\", level {i + 1}: {problem}";
@@ -113,6 +116,13 @@ public sealed class MatchThreeGameDefinition
 
     /// <summary>The job a win's stars go to (Profiles.json: 14 Miner, 4 Postman, 16 Blacksmith, 45 Chef); 0 for none.</summary>
     public int RewardProfileId { get; set; }
+
+    /// <summary>
+    /// The fewest seconds an honest player spends on a level. A game won in less than this times its levels, from its
+    /// start to the win on the server's clock, still ends as a win for the client but pays nothing: only a client that
+    /// skips the Flash's own animations gets there. 0 turns the check off.
+    /// </summary>
+    public int MinSecondsPerLevel { get; set; } = 5;
 
     /// <summary>What winning the game pays.</summary>
     public MinigameReward Reward => new(Coins, RewardProfileId, Experience);

@@ -223,8 +223,9 @@ public static class FlashMinigameHandler
 
     /// <summary>
     /// Logs each new result, and pays a won game once, as Cooking pays (<see cref="MinigameReward.Pay"/>). The server's
-    /// own game decides the win (<see cref="FlashMinigameSession.TryTakeMatchThreeReward"/>), never a message from the
-    /// Flash, so a forged, repeated or replayed "game over" pays nothing more.
+    /// own game decides the win (<see cref="FlashMinigameSession.SettleMatchThreeWin"/>), never a message from the
+    /// Flash, so a forged, repeated or replayed "game over" pays nothing more. A win quicker than its levels can be
+    /// played pays nothing either, and is logged as a warning.
     /// </summary>
     private static void Settle(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game)
     {
@@ -238,15 +239,25 @@ public static class FlashMinigameHandler
                 player.Guid, game.Result, game.Name, game.Level?.Number, game.TotalScore);
         }
 
-        if (!session.TryTakeMatchThreeReward(out var reward))
+        var payout = session.SettleMatchThreeWin(out var reward);
+
+        if (payout == MatchThreePayout.TooFast)
+        {
+            _logger.LogWarning("Minigame: {player} won {game} in {seconds:0.0} s, under the {minimum} s its levels take to play; " +
+                "nothing paid.", player.Guid, game.Name, game.SecondsToWin, game.MinSecondsToWin);
+            return;
+        }
+
+        if (payout != MatchThreePayout.Pay)
             return;
 
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var paid = reward.Pay(_resourceManager, dbContext, _logger, player);
 
-        _logger.LogInformation("Minigame: {player} won {game}: paid {coins} coins and {stars} stars on job {profileId}.",
-            player.Guid, game.Name, paid.Coins ? reward.Coins : 0, paid.Stars ? reward.Experience : 0, reward.ProfileId);
+        _logger.LogInformation("Minigame: {player} won {game} in {seconds:0.0} s: paid {coins} coins and {stars} stars on job " +
+            "{profileId}.", player.Guid, game.Name, game.SecondsToWin, paid.Coins ? reward.Coins : 0,
+            paid.Stars ? reward.Experience : 0, reward.ProfileId);
     }
 
     /// <summary>The client ended the session (the minigame frame's close button).</summary>

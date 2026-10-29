@@ -206,6 +206,23 @@ first time, and never again in that session, however often the Flash repeats or 
 after every message and tick. A loss, a game stopped for falling out of step, a quit and `FRServer_GameOver` pay
 nothing.
 
+**A win must take time**, as in Cooking (`MinSecondsPerPhase`). A game won in less than its `MinSecondsPerLevel` times
+its levels, from its start (the tutorial closed) to the win on the server's clock, still ends as a win for the client
+but pays nothing, and the Gateway logs a warning with the player and the time. Only a client that skips the Flash's
+own animations gets under it. Every game uses 5 s a level, a conservative placeholder:
+
+- The Flash spends about 4.5 s of every level on its own. The board drops in row by row before the countdown ends
+  (`Grid.nROW_SPAWNING_TIME`, 0.13 s a row, then a 25-frame fall: 1.5 s or more for 8 rows), and after a level ends
+  the client waits `ConfigClientCommon.END_STAGE_DELAY`, 3 s, before it asks for the next one.
+- Then the play. Two scripted players, the tests' own (the first chain it finds, 200 boards a level) and a greedy one
+  (the chain with the most tiles still needed, or that drops the most ore, 100 boards a level), never finished a
+  level in fewer than 11 chains: Harvesting and Mail Sorting level 1. Mining Practice took at least 24, Forging level
+  1 at least 28. Eleven chains at an inhuman four a second is almost 3 s.
+
+So the quickest honest level takes over 7 s, and 5 s leaves room for a lucky board. A bot that waits out the minimum
+still wins a Mining Practice every few seconds, so a daily cap is left to the economy pass. The Gateway logs every paid
+win's time, so real players' times can tune the minimum.
+
 ## Still unknown
 
 - **What the quota bin's icon id is.** Mining Practice sends 698, the Copper Ore item's icon. The client stores it and

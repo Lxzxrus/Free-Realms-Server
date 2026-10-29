@@ -51,7 +51,8 @@ public sealed class MinigameRewardTests
             _curve = new RankLevelDefinitionCollection(NullLogger.Instance);
             Assert.IsTrue(_curve.Load(Path.Combine(resources, "RankLevels.json")));
 
-            Assert.IsTrue(MatchThreeDefinitions.TryLoad(Path.Combine(resources, "MatchThree.json"), NullLogger.Instance, out var matchThree));
+            var file = Path.Combine(resources, "MatchThree.json");
+            Assert.IsTrue(MatchThreeDefinitions.TryLoad(file, NullLogger.Instance, out var matchThree));
             _games = matchThree.Games;
             return;
         }
@@ -159,7 +160,7 @@ public sealed class MinigameRewardTests
     public void WithoutTheJob_NoStars_AndNoJobIsMade()
     {
         foreach (var game in _games)
-            Assert.IsFalse(PayStars(AdventurerCharacterId, game.Reward), $"{game.Name}: the Adventurer doesn't have job {game.RewardProfileId}.");
+            Assert.IsFalse(PayStars(AdventurerCharacterId, game.Reward), $"{game.Name}: no job {game.RewardProfileId} to pay.");
 
         var jobs = Jobs(AdventurerCharacterId);
 

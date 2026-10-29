@@ -251,22 +251,25 @@ public sealed class MatchThreeTests
 
     /// <summary>
     /// The Gateway's side of a game (<c>FlashMinigameHandler</c>): each message from the Flash goes to the game and the
-    /// clock ticks it, and after each the session is asked for the reward; whatever it hands over is paid. (The Gateway
-    /// answers <c>FRServer_GameOver</c> itself, by ending the session, and pays nothing there.)
+    /// clock ticks it, and after each the session settles the win, if there is one: whatever reward it hands over is
+    /// paid, and a win too quick to pay is logged. (The Gateway answers <c>FRServer_GameOver</c> itself, by ending the
+    /// session, and pays nothing there.)
     /// </summary>
     private sealed class Payer(FlashMinigameSession session)
     {
         /// <summary>A session for the game's own Games menu entry, started.</summary>
-        public static Payer For(MatchThreeGame game) =>
-            new(new FlashMinigameSession(1, FlashMinigames.Definitions.Values.Single(definition => definition.MatchThreeGame == game.Name))
-            {
-                Started = true,
-                MatchThree = game
-            });
+        public static Payer For(MatchThreeGame game)
+        {
+            var activity = FlashMinigames.Definitions.Values.Single(definition => definition.MatchThreeGame == game.Name);
+            return new(new FlashMinigameSession(1, activity) { Started = true, MatchThree = game });
+        }
 
         public FlashMinigameSession Session => session;
 
         public List<MinigameReward> Paid { get; } = [];
+
+        /// <summary>Wins refused as too quick: each would be one warning in the Gateway's log.</summary>
+        public int TooFast { get; private set; }
 
         public void Send(params string[] message)
         {
@@ -282,10 +285,21 @@ public sealed class MatchThreeTests
 
         public void Settle()
         {
-            if (session.TryTakeMatchThreeReward(out var reward))
-                Paid.Add(reward);
+            switch (session.SettleMatchThreeWin(out var reward))
+            {
+                case MatchThreePayout.Pay:
+                    Paid.Add(reward);
+                    break;
+
+                case MatchThreePayout.TooFast:
+                    TooFast++;
+                    break;
+            }
         }
     }
+
+    /// <summary>The time a level takes a player in these tests: enough for any win to pay.</summary>
+    private const long SecondsAtPlayersPace = 30;
 
     /// <summary>
     /// Plays the level in progress to its end, the reward asked for after every move and tick. The scripted client
@@ -819,7 +833,7 @@ public sealed class MatchThreeTests
         foreach (var level in definition.Levels)
             level.DurationSeconds = 100_000;
 
-        var (game, output, _) = Start(definition, seed);
+        var (game, output, clock) = Start(definition, seed);
         var payer = Payer.For(game);
         var from = 0;
 
@@ -845,7 +859,8 @@ public sealed class MatchThreeTests
             // A level won isn't the game won.
             Assert.AreEqual(0, payer.Paid.Count, $"Level {number} paid.");
 
-            // The client's end-of-level animation asks for the next level.
+            // The level took a player's time; the client's end-of-level animation asks for the next level.
+            clock.Now += SecondsAtPlayersPace * 1000;
             payer.Send("OnNextLevelMsg");
             if (number == definition.Levels.Count)
                 break;
@@ -859,6 +874,7 @@ public sealed class MatchThreeTests
         Assert.AreEqual(1, output.Named("OnGameWonMsg").Count());
         Assert.AreEqual(definition.Levels.Count, output.Named("OnStopLevel").Count());
         CollectionAssert.AreEqual(new[] { definition.Reward }, payer.Paid, "Every level won: the game's reward, once.");
+        Assert.AreEqual(0, payer.TooFast);
 
         var summary = game.Summarize();
         Assert.AreEqual(name, summary.Name);
@@ -927,8 +943,10 @@ public sealed class MatchThreeTests
         Assert.AreEqual(new MinigameReward(game.Coins, profileId, game.Experience), game.Reward);
         Assert.IsTrue(game.Coins > 0, $"{name}: a win pays coins.");
         Assert.IsTrue(game.Experience > 0, $"{name}: a win pays stars.");
+        Assert.IsTrue(game.MinSecondsPerLevel > 0, $"{name}: a win too quick to have been played pays nothing.");
 
-        using var profiles = JsonDocument.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(FindShipped())!, "Profiles.json")));
+        var profilesFile = Path.Combine(Path.GetDirectoryName(FindShipped())!, "Profiles.json");
+        using var profiles = JsonDocument.Parse(File.ReadAllText(profilesFile));
         var named = profiles.RootElement.EnumerateArray().Single(profile => profile.GetProperty("Id").GetInt32() == profileId);
         Assert.AreEqual(job, named.GetProperty("Comment").GetString(), $"Job {profileId} in Profiles.json.");
     }
@@ -958,6 +976,13 @@ public sealed class MatchThreeTests
 
         noJob.Games[0].Experience = 0;
         Assert.AreEqual(0, noJob.Problems().Count(), "Coins alone, with no job, are fine.");
+
+        var noTime = Mail();
+        noTime.Games[0].MinSecondsPerLevel = -1;
+        StringAssert.Contains(noTime.Problems().Single(), "MinSecondsPerLevel can't be negative");
+
+        noTime.Games[0].MinSecondsPerLevel = 0;
+        Assert.AreEqual(0, noTime.Problems().Count(), "0 turns the speed check off.");
     }
 
     [TestMethod]
@@ -988,7 +1013,7 @@ public sealed class MatchThreeTests
     [TestMethod]
     public void AWin_PaysTheGamesRewardOnce()
     {
-        var (game, output, _) = Start(QuickMining(), seed: 11);
+        var (game, output, clock) = Start(QuickMining(), seed: 11);
         var payer = Payer.For(game);
 
         PlayLevel(game, new ScriptedClient(game, output), payer);
@@ -996,18 +1021,93 @@ public sealed class MatchThreeTests
         Assert.IsTrue(game.Level!.Succeeded);
         Assert.AreEqual(0, payer.Paid.Count, "The level is won, but the game is won when the client asks for what's next.");
 
-        // The end of the level's animation asks for the next level; after the last, the server says the game is won.
+        // Played at a player's pace. The end of the level's animation asks for the next level; after the last, the
+        // server says the game is won.
+        clock.Now += SecondsAtPlayersPace * 1000;
         payer.Send("OnNextLevelMsg");
 
         Assert.AreEqual(MatchThreeResult.Won, game.Result);
+        Assert.AreEqual(SecondsAtPlayersPace, game.SecondsToWin!.Value, 0.001);
         Assert.AreEqual(1, output.Named("OnGameWonMsg").Count());
         CollectionAssert.AreEqual(new[] { Mining().Reward }, payer.Paid, "The data's amounts, once.");
-        Assert.IsTrue(payer.Session.MatchThreeRewardTaken);
+        Assert.IsTrue(payer.Session.MatchThreeWinSettled);
 
         // Asked again, after every message and tick, it hands over nothing more.
         payer.Tick();
         payer.Settle();
         Assert.AreEqual(1, payer.Paid.Count);
+        Assert.AreEqual(0, payer.TooFast);
+    }
+
+    /// <summary>
+    /// A win quicker than the game's levels can be played, like Cooking's: only a client that skips the Flash's own
+    /// animations (a bot) gets there. The client still sees its win; the server pays nothing and logs it once.
+    /// </summary>
+    [TestMethod]
+    public void AWinFasterThanItsLevelsCanBePlayed_PaysNothing()
+    {
+        // Every move at once: no time passes on the server's clock.
+        var (game, output, _) = Start(QuickMining(), seed: 11);
+        var payer = Payer.For(game);
+
+        PlayLevel(game, new ScriptedClient(game, output), payer);
+        payer.Send("OnNextLevelMsg");
+
+        Assert.AreEqual(MatchThreeResult.Won, game.Result, "The game still ends as a win.");
+        Assert.AreEqual(1, output.Named("OnGameWonMsg").Count(), "The client is told it won.");
+        Assert.AreEqual(0, game.SecondsToWin);
+        Assert.IsTrue(game.WonTooFast);
+        Assert.AreEqual(0, payer.Paid.Count);
+        Assert.AreEqual(1, payer.TooFast);
+
+        // Settled: repeating the end changes nothing, and the warning isn't logged again.
+        payer.Send("OnNextLevelMsg");
+        payer.Send("FRServer_GameOver");
+        payer.Tick();
+        Assert.AreEqual(0, payer.Paid.Count);
+        Assert.AreEqual(1, payer.TooFast);
+    }
+
+    [TestMethod]
+    [DataRow("mining", 11)]
+    [DataRow("farming", 3)]
+    public void TheMinimumTime_IsEveryLevelsMinSecondsPerLevel(string name, int seed)
+    {
+        var definition = name == "mining" ? QuickMining() : Game(name);
+        foreach (var level in definition.Levels)
+            level.DurationSeconds = 100_000;
+
+        var minimum = definition.MinSecondsPerLevel * definition.Levels.Count;
+        Assert.IsTrue(minimum > 0);
+
+        // The same game won twice: a tenth of a second under the minimum, then at it.
+        foreach (var (seconds, pays) in new[] { (minimum - 0.1, false), (minimum, true) })
+        {
+            var (game, output, clock) = Start(definition, seed);
+            var payer = Payer.For(game);
+            var from = 0;
+
+            for (var number = 1; number <= definition.Levels.Count; number++)
+            {
+                PlayLevel(game, new ScriptedClient(game, output, from), payer);
+
+                // The time goes by on the last level, before the client asks for what's next.
+                if (number == definition.Levels.Count)
+                    clock.Now += (long)Math.Round(seconds * 1000);
+
+                payer.Send("OnNextLevelMsg");
+
+                from = output.Messages.Count;
+                if (number < definition.Levels.Count)
+                    payer.Send("OnStartLevelMsg", "0");
+            }
+
+            Assert.AreEqual(MatchThreeResult.Won, game.Result);
+            Assert.AreEqual(minimum, game.MinSecondsToWin);
+            Assert.AreEqual(seconds, game.SecondsToWin!.Value, 0.001);
+            Assert.AreEqual(pays ? 1 : 0, payer.Paid.Count, $"Won in {seconds} s, the minimum {minimum} s.");
+            Assert.AreEqual(pays ? 0 : 1, payer.TooFast);
+        }
     }
 
     [TestMethod]
@@ -1042,7 +1142,7 @@ public sealed class MatchThreeTests
     [TestMethod]
     public void ForgedOrRepeatedGameOvers_PayNothingExtra()
     {
-        var (game, output, _) = Start(QuickMining(), seed: 11);
+        var (game, output, clock) = Start(QuickMining(), seed: 11);
         var payer = Payer.For(game);
 
         // Mid-level: every message a client could use to say the game is over, or won.
@@ -1058,8 +1158,9 @@ public sealed class MatchThreeTests
         Assert.IsTrue(game.Level!.IsInProgress);
         Assert.AreEqual(0, payer.Paid.Count);
 
-        // Won for real: paid.
+        // Won for real, at a player's pace: paid.
         PlayLevel(game, new ScriptedClient(game, output), payer);
+        clock.Now += SecondsAtPlayersPace * 1000;
         payer.Send("OnNextLevelMsg");
         Assert.AreEqual(1, payer.Paid.Count);
 
@@ -1075,10 +1176,12 @@ public sealed class MatchThreeTests
         payer.Send("OnStartGameMsg", "0");
         payer.Send("OnStartLevelMsg", "0");
         PlayLevel(game, new ScriptedClient(game, output, from), payer);
+        clock.Now += SecondsAtPlayersPace * 1000;
         payer.Send("OnNextLevelMsg");
 
         Assert.AreEqual(MatchThreeResult.Won, game.Result, "Won a second time...");
         Assert.AreEqual(2, output.Named("OnGameWonMsg").Count());
         CollectionAssert.AreEqual(new[] { Mining().Reward }, payer.Paid, "...and paid once.");
+        Assert.AreEqual(0, payer.TooFast);
     }
 }
