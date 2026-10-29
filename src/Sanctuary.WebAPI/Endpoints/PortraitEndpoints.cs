@@ -41,11 +41,13 @@ public static class PortraitEndpoints
     private readonly static ConcurrentDictionary<string, SemaphoreSlim> _fileLocks = [];
 
     // Portraits are PNG only, so uploads are read with the PNG codec alone: any other format is refused as unknown before
-    // a decoder for it runs, and metadata (ICC profiles, EXIF, text) is never parsed. ImageSharp's default configuration
-    // would parse TIFF, ICC profiles and more from an uploaded file. As of 3.1.12 that leaves none of its open advisories
-    // reachable from an upload: GHSA-j9gm-c75j-xc9q and GHSA-jjfr-hcj7-qf5w (TIFF encoder), GHSA-wmxv-xphr-5c9g (BigTIFF
-    // decoder), GHSA-j3p4-wp97-rph4 (histogram equalization, unused) and GHSA-gwg2-r3hj-4w44 (ICC profile parsing).
-    // The fixes ship only in ImageSharp 4, which needs a Six Labors license key to build.
+    // a decoder for it runs. SkipMetadata skips EXIF and text chunks. A PNG's ICC profile is still kept on load (and
+    // saved with the portrait), but only as raw bytes: ImageSharp 3.x parses a profile when its Header or Entries are
+    // read, which nothing here does. ImageSharp's default configuration would parse TIFF and more from an uploaded
+    // file. As of 3.1.12 that leaves none of its open advisories reachable from an upload: GHSA-v76p-62qx-wwq2 (tiled
+    // fax TIFF decoder), GHSA-wmxv-xphr-5c9g (BigTIFF decoder), GHSA-j9gm-c75j-xc9q and GHSA-jjfr-hcj7-qf5w (TIFF
+    // encoder), GHSA-j3p4-wp97-rph4 (histogram equalization, unused) and GHSA-gwg2-r3hj-4w44 (ICC profile parsing).
+    // The fixes ship in 3.2.0 and 4.1.2, and both need a Six Labors license key to build in Release (Debug only warns).
     private static readonly DecoderOptions PngOnly = new()
     {
         Configuration = new Configuration(new PngConfigurationModule()),
