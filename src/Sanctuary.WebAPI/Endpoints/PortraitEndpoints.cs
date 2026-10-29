@@ -40,17 +40,35 @@ public static class PortraitEndpoints
     private static ILogger _logger = null!;
     private readonly static ConcurrentDictionary<string, SemaphoreSlim> _fileLocks = [];
 
-    // Portraits are PNG only, so uploads are read with the PNG codec alone: any other format is refused as unknown before
-    // a decoder for it runs. SkipMetadata skips EXIF and text chunks. A PNG's ICC profile is still kept on load (and
-    // saved with the portrait), but only as raw bytes: ImageSharp 3.x parses a profile when its Header or Entries are
-    // read, which nothing here does. ImageSharp's default configuration would parse TIFF and more from an uploaded
-    // file. As of 3.1.12 that leaves none of its open advisories reachable from an upload: GHSA-v76p-62qx-wwq2 (tiled
-    // fax TIFF decoder), GHSA-wmxv-xphr-5c9g (BigTIFF decoder), GHSA-j9gm-c75j-xc9q and GHSA-jjfr-hcj7-qf5w (TIFF
-    // encoder), GHSA-j3p4-wp97-rph4 (histogram equalization, unused) and GHSA-gwg2-r3hj-4w44 (ICC profile parsing).
-    // The fixes ship in 3.2.0 and 4.1.2, and both need a Six Labors license key to build in Release (Debug only warns).
-    private static readonly DecoderOptions PngOnly = new()
+    // Portraits are PNG only, so uploads are read with the PNG codec alone: any other format is refused as unknown
+    // before a decoder for it runs. SkipMetadata skips EXIF and text chunks. A PNG's ICC profile is still kept on load,
+    // but only as raw bytes: ImageSharp 3.x parses a profile when its Header or Entries are read, which nothing here
+    // does. ImageSharp's default configuration would parse TIFF and more from an uploaded file. As of 3.1.12 that
+    // leaves none of its open advisories reachable from an upload: GHSA-v76p-62qx-wwq2 (tiled fax TIFF decoder),
+    // GHSA-wmxv-xphr-5c9g (BigTIFF decoder), GHSA-j9gm-c75j-xc9q and GHSA-jjfr-hcj7-qf5w (TIFF encoder),
+    // GHSA-j3p4-wp97-rph4 (histogram equalization, unused) and GHSA-gwg2-r3hj-4w44 (ICC profile parsing). The fixes
+    // ship in 3.2.0 and 4.1.2, and both need a Six Labors license key to build in Release (Debug only warns).
+    // Only the first frame is decoded. Each further frame of an animated PNG decodes to a whole canvas however small it
+    // is in the file: 1,000 one-pixel frames in a 67 KB file came to about 250 MB, and the 1 MB upload limit fits some
+    // 15,000 of them, about 3.7 GB from one request.
+    internal static readonly DecoderOptions PngOnly = new()
     {
         Configuration = new Configuration(new PngConfigurationModule()),
+        SkipMetadata = true,
+        MaxFrames = 1
+    };
+
+    // The Gateway sends saved portraits on to other players' game clients, so a saved portrait keeps the upload's
+    // pixels and nothing else (see PixelsOnly). Saving the decoded upload itself would copy its ICC and CICP profiles
+    // (3.1.12 keeps those whatever SkipMetadata says), its gamma, resolution, transparency and palette chunks, its bit
+    // depth and interlacing, and any animation frames into the file. Instead every portrait is written the same way:
+    // 8-bit RGBA, not interlaced, with no ancillary chunks (SkipMetadata also drops the resolution chunk a new image
+    // would get).
+    private static readonly PngEncoder PortraitEncoder = new()
+    {
+        ColorType = PngColorType.RgbWithAlpha,
+        BitDepth = PngBitDepth.Bit8,
+        InterlaceMethod = PngInterlaceMode.None,
         SkipMetadata = true
     };
 
@@ -205,7 +223,7 @@ public static class PortraitEndpoints
 
                 try
                 {
-                    await image.SaveAsPngAsync(savePath, cancellationToken);
+                    await image.SaveAsPngAsync(savePath, PortraitEncoder, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -297,7 +315,9 @@ public static class PortraitEndpoints
 
             stream.Position = 0;
 
-            images.Add((fileName, await Image.LoadAsync<Rgba32>(PngOnly, stream, cancellationToken)));
+            using var decoded = await Image.LoadAsync<Rgba32>(PngOnly, stream, cancellationToken);
+
+            images.Add((fileName, PixelsOnly(decoded)));
 
             return null;
         }
@@ -307,6 +327,16 @@ public static class PortraitEndpoints
 
             return Results.BadRequest("Invalid image format.");
         }
+    }
+
+    /// <summary>A new image holding the first frame's pixels and none of the upload's metadata.</summary>
+    private static Image<Rgba32> PixelsOnly(Image<Rgba32> decoded)
+    {
+        var pixels = new Rgba32[decoded.Width * decoded.Height];
+
+        decoded.CopyPixelDataTo(pixels);
+
+        return Image.LoadPixelData<Rgba32>(pixels, decoded.Width, decoded.Height);
     }
 
     private static bool IsPlayerGuid(ulong guid)
