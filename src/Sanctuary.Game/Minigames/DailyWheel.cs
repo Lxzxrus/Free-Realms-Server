@@ -26,6 +26,8 @@ public sealed class DailyWheelSlot
 /// </summary>
 public sealed class DailyWheel
 {
+    public const int ActivityId = 8;
+
     /// <summary>Wheel type 1 is the ten-wedge wheel in the Flash file (<c>mcCategory1</c> to <c>mcCategory10</c>).</summary>
     public const int TenSlotType = 1;
 

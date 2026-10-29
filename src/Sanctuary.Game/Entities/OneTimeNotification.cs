@@ -2,5 +2,6 @@ namespace Sanctuary.Game.Entities;
 
 public enum OneTimeNotification
 {
-    WelcomeInfo
+    WelcomeInfo,
+    NewPlayerHint
 }
