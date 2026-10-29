@@ -22,6 +22,10 @@ public class GatewayServer : UdpManager<GatewayConnection>
     {
         _logger = logger;
         _resourceManager = resourceManager;
+
+        // Run game callbacks after releasing the UDP connection lock. Zone ticks send
+        // packets while holding zone locks, so inline callbacks can invert that order.
+        EventQueuing = true;
     }
 
     public override bool OnConnectRequest(UdpConnection udpConnection)
@@ -103,6 +107,7 @@ public class GatewayServer : UdpManager<GatewayConnection>
 
     public void OnStarted()
     {
+        _resourceManager.Zones.CollectionChanged -= Zones_CollectionChanged;
         _resourceManager.Zones.CollectionChanged += Zones_CollectionChanged;
     }
 
@@ -112,6 +117,8 @@ public class GatewayServer : UdpManager<GatewayConnection>
 
     public void OnStopping()
     {
+        _resourceManager.Zones.CollectionChanged -= Zones_CollectionChanged;
+
         var packetNotice = new PacketWorldShutdownNotice();
 
         // Scheduled maintenance and updates.
@@ -128,4 +135,11 @@ public class GatewayServer : UdpManager<GatewayConnection>
             connection.Send(UdpChannel.Reliable1, packetData);
         }
     }
+
+    public override void Dispose()
+    {
+        _resourceManager.Zones.CollectionChanged -= Zones_CollectionChanged;
+        base.Dispose();
+    }
+
 }

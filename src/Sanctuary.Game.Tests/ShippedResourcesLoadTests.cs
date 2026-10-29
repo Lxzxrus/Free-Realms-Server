@@ -19,16 +19,19 @@ public sealed class ShippedResourcesLoadTests
     private sealed class ErrorLogger : ILogger<ResourceManager>
     {
         public List<string> Errors { get; } = [];
+        public List<string> Warnings { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Error;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
             if (logLevel >= LogLevel.Error)
                 Errors.Add(formatter(state, exception));
+            else if (logLevel == LogLevel.Warning)
+                Warnings.Add(formatter(state, exception));
         }
     }
 
@@ -63,6 +66,16 @@ public sealed class ShippedResourcesLoadTests
         var root = Path.Combine(Path.GetTempPath(), "evergrove-resources-" + Guid.NewGuid().ToString("N"));
         CopyDirectory(FindShippedResources(), Path.Combine(root, ResourceManager.BaseDirectory));
 
+        // The zone geometry is fetched at deploy time (tools/deploy/fetch-zone-geometry.sh) and isn't in the
+        // repository; a developer may have fetched it, so the copy drops it to load what a fresh clone has.
+        foreach (var geometry in new[] { "NavMeshes", "Terrain" })
+        {
+            var directory = Path.Combine(root, ResourceManager.BaseDirectory, geometry);
+
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, true);
+        }
+
         var previous = Environment.CurrentDirectory;
         var logger = new ErrorLogger();
         ResourceManager? resourceManager = null;
@@ -74,6 +87,14 @@ public sealed class ShippedResourcesLoadTests
 
             Assert.IsTrue(resourceManager.Load(), "The servers would refuse to start: " + string.Join(" | ", logger.Errors));
             Assert.AreEqual(20, resourceManager.RankLevels.MaxLevel, "Every job levels from 1 to 20.");
+
+            // The Gateway loads the zone geometry next. Without it the server still starts, with one warning.
+            logger.Warnings.Clear();
+            Assert.IsTrue(resourceManager.LoadZoneGeometry(), "The Gateway would refuse to start: " + string.Join(" | ", logger.Errors));
+            Assert.AreEqual(0, resourceManager.NavMeshes.Count);
+            Assert.AreEqual(0, resourceManager.Terrains.Count);
+            Assert.AreEqual(1, logger.Warnings.Count, "Expected one warning: " + string.Join(" | ", logger.Warnings));
+            StringAssert.Contains(logger.Warnings[0], "fetch-zone-geometry.sh");
         }
         finally
         {

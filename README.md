@@ -43,7 +43,7 @@ Quests, fishing, Mining, trading, chat and more come with it, with new content a
 | `src/` | The server: Login, Gateway (the game world), WebAPI (accounts) and the game logic. C#/.NET |
 | `launcher/` | The launcher, a fork of OSFR's ([launcher/README.md](launcher/README.md)) |
 | `docs/` | Design, security and operations notes. [docs/webapi.md](docs/webapi.md) covers running WebAPI behind HTTPS |
-| `tools/` | The client mod behind the housing search, and the asset mirror |
+| `tools/` | The client mod behind the housing search, the asset mirror, and deploy and ops scripts |
 
 ## Running your own server
 
@@ -90,6 +90,11 @@ Then start `Sanctuary.Login`, `Sanctuary.Gateway` and `Sanctuary.WebAPI`, and po
 WebAPI (accounts, login and portraits) must sit behind HTTPS: [docs/webapi.md](docs/webapi.md) covers Caddy, rate
 limits and lockouts. [launcher/server/README.md](launcher/server/README.md) lists what the launcher needs from the
 server, and [tools/asset-mirror](tools/asset-mirror/README.md) how to serve the game's streamed assets yourself.
+
+NPC movement uses zone geometry (a navmesh and terrain) that Open Source Free Realms converted from the client.
+It isn't in this repository: after unpacking a release on the server, and before `docker compose build`, run
+`bash tools/deploy/fetch-zone-geometry.sh`. It downloads the files from OSFR's GitHub at a pinned commit, checks
+their SHA-256 and puts them in `src/Resources`. Without them the server still runs; NPCs just don't wander.
 
 ## Credits
 

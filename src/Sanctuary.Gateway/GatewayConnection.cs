@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Numerics;
 using System.Text;
+using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,6 +39,9 @@ public class GatewayConnection : UdpConnection
     private readonly IServiceProvider _serviceProvider;
     private readonly IResourceManager _resourceManager;
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
+
+    private readonly object _workLock = new();
+    private Task _workTail = Task.CompletedTask;
 
     private ICipher _cipher;
 #pragma warning disable CS0649
@@ -93,6 +97,24 @@ public class GatewayConnection : UdpConnection
         SavePlayerToDatabase();
 
         Player.Dispose();
+    }
+
+    public void QueueWork(Action work)
+    {
+        lock (_workLock)
+        {
+            _workTail = _workTail.ContinueWith(_ =>
+            {
+                try
+                {
+                    work();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "{connection} queued work failed.", this);
+                }
+            }, TaskScheduler.Default);
+        }
     }
 
     public override void OnRoutePacket(Span<byte> data)
@@ -164,19 +186,19 @@ public class GatewayConnection : UdpConnection
         _logger.LogError("[PacketCorrupt] Guid: {guid}, Reason: {reason}, Data: {data}", Player?.Guid, reason, PacketLog.Hex(data));
     }
 
-    public void SendTunneled(ISerializablePacket packet, bool reliable = true, bool secure = false)
+    public void SendTunneled(ISerializablePacket serializablePacket, bool reliable = true, bool secure = false)
     {
-        var packetTunneled = new PacketTunneledClientPacket
+        var packetTunneledClientPacket = new PacketTunneledClientPacket
         {
-            Payload = packet.Serialize()
+            Payload = serializablePacket.Serialize()
         };
 
-        Send(packetTunneled, reliable, secure);
+        Send(packetTunneledClientPacket, reliable, secure);
     }
 
-    public void Send(ISerializablePacket packet, bool reliable = true, bool secure = false)
+    public void Send(ISerializablePacket serializablePacket, bool reliable = true, bool secure = false)
     {
-        var data = packet.Serialize();
+        var data = serializablePacket.Serialize();
 
         if (secure)
             InternalSendSecure(data);
@@ -227,6 +249,8 @@ public class GatewayConnection : UdpConnection
         }
 
         Player = player;
+        player.LoginStartedAt = DateTimeOffset.UtcNow;
+        player.SecondsSinceLastLogin = WelcomeScreenHelper.SecondsSinceLastLogin(dbCharacter.LastLogin, player.LoginStartedAt);
 
         // Start - ClientPcData
 
@@ -348,9 +372,21 @@ public class GatewayConnection : UdpConnection
             });
         }
 
+        foreach (var dbPet in dbCharacter.Pets)
+        {
+            if (!_resourceManager.ClientItemDefinitions.TryGetValue(dbPet.Definition, out var clientItemDefinition) ||
+                !PetHelper.TryGetModel(_resourceManager, clientItemDefinition, out var modelDefinition))
+            {
+                continue;
+            }
+
+            PetHelper.AddPet(Player, _resourceManager, dbPet, clientItemDefinition, modelDefinition);
+        }
+
         // TODO
 
         // Start - Store on DB
+
         var clientActionBar = new ClientActionBar();
 
         clientActionBar.Id = 2; // ItemActionBar
@@ -514,14 +550,16 @@ public class GatewayConnection : UdpConnection
 
         dbCharacter.ActiveTitleId = Player.ActiveTitle;
 
-        if (dbCharacter.LastLogin.HasValue)
-            dbCharacter.PlayTime += (int)(DateTimeOffset.UtcNow - dbCharacter.LastLogin.Value).TotalMinutes;
+        dbCharacter.PlayTime += (int)Math.Max(0, (DateTimeOffset.UtcNow - Player.LoginStartedAt).TotalMinutes);
 
         // End ClientPcData
 
         dbCharacter.ChatBubbleForegroundColor = Player.ChatBubbleForegroundColor;
         dbCharacter.ChatBubbleBackgroundColor = Player.ChatBubbleBackgroundColor;
         dbCharacter.ChatBubbleSize = Player.ChatBubbleSize;
+
+        foreach (var dbPet in dbContext.Pets.Where(pet => pet.CharacterId == dbCharacter.Id))
+            PetHelper.SavePetState(Player, dbPet);
 
         // SaveChanges returns the rows changed. Zero means nothing changed since the last save (a quick relog, or
         // logging out inside a house), not a failure; a real failure throws.

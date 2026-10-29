@@ -113,6 +113,8 @@ public sealed class CollectionDefinitionCollection : ObservableConcurrentDiction
     public List<ClientCollection> CreateClientCollections(ulong playerGuid, CollectionProgress progress,
         Func<int, ClientItemDefinition?> itemDefinitions, int gender = 0)
     {
+        // The client derives its collection data-source width from every definition,
+        // then hides unstarted collections whose entries are all uncollected.
         return Values
             .OrderBy(definition => definition.CategoryId)
             .ThenBy(definition => definition.Id)

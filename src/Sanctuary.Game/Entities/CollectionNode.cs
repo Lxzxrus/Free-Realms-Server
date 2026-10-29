@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 
 using Sanctuary.Game.Resources.Definitions;
@@ -8,6 +9,7 @@ namespace Sanctuary.Game.Entities;
 public sealed class CollectionNode : Npc
 {
     private int _reserved;
+    private readonly List<Npc> _effectAnchors = [];
 
     public CollectionNodeTypeDefinition TypeDefinition { get; }
     public CollectionNodePoolDefinition PoolDefinition { get; }
@@ -52,21 +54,26 @@ public sealed class CollectionNode : Npc
     /// </summary>
     public void HideFromCollector(Player player)
     {
-        player.OnRemoveVisibleNpcGracefully(this,
-            animate: true,
-            delay: 0,
-            effectDelay: 0,
-            compositeEffectId: 0,
-            duration: 1000);
+        // Upstream's graceful removal (EntityHelper) has no duration of its own any more.
+        player.OnRemoveVisibleNpcGracefully(this, animate: true);
     }
 
-    internal void DisposeAfterCollection()
+    internal void AddEffectAnchor(Npc anchor)
     {
-        DisposeGracefully(
-            animate: true,
-            delay: 0,
-            effectDelay: 0,
-            compositeEffectId: 0,
-            duration: 1000);
+        _effectAnchors.Add(anchor);
+    }
+
+    public override void Dispose()
+    {
+        DisposeEffectAnchors();
+        base.Dispose();
+    }
+
+    private void DisposeEffectAnchors()
+    {
+        foreach (var anchor in _effectAnchors)
+            anchor.Dispose();
+
+        _effectAnchors.Clear();
     }
 }

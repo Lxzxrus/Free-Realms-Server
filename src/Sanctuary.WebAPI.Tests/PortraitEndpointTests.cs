@@ -270,7 +270,9 @@ public class PortraitEndpointTests
             .Order()
             .ToArray();
 
-        CollectionAssert.AreEqual(new[] { "headshot.png", "portrait.png" }, files);
+        // Still a fixed set, overwritten on every upload: the two images and upstream OSFR's 4-byte portrait.crc,
+        // which the Gateway reads to refresh a changed portrait.
+        CollectionAssert.AreEqual(new[] { "headshot.png", "portrait.crc", "portrait.png" }, files);
         Assert.AreEqual(1, Directory.GetDirectories(host.ImagesDirectory).Length);
     }
 

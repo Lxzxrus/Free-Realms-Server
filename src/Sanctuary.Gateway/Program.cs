@@ -101,7 +101,12 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
             MaxConnections = 2000,
             KeepAliveDelay = 29000,
             Port = serverOptions.Port,
-            ProtocolName = "CGAPI_527"
+            ProtocolName = "CGAPI_527",
+            // Upstream OSFR gives each due connection its time in parallel. Evergrove keeps it off for now: it changes
+            // the UDP thread's timing under the fault isolation (GiveConnectionTimeGuarded) and the load-test baseline
+            // (docs/performance/baseline.md) was measured without it. Turn it on after the load bot (src/Sanctuary.LoadTest)
+            // has run against it and the numbers compare.
+            ParallelConnectionGiveTime = false
         };
 
         playerUdpOptions.ApplyTo(udpParams);
@@ -131,6 +136,7 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<TradeOptions>();
     serviceCollection.AddSingleton<ITradeCommitter, TradeCommitter>();
     serviceCollection.AddSingleton<ITradeManager, TradeManager>();
+    serviceCollection.AddSingleton<IRewardManager, RewardManager>();
 });
 
 builder.ConfigureLogging((hostBuilderContext, loggingBuilder) =>

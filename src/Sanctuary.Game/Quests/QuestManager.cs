@@ -455,25 +455,33 @@ public sealed class QuestManager : IQuestManager
 
         if (imageId == 0)
         {
-            player.SendTunneled(new PlayerUpdatePacketRemoveNotifications { Guids = { npc.Guid } });
+            player.SendTunneled(new PlayerUpdatePacketRemoveNotifications
+            {
+                Notifications = { new RemoveNotificationInfo { Guid = npc.Guid } }
+            });
             return;
         }
 
         player.SendTunneled(new PlayerUpdatePacketAddNotifications
         {
-            Notifications =
-            {
-                new NotificationInfo
-                {
-                    Guid = npc.Guid,
-                    Combat = false,
-                    ImageId = imageId,
-                    NameId = npc.NameId,
-                    SubTextId = npc.SubTextNameId,
-                }
-            }
+            Notifications = { GetQuestNotification(npc, imageId) }
         });
     }
+
+    /// <summary>
+    /// A quest or trainer marker over an npc. Upstream OSFR's <see cref="NotificationInfo"/> names Evergrove's fields
+    /// differently (the marker image is its IconState, the subtext its ReferenceId); the bytes are the ones Evergrove's
+    /// markers were checked in game with, its last flag (upstream's Enabled) false.
+    /// </summary>
+    public static NotificationInfo GetQuestNotification(Npc npc, int imageId) => new()
+    {
+        Guid = npc.Guid,
+        IsCompact = false,
+        IconState = imageId,
+        NameId = npc.NameId,
+        ReferenceId = npc.SubTextNameId,
+        Enabled = false,
+    };
 
     private void Offer(Player player, QuestDefinition quest)
     {

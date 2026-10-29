@@ -21,10 +21,10 @@ public sealed class CollectionNodeTypeDefinitionTests
     [DataRow(3 + 7, 1003)]
     public void SelectItemDefinitionId_UsesWeightBoundaries(int roll, int expectedItemDefinitionId)
     {
-        var definition = new CollectionNodeTypeDefinition
+        var definition = new CollectionNodePoolDefinition
         {
             Key = "test",
-            Name = "Test",
+            NodeType = "test",
             DropTable =
             [
                 new CollectionNodeDropDefinition { ItemDefinitionId = 1001, Weight = 3 },
@@ -41,12 +41,13 @@ public sealed class CollectionNodeTypeDefinitionTests
     {
         var path = Path.Combine(Path.GetTempPath(), $"collection-node-types-{Guid.NewGuid():N}.json");
         File.WriteAllText(path,
-            "[{\"Key\":\"test\",\"Name\":\"Test\",\"ModelId\":1," +
+            "[{\"Key\":\"test\",\"ZoneDefinitionId\":1,\"NodeType\":\"test\"," +
+            "\"MaxActiveNodes\":1,\"RespawnSeconds\":30," +
             "\"DropTable\":[{\"ItemDefinitionId\":1001,\"Weight\":0}]}]");
 
         try
         {
-            var definitions = new CollectionNodeTypeDefinitionCollection(NullLogger.Instance);
+            var definitions = new CollectionNodePoolDefinitionCollection(NullLogger.Instance);
 
             Assert.IsFalse(definitions.Load(path));
             Assert.AreEqual(0, definitions.Count);
@@ -70,8 +71,8 @@ public sealed class CollectionNodeTypeDefinitionTests
             var definitions = new CollectionNodeTypeDefinitionCollection(NullLogger.Instance);
 
             Assert.IsTrue(definitions.Load(path));
+            // Drop tables live on pools since upstream OSFR #151, so a type has none of its own to read.
             Assert.AreEqual(386170, definitions["coin"].NameId);
-            Assert.IsFalse(definitions["coin"].HasDrop);
         }
         finally
         {
@@ -101,10 +102,10 @@ public sealed class CollectionNodeTypeDefinitionTests
     [TestMethod]
     public void CommonAndRareDropTables_CanPartitionOneCollection()
     {
-        var common = new CollectionNodeTypeDefinition
+        var common = new CollectionNodePoolDefinition
         {
             Key = "mushrooms",
-            Name = "Mushrooms",
+            NodeType = "mushrooms",
             DropTable =
             [
                 new CollectionNodeDropDefinition { ItemDefinitionId = 11082 },
@@ -115,10 +116,10 @@ public sealed class CollectionNodeTypeDefinitionTests
                 new CollectionNodeDropDefinition { ItemDefinitionId = 11088 }
             ]
         };
-        var rare = new CollectionNodeTypeDefinition
+        var rare = new CollectionNodePoolDefinition
         {
             Key = "rare-mushrooms",
-            Name = "Rare Mushrooms",
+            NodeType = "rare-mushrooms",
             DropTable =
             [
                 new CollectionNodeDropDefinition { ItemDefinitionId = 11081 },
