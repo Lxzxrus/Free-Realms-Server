@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Sanctuary.WebAPI.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Sanctuary.Core\Sanctuary.Core.csproj" />
   </ItemGroup>
 

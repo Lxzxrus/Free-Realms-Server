@@ -1,10 +1,14 @@
 using System;
+using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
@@ -12,8 +16,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Database;
+using Sanctuary.WebAPI.Endpoints;
 
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Png.Chunks;
+using SixLabors.ImageSharp.Metadata.Profiles.Cicp;
+using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using SixLabors.ImageSharp.Metadata.Profiles.Icc;
+using SixLabors.ImageSharp.Metadata.Profiles.Xmp;
 using SixLabors.ImageSharp.PixelFormats;
 
 namespace Sanctuary.WebAPI.Tests;
@@ -252,6 +262,66 @@ public class PortraitEndpointTests
     }
 
     [TestMethod]
+    public async Task SavedPortraitsKeepThePixelsAndNothingElse()
+    {
+        // The Gateway sends saved portraits on to other players' game clients, so an upload's ICC and CICP profiles,
+        // text, EXIF, XMP, gamma, resolution and animation frames must not reach the saved files. Only its pixels do.
+        using var host = new WebAPIHost();
+        var seed = await host.StartAsync();
+
+        var path = await host.GetPortraitUploadPathAsync("alice");
+
+        var thumbnail = PngWithMetadata(70, 70);
+        var portrait = Animated(PngWithMetadata(180, 330), extraFrames: 2);
+
+        // The uploads really do carry all of that.
+        CollectionAssert.IsSubsetOf(new[] { "gAMA", "cICP", "iCCP", "pHYs", "eXIf", "iTXt", "tEXt", "zTXt" }, PngChunks(thumbnail));
+
+        using (var uploaded = Image.Load<Rgba32>(portrait))
+        {
+            Assert.AreEqual(3, uploaded.Frames.Count);
+            Assert.IsNotNull(uploaded.Metadata.IccProfile);
+        }
+
+        using var response = await PostAsync(host, path, seed.AliceCharacterGuid.ToString(), thumbnail, portrait);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+
+        foreach (var name in new[] { "headshot.png", "portrait.png" })
+        {
+            var saved = File.ReadAllBytes(Path.Combine(host.ImagesDirectory, seed.AliceCharacterGuid.ToString(), name));
+            var chunks = PngChunks(saved);
+
+            // Nothing but the header, the image data and the end.
+            CollectionAssert.AreEqual(new[] { "IHDR", "IDAT", "IEND" }, chunks.Distinct().ToArray(), $"{name}: {string.Join(' ', chunks)}");
+
+            foreach (var chunk in new[] { "iCCP", "tEXt", "zTXt", "iTXt", "eXIf" })
+                CollectionAssert.DoesNotContain(chunks, chunk, $"{name} kept {chunk}.");
+
+            using var image = Image.Load<Rgba32>(saved);
+
+            Assert.AreEqual(1, image.Frames.Count);
+            Assert.AreEqual(new Rgba32(200, 100, 50), image[0, 0]);
+        }
+    }
+
+    [TestMethod]
+    public void OnlyTheFirstFrameOfAnAnimatedPngIsDecoded()
+    {
+        // Each extra frame of an animated PNG decodes to a full canvas however small it is in the file, so without the
+        // limit one upload could make the WebAPI allocate gigabytes. The saved files can't show it, as they are made
+        // from the first frame either way.
+        var animated = Animated(Portrait, extraFrames: 3);
+
+        using (var everyFrame = Image.Load<Rgba32>(animated))
+            Assert.AreEqual(4, everyFrame.Frames.Count);
+
+        using var firstFrame = Image.Load<Rgba32>(PortraitEndpoints.PngOnly, animated);
+
+        Assert.AreEqual(1, firstFrame.Frames.Count);
+    }
+
+    [TestMethod]
     public async Task StorageStaysAtTwoFilesPerCharacter()
     {
         using var host = new WebAPIHost();
@@ -369,6 +439,128 @@ public class PortraitEndpointTests
         image.SaveAsPng(stream);
 
         return stream.ToArray();
+    }
+
+    // A PNG carrying every ancillary chunk ImageSharp writes from an image's metadata.
+    private static byte[] PngWithMetadata(int width, int height)
+    {
+        using var image = new Image<Rgba32>(width, height, new Rgba32(200, 100, 50));
+
+        image.Metadata.IccProfile = new IccProfile(new byte[200]);
+        image.Metadata.CicpProfile = new CicpProfile(1, 13, 0, true);
+        image.Metadata.ExifProfile = new ExifProfile();
+        image.Metadata.ExifProfile.SetValue(ExifTag.Software, "uploader");
+        image.Metadata.XmpProfile = new XmpProfile("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>"u8.ToArray());
+
+        var png = image.Metadata.GetPngMetadata();
+        png.Gamma = 0.45455f;
+        // Written as tEXt, as zTXt (long enough to be compressed) and as iTXt (it has a language).
+        png.TextData.Add(new PngTextData("Comment", "uploader text", "", ""));
+        png.TextData.Add(new PngTextData("Description", new string('z', 2000), "", ""));
+        png.TextData.Add(new PngTextData("Title", "uploader title", "en", "Title"));
+
+        using var stream = new MemoryStream();
+
+        image.SaveAsPng(stream);
+
+        return stream.ToArray();
+    }
+
+    // The 8-bit RGBA PNG made animated: an acTL chunk before its image data and one-pixel frames before its end, each
+    // an fcTL and an fdAT chunk, as an attacker would make them. ImageSharp 3.1's Identify skips 4 bytes too many after
+    // each fdAT (the sequence number twice) and so rejects many animated PNGs, its own included, but 4 spare bytes
+    // after each frame get one past it. Load reads frames correctly and steps over the spare bytes.
+    private static byte[] Animated(byte[] png, int extraFrames)
+    {
+        using var output = new MemoryStream();
+
+        output.Write(png, 0, 8);
+
+        // A frame's data is one scanline: filter type 0, then one opaque blue pixel.
+        var frameData = Zlib([0, 0, 0, 255, 255]);
+        var sequence = 0u;
+        var started = false;
+
+        for (var offset = 8; offset < png.Length;)
+        {
+            var length = BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(offset));
+            var type = Encoding.ASCII.GetString(png, offset + 4, 4);
+
+            if (type == "IDAT" && !started)
+            {
+                // Frame count, then plays (0 is forever). The image itself isn't one of the frames.
+                var animationControl = new byte[8];
+                BinaryPrimitives.WriteInt32BigEndian(animationControl, extraFrames);
+                WriteChunk(output, "acTL", animationControl);
+
+                started = true;
+            }
+
+            if (type == "IEND")
+            {
+                for (var i = 0; i < extraFrames; i++)
+                {
+                    // Sequence number, 1x1 at (0, 0), shown for 1/100 s.
+                    var frameControl = new byte[26];
+                    BinaryPrimitives.WriteUInt32BigEndian(frameControl, sequence++);
+                    BinaryPrimitives.WriteInt32BigEndian(frameControl.AsSpan(4), 1);
+                    BinaryPrimitives.WriteInt32BigEndian(frameControl.AsSpan(8), 1);
+                    BinaryPrimitives.WriteUInt16BigEndian(frameControl.AsSpan(20), 1);
+                    BinaryPrimitives.WriteUInt16BigEndian(frameControl.AsSpan(22), 100);
+                    WriteChunk(output, "fcTL", frameControl);
+
+                    var frame = new byte[4 + frameData.Length];
+                    BinaryPrimitives.WriteUInt32BigEndian(frame, sequence++);
+                    frameData.CopyTo(frame, 4);
+                    WriteChunk(output, "fdAT", frame);
+
+                    output.Write(new byte[4]);
+                }
+            }
+
+            output.Write(png, offset, 12 + length);
+            offset += 12 + length;
+        }
+
+        return output.ToArray();
+    }
+
+    private static void WriteChunk(Stream stream, string type, byte[] data)
+    {
+        var chunk = new byte[12 + data.Length];
+
+        BinaryPrimitives.WriteInt32BigEndian(chunk, data.Length);
+        Encoding.ASCII.GetBytes(type).CopyTo(chunk, 4);
+        data.CopyTo(chunk, 8);
+
+        // The CRC covers the type and the data.
+        BinaryPrimitives.WriteUInt32BigEndian(chunk.AsSpan(8 + data.Length), Crc32(chunk.AsSpan(4, 4 + data.Length)));
+
+        stream.Write(chunk);
+    }
+
+    private static byte[] Zlib(byte[] data)
+    {
+        using var output = new MemoryStream();
+
+        using (var zlib = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
+            zlib.Write(data);
+
+        return output.ToArray();
+    }
+
+    // The chunk types of a PNG, in file order.
+    private static string[] PngChunks(byte[] png)
+    {
+        CollectionAssert.AreEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, png[..8]);
+
+        var chunks = new List<string>();
+
+        // Each chunk is its data length (4 bytes), type (4), data, then a CRC (4).
+        for (var offset = 8; offset < png.Length; offset += 12 + BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(offset)))
+            chunks.Add(Encoding.ASCII.GetString(png, offset + 4, 4));
+
+        return chunks.ToArray();
     }
 
     private static uint Crc32(ReadOnlySpan<byte> data)
