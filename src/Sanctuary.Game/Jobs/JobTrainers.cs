@@ -82,9 +82,20 @@ public static class JobTrainers
     public const int NotificationImageId = 2;
 
     /// <summary>
+    /// Jobs with nothing to do on Evergrove yet: no combat, no racing. Their trainers still teach them when clicked, but
+    /// show no marker, so the "!" never leads a new player to a job with nothing behind it. Take a job out of here when
+    /// its game arrives.
+    /// </summary>
+    public static readonly IReadOnlySet<int> JobsWithNothingToDoYet =
+        new HashSet<int> { Brawler, Archer, Wizard, Medic, KartDriver, DemoDerbyDriver };
+
+    /// <summary>
     /// <see cref="NotificationImageId"/> while the trainer still has a job to teach this character, else 0. A job the
-    /// server doesn't know is never offered, so it doesn't count.
+    /// server doesn't know is never offered, and one in <see cref="JobsWithNothingToDoYet"/> isn't advertised, so
+    /// neither counts.
     /// </summary>
     public static int NotificationImageFor(ulong npcGuid, Func<int, bool> hasJob, Func<int, bool> jobExists) =>
-        JobsTaughtBy(npcGuid).Any(profileId => jobExists(profileId) && !hasJob(profileId)) ? NotificationImageId : 0;
+        JobsTaughtBy(npcGuid).Any(profileId => !JobsWithNothingToDoYet.Contains(profileId) && jobExists(profileId) && !hasJob(profileId))
+            ? NotificationImageId
+            : 0;
 }

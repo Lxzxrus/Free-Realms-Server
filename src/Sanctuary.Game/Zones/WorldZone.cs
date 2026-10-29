@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Sanctuary.Core.Extensions;
 using Sanctuary.Core.IO;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Packet;
@@ -55,7 +56,18 @@ public sealed class WorldZone : BaseZone
 
             _questManager.RefreshQuestNotification(player, npc.Guid);
         }
+
+        if (player.Quests.Count == 0 && player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.NewPlayerHint))
+            ChatHelper.SendSystemMessage(player, NewPlayerHint);
     }
+
+    /// <summary>
+    /// Told once per login to a character that hasn't taken a quest yet, so a new player knows where to start. A new
+    /// character starts in Cobblestone Village, where Samantha gives Introduce Yourself, the first quest of the chain.
+    /// </summary>
+    public const string NewPlayerHint =
+        "Welcome to Free Realms Evergrove! To get started, talk to Samantha in Cobblestone Village: look for the ! on your minimap. " +
+        "After that, your quest helper shows where to go next, and its Take Me There button runs you there. Type !help for chat commands.";
 
     public int GetZoneAreaId(Vector4 position)
     {
@@ -680,6 +692,11 @@ public sealed class WorldZone : BaseZone
         player.SendTunneled(adventurersJournal);
     }
 
+    /// <summary>
+    /// The welcome window: two tips a new player can use, in the client's own words. The live game's three slots
+    /// advertised the Station Cash store, which Evergrove doesn't sell from, and its claim codes were never answered
+    /// (docs/research/ui-server-gaps.md), so neither is sent.
+    /// </summary>
     private void SendWelcomeInfo(Player player)
     {
         var packetLoadWelcomeScreen = new PacketLoadWelcomeScreen();
@@ -688,64 +705,15 @@ public sealed class WorldZone : BaseZone
         [
             new ContentInfo
             {
-                NameId = 6185,
-                DescriptionId = 6186,
+                // "Game Guide": "Click on the Game Guide on your game dock to find fun things to do!"
+                NameId = 423174,
+                DescriptionId = 426349,
             },
             new ContentInfo
             {
-                NameId = 6187,
-                DescriptionId = 6188,
-            },
-            new ContentInfo
-            {
-                NameId = 6189,
-                DescriptionId = 6190,
-            }
-        ]);
-
-        packetLoadWelcomeScreen.ClaimCodes.AddRange(
-        [
-            new ClaimCodeInfo
-            {
-                Code = "MMMDONUT",
-                NameId = 401519,
-                DescriptionId = 401534,
-                IconId = 929
-            },
-            new ClaimCodeInfo
-            {
-                Code = "BERRYCUPCAKE",
-                NameId = 401517,
-                DescriptionId = 401532,
-                IconId = 939
-            },
-            new ClaimCodeInfo
-            {
-                Code = "SKELETAL",
-                NameId = 409157,
-                DescriptionId = 109132,
-                IconId = 3459
-            },
-            new ClaimCodeInfo
-            {
-                Code = "STRAWBERRIES",
-                NameId = 409158,
-                DescriptionId = 108948,
-                IconId = 3441
-            },
-            new ClaimCodeInfo
-            {
-                Code = "FROGGY",
-                NameId = 409159,
-                DescriptionId = 3141,
-                IconId = 1258
-            },
-            new ClaimCodeInfo
-            {
-                Code = "SANDWICH",
-                NameId = 409160,
-                DescriptionId = 2430,
-                IconId = 949
+                // "Take Me There": "Click Take Me There in your quest helper to automatically run to the quest location!"
+                NameId = 414802,
+                DescriptionId = 415430,
             }
         ]);
 

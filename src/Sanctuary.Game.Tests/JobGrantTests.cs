@@ -167,6 +167,21 @@ public sealed class JobGrantTests
     }
 
     [TestMethod]
+    public void Trainer_ShowsNoMarker_ForAJobWithNothingToDoYet()
+    {
+        const ulong johnnyThunder = 100000003010; // Kart Driver, beside Shakey at the speedway
+        const ulong madJack = 100000003009;       // Demo Derby Driver, beside him
+        const ulong harold = 100000002910;        // Brawler
+        const ulong simone = 100000002069;        // Chef, Cobblestone Village
+        static bool Known(int profileId) => true;
+
+        Assert.AreEqual(0, JobTrainers.NotificationImageFor(johnnyThunder, _ => false, Known), "No racing yet.");
+        Assert.AreEqual(0, JobTrainers.NotificationImageFor(madJack, _ => false, Known), "No racing yet.");
+        Assert.AreEqual(0, JobTrainers.NotificationImageFor(harold, _ => false, Known), "No combat yet.");
+        Assert.AreEqual(JobTrainers.NotificationImageId, JobTrainers.NotificationImageFor(simone, _ => false, Known), "Cooking works.");
+    }
+
+    [TestMethod]
     public void SecondGrant_ChangesNothing()
     {
         Assert.AreEqual(JobGrantResult.Granted, Grant(MaleCharacterId, Fisherman));

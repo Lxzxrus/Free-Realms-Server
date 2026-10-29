@@ -343,8 +343,9 @@ public abstract class BaseZone : IZone, IDisposable
     }
 
     /// <summary>
-    /// The Games menu's list: one list per server type (1 world, 2 client), from the client's own activity data.
-    /// After EDITz's StartingZone.SendListOfActivities on upstream's minigame branch.
+    /// The Games menu's list: one list per server type (1 world, 2 client), from the client's own activity data, keeping
+    /// only what the server can open (<see cref="Minigames.PlayableActivities"/>). After EDITz's
+    /// StartingZone.SendListOfActivities on upstream's minigame branch.
     /// </summary>
     private void SendListOfActivities(Player player)
     {
@@ -353,7 +354,9 @@ public abstract class BaseZone : IZone, IDisposable
             player.SendTunneled(new ActivityPacketListOfActivities
             {
                 ServerType = serverType,
-                Activities = _resourceManager.ClientActivityDefinitions.Values.Where(x => x.ServerType == serverType).ToList()
+                Activities = _resourceManager.ClientActivityDefinitions.Values
+                    .Where(x => x.ServerType == serverType && Minigames.PlayableActivities.IsPlayable(_resourceManager, x.Id))
+                    .ToList()
             });
         }
     }

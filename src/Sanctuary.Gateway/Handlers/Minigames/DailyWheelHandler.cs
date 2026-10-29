@@ -21,7 +21,7 @@ namespace Sanctuary.Gateway.Handlers;
 [PacketHandler]
 public static class DailyWheelHandler
 {
-    public const int ActivityId = 8;
+    public const int ActivityId = DailyWheel.ActivityId;
 
     /// <summary>Minigame type 22, "Wheel" (client MiniGameTypeData.txt); its MiniGameData row is 8.</summary>
     private const int WheelMiniGameType = 22;
