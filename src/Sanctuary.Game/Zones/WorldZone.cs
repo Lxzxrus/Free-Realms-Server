@@ -34,14 +34,16 @@ public sealed class WorldZone : BaseZone
         base.OnClientIsReady(player);
 
         SendPointOfInterests(player);
-        SendAdventurersJournalInfo(player);
-
-        if (player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.WelcomeInfo))
-            SendWelcomeInfo(player);
+        player.SendTunneled(CreateAdventurersJournalInfo());
 
         SendShopData(player);
 
         _questManager.RestoreJournal(player);
+
+        // After the quests: the welcome window's "Hero's Journal Quest" box shows the journal's current quest, which
+        // the client works out from the quests just sent (AdventurersJournal).
+        if (player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.WelcomeInfo))
+            SendWelcomeInfo(player);
 
         foreach (var npc in Npcs)
         {
@@ -116,7 +118,15 @@ public sealed class WorldZone : BaseZone
         player.SendTunneled(packetPointOfInterestDefinitionReply);
     }
 
-    private void SendAdventurersJournalInfo(Player player)
+    /// <summary>
+    /// The Adventurer's Journal: its regions (the book's tabs), their hubs, and each hub's quests. Region 1, Cobblestone
+    /// Village, holds Evergrove's own story (<see cref="AdventurersJournal"/>). The live game's 2013 story (hubs
+    /// Briarwood Caverns and Farnum Farmstead, quests 2513-2566) isn't on this server, and with its hubs first the
+    /// client's current quest was always one it had never been sent, so the welcome window said there were no quests.
+    /// Regions 2-4 still list that story's later hubs. The client only moves the journal to a region holding a quest
+    /// the player has taken or finished, so they never become current; Evergrove's stories replace them when written.
+    /// </summary>
+    internal static AdventurersJournalInfoPacket CreateAdventurersJournalInfo()
     {
         // DO NOT REMOVE even if it's not fully implemented. This packet is needed
         // due to an Area Definition called "Newbiezone" in FabledRealmsAreas.xml.
@@ -133,7 +143,9 @@ public sealed class WorldZone : BaseZone
                 TabImageId = 35449,
                 ChapterMapImageId = 0,
                 GeometryId = 244,
-                CompletedStringId = 5101408
+
+                // 5101408 ("The Hooligans leader, Mac, has been defeated...") ends the 2013 story, not Evergrove's.
+                CompletedStringId = 0
             },
             new()
             {
@@ -173,40 +185,16 @@ public sealed class WorldZone : BaseZone
         [
             new()
             {
-                Id = 1,
+                Id = AdventurersJournal.CobblestoneVillageHubId,
                 RegionId = 1,
                 DisplayOrder = 1,
-                NameId = 442216,
-                ActiveImageSetId = 19,
-                ImageSetId = 44308,
-                CompletedImageSetId = 44310,
-                CompletedDescriptionId = 5100071,
-                MapX = 0,
-                MapY = 0
-            },
-            new()
-            {
-                Id = 2,
-                RegionId = 1,
-                DisplayOrder = 2,
-                NameId = 18735,
-                ActiveImageSetId = 19,
-                ImageSetId = 44308,
-                CompletedImageSetId = 44311,
-                CompletedDescriptionId = 5100072,
-                MapX = 0,
-                MapY = 0
-            },
-            new()
-            {
-                Id = 3,
-                RegionId = 1,
-                DisplayOrder = 3,
                 NameId = 5100069,
                 ActiveImageSetId = 19,
                 ImageSetId = 44308,
                 CompletedImageSetId = 44309,
-                CompletedDescriptionId = 5100073,
+
+                // 5100073 ends the 2013 story ("...Cobblestone Village has been freed!"), not Evergrove's.
+                CompletedDescriptionId = 0,
                 MapX = 0,
                 MapY = 0
             },
@@ -307,84 +295,7 @@ public sealed class WorldZone : BaseZone
 
         AdventurersJournalHubQuestDefinition[] hubQuests =
         [
-            new()
-            {
-                HubId = 1,
-                Id = 2514,
-                Unknown = 2
-            },
-            new()
-            {
-                HubId = 1,
-                Id = 2513,
-                Unknown = 1
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2521,
-                Unknown = 2
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2526,
-                Unknown = 7
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2522,
-                Unknown = 3
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2523,
-                Unknown = 4
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2524,
-                Unknown = 5
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2525,
-                Unknown = 6
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2529,
-                Unknown = 3
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2528,
-                Unknown = 2
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2527,
-                Unknown = 1
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2566,
-                Unknown = 5
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2530,
-                Unknown = 4
-            },
+            .. AdventurersJournal.HubQuests(),
             new()
             {
                 HubId = 4,
@@ -689,7 +600,7 @@ public sealed class WorldZone : BaseZone
 
         adventurersJournal.Stickers = stickers.ToDictionary(x => x.Id);
 
-        player.SendTunneled(adventurersJournal);
+        return adventurersJournal;
     }
 
     /// <summary>
