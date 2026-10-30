@@ -274,6 +274,11 @@ public sealed class QuestManager : IQuestManager
 
         SendActiveState(player, quest);
 
+        // A login between two story quests left the finished set out (RestoreJournal); with the next one taken, the
+        // client can have it and show this quest as the journal's current one.
+        if (AdventurersJournal.IsStoryQuest(questId))
+            SendJournalQuestStates(player);
+
         RefreshQuestNotifications(player, quest);
 
         player.SendTunneled(new CommandPacketQuestDialogComplete());
@@ -394,7 +399,11 @@ public sealed class QuestManager : IQuestManager
             Count = player.Quests.Values.Count(done => done)
         });
 
-        SendJournalQuestStates(player);
+        // The welcome window, sent next, shows the journal's current quest, which the client picks with the finished
+        // set. Between two story quests it would pick the one not taken yet and show it without any text; without the
+        // set it says there are no quests. The set follows once the next one is taken (AcceptQuest, AdventurersJournal).
+        if (!AdventurersJournal.IsBetweenStoryQuests(player.Quests))
+            SendJournalQuestStates(player);
     }
 
     private void SendJournalQuestStates(Player player)
