@@ -142,6 +142,17 @@ public static class CoinStoreSellToClientRequestPacketHandler
         if (clientItemDefinition.Type == ItemDefinitionHelper.PetItemType)
             return BuyPet(connection, coinStoreSellToClientRequestPacket, coinStoreTransactionCompletePacket, clientItemDefinition, tint, hasTintGroup, totalCost);
 
+        // Evergrove: each colour of an item is an inventory row of its own, so a free item comes only in a colour the store
+        // offers it in. A made-up tint was a new free row on every request, and every login loads them all.
+        if (totalCost == 0 && !StorePurchase.IsOfferedTint(clientItemDefinition, coinStoreItem?.TintGroupId ?? NoTintGroupId, tint))
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
+
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var dbQuery = dbContext.Characters
