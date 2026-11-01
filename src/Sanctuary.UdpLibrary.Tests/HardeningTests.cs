@@ -509,6 +509,53 @@ public class HardeningTests
     }
 
     [TestMethod]
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void PacketsFailingTheirCrcCheckNeverDisconnectAndOnlySoManyAreQueued(bool queued)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.EventQueuing = queued;
+            p.MaxQueuedPacketsPerConnection = 4;
+        });
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        var badCrc = a.Craft(1, 2, 3);
+        badCrc[^1] ^= 0xFF;
+
+        // all read in one poll, before any is handled: 50 that fail their CRC check from the player's address (anyone can
+        // send them, with a forged sender address), well over both limits, then three of the player's own
+        for (var i = 0; i < 50; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, badCrc);
+
+        for (byte i = 1; i <= 3; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(i));
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Connected, serverA.Status, "they prove nothing about who sent them");
+        Assert.AreEqual(0, server.Stats.QueueLimitDisconnects, "and don't count towards the player's packets");
+        Assert.HasCount(3, serverA.Received);
+        Assert.AreEqual(50, server.Stats.CrcRejectedPackets);
+
+        // queued, those over the limit are dropped; inline there is no queue to fill
+        var told = queued ? FakeManager.MaxQueuedCrcRejects : 50;
+
+        Assert.AreEqual(told, serverA.CrcRejects);
+        Assert.AreEqual(0, serverA.QueuedCrcRejects);
+
+        // the limit is on those waiting, not those sent
+        network.Deliver(client.EndPoint, server.EndPoint, badCrc);
+        network.Pump(1, server);
+
+        Assert.AreEqual(told + 1, serverA.CrcRejects);
+        Assert.AreEqual(Status.Connected, serverA.Status);
+    }
+
+    [TestMethod]
     public void SocketAndConnectionsGetTimeWhileABacklogOfEventsDrains()
     {
         var network = new FakeNetwork();
