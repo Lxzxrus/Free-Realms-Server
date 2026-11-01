@@ -60,6 +60,27 @@ public sealed class StorePurchaseTests
     }
 
     [TestMethod]
+    public void AStackLimit_CountsWhatIsAlreadyOwned()
+    {
+        // 10401, the Domo Hat: free, a stack limit of 1. One request at a time bought any number.
+        var domoHat = Item(10401, maxStackSize: 1);
+
+        Assert.IsTrue(StorePurchase.IsWithinStackLimit(domoHat, ownedCount: 0, quantity: 1));
+        Assert.IsFalse(StorePurchase.IsWithinStackLimit(domoHat, ownedCount: 1, quantity: 1));
+
+        Assert.IsTrue(StorePurchase.IsWithinStackLimit(Item(maxStackSize: 50), ownedCount: 49, quantity: 1));
+        Assert.IsFalse(StorePurchase.IsWithinStackLimit(Item(maxStackSize: 50), ownedCount: 49, quantity: 2));
+        Assert.IsFalse(StorePurchase.IsWithinStackLimit(Item(maxStackSize: 50), ownedCount: int.MaxValue, quantity: int.MaxValue), "no wrapping round");
+    }
+
+    [TestMethod]
+    public void AnItemWithNoStackLimit_IsNotHeldToWhatIsOwned()
+    {
+        foreach (var maxStackSize in new[] { -1, 0 })
+            Assert.IsTrue(StorePurchase.IsWithinStackLimit(Item(maxStackSize: maxStackSize), ownedCount: 1_000_000, quantity: 99));
+    }
+
+    [TestMethod]
     [DataRow(0L)]
     [DataRow(-1L)]
     [DataRow(-1_000_000L)]

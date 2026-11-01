@@ -40,11 +40,17 @@ public static class PacketZoneSafeTeleportRequestHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PacketZoneSafeTeleportRequest), packet);
 
-        // Out of a house or a fishing hole: the hub points of interest are all in the starting zone.
+        // Out of a house or a fishing hole: the hub points of interest are all in the starting zone. A zone change that
+        // comes too soon after the last waits for its turn (ZoneTeleports).
         if (connection.Player.Zone is HousingZone or FishingZone)
         {
-            if (ZoneTeleports.TryStart(connection.Player))
-                connection.Player.ReturnToStartingZone();
+            var player = connection.Player;
+
+            ZoneTeleports.Request(player, Environment.TickCount64, () =>
+            {
+                if (!player.ReturnToStartingZone())
+                    ChatHelper.SendSystemMessage(player, "The teleport failed. Please try again.");
+            });
 
             return true;
         }

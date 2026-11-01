@@ -79,6 +79,45 @@ public class GatewayServer : UdpManager<GatewayConnection>
         }
     }
 
+    /// <summary>
+    /// Makes each move to another zone that came too soon and waited (<see cref="ZoneTeleports"/>) once its turn comes.
+    /// Main loop.
+    /// </summary>
+    public void TickZoneTeleports(long now)
+    {
+        // A snapshot, and no exception may leave here, as in TickFishing.
+        try
+        {
+            foreach (var connection in ConnectionList.ToArray())
+            {
+                if (connection?.Player is not { WaitingZoneMove: not null } player)
+                    continue;
+
+                // Made on a timer, not in a packet handler, so it takes the guard a packet handler would hold: a trade
+                // works on the player on another thread under it, and may disconnect them. Busy, it waits a tick more.
+                if (!connection.TryAcquireMutationGuard(TimeSpan.Zero, out var lease))
+                    continue;
+
+                using (lease)
+                {
+                    try
+                    {
+                        if (connection.Status == Status.Connected)
+                            ZoneTeleports.Tick(player, now);
+                    }
+                    catch (Exception exception)
+                    {
+                        _logger.LogError(exception, "Zone teleports: the move of {player} failed.", player.Guid);
+                    }
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Zone teleports: the tick failed.");
+        }
+    }
+
     /// <summary>Runs the clocks of open match-three games (Mining): a level ends when its time is up. Main loop.</summary>
     public void TickMinigames()
     {
@@ -143,6 +182,40 @@ public class GatewayServer : UdpManager<GatewayConnection>
 
     private void Zones_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
+    }
+
+    /// <summary>
+    /// Saves every player still online, as the Gateway stops: disposing the UDP manager disconnects them without
+    /// OnTerminated, so their logout save would never run. On the main loop, once it has ended.
+    /// </summary>
+    public void SaveOnlinePlayers()
+    {
+        var saved = 0;
+
+        try
+        {
+            foreach (var connection in ConnectionList.ToArray())
+            {
+                if (connection?.Player is null)
+                    continue;
+
+                try
+                {
+                    if (connection.SavePlayerOnce())
+                        saved++;
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Failed to save {player} as the Gateway stops.", connection.Player.Guid);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Failed to save the players online as the Gateway stops.");
+        }
+
+        _logger.LogInformation("Saved {count} players still online as the Gateway stops.", saved);
     }
 
     public void OnStopping()

@@ -40,8 +40,10 @@ public static class PetUtilityFeedPacketHandler
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PetUtilityFeedPacket), petUtilityFeedPacket);
 
         // Evergrove: one pet request every PetHelper.RequestIntervalMs, as feeding runs two queries, and one that comes
-        // sooner waits its turn. The client keeps its pet buttons locked until the feed starts or is refused.
-        if (PetHelper.TryStartRequest(connection.Player, () => Feed(connection, petUtilityFeedPacket)))
+        // sooner waits its turn. The client keeps its pet buttons locked until the feed starts or is refused, so a feed
+        // dropped because too many requests are waiting unlocks them, as a refused one does.
+        if (PetHelper.TryStartRequest(connection.Player, () => Feed(connection, petUtilityFeedPacket),
+                connection.Player.PlayerPet.UnlockPetActions))
             Feed(connection, petUtilityFeedPacket);
 
         return true;

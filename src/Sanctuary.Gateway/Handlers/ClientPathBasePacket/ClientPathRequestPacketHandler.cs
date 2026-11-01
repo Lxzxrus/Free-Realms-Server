@@ -42,7 +42,11 @@ public static class ClientPathRequestPacketHandler
         // Evergrove: a real client asks for paths between points in its zone. A point that isn't finite or lies far
         // outside the world never comes from one, and could freeze the Gateway inside the navmesh query
         // (NavMeshPathfinder.TryFindPath now refuses any point off the navmesh), so the request counts as a fault, as a
-        // position update with such a point does.
+        // position update with such a point does. A height past Positions.HeightLimit is held at the limit, as in a
+        // position update: a player who has fallen through the world may still ask for a path, and gets the usual reply.
+        clientPathRequestPacket.FromPosition = Positions.ClampHeight(clientPathRequestPacket.FromPosition);
+        clientPathRequestPacket.ToPosition = Positions.ClampHeight(clientPathRequestPacket.ToPosition);
+
         if (!Positions.IsInWorld(clientPathRequestPacket.FromPosition) || !Positions.IsInWorld(clientPathRequestPacket.ToPosition))
         {
             connection.ReportFault();
