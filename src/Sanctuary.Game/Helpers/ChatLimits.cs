@@ -1,6 +1,7 @@
 using System;
 
 using Sanctuary.Game.Entities;
+using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Chat;
 
 namespace Sanctuary.Game.Helpers;
@@ -17,6 +18,12 @@ public static class ChatLimits
     /// </summary>
     public const int MaxMessageLength = 512;
 
+    /// <summary>
+    /// The longest first or last name a chat packet may give for whom it is to. A character's names are at most 14
+    /// characters each (CheckNamePacketHandler).
+    /// </summary>
+    public const int MaxNameLength = 64;
+
     /// <summary>Messages a player may send at once: typed chat, quick chat and chat commands alike...</summary>
     public const int Burst = 6;
 
@@ -30,6 +37,15 @@ public static class ChatLimits
     /// around them as a system message. Any other value isn't a channel at all.
     /// </summary>
     public static bool IsClientChannel(ChatChannel channel) => channel != ChatChannel.System && Enum.IsDefined(channel);
+
+    /// <summary>
+    /// Whether the message, and the name the client gave for whom it is to, are no longer than the real client sends.
+    /// Each could otherwise be as long as a whole packet (64 KiB), and the packet is relayed as it came.
+    /// </summary>
+    public static bool IsClientSized(PacketChat packet) =>
+        packet.Message is { Length: <= MaxMessageLength }
+        && packet.ToName.FirstName.Length <= MaxNameLength
+        && packet.ToName.LastName.Length <= MaxNameLength;
 
     /// <summary>
     /// Whether the player may send another message now. If not, they're told so, at most once every few seconds.
