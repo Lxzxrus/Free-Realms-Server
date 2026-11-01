@@ -89,14 +89,14 @@ public sealed class QuestWorld : IDisposable
             dbContext.SaveChanges();
         }
 
-        var database = new Database(CreateDbContext);
+        DbContextFactory = new Database(CreateDbContext);
 
         // As the Gateway builds them: the job manager refreshes trainer badges through the quest manager, which takes
         // the job manager lazily.
         JobManager jobs = null!;
-        Quests = new QuestManager(Resources, null!, database, new Lazy<IJobManager>(() => questJobs ?? jobs),
+        Quests = new QuestManager(Resources, null!, DbContextFactory, new Lazy<IJobManager>(() => questJobs ?? jobs),
             new Launcher(this), Logged);
-        Jobs = jobs = new JobManager(Resources, database, null!, Quests, NullLogger<JobManager>.Instance);
+        Jobs = jobs = new JobManager(Resources, DbContextFactory, null!, Quests, NullLogger<JobManager>.Instance);
 
         // The pet tests' connection that never connects, so the packets a step or a turn-in sends go nowhere.
         var connection = new UdpConnection(DispatchProxy.Create<IUdpManager, PetTreasureSaveTests.NoNetwork>(),
@@ -114,6 +114,9 @@ public sealed class QuestWorld : IDisposable
     }
 
     public ResourceManager Resources { get; }
+
+    /// <summary>The character's database, for Gateway code a test runs as it is, such as a minigame's payment.</summary>
+    public IDbContextFactory<DatabaseContext> DbContextFactory { get; }
 
     public QuestManager Quests { get; }
 

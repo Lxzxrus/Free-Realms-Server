@@ -254,11 +254,13 @@ public sealed class MatchThreeTests
     private static string Chain(IEnumerable<int> positions) => string.Join(',', positions) + ",";
 
     /// <summary>
-    /// The Gateway's side of a game (<c>FlashMinigameHandler</c>): each message from the Flash goes to the game and the
-    /// clock ticks it, and after each the win is settled by the code the Gateway runs (<see cref="MinigameSettlement"/>):
-    /// whatever reward it pays is recorded here instead of saved, and the player's quests are told of a paid win; a win
-    /// too quick to pay is logged. (The Gateway answers <c>FRServer_GameOver</c> itself, by ending the session, and pays
-    /// nothing there.)
+    /// The Gateway's side of a game (<c>FlashMinigameHandler</c>): each message from the Flash and each tick of the clock
+    /// goes through the code the Gateway runs (<see cref="MinigameSettlement.HandleMatchThree"/>,
+    /// <see cref="MinigameSettlement.TickMatchThree"/>), which hands it to the game and settles the win: whatever reward it
+    /// pays is recorded here instead of saved, and the player's quests are told of a paid win; a win too quick to pay is
+    /// logged. The scripted client's moves go to the game directly, so <see cref="PlayLevel"/> settles after each, as the
+    /// next message would. (The Gateway answers <c>FRServer_GameOver</c> itself, by ending the session, and pays nothing
+    /// there.)
     /// </summary>
     private sealed class Payer
     {
@@ -305,21 +307,15 @@ public sealed class MatchThreeTests
         /// <summary>The wins of this game the player's quests were told of (a test without a quest world).</summary>
         public int WinsTold => _told!.Wins.Count(activityId => activityId == _session.Definition.ActivityId);
 
-        public void Send(params string[] message)
-        {
-            _session.MatchThree!.Handle(message);
-            Settle();
-        }
+        public void Send(params string[] message) => Count(_settlement.HandleMatchThree(_session, _player, message));
 
-        public void Tick()
-        {
-            _session.MatchThree!.Tick();
-            Settle();
-        }
+        public void Tick() => Count(_settlement.TickMatchThree(_session, _player));
 
-        public void Settle()
+        public void Settle() => Count(_settlement.SettleMatchThree(_session, _player));
+
+        private void Count(MatchThreeSettlement settled)
         {
-            if (_settlement.SettleMatchThree(_session, _player).Payout == MatchThreePayout.TooFast)
+            if (settled.Payout == MatchThreePayout.TooFast)
                 TooFast++;
         }
     }

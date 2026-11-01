@@ -77,20 +77,18 @@ public static class MimicHandler
         if (session.Mimic is not { } game)
             return;
 
-        game.Handle(message);
-        Settle(connection, session, game);
+        Log(connection, game, _settlement.HandleMimic(session, connection.Player, message));
     }
 
     /// <summary>
-    /// Logs a game's result once and pays a win, which is also the win a quest step that is this game counts
-    /// (<see cref="ActivityWonEvent"/>): the Flash's report, accepted as plausible, and settled once per game. A win the
-    /// server refused pays nothing and passes no step. Settling, paying and telling the quests are
-    /// <see cref="MinigameSettlement.SettleMimic"/>'s, which the tests run too.
+    /// Logs a game's result once, as settling it found it. A win is paid, and is also the win a quest step that is this
+    /// game counts (<see cref="ActivityWonEvent"/>): the Flash's report, accepted as plausible, settled once per game. A
+    /// win the server refused pays nothing and passes no step. Handing each message to the game, settling, paying and
+    /// telling the quests are <see cref="MinigameSettlement.HandleMimic"/>'s, which the tests run too.
     /// </summary>
-    private static void Settle(GatewayConnection connection, FlashMinigameSession session, MimicGame game)
+    private static void Log(GatewayConnection connection, MimicGame game, MimicResult result)
     {
         var player = connection.Player;
-        var result = _settlement.SettleMimic(session, player);
 
         if (result == MimicResult.None)
             return;

@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Database;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Minigames.MatchThree;
 using Sanctuary.Game.Minigames.Mimic;
 using Sanctuary.Game.Quests;
 
@@ -20,8 +22,10 @@ public readonly record struct MatchThreeSettlement(MatchThreePayout Payout, Mini
 /// What a minigame's result does once its session settles it (<see cref="FlashMinigameSession"/>): a win is paid, then
 /// the player's quests are told of it (<see cref="ActivityWonEvent"/>), so a quest step that is the game counts it. A win
 /// the server refused (a match three won faster than its levels can be played, a Cooking report that couldn't have
-/// been played) pays nothing and passes no step. The Gateway's FlashMinigameHandler and MimicHandler run this and add
-/// only their log lines; the tests run the same code, with each payment recorded instead of saved.
+/// been played) pays nothing and passes no step. Each message from a game's Flash, and each tick of a match three's
+/// clock, goes to the game and is settled here (<see cref="HandleMatchThree"/>, <see cref="TickMatchThree"/>,
+/// <see cref="HandleMimic"/>). The Gateway's FlashMinigameHandler and MimicHandler run this and add only their log
+/// lines; the tests run the same code, with each payment recorded instead of saved.
 /// </summary>
 public sealed class MinigameSettlement
 {
@@ -50,6 +54,32 @@ public sealed class MinigameSettlement
         });
 
     /// <summary>
+    /// A message from a match-three game's Flash: the server's board takes it (<see cref="MatchThreeGame.Handle"/>), then
+    /// the game's win is settled (<see cref="SettleMatchThree"/>). Nothing for a session with no board.
+    /// </summary>
+    public MatchThreeSettlement HandleMatchThree(FlashMinigameSession session, Player player, IReadOnlyList<string> message)
+    {
+        if (session.MatchThree is not { } game)
+            return default;
+
+        game.Handle(message);
+        return SettleMatchThree(session, player);
+    }
+
+    /// <summary>
+    /// The match-three clock: the server's board moves on (<see cref="MatchThreeGame.Tick"/>, which can end a level),
+    /// then the game's win is settled. Nothing for a session with no board.
+    /// </summary>
+    public MatchThreeSettlement TickMatchThree(FlashMinigameSession session, Player player)
+    {
+        if (session.MatchThree is not { } game)
+            return default;
+
+        game.Tick();
+        return SettleMatchThree(session, player);
+    }
+
+    /// <summary>
     /// Settles a match-three game's win (<see cref="FlashMinigameSession.SettleMatchThreeWin"/>): the first time the
     /// server's board has the game won, its reward is paid and the quests are told. Nothing before then or after.
     /// </summary>
@@ -69,6 +99,19 @@ public sealed class MinigameSettlement
         _quests.OnEvent(player, new ActivityWonEvent(session.Definition.ActivityId));
 
         return new(payout, reward, paid);
+    }
+
+    /// <summary>
+    /// A message from a Cooking game's Flash: the server's side of the game takes it (<see cref="MimicGame.Handle"/>),
+    /// then the game's result is settled (<see cref="SettleMimic"/>). Nothing for a session with no Cooking game.
+    /// </summary>
+    public MimicResult HandleMimic(FlashMinigameSession session, Player player, IReadOnlyList<string> message)
+    {
+        if (session.Mimic is not { } game)
+            return MimicResult.None;
+
+        game.Handle(message);
+        return SettleMimic(session, player);
     }
 
     /// <summary>

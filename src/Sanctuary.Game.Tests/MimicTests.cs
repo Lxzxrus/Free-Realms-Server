@@ -77,9 +77,19 @@ public sealed class MimicTests
         /// <summary>Levels by sequence: stage type, duration, LD_DATA1 to LD_DATA11.</summary>
         public SortedDictionary<int, (int StageType, int Duration, int[] Data)> Levels { get; } = [];
 
+        /// <summary>
+        /// Where each message goes when a test sends them the way MimicHandler does (<see cref="ThroughTheHandler"/>);
+        /// otherwise straight to the game, which must know it.
+        /// </summary>
+        public Action<string[]>? Deliver { get; set; }
+
         public void Send(params string[] message)
         {
-            Assert.IsTrue(game.Handle(message), $"The server knows {message[0]}.");
+            if (Deliver is { } deliver)
+                deliver(message);
+            else
+                Assert.IsTrue(game.Handle(message), $"The server knows {message[0]}.");
+
             Receive();
         }
 
@@ -471,6 +481,18 @@ public sealed class MimicTests
         });
 
     /// <summary>
+    /// From here on the client's messages go where MimicHandler sends them (<see cref="MinigameSettlement.HandleMimic"/>):
+    /// each to the game, then the game's result settled. What each message settled, in order.
+    /// </summary>
+    private static List<MimicResult> ThroughTheHandler(ScriptedCookingClient client, MinigameSettlement settlement,
+        FlashMinigameSession session, Player player)
+    {
+        var settled = new List<MimicResult>();
+        client.Deliver = message => settled.Add(settlement.HandleMimic(session, player, message));
+        return settled;
+    }
+
+    /// <summary>
     /// What MimicHandler pays, and tells the player's quests about: a won game, settled once, however often the Flash
     /// repeats its end messages.
     /// </summary>
@@ -539,23 +561,31 @@ public sealed class MimicTests
 
     /// <summary>
     /// The shipped Cobblestone Village Cafe (9103) is won by cooking Simone's Spiralmint Steak: its Games menu entry,
-    /// settled by MimicHandler's code and told to the real quest manager.
+    /// every message handled and settled by the Gateway's own code (<see cref="MinigameSettlement.Create"/>, as
+    /// MimicHandler builds it), the pay saved to the character and the win told to the real quest manager.
     /// </summary>
     [TestMethod]
-    public void CookingSimonesSteak_WinsTheCafesCookingStep()
+    public void CookingSimonesSteak_IsPaidAndSaved_AndWinsTheCafesCookingStep()
     {
         using var world = new QuestWorld();
+        world.Give(QuestWorld.Chef);
         world.Player.Quests.AddCompleted(9102);
         var progress = world.Accept(QuestWorld.Shipped(9103));
 
         var recipe = SimonesSteak();
         var (game, _, _, client) = Start(recipe);
         var session = SessionFor(recipe, game);
+        var gateway = MinigameSettlement.Create(world.Resources, world.DbContextFactory, world.Quests, NullLogger.Instance);
+        var settled = ThroughTheHandler(client, gateway, session, world.Player);
 
         PlayToAWin(recipe, client);
 
-        Assert.AreEqual(MimicResult.Won, Settlement(world.Quests, []).SettleMimic(session, world.Player));
+        CollectionAssert.AreEqual(new[] { MimicResult.Won }, settled.Where(result => result != MimicResult.None).ToArray());
         Assert.AreEqual(1, progress.GoalIndex, "On to taking the steak to Simone.");
+
+        var saved = world.ReadCharacter();
+        Assert.AreEqual(game.Reward.Coins, saved.Coins, "The steak's coins, saved.");
+        Assert.AreEqual((1, game.Reward.Experience), world.SavedJob(QuestWorld.Chef), "Its stars, saved on Chef.");
     }
 
     /// <summary>A win the server refused, such as a modified client's report, never passes the Cafe's cooking step.</summary>
@@ -569,10 +599,13 @@ public sealed class MimicTests
         var recipe = SimonesSteak();
         var (game, _, _, client) = Start(recipe);
         var session = SessionFor(recipe, game);
+        var paid = new List<MinigameReward>();
+        var settled = ThroughTheHandler(client, Settlement(world.Quests, paid), session, world.Player);
 
         ReportAWinWithoutPlaying(recipe, client);
 
-        Assert.AreEqual(MimicResult.Refused, Settlement(world.Quests, []).SettleMimic(session, world.Player));
+        CollectionAssert.AreEqual(new[] { MimicResult.Refused }, settled.Where(result => result != MimicResult.None).ToArray());
+        Assert.AreEqual(0, paid.Count);
         Assert.AreEqual(0, progress.GoalIndex);
         Assert.AreEqual(0, progress.ProgressFor(0).Count);
     }

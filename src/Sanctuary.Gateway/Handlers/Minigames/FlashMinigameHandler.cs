@@ -198,10 +198,7 @@ public static class FlashMinigameHandler
         }
 
         if (session.MatchThree is { } game)
-        {
-            game.Handle(message);
-            Settle(connection, session, game);
-        }
+            Log(connection, session, game, _settlement.HandleMatchThree(session, connection.Player, message));
         else if (session.Mimic is not null)
             MimicHandler.Handle(connection, session, message);
         else if (message[0] == "FRServer_Connect")
@@ -216,8 +213,7 @@ public static class FlashMinigameHandler
         if (session.MatchThree is not { } game)
             return;
 
-        game.Tick();
-        Settle(connection, session, game);
+        Log(connection, session, game, _settlement.TickMatchThree(session, connection.Player));
     }
 
     /// <summary>A game that threw: the player's minigame is closed rather than left half-working.</summary>
@@ -228,14 +224,15 @@ public static class FlashMinigameHandler
     }
 
     /// <summary>
-    /// Logs each new result, and pays a won game once, as Cooking pays (<see cref="MinigameReward.Pay"/>). The server's
-    /// own game decides the win (<see cref="FlashMinigameSession.SettleMatchThreeWin"/>), never a message from the
-    /// Flash, so a forged, repeated or replayed "game over" pays nothing more. A win quicker than its levels can be
-    /// played pays nothing either, and is logged as a warning. A paid win is the one a quest step that is this game
-    /// counts (<see cref="ActivityWonEvent"/>), so a win refused as too fast never passes a step. Settling, paying and
-    /// telling the quests are <see cref="MinigameSettlement.SettleMatchThree"/>'s, which the tests run too.
+    /// Logs each new result, and what settling it did: a won game paid once, as Cooking pays
+    /// (<see cref="MinigameReward.Pay"/>). The server's own game decides the win
+    /// (<see cref="FlashMinigameSession.SettleMatchThreeWin"/>), never a message from the Flash, so a forged, repeated or
+    /// replayed "game over" pays nothing more. A win quicker than its levels can be played pays nothing either, and is
+    /// logged as a warning. A paid win is the one a quest step that is this game counts (<see cref="ActivityWonEvent"/>),
+    /// so a win refused as too fast never passes a step. Handing each message and tick to the game, settling, paying and
+    /// telling the quests are <see cref="MinigameSettlement"/>'s, which the tests run too.
     /// </summary>
-    private static void Settle(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game)
+    private static void Log(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game, MatchThreeSettlement settled)
     {
         var player = connection.Player;
 
@@ -246,8 +243,6 @@ public static class FlashMinigameHandler
             _logger.LogInformation("Minigame: {player} {result} {game} on level {level} with {score} points.",
                 player.Guid, game.Result, game.Name, game.Level?.Number, game.TotalScore);
         }
-
-        var settled = _settlement.SettleMatchThree(session, player);
 
         if (settled.Payout == MatchThreePayout.TooFast)
         {
