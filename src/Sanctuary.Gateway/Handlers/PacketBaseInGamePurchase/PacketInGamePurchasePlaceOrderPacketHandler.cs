@@ -76,6 +76,11 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
             return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
         }
 
+        // No more of a bundle than the quantity picker offers. A free one could otherwise be had by the billion in one
+        // order.
+        if (!StorePurchase.IsOrderQuantityAllowed(appStoreBundleDefinition, orderDetail.Quantity))
+            return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
+
         var housingZoneDefinition = _resourceManager.Zones.Values
             .OfType<HousingZoneDefinition>()
             .FirstOrDefault(definition => definition.StoreBundleId == appStoreBundleDefinition.Id);
@@ -133,6 +138,11 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
         }
 
         var totalCost = (int)totalCostValue;
+
+        // Each colour of an item is an inventory row of its own, so a free bundle comes only in a colour the store offers
+        // it in. A made-up tint was a new free row on every order, and every login loads them all.
+        if (totalCost == 0 && !StorePurchase.IsOfferedTint(appStoreBundleDefinition, orderDetailTint))
+            return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
 
         if (connection.Player.StationCash < totalCost)
         {
