@@ -40,6 +40,16 @@ public static class InventoryPacketEquipByItemRecordHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(InventoryPacketEquipByItemRecord), inventoryPacketEquipByItemRecord);
 
+        // Each equip queues a database write. While too many are waiting, refuse the packet before anything changes,
+        // so a client can't queue them faster than the database saves them.
+        if (!connection.CanQueueWork)
+        {
+            _logger.LogWarning("{connection} sent equips faster than the database saves them; refused one.", connection);
+
+            connection.ReportFault();
+            return true;
+        }
+
         var clientItem = connection.Player.Items.SingleOrDefault(x => x.Definition == inventoryPacketEquipByItemRecord.ItemRecord.Definition && x.Tint == inventoryPacketEquipByItemRecord.ItemRecord.Tint);
 
         if (clientItem is null)

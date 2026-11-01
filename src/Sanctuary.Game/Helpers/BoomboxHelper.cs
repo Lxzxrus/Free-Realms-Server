@@ -18,7 +18,22 @@ public static class BoomboxHelper
     private const int RealmsRollItemId = 1180;
     private const int BoomboxRemoveDurationMs = 500;
 
-    private sealed record DanceSource(Vector3 Center, BoomboxDefinition Definition, long ExpiresAt)
+    /// <summary>
+    /// Evergrove: how many boomboxes a character may have playing in a zone at once, and how many players' boomboxes a
+    /// zone may have. A boombox plays for its whole duration whether or not its owner stays, and the use cooldown was
+    /// lost on relog, so one account could fill a zone with hundreds, each adding to every other's dance work. The
+    /// counts live with the zone, so a relog doesn't reset them. Scripted boomboxes don't count.
+    /// </summary>
+    public const int MaxBoomboxesPerCharacter = 3;
+
+    /// <inheritdoc cref="MaxBoomboxesPerCharacter"/>
+    public const int MaxBoomboxesPerZone = 30;
+
+    // Evergrove: dance owners are chosen once per zone tick (100 ms), by whichever boombox ticks first, not once per
+    // boombox: with every boombox choosing for every player, the work grew with the square of the boomboxes.
+    private const int SelectIntervalMs = 50;
+
+    private sealed record DanceSource(Vector3 Center, BoomboxDefinition Definition, long ExpiresAt, ulong OwnerGuid)
     {
         public bool Covers(Vector3 position, long now) => ExpiresAt > now && Vector3.Distance(position, Center) <= Definition.Range;
     }
@@ -26,16 +41,43 @@ public static class BoomboxHelper
     {
         public readonly Dictionary<ulong, DanceSource> Sources = new();
         public readonly BoomboxDanceSelection Selection = new();
+        public long NextSelectAt;
 
         public ulong SelectOwner(Player player, long now)
         {
             var position = player.Position.ToVector3();
             var available = Sources.Where(pair => pair.Value.Covers(position, now)).ToArray();
+
+            // Evergrove: the same as Select with no sources, without its allocations, for the many players in no range.
+            if (available.Length == 0)
+            {
+                Selection.Remove(player.Guid);
+                return 0;
+            }
+
             return Selection.Select(player.Guid, now,
                 available.Select(pair => (pair.Key, pair.Value.Definition.Priority)));
         }
     }
     private static readonly ConditionalWeakTable<IZone, ZoneDances> DanceStates = new();
+
+    /// <summary>
+    /// Evergrove: whether the player may put out another boombox in their zone (<see cref="MaxBoomboxesPerCharacter"/>,
+    /// <see cref="MaxBoomboxesPerZone"/>).
+    /// </summary>
+    public static bool CanPlace(IZone zone, ulong ownerGuid)
+    {
+        if (!DanceStates.TryGetValue(zone, out var zoneDances))
+            return true;
+
+        lock (zoneDances)
+        {
+            var now = Environment.TickCount64;
+            var placed = zoneDances.Sources.Values.Where(source => source.OwnerGuid != 0 && source.ExpiresAt > now).ToArray();
+
+            return placed.Length < MaxBoomboxesPerZone && placed.Count(source => source.OwnerGuid == ownerGuid) < MaxBoomboxesPerCharacter;
+        }
+    }
 
     public static bool IsInDanceRange(Player player)
     {
@@ -63,7 +105,8 @@ public static class BoomboxHelper
             zoneDances.Selection.Remove(guid);
     }
 
-    public static void StartDanceLoop(IZone zone, Npc boomboxNpc, Vector4 spawnPosition, BoomboxDefinition definition, int songTagId, int effectId, int transformModelId, int transformBuffNameId, bool permanent = false)
+    /// <param name="ownerGuid">Evergrove: the player who put the boombox out, or 0 for a scripted one (<see cref="CanPlace"/>).</param>
+    public static void StartDanceLoop(IZone zone, Npc boomboxNpc, Vector4 spawnPosition, BoomboxDefinition definition, int songTagId, int effectId, int transformModelId, int transformBuffNameId, bool permanent = false, ulong ownerGuid = 0)
     {
         var danceCenter = spawnPosition.ToVector3();
 
@@ -76,7 +119,7 @@ public static class BoomboxHelper
         var sharedPlayback = BoomboxDancePlayback.CreateSynchronized(definition);
         var zoneDances = DanceStates.GetValue(zone, _ => new ZoneDances());
         lock (zoneDances)
-            zoneDances.Sources[boomboxNpc.Guid] = new(danceCenter, definition, permanent ? long.MaxValue : startedAt + definition.DurationMs);
+            zoneDances.Sources[boomboxNpc.Guid] = new(danceCenter, definition, permanent ? long.MaxValue : startedAt + definition.DurationMs, ownerGuid);
         var independentNextAt = new Dictionary<ulong, long>();
         var wasPlaying = false;
         var expired = false;
@@ -89,9 +132,17 @@ public static class BoomboxHelper
             if (expired)
                 return;
             var now = Environment.TickCount64;
-            foreach (var participant in zone.Players)
-                zoneDances.SelectOwner(participant, now);
-            UpdateParticipants();
+
+            // Evergrove: see SelectIntervalMs. Who joins and leaves is checked once a second by UpdateEverySecondAction
+            // alone; upstream also checked it here, on every tick of every boombox.
+            if (now >= zoneDances.NextSelectAt)
+            {
+                zoneDances.NextSelectAt = now + SelectIntervalMs;
+
+                foreach (var participant in zone.Players)
+                    zoneDances.SelectOwner(participant, now);
+            }
+
             if (!permanent && now - startedAt >= definition.DurationMs)
                 return;
             if (sharedPlayback is not null)

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Net;
 using System.Numerics;
 using System.Text;
-using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,8 +40,13 @@ public class GatewayConnection : UdpConnection
     private readonly IResourceManager _resourceManager;
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
 
-    private readonly object _workLock = new();
-    private Task _workTail = Task.CompletedTask;
+    /// <summary>
+    /// Most database writes one connection may have queued at once (see <see cref="QueueWork"/>). Each equip queues one and
+    /// a player clicks a few at a time, so this only stops a client that sends them faster than the database saves them.
+    /// </summary>
+    public const int MaxQueuedWork = 64;
+
+    private readonly SerialWorkQueue _work = new(MaxQueuedWork);
 
     private ICipher _cipher;
 #pragma warning disable CS0649
@@ -100,22 +104,19 @@ public class GatewayConnection : UdpConnection
         Player.Dispose();
     }
 
-    public void QueueWork(Action work)
+    /// <summary>
+    /// Whether <see cref="QueueWork"/> takes more work now. A handler checks it before changing anything the work saves,
+    /// and refuses the packet if not.
+    /// </summary>
+    public bool CanQueueWork => !_work.IsFull;
+
+    /// <summary>
+    /// Runs database work off the packet thread, after this connection's earlier work. Refused (false) while
+    /// <see cref="MaxQueuedWork"/> items wait, so check <see cref="CanQueueWork"/> first.
+    /// </summary>
+    public bool QueueWork(Action work)
     {
-        lock (_workLock)
-        {
-            _workTail = _workTail.ContinueWith(_ =>
-            {
-                try
-                {
-                    work();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "{connection} queued work failed.", this);
-                }
-            }, TaskScheduler.Default);
-        }
+        return _work.TryQueue(work, ex => _logger.LogError(ex, "{connection} queued work failed.", this));
     }
 
     public override void OnRoutePacket(Span<byte> data)
@@ -436,10 +437,8 @@ public class GatewayConnection : UdpConnection
 
         clientActionBar.Id = 2; // ItemActionBar
 
-        clientActionBar.Slots.Add(0, new ActionBarSlot() { IsEmpty = true });
-        clientActionBar.Slots.Add(1, new ActionBarSlot() { IsEmpty = true });
-        clientActionBar.Slots.Add(2, new ActionBarSlot() { IsEmpty = true });
-        clientActionBar.Slots.Add(3, new ActionBarSlot() { IsEmpty = true });
+        for (var slot = 0; slot < Player.ItemActionBarSlotCount; slot++)
+            clientActionBar.Slots.Add(slot, new ActionBarSlot() { IsEmpty = true });
 
         Player.ActionBars.Add(clientActionBar.Id, clientActionBar);
         // End - Store on DB

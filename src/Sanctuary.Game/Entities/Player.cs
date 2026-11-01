@@ -149,6 +149,10 @@ public sealed class Player : ClientPcData, IEntity
     public DateTimeOffset LoginStartedAt { get; set; }
 
     public long NextClientPathRequestAt { get; set; }
+
+    /// <summary>Evergrove: when the player may next rename, dress, equip or tend a pet (<see cref="PetHelper.TryStartRequest"/>).</summary>
+    public long NextPetRequestAt { get; set; }
+
     public int SecondsSinceLastLogin { get; set; } = -1;
 
     public int StationCash { get; set; }
@@ -166,6 +170,14 @@ public sealed class Player : ClientPcData, IEntity
     public bool CanCreateGuild => GuildData is null && Profiles.Any(profile => profile.Rank >= GuildCreationRank);
 
     public int TimezoneOffset { get; set; }
+
+    /// <summary>
+    /// How many slots the item action bar (id 2) has. The client's has four, 0 to 3 (game dock buttons 5 to 8, and the
+    /// four its consumables screen lists), and the server makes those four at login.
+    /// </summary>
+    public const int ItemActionBarSlotCount = 4;
+
+    public static bool IsItemActionBarSlot(int slot) => slot is >= 0 and < ItemActionBarSlotCount;
 
     public Dictionary<int, Dictionary<int, int>> ActionBarItemGuids { get; set; } = new();
 

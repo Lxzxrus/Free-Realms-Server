@@ -85,6 +85,12 @@ public struct UdpManagerStatistics
     public long FaultLimitDisconnects;
 
     /// <summary>
+    /// number of connections disconnected because they had <see cref="Configuration.UdpParams.MaxQueuedPacketsPerConnection"/>
+    /// packets waiting for the application
+    /// </summary>
+    public long QueueLimitDisconnects;
+
+    /// <summary>
     /// number of connections currently being managed
     /// </summary>
     public int ConnectionCount;
@@ -149,6 +155,7 @@ public struct UdpManagerStatistics
         RefusedReplyRate = 0;
         ConnectionFaults = 0;
         FaultLimitDisconnects = 0;
+        QueueLimitDisconnects = 0;
         ConnectionCount = 0;
         DisconnectPendingCount = 0;
         EventListCount = 0;

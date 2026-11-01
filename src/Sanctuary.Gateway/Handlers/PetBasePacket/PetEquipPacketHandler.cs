@@ -49,6 +49,10 @@ public static class PetEquipPacketHandler
         if (pet is null || petClientInfo is null || pet.Guid != player.ActivePetGuid || !PetHelper.PetClothingSlots.Contains(petEquipPacket.Slot))
             return true;
 
+        // Evergrove: one pet request every PetHelper.RequestIntervalMs. An equip saves and is shown to everyone nearby.
+        if (!PetHelper.TryStartRequest(player))
+            return true;
+
         var characterId = GuidHelper.GetPlayerId(player.Guid);
         using var dbContext = _dbContextFactory.CreateDbContext();
         var dbPet = dbContext.Pets.Include(ownedPet => ownedPet.Items)
@@ -83,18 +87,24 @@ public static class PetEquipPacketHandler
             dbPet.Items.Add(dbItem);
 
         dbContext.SaveChanges();
-        petClientInfo.ItemGuids.Clear();
-        petClientInfo.ItemGuids.AddRange(dbPet.Items.OrderBy(item => item.Id).Select(item => item.Id));
 
+        var itemGuids = dbPet.Items.OrderBy(item => item.Id).Select(item => item.Id).ToArray();
         var equippedItemGuid = dbItem?.Id ?? PetHelper.NoItemGuid;
         var attachment = dbItem is null ? null : PetHelper.GetAttachment(dbItem.Tint, clientItemDefinition!);
 
+        // Evergrove: the pet's item list changes on the zone's tick with its attachments. The zone reads the list to
+        // summon the pet and send the pet list, and changing it from here could break the tick for the whole zone.
         player.PlayerPet.QueueAction(() =>
         {
+            petClientInfo.ItemGuids.Clear();
+            petClientInfo.ItemGuids.AddRange(itemGuids);
+
             if (attachment is null)
                 PetHelper.UnequipItem(player, pet, petEquipPacket.Slot);
             else
                 PetHelper.EquipItem(player, pet, equippedItemGuid, attachment);
+
+            player.PlayerPet.SendPetList();
         });
 
         connection.SendTunneled(new PetEquipPacket
@@ -103,7 +113,6 @@ public static class PetEquipPacketHandler
             Slot = petEquipPacket.Slot,
             ItemGuid = equippedItemGuid
         });
-        player.PlayerPet.SendPetList();
 
         return true;
     }

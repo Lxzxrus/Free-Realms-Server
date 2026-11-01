@@ -17,6 +17,7 @@ using Sanctuary.Game;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions.Zones;
+using Sanctuary.Game.Store;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -295,6 +296,12 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
                     return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
                 }
 
+                // Each pet is a database row, made in this one save: no more than the Marketplace's quantity picker allows.
+                if (!StorePurchase.IsQuantityAllowed(clientItemDefinition, totalQuantityValue))
+                {
+                    return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
+                }
+
                 // totalQuantityValue is the entry's checked quantity from the top of the loop (Evergrove).
                 if (totalQuantityValue > int.MaxValue - lastPetId)
                 {
@@ -321,13 +328,14 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
                     dbPets.Add(dbPet);
                 }
 
-                pendingUpdates.Add(() =>
+                // Evergrove: the new pets join the list on the zone's tick, which reads it every tick, and the pet list is sent there.
+                pendingUpdates.Add(() => connection.Player.PlayerPet.QueueAction(() =>
                 {
                     foreach (var dbPet in dbPets)
                         PetHelper.AddPet(connection.Player, _resourceManager, dbPet, clientItemDefinition, modelDefinition);
 
                     connection.Player.PlayerPet.SendPetList();
-                });
+                }));
             }
             else if (clientItemDefinition.Type == ItemDefinitionHelper.MountItemType)
             {

@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 
 using Sanctuary.Game.Zones;
@@ -12,6 +13,12 @@ public sealed class PetTreasureChest : Npc
     public string RewardTableKey { get; }
     public string? CoinRewardTableKey { get; set; }
     public int OpenCompositeEffectId { get; set; }
+
+    /// <summary>Evergrove: the pet that dug the chest up. Its treasure rest is saved as the chest pays out.</summary>
+    public int PetId { get; init; }
+
+    /// <summary>Evergrove: when the pet dug the chest up, the start of the player's treasure rest.</summary>
+    public DateTimeOffset FoundAt { get; init; }
 
     public PetTreasureChest(IZone zone, ulong ownerGuid, string rewardTableKey)
         : base(zone)

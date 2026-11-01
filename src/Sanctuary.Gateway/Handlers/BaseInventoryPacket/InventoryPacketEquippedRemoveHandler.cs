@@ -39,6 +39,16 @@ public static class InventoryPacketEquippedRemoveHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(InventoryPacketEquippedRemove), inventoryPacketEquippedRemove);
 
+        // Each unequip queues a database write. While too many are waiting, refuse the packet before anything changes,
+        // so a client can't queue them faster than the database saves them.
+        if (!connection.CanQueueWork)
+        {
+            _logger.LogWarning("{connection} sent unequips faster than the database saves them; refused one.", connection);
+
+            connection.ReportFault();
+            return true;
+        }
+
         var profile = connection.Player.Profiles.SingleOrDefault(x => x.Id == inventoryPacketEquippedRemove.ProfileId);
 
         if (profile is null)

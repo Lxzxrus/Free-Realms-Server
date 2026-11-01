@@ -30,6 +30,11 @@ public sealed class PlayerPet
     private readonly Queue<Vector3> _petNavMeshWaypoints = new();
     private PetState _petState = new();
     private readonly ConcurrentQueue<Action> _queuedActions = new();
+    private readonly PetSummonRequests _summonRequests = new();
+
+    // Evergrove: how many pet actions may wait for the zone's tick. The pet packets a player sends by clicking come
+    // nowhere near it; past it they are dropped, so a client flooding them no longer grows the queue without limit.
+    internal const int MaxQueuedActions = 32;
 
     private sealed class PetState
     {
@@ -66,6 +71,7 @@ public sealed class PlayerPet
         public long ShakeAnimationAt;
         public int ShakeDurationMs;
         public readonly HashSet<ulong> NoticedCollectionNodes = [];
+        public long NextWarpAt;
         public long TreasureAt;
         public bool TreasurePending;
         public long TreasureDigAt;
@@ -169,6 +175,11 @@ public sealed class PlayerPet
     private const int PetCannotCatchUpMs = 5000;
     private const float PetChaseProgressDistance = 0.5f;
     private const float PetWarpSideDistance = 1.2f;
+
+    // Evergrove: at most one warp a second. A warp makes everyone who sees the pet drop it and add it again, and a
+    // client that moved its player back and forth further than OwnerTeleportDistance warped the pet on every tick.
+    private const int PetWarpIntervalMs = 1000;
+
     private const float PetSummonSideDistance = 2f;
     private const float PetWarpHeight = 6f;
     private const float PetMaxStepDownHeight = 3f;
@@ -318,6 +329,10 @@ public sealed class PlayerPet
 
     public void SummonPet(int id)
     {
+        // Evergrove: summoning the pet that is already out would only rebuild it for everyone nearby.
+        if (Pet is not null && _summonedPetId == id)
+            return;
+
         if (_player.Zone is not WorldZone && _player.Zone is not HousingZone)
             return;
 
@@ -328,6 +343,21 @@ public sealed class PlayerPet
             !PetHelper.TryGetModel(_resourceManager, clientItemDefinition, out var modelDefinition))
         {
             return;
+        }
+
+        // Evergrove: the clothes are gathered before the npc joins the zone. The player's items can change on the packet
+        // thread meanwhile, and a throw after TryCreateNpc left an npc in the zone that no pet owned and nothing removed.
+        var attachments = new List<CharacterAttachmentData>();
+
+        foreach (var itemGuid in petClientInfo.ItemGuids)
+        {
+            var clientItem = _player.Items.FirstOrDefault(item => item.Id == itemGuid);
+
+            if (clientItem is not null && _resourceManager.ClientItemDefinitions.TryGetValue(clientItem.Definition, out var definition)
+                && definition.Type == ItemDefinitionHelper.PetClothingItemType)
+            {
+                attachments.Add(PetHelper.GetAttachment(clientItem.Tint, definition));
+            }
         }
 
         RecallPet();
@@ -345,17 +375,7 @@ public sealed class PlayerPet
             ? petDefinition.DefaultTintAlias
             : clientItemDefinition.TintAlias;
         npc.TintId = petClientInfo.TintId;
-        foreach (var itemGuid in petClientInfo.ItemGuids)
-        {
-            var clientItem = _player.Items.FirstOrDefault(item => item.Id == itemGuid);
-
-            if (clientItem is not null && _resourceManager.ClientItemDefinitions.TryGetValue(clientItem.Definition, out var definition)
-                && definition.Type == ItemDefinitionHelper.PetClothingItemType)
-            {
-                npc.Attachments.Add(PetHelper.GetAttachment(clientItem.Tint, definition));
-            }
-        }
-
+        npc.Attachments.AddRange(attachments);
         npc.IsInteractable = false;
         npc.Scale = modelDefinition.Scale > 0f ? modelDefinition.Scale : PetDefaultScale;
         npc.Disposition = PetNpcDisposition;
@@ -426,12 +446,32 @@ public sealed class PlayerPet
         _petState.PendingPlay += Math.Min(PetScratchMaxPlay, inputMovementSquaredSum / (float)inputDurationMs * PetScratchPlayPerMovement);
     }
 
-    public void QueueAction(Action action) => _queuedActions.Enqueue(action);
+    public void QueueAction(Action action)
+    {
+        if (_queuedActions.Count < MaxQueuedActions)
+            _queuedActions.Enqueue(action);
+    }
+
+    /// <summary>Summons the pet on the zone's tick, at most one summon a second (<see cref="PetSummonRequests"/>).</summary>
+    public void RequestSummon(int id) => _summonRequests.Summon(id);
+
+    /// <summary>Puts the pet away on the zone's tick, replacing any summon still waiting.</summary>
+    public void RequestRecall() => _summonRequests.Recall();
 
     public void UpdateEveryTick()
     {
-        while (_queuedActions.TryDequeue(out var queuedAction))
+        // Evergrove: only the actions queued before this tick, so a client that keeps sending can't hold the zone here.
+        for (var count = _queuedActions.Count; count > 0 && _queuedActions.TryDequeue(out var queuedAction); count--)
             queuedAction();
+
+        // After the queue, so changes to the pets queued in the same tick are in place before a summon builds the pet.
+        if (_summonRequests.TryTake(Environment.TickCount64, out var petId))
+        {
+            if (petId == PetSummonRequests.NoPetId)
+                RecallPet();
+            else
+                SummonPet(petId);
+        }
 
         UpdatePetSpeedBuff();
         UpdatePetStand();
@@ -924,9 +964,18 @@ public sealed class PlayerPet
     {
         var roll = Random.Shared.Next(PetTreasureChestTotalWeight);
         var chestTier = PetTreasureChestTiers.First(tier => (roll -= tier.Weight) < 0);
+        var foundAt = DateTimeOffset.UtcNow;
 
-        if (!_player.Zone.TryAddNpc((zone, guid) => new PetTreasureChest(zone, _player.Guid, chestTier.RewardTableKey) { Guid = guid }, out var chest))
+        // Evergrove: the chest knows which pet found it and when, to save the treasure rest as it pays out.
+        if (!_player.Zone.TryAddNpc((zone, guid) => new PetTreasureChest(zone, _player.Guid, chestTier.RewardTableKey)
+            {
+                Guid = guid,
+                PetId = _player.ActivePetId,
+                FoundAt = foundAt
+            }, out var chest))
+        {
             return;
+        }
 
         var petPosition = npc.Position.ToVector3();
         var position = GetPetStandPosition(npc.Zone, petPosition, petPosition + _petState.TreasureDirection * PetTreasureChestDistance);
@@ -952,7 +1001,7 @@ public sealed class PlayerPet
 
         EntityHelper.SetAnimation(_player, chest, PetTreasureChestSpawnAnimationId);
 
-        _player.PetTreasureFoundAt[_player.ActivePetId] = DateTimeOffset.UtcNow;
+        _player.PetTreasureFoundAt[_player.ActivePetId] = foundAt;
     }
 
     private void UpdatePetTreasureDig(Npc npc)
@@ -1018,8 +1067,8 @@ public sealed class PlayerPet
 
         if (_petState.OwnerTeleported)
         {
-            _petState.OwnerTeleported = false;
-            WarpPetBesideOwner(npc, ownerPosition);
+            // Evergrove: a warp held back by PetWarpIntervalMs stays due, and the pet waits for it.
+            _petState.OwnerTeleported = !WarpPetBesideOwner(npc, ownerPosition);
             return;
         }
 
@@ -1221,12 +1270,18 @@ public sealed class PlayerPet
         return ownerGroundedPositions[0];
     }
 
-    private void WarpPetBesideOwner(Npc npc, Vector3 ownerPosition) =>
+    private bool WarpPetBesideOwner(Npc npc, Vector3 ownerPosition) =>
         WarpPet(npc, GetPetStandPosition(npc.Zone, ownerPosition,
             ownerPosition + Vector3.Cross(Vector3.UnitY, _player.GetFacingDirection()) * PetWarpSideDistance * _petState.FollowSide));
 
-    private void WarpPet(Npc npc, Vector3 position)
+    /// <returns>Evergrove: false when the warp is held back by <see cref="PetWarpIntervalMs"/>.</returns>
+    private bool WarpPet(Npc npc, Vector3 position)
     {
+        if (Environment.TickCount64 < _petState.NextWarpAt)
+            return false;
+
+        _petState.NextWarpAt = Environment.TickCount64 + PetWarpIntervalMs;
+
         if (_petState.StandAt != 0)
             StandPet(npc);
 
@@ -1244,6 +1299,7 @@ public sealed class PlayerPet
         _petState.FollowGoal = position;
         _petState.LastPosition = position;
         _petState.FaceOwnerAt = PetFaceOwnerDone;
+        return true;
     }
 
     private Quaternion GetFacingOwnerRotation(Vector3 position)

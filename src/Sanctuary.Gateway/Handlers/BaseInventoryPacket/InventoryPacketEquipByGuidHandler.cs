@@ -41,6 +41,16 @@ public static class InventoryPacketEquipByGuidHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(InventoryPacketEquipByGuid), inventoryPacketEquipByGuid);
 
+        // Each equip queues a database write. While too many are waiting, refuse the packet before anything changes,
+        // so a client can't queue them faster than the database saves them.
+        if (!connection.CanQueueWork)
+        {
+            _logger.LogWarning("{connection} sent equips faster than the database saves them; refused one.", connection);
+
+            connection.ReportFault();
+            return true;
+        }
+
         var clientItem = connection.Player.Items.SingleOrDefault(x => x.Id == inventoryPacketEquipByGuid.Guid);
 
         if (clientItem is null)

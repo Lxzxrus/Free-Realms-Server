@@ -39,7 +39,8 @@ public class SnowballInteraction : IInteraction
         player.NpcAbility = definition;
         player.NpcAbilityProfileId = player.ActiveProfileId;
         player.NpcAbilityExpiresAt = DateTimeOffset.UtcNow.AddMilliseconds(definition.DurationMs);
-        player.NpcAbilityNextCastAt = DateTimeOffset.MinValue;
+        // Evergrove: a pickup keeps the throw cooldown (NpcAbilityNextCastAt). Clearing it let a client alternate pickups
+        // and throws to hit a player, with every throw shown to everyone nearby, as fast as it could send packets.
         player.NpcAbilityEffectId = player.AddEffect(new PlayerEffect
         {
             ExpiresAt = player.NpcAbilityExpiresAt,

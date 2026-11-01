@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Extensions;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -39,6 +40,16 @@ public static class ClientPathRequestPacketHandler
             return true;
 
         connection.Player.NextClientPathRequestAt = Environment.TickCount64 + MinRequestIntervalMs;
+
+        // Evergrove: a real client asks for paths between points in its zone. A point that isn't finite or lies far
+        // outside the world never comes from one, and could freeze the Gateway inside the navmesh query
+        // (NavMeshPathfinder.TryFindPath now refuses any point off the navmesh), so the request counts as a fault, as a
+        // position update with such a point does.
+        if (!Positions.IsInWorld(clientPathRequestPacket.FromPosition) || !Positions.IsInWorld(clientPathRequestPacket.ToPosition))
+        {
+            connection.ReportFault();
+            return true;
+        }
 
         var clientPathReplyPacket = new ClientPathReplyPacket
         {
