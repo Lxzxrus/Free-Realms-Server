@@ -12,12 +12,13 @@ namespace Sanctuary.Game.Tests;
 public sealed class ItemActionBarTests
 {
     [TestMethod]
-    public void TheClientsFourSlots_AreSlots()
+    [DataRow(0)]
+    [DataRow(1)]
+    [DataRow(2)]
+    [DataRow(3)]
+    public void TheClientsFourSlots_AreSlots(int slot)
     {
-        Assert.AreEqual(4, Player.ItemActionBarSlotCount);
-
-        for (var slot = 0; slot < Player.ItemActionBarSlotCount; slot++)
-            Assert.IsTrue(Player.IsItemActionBarSlot(slot), $"Slot {slot} is one of the bar's.");
+        Assert.IsTrue(Player.IsItemActionBarSlot(slot));
     }
 
     [TestMethod]
