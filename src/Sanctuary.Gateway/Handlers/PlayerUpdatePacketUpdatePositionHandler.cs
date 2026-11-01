@@ -36,7 +36,9 @@ public static class PlayerUpdatePacketUpdatePositionHandler
 
         // A real client sends finite numbers. NaN compares false with everything, so it would pass every
         // "too far away" check; a connection that sends it is counted as faulty and dropped if it keeps on.
-        if (!Positions.IsFinite(packet.Position) || !Positions.IsFinite(packet.Rotation))
+        // Nor does a real client leave the world: pets and NPCs act on its position, and far out there a pet
+        // following its owner could freeze the zone's tick inside the navmesh.
+        if (!Positions.IsFinite(packet.Position) || !Positions.IsFinite(packet.Rotation) || !Positions.IsInWorld(packet.Position))
         {
             connection.ReportFault();
             return true;
