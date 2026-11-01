@@ -142,9 +142,10 @@ public static class CoinStoreSellToClientRequestPacketHandler
         if (clientItemDefinition.Type == ItemDefinitionHelper.PetItemType)
             return BuyPet(connection, coinStoreSellToClientRequestPacket, coinStoreTransactionCompletePacket, clientItemDefinition, tint, hasTintGroup, totalCost);
 
-        // Evergrove: each colour of an item is an inventory row of its own, so a free item comes only in a colour the store
-        // offers it in. A made-up tint was a new free row on every request, and every login loads them all.
-        if (totalCost == 0 && !StorePurchase.IsOfferedTint(clientItemDefinition, coinStoreItem?.TintGroupId ?? NoTintGroupId, tint))
+        // Evergrove: each colour of an item is an inventory row of its own, so an item comes only in a colour the store
+        // offers it in. A made-up tint was a new row on every request, free or for a few coins, and every login loads them
+        // all. The colour picker sends no other tint, whatever the price.
+        if (!StorePurchase.IsOfferedTint(clientItemDefinition, coinStoreItem?.TintGroupId ?? NoTintGroupId, tint))
         {
             coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
 
@@ -153,6 +154,8 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
+        // An item sold in several colours (hasTintGroup) has its stack limit in each, as upstream's store counts it. The
+        // client counts every colour together, so a real request is within it either way.
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var dbQuery = dbContext.Characters
@@ -161,7 +164,7 @@ public static class CoinStoreSellToClientRequestPacketHandler
             {
                 Character = x,
                 Item = x.Items.SingleOrDefault(i => i.Definition == clientItemDefinition.Id && i.Tint == tint),
-                OwnedCount = x.Items.Where(i => i.Definition == clientItemDefinition.Id && (!hasTintGroup || i.Tint == tint)).Sum(i => (int?)i.Count) ?? 0,
+                OwnedCount = x.Items.Where(i => i.Definition == clientItemDefinition.Id && (!hasTintGroup || i.Tint == tint)).Sum(i => (long?)i.Count) ?? 0,
                 NextId = x.Items.Select(i => (int?)i.Id).Max() ?? 0
             })
             .SingleOrDefault();
@@ -175,8 +178,9 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
-        if (clientItemDefinition.MaxStackSize > 0
-            && dbQuery.OwnedCount + coinStoreSellToClientRequestPacket.Quantity > clientItemDefinition.MaxStackSize)
+        // A stack limit counts what the character already owns, so a limited item (the free Domo Hat, say) can't be bought
+        // one request at a time without end. The sum is a long, so old rows can't wrap it.
+        if (!StorePurchase.IsWithinStackLimit(clientItemDefinition, dbQuery.OwnedCount, coinStoreSellToClientRequestPacket.Quantity))
         {
             coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidQuantity;
 

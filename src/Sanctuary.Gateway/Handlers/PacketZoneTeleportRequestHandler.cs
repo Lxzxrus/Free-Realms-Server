@@ -49,11 +49,17 @@ public static class PacketZoneTeleportRequestHandler
         var position = pointOfInterest.SpawnPosition;
         var rotation = new Quaternion(rotationZ, 0f, rotationX, 0f);
 
-        // Every point of interest is in the starting zone, so from a house or a fishing hole this is a zone change.
+        // Every point of interest is in the starting zone, so from a house or a fishing hole this is a zone change. One
+        // that comes too soon after the last waits for its turn (ZoneTeleports).
         if (connection.Player.Zone != _zoneManager.StartingZone)
         {
-            if (ZoneTeleports.TryStart(connection.Player))
-                connection.Player.TeleportToZone(_zoneManager.StartingZone, position, rotation);
+            var player = connection.Player;
+
+            ZoneTeleports.Request(player, Environment.TickCount64, () =>
+            {
+                if (!player.TeleportToZone(_zoneManager.StartingZone, position, rotation))
+                    ChatHelper.SendSystemMessage(player, "The teleport failed. Please try again.");
+            });
 
             return true;
         }

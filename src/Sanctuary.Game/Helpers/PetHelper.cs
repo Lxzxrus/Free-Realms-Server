@@ -50,8 +50,10 @@ public static class PetHelper
     /// as ClientPathRequestPacketHandler does with <see cref="Player.NextClientPathRequestAt"/>. If not, the request
     /// (<paramref name="later"/>) waits its turn behind any already waiting, and <see cref="StartWaitingRequest"/>
     /// carries it out then: dropped, a click in the pet window that came within the wait of another went unanswered.
+    /// One that finds <see cref="MaxWaitingRequests"/> already waiting is dropped, and <paramref name="dropped"/>
+    /// answers it instead, for a request the client waits on.
     /// </summary>
-    public static bool TryStartRequest(Player player, Action later)
+    public static bool TryStartRequest(Player player, Action later, Action? dropped = null)
     {
         var now = Environment.TickCount64;
 
@@ -59,6 +61,8 @@ public static class PetHelper
         {
             if (player.WaitingPetRequests.Count < MaxWaitingRequests)
                 player.WaitingPetRequests.Enqueue(later);
+            else
+                dropped?.Invoke();
 
             return false;
         }
@@ -89,16 +93,26 @@ public static class PetHelper
     /// letters character names allow (<see cref="CharacterNameHelper.ContainsIllegalCharacters"/>), space and apostrophe.
     /// It may also hold '.' and '-': the client names a pet only with its name picker, which joins a title and a name
     /// from its Resources/PetNames.txt as "[*pet_first*] [*pet_second*]", and those include "Mr.", "Lt." and "She-Rex".
-    /// The symbols and invisible marks in the character names' range, such as the soft hyphen, which can split a
-    /// filtered word unseen, are refused. Upstream refused only blank and long names and control characters, so a pet
-    /// could carry a word the filter keeps out of every other name, or invisible and right-to-left marks.
+    /// A '.' may only end a word, as in "Mr.", and a '-' only join two, as in "She-Rex", and a name needs a letter, so
+    /// a name plate can't show a web address such as "freesc.com" or no letter at all ("----"). The symbols and
+    /// invisible marks in the character names' range, such as the soft hyphen, which can split a filtered word
+    /// unseen, are refused. Upstream refused only blank and long names and control characters, so a pet could carry a
+    /// word the filter keeps out of every other name, or invisible and right-to-left marks.
     /// </summary>
     public static bool IsValidName(string name, IEnumerable<string> nameFilter) =>
-        !string.IsNullOrWhiteSpace(name) && name.Length <= NameMaxLength && name.All(IsNameCharacter)
+        !string.IsNullOrWhiteSpace(name) && name.Length <= NameMaxLength && name.Any(IsNameLetter)
+        && Enumerable.Range(0, name.Length).All(index => IsNameCharacter(name, index))
         && !nameFilter.Any(token => name.Contains(token, StringComparison.OrdinalIgnoreCase));
 
-    private static bool IsNameCharacter(char character) =>
-        character is ' ' or '\'' or '.' or '-' || character is >= 'A' and <= '\u024F' && char.IsLetter(character);
+    private static bool IsNameLetter(char character) => character is >= 'A' and <= '\u024F' && char.IsLetter(character);
+
+    private static bool IsNameCharacter(string name, int index) => name[index] switch
+    {
+        ' ' or '\'' => true,
+        '.' => index > 0 && IsNameLetter(name[index - 1]) && (index == name.Length - 1 || name[index + 1] == ' '),
+        '-' => index > 0 && index < name.Length - 1 && IsNameLetter(name[index - 1]) && IsNameLetter(name[index + 1]),
+        var character => IsNameLetter(character)
+    };
 
     private const int FirstTreasureSpringItemDefinitionId = 23427;
     private const int NoTint = 0;
@@ -315,12 +329,15 @@ public static class PetHelper
             Position = chest.Position
         }, true);
 
+        // Evergrove: removed before it pays. Paying saves to the database and can throw, and a chest left in the zone then
+        // stayed opened and was never removed, since its despawn removes only a chest it can open. Paying needs only the
+        // chest's guid and reward tables.
+        EntityHelper.RemovePlayerGracefully(chest, animate: true, delay: TreasureChestOpenDurationMs);
+
         if (chest.CoinRewardTableKey is not null && rewardManager.TryRollReward(chest.CoinRewardTableKey, out var coinDrop) && coinDrop is not null)
             rewardManager.TryGrantReward(player, coinDrop, chest.Guid);
 
         itemDrop = RollTreasureSpring(player) ?? RollTreasureItem(player, chest, rewardManager, resourceManager);
-
-        EntityHelper.RemovePlayerGracefully(chest, animate: true, delay: TreasureChestOpenDurationMs);
         return true;
     }
 

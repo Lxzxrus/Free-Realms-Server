@@ -590,25 +590,13 @@ public class UdpConnection : PriorityQueueMember
             if (!reader.TryRead(out UdpPacketType packetType))
                 return;
 
-            if (zeroByte != 0 || packetType != UdpPacketType.UnreachableConnection)
-            {
-                // if we get any type of packet other than an unreachable-connection packet, then we can assume that our remapping
-                // request succeeded, and clear the timer for how long we should attempt to do the remapping.  The reason we need
-                // to send requests for a certain amount of time, is the server may already have dozens of unreachable-connection packets
-                // on the wire on the way to us, before we manage to request that the remapping occur.
-                PortRemapRequestStartStamp = 0;
-            }
-
-            // we received a packet successfully, so assume we have recovered from any ICMP error state we may have been in, so we can reset the timer
-            IcmpErrorRetryStartStamp = 0;
-
-            LastReceiveTime = UdpManager.CachedClock;
-
             ConnectionStats.TotalPacketsReceived++;
             ConnectionStats.TotalBytesReceived += data.Length;
 
             // TODO
             // track incoming data rate
+
+            var keepAlive = false;
 
             if (zeroByte == 0 && packetType == UdpPacketType.KeepAlive)
             {
@@ -622,7 +610,10 @@ public class UdpConnection : PriorityQueueMember
                 // ourselves for immediate-time is even sooner than that, so there is no point.
                 // This turns out to be important for applications that have lots of connections (tens of thousands)
                 // that rarely talk but send keep alives...no reason to make the server do a lot work over these things.
-                return;
+                // Evergrove: but it has to pass the CRC check below first, and stops there.  Anyone can send these two bytes
+                // from a player's address, and unchecked they kept the connection alive long after the player had gone.  A
+                // real keep alive carries its CRC like every other packet (PhysicalSend).
+                keepAlive = true;
             }
 
             // whenever we receive a packet, it could potentially change when we want time scheduled again
@@ -634,7 +625,8 @@ public class UdpConnection : PriorityQueueMember
             // note: this was moved to the top of the function from the bottom.  This doesn't effect anything as it doesn't matter
             // when we schedule ourself for future processing.  Moving it to the top allowed us to get scheduled even if the packet
             // we processed got rejected for some reason (crc mismatch or bad size).
-            ScheduleTimeNow();
+            if (!keepAlive)
+                ScheduleTimeNow();
 
             // invalid packet len
             if (data.Length < 1)
@@ -710,6 +702,12 @@ public class UdpConnection : PriorityQueueMember
                 // the other side knows our encrypt code, so it received our confirm packet: a real peer, not a spoofed address
                 HandshakePending = false;
 
+                VerifiedPacketReceived();
+
+                // a keep alive needs nothing more (see above)
+                if (keepAlive)
+                    return;
+
                 for (var i = Constants.EncryptPasses - 1; i >= 0; i--)
                 {
                     if (ConnectionConfig.EncryptMethod[i] == EncryptMethod.None)
@@ -761,6 +759,24 @@ public class UdpConnection : PriorityQueueMember
                 ProcessCookedPacket(finalStart.Slice(0, finalLen));
             }
         }
+    }
+
+    // Evergrove: called for a packet only the other side could have sent: one that passed its CRC check, which takes our
+    // encrypt code, or the confirm, which carries our connect code.  This used to be done for every packet before any check,
+    // so packets anyone can send from the other side's address (a bad CRC, a bare keep alive, a connect request) kept a
+    // connection alive after the other side had gone, as NoDataTimeout counts from mLastReceiveTime.
+    private void VerifiedPacketReceived()
+    {
+        // if we get any type of packet other than an unreachable-connection packet, then we can assume that our remapping
+        // request succeeded, and clear the timer for how long we should attempt to do the remapping.  The reason we need
+        // to send requests for a certain amount of time, is the server may already have dozens of unreachable-connection packets
+        // on the wire on the way to us, before we manage to request that the remapping occur.
+        PortRemapRequestStartStamp = 0;
+
+        // we received a packet successfully, so assume we have recovered from any ICMP error state we may have been in, so we can reset the timer
+        IcmpErrorRetryStartStamp = 0;
+
+        LastReceiveTime = UdpManager.CachedClock;
     }
 
     internal void CallbackRoutePacket(Span<byte> data)
@@ -946,6 +962,11 @@ public class UdpConnection : PriorityQueueMember
                         OtherSideProtocolVersion = otherSideProtocolVersion;
                         SetupEncryptModel();
                         Status = Status.Connected;
+
+                        // Evergrove: it carries our connect code, so it's the other side's, and NoDataTimeout counts from here as it
+                        // always has, though the confirm has no CRC
+                        VerifiedPacketReceived();
+
                         UdpManager.CallbackConnectComplete(this);
                     }
                 }
@@ -1039,6 +1060,15 @@ public class UdpConnection : PriorityQueueMember
 
             case UdpPacketType.UnreachableConnection:
                 {
+                    // Only the side that opened the connection asks the other to remap it: a server's own address
+                    // doesn't change.  A server that answered would send 10 bytes for every 2 byte unreachable
+                    // packet anyone forges from a player's address.  Nor does a connection we accepted disconnect for
+                    // one: the packet isn't CRC'd, so anyone could forge one and drop a player who had been quiet for
+                    // MaximumTimeAllowedForPortRemapping (5 s).  If the other side has really gone, it stops sending,
+                    // so a NoDataTimeout catches it.
+                    if (AcceptedConnection)
+                        break;
+
                     if (UdpManager.Params.AllowPortRemapping)
                     {
                         if (PortRemapRequestStartStamp == 0)
@@ -1048,12 +1078,6 @@ public class UdpConnection : PriorityQueueMember
 
                         if (UdpManager.CachedClockElapsed(PortRemapRequestStartStamp) < Constants.MaximumTimeAllowedForPortRemapping)
                         {
-                            // Only the side that opened the connection asks the other to remap it: a server's own address
-                            // doesn't change.  A server that answered would send 10 bytes for every 2 byte unreachable
-                            // packet anyone forges from a player's address.
-                            if (AcceptedConnection)
-                                break;
-
                             Span<byte> buf = stackalloc byte[10];
 
                             // send confirm packet (if our connect code matches up)

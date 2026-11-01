@@ -30,12 +30,17 @@ public static class PlayerUpdatePacketJumpHandler
 
         // _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PlayerUpdatePacketJump), packet);
 
+        // Evergrove: a height past Positions.HeightLimit is held at the limit, as in a position update: a player who has
+        // fallen through the world is no fault.
+        packet.Position = Positions.ClampHeight(packet.Position);
+
         // Evergrove: a jump moves and turns the player too, so it is held to the same standard as
-        // PlayerUpdatePacketUpdatePosition: a position in the world (pets and NPCs act on it, and far outside the world a
-        // pet following its owner could freeze the zone's tick inside the navmesh) and a rotation within
-        // Positions.RotationLimit, which is relayed to everyone nearby and saved with the character. NaN and infinities
-        // fail both.
-        if (!Positions.IsInWorld(packet.Position) || !Positions.IsWithinRotationLimit(packet.Rotation))
+        // PlayerUpdatePacketUpdatePosition: a finite position in the world (pets and NPCs act on it, and far outside the
+        // world a pet following its owner could freeze the zone's tick inside the navmesh) and a rotation within
+        // Positions.RotationLimit, which is relayed to everyone nearby and saved with the character. Its vertical velocity
+        // is relayed with it, so it must be within Positions.VerticalVelocityLimit. NaN and infinities fail every check.
+        if (!Positions.IsFinite(packet.Position) || !Positions.IsWithinRotationLimit(packet.Rotation) || !Positions.IsInWorld(packet.Position) ||
+            !Positions.IsWithinVerticalVelocityLimit(packet.VerticalVelocity))
         {
             connection.ReportFault();
             return true;

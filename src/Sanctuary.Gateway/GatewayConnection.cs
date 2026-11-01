@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Numerics;
 using System.Text;
+using System.Threading;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,6 +57,9 @@ public class GatewayConnection : UdpConnection
     // Player will only be null during login.
     public Player Player { get; private set; } = null!;
 
+    // 1 once the player has been saved for good (SavePlayerOnce).
+    private int _playerSaved;
+
     public string Locale { get; set; } = "en_US";
 
     public GatewayConnection(ILogger<GatewayConnection> logger, IOptions<GatewayServerOptions> options, IZoneManager zoneManager, LoginClient loginClient, GatewayServer gatewayServer, IResourceManager resourceManager, IServiceProvider serviceProvider, IDbContextFactory<DatabaseContext> dbContextFactory, SocketAddress socketAddress, int connectCode) : base(gatewayServer, socketAddress, connectCode)
@@ -91,26 +95,28 @@ public class GatewayConnection : UdpConnection
         if (Player is null)
             return;
 
-        _serviceProvider.GetRequiredService<ITradeManager>().OnDisconnected(Player);
-
-        SendFriendOffline();
-
-        SendGuildMemberOffline();
-
-        _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
-
-        // A save that throws (the database out of reach for a moment) is logged, and the player still leaves their zone
-        // below. Before, they stayed in it as a ghost that nothing removed.
+        // Whatever throws here (the save, with the database out of reach for a moment) is logged, and the player still
+        // leaves their zone. Before, a throw skipped Player.Dispose, so they stayed in it as a ghost that nothing removed.
         try
         {
-            SavePlayerToDatabase();
+            _serviceProvider.GetRequiredService<ITradeManager>().OnDisconnected(Player);
+
+            SendFriendOffline();
+
+            SendGuildMemberOffline();
+
+            _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
+
+            SavePlayerOnce();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "{connection} failed to save character {characterId} at logout.", this, GuidHelper.GetPlayerId(Player.Guid));
+            _logger.LogError(ex, "{connection} failed while logging out character {characterId}.", this, GuidHelper.GetPlayerId(Player.Guid));
         }
-
-        Player.Dispose();
+        finally
+        {
+            Player.Dispose();
+        }
     }
 
     /// <summary>
@@ -126,6 +132,21 @@ public class GatewayConnection : UdpConnection
     public bool QueueWork(Action work)
     {
         return _work.TryQueue(work, ex => _logger.LogError(ex, "{connection} queued work failed.", this));
+    }
+
+    /// <summary>
+    /// Saves the player at the end of their session: at logout, or as the Gateway stops while they're online
+    /// (<see cref="GatewayServer.SaveOnlinePlayers"/>). Only the first call saves: a second would add the play time
+    /// since login again. A trade can disconnect a player on another thread, so the two may race.
+    /// </summary>
+    /// <returns>Whether this call saved them.</returns>
+    public bool SavePlayerOnce()
+    {
+        if (Interlocked.Exchange(ref _playerSaved, 1) != 0)
+            return false;
+
+        SavePlayerToDatabase();
+        return true;
     }
 
     public override void OnRoutePacket(Span<byte> data)

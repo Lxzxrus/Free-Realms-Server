@@ -150,6 +150,42 @@ public sealed class PetRequestThrottleTests
         Assert.AreEqual(PetHelper.MaxWaitingRequests, carriedOut);
     }
 
+    /// <summary>
+    /// The client locks its pet buttons until a feed or grooming starts or is refused, so one dropped from a full queue
+    /// must still be answered (the feed and groom handlers unlock the buttons).
+    /// </summary>
+    [TestMethod]
+    public void ARequestDroppedFromAFullQueue_IsAnswered_AndNotCarriedOut()
+    {
+        var player = NewPlayer();
+        var carriedOut = false;
+        var answered = 0;
+
+        Assert.IsTrue(PetHelper.TryStartRequest(player, Nothing));
+
+        for (var i = 0; i < PetHelper.MaxWaitingRequests; i++)
+            Assert.IsFalse(PetHelper.TryStartRequest(player, Nothing, () => answered++));
+
+        Assert.AreEqual(0, answered, "A request that waits its turn is answered when it is carried out.");
+
+        Assert.IsFalse(PetHelper.TryStartRequest(player, () => carriedOut = true, () => answered++));
+        Assert.AreEqual(1, answered);
+
+        for (var turn = 0; turn < PetHelper.MaxWaitingRequests + 1; turn++)
+            PetHelper.StartWaitingRequest(player, player.NextPetRequestAt);
+
+        Assert.IsFalse(carriedOut);
+    }
+
+    [TestMethod]
+    public void ARequestCarriedOutAtOnce_IsNotAnsweredAsDropped()
+    {
+        var answered = false;
+
+        Assert.IsTrue(PetHelper.TryStartRequest(NewPlayer(), Nothing, () => answered = true));
+        Assert.IsFalse(answered);
+    }
+
     [TestMethod]
     public void NothingWaiting_CarriesOutNothing_AndLeavesTheWait()
     {
