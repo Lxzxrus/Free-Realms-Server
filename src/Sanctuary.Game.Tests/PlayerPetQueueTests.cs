@@ -64,4 +64,22 @@ public sealed class PlayerPetQueueTests
         player.PlayerPet.UpdateEveryTick();
         Assert.AreEqual(2, carriedOut);
     }
+
+    /// <summary>
+    /// The zone goes on ticking a player who has logged out until it removes them, and a pet summoned then (a restore
+    /// queued by a zone load, or a summon waiting its turn) was left in the zone with nothing to remove it.
+    /// </summary>
+    [TestMethod]
+    public void AfterLogout_NothingIsCarriedOut()
+    {
+        var player = NewPlayer();
+        var carriedOut = 0;
+
+        player.PlayerPet.QueueAction(() => carriedOut++);
+        player.PlayerPet.Dispose();
+
+        player.PlayerPet.UpdateEveryTick();
+
+        Assert.AreEqual(0, carriedOut);
+    }
 }
