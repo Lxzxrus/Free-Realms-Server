@@ -898,7 +898,11 @@ public sealed class QuestManager : IQuestManager
             }
         }
 
-        SendObjectiveForGoal(player, quest, progress.FirstOpenGoalIndex);
+        // The marker follows the tracked quest: another quest's step moving on mustn't point it elsewhere.
+        if (quest.QuestId == player.Quests.ActiveQuestId)
+            SendObjectiveForGoal(player, quest, progress.FirstOpenGoalIndex);
+        else
+            RefreshObjectiveTarget(player);
 
         if (playDialogue && completedGoal is TalkToNpcGoal)
         {
@@ -1105,72 +1109,63 @@ public sealed class QuestManager : IQuestManager
         return NearestNpcGuid(player, quest.GoalTargetNpcId(goalIndex));
     }
 
-    private void SendObjectiveForGoal(Player player, QuestDefinition quest, int goalIndex)
+    /// <summary>Where a goal's objective marker stands: the NPC or pickup it points at (0 for a place), its name, where.</summary>
+    internal readonly record struct ObjectiveTarget(ulong Guid, int NameId, Vector3 Position);
+
+    /// <summary>
+    /// The objective marker for a goal, which the client's Take Me There button and map pin follow, or null when it points
+    /// at nothing. The marker packet, the Take Me There counter and the tracker all take it from here. When there is
+    /// none, <paramref name="clear"/> says whether the last marker comes down (a hidden objective, a reach step in
+    /// another zone, a Collect step with nothing left to take here: the client shows Take Me There only while there is
+    /// a target) or stays as it is (an NPC that isn't in this zone), as upstream does.
+    /// </summary>
+    internal ObjectiveTarget? ObjectiveTargetFor(Player player, QuestDefinition quest, int goalIndex, out bool clear)
     {
         var goals = quest.Goals;
+        var goal = goalIndex >= 0 && goalIndex < goals.Count ? goals[goalIndex] : null;
+
+        clear = true;
 
         if (quest.HideObjectiveTarget)
+            return null;
+
+        if (goal is ReachLocationGoal reachGoal && reachGoal.ReachPosition != Vector3.Zero)
         {
-            player.SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
-            return;
+            return reachGoal.ZoneDefinitionId == player.Zone.DefinitionId
+                ? new ObjectiveTarget(0, goal.NameId, reachGoal.ReachPosition)
+                : null;
         }
 
-        if (goalIndex >= 0 && goalIndex < goals.Count
-            && goals[goalIndex] is ReachLocationGoal reachGoal && reachGoal.ReachPosition != Vector3.Zero)
+        // Every goal done (waiting to be handed in) leaves goalIndex at Goals.Count: the target is then the turn-in NPC.
+        var targetGuid = ResolveGoalTargetGuid(player, quest, goalIndex);
+
+        if (targetGuid != 0 && player.Zone.TryGetNpc(targetGuid, out var target))
+            return new ObjectiveTarget(targetGuid, target.NameId, new Vector3(target.Position.X, target.Position.Y, target.Position.Z));
+
+        clear = goal is CollectGoal;
+        return null;
+    }
+
+    private void SendObjectiveForGoal(Player player, QuestDefinition quest, int goalIndex)
+    {
+        if (ObjectiveTargetFor(player, quest, goalIndex, out var clear) is { } target)
         {
-            if (reachGoal.ZoneDefinitionId != player.Zone.DefinitionId)
-            {
-                player.SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
-                return;
-            }
-
-            var reachPos = new Vector4(reachGoal.ReachPosition, 1f);
-
             player.SendTunneled(new ObjectiveTargetUpdatePacket
             {
                 Active = true,
                 TaskId = player.ObjectiveTaskId,
-                Guid = 0,
-                NameId = goals[goalIndex].NameId,
-                PositionX = reachPos.X,
-                PositionY = reachPos.Y,
-                PositionZ = reachPos.Z,
+                Guid = target.Guid,
+                NameId = target.NameId,
+                PositionX = target.Position.X,
+                PositionY = target.Position.Y,
+                PositionZ = target.Position.Z,
                 PositionW = 1f
             });
-            return;
         }
-
-        var targetGuid = ResolveGoalTargetGuid(player, quest, goalIndex);
-
-        // The client shows Take Me There only while there is a target, so a Collect step with nothing left to take here
-        // clears the marker rather than leaving the last step's target up.
-        if (targetGuid == 0 && goalIndex >= 0 && goalIndex < goals.Count && goals[goalIndex] is CollectGoal)
+        else if (clear)
         {
             player.SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
-            return;
         }
-
-        SendObjectiveTarget(player, targetGuid);
-    }
-
-    private void SendObjectiveTarget(Player player, ulong targetGuid)
-    {
-        if (targetGuid == 0 || !player.Zone.TryGetNpc(targetGuid, out var target))
-            return;
-
-        var pos = target.Position;
-
-        player.SendTunneled(new ObjectiveTargetUpdatePacket
-        {
-            Active = true,
-            TaskId = player.ObjectiveTaskId,
-            Guid = targetGuid,
-            NameId = target.NameId,
-            PositionX = pos.X,
-            PositionY = pos.Y,
-            PositionZ = pos.Z,
-            PositionW = 1f
-        });
     }
 
     public void RefreshObjectiveTarget(Player player)
@@ -1188,23 +1183,11 @@ public sealed class QuestManager : IQuestManager
     {
         targetPosition = default;
 
-        if (!TryGetTrackedGoal(player, out var quest, out var goalIndex))
+        if (!TryGetTrackedGoal(player, out var quest, out var goalIndex)
+            || ObjectiveTargetFor(player, quest, goalIndex, out _) is not { } target)
             return false;
 
-        // Every goal done (waiting to be handed in) leaves goalIndex at Goals.Count: then the target is the turn-in NPC.
-        if (goalIndex >= 0 && goalIndex < quest.Goals.Count && quest.Goals[goalIndex] is ReachLocationGoal reachGoal
-            && reachGoal.ReachPosition != Vector3.Zero)
-        {
-            targetPosition = reachGoal.ReachPosition;
-            return true;
-        }
-
-        var targetGuid = ResolveGoalTargetGuid(player, quest, goalIndex);
-
-        if (targetGuid == 0 || !player.Zone.TryGetNpc(targetGuid, out var target))
-            return false;
-
-        targetPosition = new Vector3(target.Position.X, target.Position.Y, target.Position.Z);
+        targetPosition = target.Position;
         return true;
     }
 
@@ -1228,30 +1211,13 @@ public sealed class QuestManager : IQuestManager
             return false;
 
         int currentGoalIndex = progress.FirstOpenGoalIndex;
-        var goals = q.Goals;
 
-        if (q.HideObjectiveTarget)
+        if (ObjectiveTargetFor(player, q, currentGoalIndex, out _) is null)
             return false;
 
-        if (currentGoalIndex >= 0 && currentGoalIndex < goals.Count
-            && goals[currentGoalIndex] is ReachLocationGoal reachGoal && reachGoal.ReachPosition != Vector3.Zero)
-        {
-            if (reachGoal.ZoneDefinitionId != player.Zone.DefinitionId)
-                return false;
-
-            quest = q;
-            goalIndex = currentGoalIndex;
-            return true;
-        }
-
-        ulong guid = ResolveGoalTargetGuid(player, q, currentGoalIndex);
-        if (guid != 0 && player.Zone.TryGetNpc(guid, out _))
-        {
-            quest = q;
-            goalIndex = currentGoalIndex;
-            return true;
-        }
-        return false;
+        quest = q;
+        goalIndex = currentGoalIndex;
+        return true;
     }
 
     // Evergrove: the reward payout is Evergrove's from before the merge, verified in game: coins saved without a toast

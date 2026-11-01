@@ -81,7 +81,7 @@ done. Each goal becomes its own tracker row.
 | Type | Value | Completes when... |
 |---|---|---|
 | `TalkToNpc` | 0 | player interacts with the NPC in `Targets` (or the quest's `TargetNpcId` when it names none) |
-| `ReachLocation` | 1 | player gets within `ReachRadius` (default 12) of `ReachPosition`, checked on every position update (2D, X/Z only) |
+| `ReachLocation` | 1 | player gets within `ReachRadius` (default 12) of `ReachPosition`, checked on every position update (2D, X/Z only; give Y the ground height all the same, as Take Me There finds its path from it) |
 | `Collect` | 2 | player gathers `RequiredCount` pickups of the node type `CollectNodeType` |
 
 That's the full set - this branch has no combat system, so there's no Kill/hunt or

@@ -209,6 +209,8 @@ public sealed class QuestDefinitionCollectionTests
 
         if (offeredAtTurnIn)
             Assert.AreEqual(nextId, previous.NextQuestId, $"Quest {previousId} doesn't offer {nextId} at its turn-in.");
+        else
+            Assert.IsNull(previous.NextQuestId, $"Quest {previousId} offers a quest at its turn-in, which this chain doesn't expect.");
 
         var playerQuests = new QuestLog();
         Assert.IsFalse(next.IsOfferableFor(playerQuests), $"Quest {nextId} is offered before {previousId} is done.");

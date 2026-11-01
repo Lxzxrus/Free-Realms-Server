@@ -2651,18 +2651,9 @@
     "Comment": "Evergrove's first hour: Samantha's bundle of mail lies beside the warpstone outside Sanctuary (pool sanctuary-samanthas-mail), and the return step's text teaches teleporting home with the world map. 47895 is Samantha's own offer line; the rows near the title have none.",
     "Goals": [
       {
-        "Type": 1,
-        "NameId": 46176,
-        "ReachPosition": [
-          -1418.32,
-          -27.0,
-          347.82
-        ],
-        "ReachRadius": 15
-      },
-      {
         "Type": 2,
         "NameId": 46175,
+        "DescriptionId": 46176,
         "CollectNodeType": "samanthas-mail",
         "RequiredCount": 1
       },

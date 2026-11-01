@@ -178,4 +178,49 @@ public sealed class QuestObjectiveTargetTests
 
         Assert.AreEqual(0.5f, TargetX());
     }
+
+    // The marker packet (what the client's Take Me There button and map pin read) takes the same answer from
+    // ObjectiveTargetFor, with whether to take the last marker down when there is none.
+
+    [TestMethod]
+    public void Marker_OnACollectStep_IsTheNearestPickup()
+    {
+        AddPickup(spawnId: 4, x: 10f);
+
+        var target = _questManager.ObjectiveTargetFor(_player, PackageQuest(), 0, out _);
+
+        Assert.IsNotNull(target);
+        Assert.AreEqual(10f, target.Value.Position.X);
+        Assert.AreNotEqual(0UL, target.Value.Guid);
+    }
+
+    [TestMethod]
+    public void Marker_OnACollectStepWithNothingLeft_ComesDown()
+    {
+        AddPickup(spawnId: 4, x: 10f);
+        Gathered.TryAdd(4);
+
+        Assert.IsNull(_questManager.ObjectiveTargetFor(_player, PackageQuest(), 0, out var clear));
+        Assert.IsTrue(clear, "The client shows Take Me There only while there is a target.");
+    }
+
+    [TestMethod]
+    public void Marker_OnATalkStepWhoseNpcIsElsewhere_StaysAsItWas()
+    {
+        ZoneNpcs.Clear();
+
+        Assert.IsNull(_questManager.ObjectiveTargetFor(_player, PackageQuest(), 1, out var clear));
+        Assert.IsFalse(clear, "An NPC step leaves the last marker up, as upstream does.");
+    }
+
+    [TestMethod]
+    public void Marker_OnAHiddenObjective_ComesDown()
+    {
+        AddPickup(spawnId: 4, x: 10f);
+        var quest = PackageQuest();
+        quest.HideObjectiveTarget = true;
+
+        Assert.IsNull(_questManager.ObjectiveTargetFor(_player, quest, 0, out var clear));
+        Assert.IsTrue(clear);
+    }
 }
