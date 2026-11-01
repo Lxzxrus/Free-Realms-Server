@@ -90,7 +90,16 @@ public class GatewayConnection : UdpConnection
 
         _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
 
-        SavePlayerToDatabase();
+        // A save that throws (the database out of reach for a moment) is logged, and the player still leaves their zone
+        // below. Before, they stayed in it as a ghost that nothing removed.
+        try
+        {
+            SavePlayerToDatabase();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "{connection} failed to save character {characterId} at logout.", this, GuidHelper.GetPlayerId(Player.Guid));
+        }
 
         Player.Dispose();
     }
