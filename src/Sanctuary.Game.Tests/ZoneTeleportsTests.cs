@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
@@ -121,6 +122,24 @@ public sealed class ZoneTeleportsTests
         ZoneTeleports.Request(player, Start + ZoneTeleports.MinIntervalMs + 1, () => player.Zone = world);
 
         Assert.AreSame(world, player.Zone);
+    }
+
+    [TestMethod]
+    public void AMoveThatThrewAfterThePlayerMoved_StillStartsTheWait()
+    {
+        var world = NewWorld();
+        var house = NewHouse();
+        var player = NewPlayer(world);
+
+        Assert.ThrowsExactly<InvalidOperationException>(() => ZoneTeleports.Request(player, Start, () =>
+        {
+            player.Zone = house;
+            throw new InvalidOperationException();
+        }));
+
+        ZoneTeleports.Request(player, Start + 1, () => player.Zone = world);
+
+        Assert.AreSame(house, player.Zone, "The player did move, so the next move waits.");
     }
 
     [TestMethod]

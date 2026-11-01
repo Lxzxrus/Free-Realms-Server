@@ -58,11 +58,16 @@ public static class ZoneTeleports
     {
         var zone = player.Zone;
 
-        move();
-
-        // Only a move that happened starts the wait: one refused, or to where the player already is, costs little, and
-        // must not hold up the next real one.
-        if (!ReferenceEquals(player.Zone, zone))
-            player.NextZoneTeleportAt = now + MinIntervalMs;
+        try
+        {
+            move();
+        }
+        finally
+        {
+            // Only a move that happened starts the wait, even if something after it threw: one refused, or to where
+            // the player already is, costs little, and must not hold up the next real one.
+            if (!ReferenceEquals(player.Zone, zone))
+                player.NextZoneTeleportAt = now + MinIntervalMs;
+        }
     }
 }
