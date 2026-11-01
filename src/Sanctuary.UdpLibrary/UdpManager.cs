@@ -1008,6 +1008,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     {
         lock (_connectionGuard)
         {
+            // a disconnected connection has been taken out of the queue for good (RemoveConnection), but can still try to
+            // schedule itself: the reliable packet whose handler disconnected it is acknowledged afterwards, for one.  Put
+            // back, nothing would take it out again, and it would hold its slot and its memory for as long as the server runs
+            if (con.Status == Status.Disconnected)
+                return;
+
             // do not ever let anybody schedule themselves for processing time sooner then mMinimumScheduledStamp
             // otherwise, they could end up getting processing time multiple times in a single UdpManager::GiveTime iteration
             // of the priority queue, which under odd circumstances could result in an infinite loop
