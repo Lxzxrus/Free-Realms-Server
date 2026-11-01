@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Numerics;
 using System.Text;
+using System.Threading;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,6 +47,9 @@ public class GatewayConnection : UdpConnection
 
     // Player will only be null during login.
     public Player Player { get; private set; } = null!;
+
+    // 1 once the player has been saved for good (SavePlayerOnce).
+    private int _playerSaved;
 
     public string Locale { get; set; } = "en_US";
 
@@ -90,9 +94,24 @@ public class GatewayConnection : UdpConnection
 
         _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
 
-        SavePlayerToDatabase();
+        SavePlayerOnce();
 
         Player.Dispose();
+    }
+
+    /// <summary>
+    /// Saves the player at the end of their session: at logout, or as the Gateway stops while they're online
+    /// (<see cref="GatewayServer.SaveOnlinePlayers"/>). Only the first call saves: a second would add the play time
+    /// since login again. A trade can disconnect a player on another thread, so the two may race.
+    /// </summary>
+    /// <returns>Whether this call saved them.</returns>
+    public bool SavePlayerOnce()
+    {
+        if (Interlocked.Exchange(ref _playerSaved, 1) != 0)
+            return false;
+
+        SavePlayerToDatabase();
+        return true;
     }
 
     public override void OnRoutePacket(Span<byte> data)

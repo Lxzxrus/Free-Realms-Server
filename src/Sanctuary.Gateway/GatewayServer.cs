@@ -150,6 +150,40 @@ public class GatewayServer : UdpManager<GatewayConnection>
     {
     }
 
+    /// <summary>
+    /// Saves every player still online, as the Gateway stops: disposing the UDP manager disconnects them without
+    /// OnTerminated, so their logout save would never run. On the main loop, once it has ended.
+    /// </summary>
+    public void SaveOnlinePlayers()
+    {
+        var saved = 0;
+
+        try
+        {
+            foreach (var connection in ConnectionList.ToArray())
+            {
+                if (connection?.Player is null)
+                    continue;
+
+                try
+                {
+                    if (connection.SavePlayerOnce())
+                        saved++;
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Failed to save {player} as the Gateway stops.", connection.Player.Guid);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Failed to save the players online as the Gateway stops.");
+        }
+
+        _logger.LogInformation("Saved {count} players still online as the Gateway stops.", saved);
+    }
+
     public void OnStopping()
     {
         var packetNotice = new PacketWorldShutdownNotice();

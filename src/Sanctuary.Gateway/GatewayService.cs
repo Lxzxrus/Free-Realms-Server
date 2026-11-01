@@ -69,6 +69,10 @@ public class GatewayService : BackgroundService
         _server.OnStopping();
 
         await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+
+        // Ends the main loop, and waits while it saves the players still online. Without this the loop ran on until
+        // the UDP manager was disposed, which disconnects everyone without their logout save.
+        await base.StopAsync(cancellationToken);
     }
 
     protected override Task ExecuteAsync(CancellationToken cancellationToken)
@@ -277,6 +281,13 @@ public class GatewayService : BackgroundService
             _logger.LogCritical(ex, "The main loop stopped on an unexpected exception. Stopping {server} so it can be restarted.", nameof(GatewayServer));
 
             _hostApplicationLifetime.StopApplication();
+        }
+        finally
+        {
+            // Stopping or crashed: once the UDP manager is disposed, it disconnects everyone without OnTerminated, so
+            // their logout save would never run. Their position, title, play time and tracked quest are saved here
+            // instead, on the thread that handled their packets, now that none come in.
+            _server.SaveOnlinePlayers();
         }
 
         return Task.CompletedTask;
