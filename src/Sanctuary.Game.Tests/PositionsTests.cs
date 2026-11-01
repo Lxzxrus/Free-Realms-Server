@@ -44,14 +44,26 @@ public sealed class PositionsTests
         Assert.IsFalse(Positions.IsInWorld(new Vector4(0f, 0f, 1e20f, 1f)));
         Assert.IsFalse(Positions.IsInWorld(new Vector4(-Positions.WorldLimit - 1f, 0f, 0f, 1f)));
 
-        // A player who fell through the world is still in it, however far down.
-        Assert.IsTrue(Positions.IsInWorld(new Vector4(-1904.883f, -1e7f, 412.6024f, 1f)));
-
         Assert.IsFalse(Positions.IsInWorld(new Vector4(float.NaN, 0f, 0f, 1f)));
         Assert.IsFalse(Positions.IsInWorld(new Vector4(0f, float.PositiveInfinity, 0f, 1f)));
         Assert.IsFalse(Positions.IsInWorld(new Vector4(0f, 0f, float.NegativeInfinity, 1f)));
 
         // W isn't a coordinate, so it isn't checked: a path request's points carry whatever W the client sends.
         Assert.IsTrue(Positions.IsInWorld(new Vector4(0f, 0f, 0f, float.NaN)));
+    }
+
+    [TestMethod]
+    public void HeightsFarAboveOrBelowTheWorld_AreNotInIt()
+    {
+        // A player who fell through the world is still in it a long way down.
+        Assert.IsTrue(Positions.IsInWorld(new Vector4(-1904.883f, -1e6f, 412.6024f, 1f)));
+        Assert.IsTrue(Positions.IsInWorld(new Vector4(-1904.883f, -Positions.HeightLimit, 412.6024f, 1f)));
+
+        Assert.IsFalse(Positions.IsInWorld(new Vector4(-1904.883f, -Positions.HeightLimit - 1f, 412.6024f, 1f)));
+        Assert.IsFalse(Positions.IsInWorld(new Vector4(-1904.883f, Positions.HeightLimit + 1f, 412.6024f, 1f)));
+
+        // Finite, yet MariaDB refuses to save it: the character's save on disconnect failed and stopped the Gateway.
+        Assert.IsFalse(Positions.IsInWorld(new Vector4(0f, float.MaxValue, 0f, 1f)));
+        Assert.IsFalse(Positions.IsInWorld(new Vector4(0f, -float.MaxValue, 0f, 1f)));
     }
 }
