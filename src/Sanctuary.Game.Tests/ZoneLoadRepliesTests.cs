@@ -8,28 +8,37 @@ namespace Sanctuary.Game.Tests;
 public sealed class ZoneLoadRepliesTests
 {
     [TestMethod]
-    public void RepeatInTheSameZone_IsAnsweredOnlyAfterAWhile()
+    public void RepeatForTheSameZoneEntry_IsAnsweredOnlyAfterAWhile()
     {
         var replies = new ZoneLoadReplies();
-        var zone = new object();
 
-        Assert.IsTrue(replies.TryAnswer(zone, now: 10_000));
-        Assert.IsFalse(replies.TryAnswer(zone, now: 10_000));
-        Assert.IsFalse(replies.TryAnswer(zone, now: 10_000 + ZoneLoadReplies.RepeatAfterMs - 1));
-        Assert.IsTrue(replies.TryAnswer(zone, now: 10_000 + ZoneLoadReplies.RepeatAfterMs));
+        Assert.IsTrue(replies.TryAnswer(zoneEntry: 0, now: 10_000));
+        Assert.IsFalse(replies.TryAnswer(zoneEntry: 0, now: 10_000));
+        Assert.IsFalse(replies.TryAnswer(zoneEntry: 0, now: 10_000 + ZoneLoadReplies.RepeatAfterMs - 1));
+        Assert.IsTrue(replies.TryAnswer(zoneEntry: 0, now: 10_000 + ZoneLoadReplies.RepeatAfterMs));
     }
 
     [TestMethod]
-    public void FirstInANewZone_IsAlwaysAnswered()
+    public void FirstForEachZoneEntry_IsAlwaysAnswered()
     {
         var replies = new ZoneLoadReplies();
-        var world = new object();
-        var house = new object();
 
-        Assert.IsTrue(replies.TryAnswer(world, now: 10_000));
-        Assert.IsTrue(replies.TryAnswer(house, now: 10_001), "Into a house at once.");
-        Assert.IsTrue(replies.TryAnswer(world, now: 10_002), "And out again: a new zone for this answer.");
-        Assert.IsFalse(replies.TryAnswer(world, now: 10_003));
+        Assert.IsTrue(replies.TryAnswer(zoneEntry: 0, now: 10_000), "The zone the player logged in to.");
+        Assert.IsTrue(replies.TryAnswer(zoneEntry: 1, now: 10_001), "Into a house at once.");
+        Assert.IsTrue(replies.TryAnswer(zoneEntry: 2, now: 10_002), "And out again: a new entry for this answer.");
+        Assert.IsFalse(replies.TryAnswer(zoneEntry: 2, now: 10_003));
+    }
+
+    [TestMethod]
+    public void BackInTheZoneAnsweredLast_IsAnsweredAgain()
+    {
+        // Answered in the world (entry 1), moved into a house (2) and sent out again as its owner locked it (3), before
+        // the client reported the house: back in the world, it loads it again and must be answered, however soon.
+        var replies = new ZoneLoadReplies();
+
+        Assert.IsTrue(replies.TryAnswer(zoneEntry: 1, now: 10_000));
+        Assert.IsTrue(replies.TryAnswer(zoneEntry: 3, now: 10_500));
+        Assert.IsFalse(replies.TryAnswer(zoneEntry: 3, now: 10_600));
     }
 
     [TestMethod]
@@ -38,10 +47,9 @@ public sealed class ZoneLoadRepliesTests
         // The player has one of each: a "ready" answered doesn't use up the "finished loading" that follows it.
         var ready = new ZoneLoadReplies();
         var finishedLoading = new ZoneLoadReplies();
-        var zone = new object();
 
-        Assert.IsTrue(ready.TryAnswer(zone, now: 10_000));
-        Assert.IsTrue(finishedLoading.TryAnswer(zone, now: 10_500));
-        Assert.IsFalse(finishedLoading.TryAnswer(zone, now: 10_600));
+        Assert.IsTrue(ready.TryAnswer(zoneEntry: 0, now: 10_000));
+        Assert.IsTrue(finishedLoading.TryAnswer(zoneEntry: 0, now: 10_500));
+        Assert.IsFalse(finishedLoading.TryAnswer(zoneEntry: 0, now: 10_600));
     }
 }

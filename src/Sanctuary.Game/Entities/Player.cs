@@ -109,6 +109,13 @@ public sealed class Player : ClientPcData, IEntity
     public long NextChatTooFastNoticeAt { get; set; }
 
     /// <summary>
+    /// Counts the player's entries into a zone since they logged in; the zone they logged in to is 0. Each is a zone
+    /// load for the client, even back in the zone it was last in, so the zone-load replies are kept per entry
+    /// (<see cref="ZoneLoadReplies"/>).
+    /// </summary>
+    public int ZoneEntry { get; private set; }
+
+    /// <summary>
     /// When the client's "ready" is answered (<see cref="ZoneLoadReplies"/>): each answer sends the zone's whole welcome
     /// and, in the world, reads the house list from the database.
     /// </summary>
@@ -121,14 +128,22 @@ public sealed class Player : ClientPcData, IEntity
     public ZoneLoadReplies ClientFinishedLoadingReplies { get; } = new();
 
     /// <summary>
-    /// The earliest time (<see cref="Environment.TickCount64"/>) the next request of each kind is answered. Each one
-    /// costs the server far more than the client: a path search, a move to another zone (<see cref="ZoneTeleports"/>).
-    /// Repeats sooner are dropped.
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the next Take Me There is answered: each one costs
+    /// the server a path search, far more than the client. Repeats sooner are dropped.
     /// </summary>
     public long NextTakeMeThereAt { get; set; }
 
-    /// <inheritdoc cref="NextTakeMeThereAt"/>
+    /// <summary>
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the player's next move to another zone is made
+    /// (<see cref="ZoneTeleports"/>). One asked for sooner waits in <see cref="WaitingZoneMove"/>.
+    /// </summary>
     public long NextZoneTeleportAt { get; set; }
+
+    /// <summary>
+    /// The move to another zone that came too soon and waits for its turn (<see cref="ZoneTeleports"/>), or
+    /// <c>null</c>.
+    /// </summary>
+    public Action? WaitingZoneMove { get; set; }
 
     public DateTime LastQuestAcceptedAt { get; set; }
 
@@ -1680,6 +1695,7 @@ public sealed class Player : ClientPcData, IEntity
         ZoneTile.Entities.Remove(Guid, out _);
 
         Zone = zone;
+        ZoneEntry++;
 
         ZoneTile = ZoneTile.Empty;
 
