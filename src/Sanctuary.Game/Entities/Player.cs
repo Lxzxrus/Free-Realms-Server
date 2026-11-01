@@ -474,6 +474,7 @@ public sealed class Player : ClientPcData, IEntity
     public NpcAbilityDefinition? NpcAbility { get; set; }
     public DateTimeOffset NpcAbilityExpiresAt { get; set; }
     public DateTimeOffset NpcAbilityNextCastAt { get; set; }
+    public DateTimeOffset NpcAbilityNextPickupAt { get; set; }
     public int NpcAbilityProfileId { get; set; }
 
     public void UpdateEverySecond()
