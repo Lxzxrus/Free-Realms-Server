@@ -92,12 +92,13 @@ public sealed class QuestDefinitionTests
     }
 
     /// <summary>
-    /// A play step names the NPC who offers its game, or it has no target, and a talk step after it takes the hand-in, or
-    /// the game's win would hand the quest in over the game. The loader warns about both and loads the quests all the
-    /// same.
+    /// A play step names the NPC who offers its game, or it has no target, and a talk step of its own after it takes the
+    /// hand-in, or the game's win could hand the quest in over the game: a quest is handed in when the last of its last
+    /// step's goals is done, so a game in that step, last or beside the hand-in talk (WithPrevious), is warned about. A
+    /// game beside another goal in an earlier step is fine. The loader loads the quests all the same.
     /// </summary>
     [TestMethod]
-    public void Load_WarnsAboutAPlayGoalNoNpcOffers_AndAQuestEndingOnOne()
+    public void Load_WarnsAboutAPlayGoalNoNpcOffers_AndOneInAQuestsLastStep()
     {
         var logger = new QuestWorld.RecordingLogger();
         var quests = new QuestDefinitionCollection(logger);
@@ -106,16 +107,19 @@ public sealed class QuestDefinitionTests
             [
               { "QuestId": 1, "TargetNpcId": 500, "Goals": [ { "Type": 3, "NameId": 10, "ActivityId": 450, "NpcId": 2069 }, { "Type": 0, "NameId": 11 } ] },
               { "QuestId": 2, "TargetNpcId": 500, "Goals": [ { "Type": 3, "NameId": 20, "ActivityId": 450 }, { "Type": 0, "NameId": 21 } ] },
-              { "QuestId": 3, "TargetNpcId": 500, "Goals": [ { "Type": 0, "NameId": 30 }, { "Type": 3, "NameId": 31, "ActivityId": 450, "NpcId": 2069 } ] }
+              { "QuestId": 3, "TargetNpcId": 500, "Goals": [ { "Type": 0, "NameId": 30 }, { "Type": 3, "NameId": 31, "ActivityId": 450, "NpcId": 2069 } ] },
+              { "QuestId": 4, "TargetNpcId": 500, "Goals": [ { "Type": 3, "NameId": 40, "ActivityId": 450, "NpcId": 2069 }, { "Type": 0, "NameId": 41, "WithPrevious": true } ] },
+              { "QuestId": 5, "TargetNpcId": 500, "Goals": [ { "Type": 3, "NameId": 50, "ActivityId": 450, "NpcId": 2069 }, { "Type": 0, "NameId": 51, "WithPrevious": true }, { "Type": 0, "NameId": 52 } ] }
             ]
             """)));
 
         var warnings = logger.Entries.Where(entry => entry.Level == LogLevel.Warning).Select(entry => entry.Message).ToList();
 
-        Assert.AreEqual(2, warnings.Count, string.Join(" | ", warnings));
+        Assert.AreEqual(3, warnings.Count, string.Join(" | ", warnings));
         Assert.IsTrue(warnings.Any(warning => warning.StartsWith("Play goal on quest 2 has no NpcId")), string.Join(" | ", warnings));
-        Assert.IsTrue(warnings.Any(warning => warning.StartsWith("Quest 3 ends on a play goal")), string.Join(" | ", warnings));
-        Assert.AreEqual(3, quests.Quests.Count);
+        Assert.IsTrue(warnings.Any(warning => warning.StartsWith("Quest 3's last step has a play goal")), string.Join(" | ", warnings));
+        Assert.IsTrue(warnings.Any(warning => warning.StartsWith("Quest 4's last step has a play goal")), string.Join(" | ", warnings));
+        Assert.AreEqual(5, quests.Quests.Count);
     }
 
     /// <summary>

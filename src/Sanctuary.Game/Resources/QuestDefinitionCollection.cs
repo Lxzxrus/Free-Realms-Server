@@ -261,10 +261,12 @@ public class QuestDefinitionCollection
             }
         }
 
-        // Evergrove: a quest that ends on a play step would be handed in the moment the game is won, its reward window
-        // over the game and no line from anyone, as a game has no conversation. A talk step after it takes the hand-in.
-        if (quest.Goals.Count > 0 && quest.Goals[^1] is PlayActivityGoal)
-            _logger.LogWarning("Quest {id} ends on a play goal in \"{file}\"; winning the game would hand it in, over the game and with nobody's thanks. End it with a talk goal.", quest.QuestId, filePath);
+        // Evergrove: a quest is handed in when the last goal of its last step is done, so a play goal anywhere in that step
+        // could hand it in the moment the game is won, its reward window over the game and no line from anyone, as a game
+        // has no conversation: last of all, or beside the hand-in talk (WithPrevious) once the talk is done. A talk step of
+        // its own after the game takes the hand-in.
+        if (quest.LastStepGoals().Any(goal => goal is PlayActivityGoal))
+            _logger.LogWarning("Quest {id}'s last step has a play goal in \"{file}\"; winning the game could hand it in, over the game and with nobody's thanks. End the quest with a talk goal in a step of its own, not WithPrevious.", quest.QuestId, filePath);
     }
 
     private void EnforceSymmetricExclusions(Index index, string filePath)

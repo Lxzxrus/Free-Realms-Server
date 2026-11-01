@@ -117,6 +117,10 @@ public sealed class QuestDefinition
         return goalIndex;
     }
 
+    // Evergrove: the goals of the quest's last step, the last goal and those open with it (WithPrevious). Whichever of
+    // them is done last hands the quest in.
+    public IEnumerable<QuestGoal> LastStepGoals() => Goals.Skip(StepStartOf(Goals.Count - 1));
+
     private bool IsGoalDoneFor(QuestLog playerQuests, int goalIndex)
     {
         if (!playerQuests.Contains(QuestId))

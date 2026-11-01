@@ -233,7 +233,8 @@ public sealed class QuestDefinitionCollectionTests
     /// A step won by playing a game (<see cref="PlayActivityGoal"/>) is credited only by a win the server reports, from a
     /// match-three game or a Cooking recipe. A step naming any other activity (a fishing hole, a game that isn't built)
     /// could never be finished; the server only warns about it. Every one names the NPC who offers its game, or it would
-    /// have no target and no Take Me There, and none is a quest's last step, which a talk step takes for the hand-in.
+    /// have no target and no Take Me There, and none is in a quest's last step, not even beside the hand-in talk
+    /// (WithPrevious): a talk step of its own takes the hand-in, or winning the game could hand the quest in.
     /// </summary>
     [TestMethod]
     public void ShippedPlayGoals_NameAGameWhoseWinsTheServerReports()
@@ -250,10 +251,10 @@ public sealed class QuestDefinitionCollectionTests
 
         var problems = playGoals
             .Where(play => PlayableActivities.WinsOf(play.Goal.ActivityId, mimic) == ActivityWins.NotReported
-                || play.Goal.RequiredCount < 1 || play.Goal.NpcId == 0 || ReferenceEquals(play.Goal, play.Quest.Goals[^1]))
+                || play.Goal.RequiredCount < 1 || play.Goal.NpcId == 0 || play.Quest.LastStepGoals().Contains(play.Goal))
             .Select(play => $"Quest {play.Quest.QuestId}, goal {play.Goal.NameId}: activity {play.Goal.ActivityId}, " +
-                $"{play.Goal.RequiredCount} wins, offered by NPC {play.Goal.NpcId}, step {play.Quest.Goals.IndexOf(play.Goal) + 1} " +
-                $"of {play.Quest.Goals.Count}")
+                $"{play.Goal.RequiredCount} wins, offered by NPC {play.Goal.NpcId}, goal {play.Quest.Goals.IndexOf(play.Goal) + 1} " +
+                $"of {play.Quest.Goals.Count}{(play.Quest.LastStepGoals().Contains(play.Goal) ? ", in the quest's last step" : "")}")
             .ToList();
 
         Assert.AreEqual(0, problems.Count, string.Join("\n", problems));

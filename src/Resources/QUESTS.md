@@ -74,6 +74,10 @@ done. Each goal becomes its own tracker row.
   `NameId` of a goal live characters may be on needs a migration (see "Database").
 - `DialogueId` on the **final** goal becomes the turn-in speech bubble; an earlier talk goal's
   `DialogueId` is what its NPC says as that step is ticked off.
+- `"WithPrevious": true` opens a goal together with the one before it, as one step: the step's goals
+  can be done in any order, and the next step opens once all of them are. One Man's Trash (624) has
+  four pickups in one step, then the talk. The quest is handed in when the last goal of its last step
+  is done, whichever that is.
 - `Type` defaults to `0` (TalkToNpc) if omitted.
 
 ## Goal types
@@ -158,11 +162,15 @@ Fishing and the wheel report no wins, so a step can't be won there. A catch does
 yet (a later piece adds a catch event from `FishingSession`, the hole being the activity), so **a play step
 can't name a fishing hole**: Reed's Testing the Waters, at Sacred Grove Shallows (activity 563), waits for
 it. The server warns at startup, and the test `ShippedPlayGoals_NameAGameWhoseWinsTheServerReports`
-fails, when a step names a game whose wins aren't reported, names no NPC to offer it, or ends the quest.
+fails, when a step names a game whose wins aren't reported, names no NPC to offer it, or is in the
+quest's last step.
 
-**A play step is followed by a talk step for the hand-in**, as the Cafe's steak is handed to Simone. A
-quest that ended on a play step would be handed in the moment the game is won: the reward window would
-open over the game, with no line from anyone, as a game has no conversation. The loader warns about it.
+**A play step is followed by a talk step for the hand-in**, as the Cafe's steak is handed to Simone, and
+**the hand-in talk is a step of its own, never `WithPrevious`**. A quest is handed in when the last goal
+of its last step is done, so a game in that step would hand the quest in the moment it is won: last of
+all, or beside the hand-in talk once the player had talked first. The reward window would open over the
+game, with no line from anyone, as a game has no conversation. The loader warns about a play goal
+anywhere in a quest's last step.
 
 Each win counts once, toward one quest: with two quests on a step for the same game, one win ticks the
 tracked one's, or else the one with the lowest `QuestId` (a pickup two quests want goes the same way). It
@@ -319,7 +327,8 @@ goal's `NameId` has to change, add a migration for both providers that moves the
 4. Wire `PrerequisiteQuestId`/`NextQuestId` if it's part of a chain, `ExcludesQuestIds` if it's
    mutually exclusive with another quest.
 5. If it has a `Collect` goal, add its node type, pool and spawn points (see Collect example). A
-   `PlayActivity` goal needs a game whose wins the server reports, and an NPC to offer it; on Cooking,
-   the quest rewards coins and stars only (see PlayActivity example).
+   `PlayActivity` goal needs a game whose wins the server reports, an NPC to offer it, and a hand-in
+   talk step of its own after it; on Cooking, the quest rewards coins and stars only (see PlayActivity
+   example).
 6. Build, spawn any test NPCs with `/npc spawn`, and walk through accept -> goals -> turn-in
    in-client.
