@@ -319,12 +319,15 @@ public static class PetHelper
             Position = chest.Position
         }, true);
 
+        // Evergrove: removed before it pays. Paying saves to the database and can throw, and a chest left in the zone then
+        // stayed opened and was never removed, since its despawn removes only a chest it can open. Paying needs only the
+        // chest's guid and reward tables.
+        EntityHelper.RemovePlayerGracefully(chest, animate: true, delay: TreasureChestOpenDurationMs);
+
         if (chest.CoinRewardTableKey is not null && rewardManager.TryRollReward(chest.CoinRewardTableKey, out var coinDrop) && coinDrop is not null)
             rewardManager.TryGrantReward(player, coinDrop, chest.Guid);
 
         itemDrop = RollTreasureSpring(player) ?? RollTreasureItem(player, chest, rewardManager, resourceManager);
-
-        EntityHelper.RemovePlayerGracefully(chest, animate: true, delay: TreasureChestOpenDurationMs);
         return true;
     }
 
