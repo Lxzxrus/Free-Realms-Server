@@ -1732,9 +1732,23 @@ public abstract class BaseZone : IZone, IDisposable
             return GuidHelper.GetNpcGuid(GuidHelper.GetNpcCounter(guid.Value), instanceId);
         }
 
+        // Evergrove: the counter has 28 bits, and the starting zone lives as long as the server, so it wraps back to
+        // the first dynamic counter instead of throwing once used up (a client respawning its mount could get there),
+        // skipping any GUID still in use.
         lock (_npcGuidLock)
         {
-            return GuidHelper.GetNpcGuid(_nextNpcCounter++, instanceId);
+            for (var tries = 0UL; tries <= GuidHelper.MaxNpcCounter - FirstNpcCounter; tries++)
+            {
+                if (_nextNpcCounter > GuidHelper.MaxNpcCounter)
+                    _nextNpcCounter = FirstNpcCounter;
+
+                var npcGuid = GuidHelper.GetNpcGuid(_nextNpcCounter++, instanceId);
+
+                if (!_entities.ContainsKey(npcGuid))
+                    return npcGuid;
+            }
+
+            throw new InvalidOperationException($"Zone {Name} ({Id}) has no free NPC GUID left.");
         }
     }
 

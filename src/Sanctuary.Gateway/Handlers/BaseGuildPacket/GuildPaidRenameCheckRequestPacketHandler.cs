@@ -45,6 +45,12 @@ public static class GuildPaidRenameCheckRequestPacketHandler
         {
             result = 2;
         }
+        else if (!GuidHelper.IsGuildGuid(guildGuid))
+        {
+            // Evergrove: not a guild GUID (only a modified client sends one while in no guild), so not a guild leader;
+            // the lookups below would throw on it.
+            result = 1;
+        }
         else
         {
             using var dbContext = _dbContextFactory.CreateDbContext();

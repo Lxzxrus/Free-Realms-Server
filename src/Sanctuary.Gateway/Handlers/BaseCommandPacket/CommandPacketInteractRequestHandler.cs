@@ -28,6 +28,8 @@ namespace Sanctuary.Gateway.Handlers;
 [PacketHandler]
 public static class CommandPacketInteractRequestHandler
 {
+    private const int MinQuestPickupIntervalMs = 500;
+
     private static ILogger _logger = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
     private static IResourceManager _resourceManager = null!;
@@ -160,6 +162,16 @@ public static class CommandPacketInteractRequestHandler
             ChatHelper.SendSystemMessage(player, "You don't need this right now.");
             return true;
         }
+
+        // Evergrove: every pickup is saved to the database, and abandoning and retaking the quest brings the pickups
+        // back, so a modified client could pick them up as fast as it sends. A pickup that comes too soon changes
+        // nothing and leaves the node where it is; a person clicking stays well under two a second.
+        var now = Environment.TickCount64;
+
+        if (now < player.NextQuestPickupAt)
+            return true;
+
+        player.NextQuestPickupAt = now + MinQuestPickupIntervalMs;
 
         player.OnRemoveVisibleNpcGracefully(node, animate: true);
 

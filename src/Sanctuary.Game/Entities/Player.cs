@@ -140,6 +140,12 @@ public sealed class Player : ClientPcData, IEntity
     /// <inheritdoc cref="NextTakeMeThereAt"/>
     public long NextZoneTeleportAt { get; set; }
 
+    /// <summary>When the player may next summon a mount: each one is a new npc, and a new NPC GUID, shown to everyone near.</summary>
+    public long NextMountSpawnAt { get; set; }
+
+    /// <summary>When the player may next pick up one of their own quest pickups: each one is saved to the database.</summary>
+    public long NextQuestPickupAt { get; set; }
+
     /// <summary>
     /// Collection entries this character picked up directly (exploration coins). Loaded at login and kept in step
     /// with the CharacterCollectionEntries table. Read on the zone thread when nodes come into view.

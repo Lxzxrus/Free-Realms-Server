@@ -36,6 +36,10 @@ public static class GuildNameRequestPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(GuildNameRequestPacket), packet);
 
+        // Evergrove: GetGuildId throws on a GUID without the guild prefix, which only a modified client sends.
+        if (!GuidHelper.IsGuildGuid(packet.Guid))
+            return true;
+
         var guildId = GuidHelper.GetGuildId(packet.Guid);
 
         using var dbContext = _dbContextFactory.CreateDbContext();
