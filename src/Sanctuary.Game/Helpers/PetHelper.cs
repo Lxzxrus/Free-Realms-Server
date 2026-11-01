@@ -55,16 +55,21 @@ public static class PetHelper
     public const int NameMaxLength = 32;
 
     /// <summary>
-    /// Evergrove: whether a player may give a pet this name. Everyone near the pet sees it on its name plate, so it
-    /// follows the rules for character names (CheckNamePacketHandler): only the letters
-    /// <see cref="CharacterNameHelper.ContainsIllegalCharacters"/> allows, and no word from the server's name filter.
-    /// Upstream refused only blank and long names and control characters, so a pet could carry a word the filter keeps
-    /// out of every other name, or invisible and right-to-left marks.
+    /// Evergrove: whether a player may give a pet this name. Everyone near the pet sees it on its name plate, so, like a
+    /// character name (CheckNamePacketHandler), it may hold no word from the server's name filter, and only the Latin
+    /// letters character names allow (<see cref="CharacterNameHelper.ContainsIllegalCharacters"/>), space and apostrophe.
+    /// It may also hold '.' and '-': the client names a pet only with its name picker, which joins a title and a name
+    /// from its Resources/PetNames.txt as "[*pet_first*] [*pet_second*]", and those include "Mr.", "Lt." and "She-Rex".
+    /// The symbols and invisible marks in the character names' range, such as the soft hyphen, which can split a
+    /// filtered word unseen, are refused. Upstream refused only blank and long names and control characters, so a pet
+    /// could carry a word the filter keeps out of every other name, or invisible and right-to-left marks.
     /// </summary>
     public static bool IsValidName(string name, IEnumerable<string> nameFilter) =>
-        !string.IsNullOrWhiteSpace(name) && name.Length <= NameMaxLength && !name.Any(char.IsControl)
-        && !CharacterNameHelper.ContainsIllegalCharacters(name)
+        !string.IsNullOrWhiteSpace(name) && name.Length <= NameMaxLength && name.All(IsNameCharacter)
         && !nameFilter.Any(token => name.Contains(token, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsNameCharacter(char character) =>
+        character is ' ' or '\'' or '.' or '-' || character is >= 'A' and <= '\u024F' && char.IsLetter(character);
 
     private const int FirstTreasureSpringItemDefinitionId = 23427;
     private const int NoTint = 0;
