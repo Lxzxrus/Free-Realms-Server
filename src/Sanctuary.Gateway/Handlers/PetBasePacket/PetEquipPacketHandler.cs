@@ -49,6 +49,10 @@ public static class PetEquipPacketHandler
         if (pet is null || petClientInfo is null || pet.Guid != player.ActivePetGuid || !PetHelper.PetClothingSlots.Contains(petEquipPacket.Slot))
             return true;
 
+        // Evergrove: one pet request every PetHelper.RequestIntervalMs. An equip saves and is shown to everyone nearby.
+        if (!PetHelper.TryStartRequest(player))
+            return true;
+
         var characterId = GuidHelper.GetPlayerId(player.Guid);
         using var dbContext = _dbContextFactory.CreateDbContext();
         var dbPet = dbContext.Pets.Include(ownedPet => ownedPet.Items)

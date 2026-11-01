@@ -59,6 +59,13 @@ public static class PetRequestNamePacketHandler
             return true;
         }
 
+        // Evergrove: one pet request every PetHelper.RequestIntervalMs. A rename saves and is shown to everyone nearby.
+        if (!PetHelper.TryStartRequest(player))
+        {
+            connection.SendTunneled(petSetNamePacket);
+            return true;
+        }
+
         var characterId = GuidHelper.GetPlayerId(player.Guid);
         using var dbContext = _dbContextFactory.CreateDbContext();
 

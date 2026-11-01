@@ -150,6 +150,10 @@ public sealed class Player : ClientPcData, IEntity
     public DateTimeOffset LoginStartedAt { get; set; }
 
     public long NextClientPathRequestAt { get; set; }
+
+    /// <summary>Evergrove: when the player may next rename, dress, equip or tend a pet (<see cref="PetHelper.TryStartRequest"/>).</summary>
+    public long NextPetRequestAt { get; set; }
+
     public int SecondsSinceLastLogin { get; set; } = -1;
 
     public int StationCash { get; set; }

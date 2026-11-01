@@ -30,6 +30,27 @@ public static class PetHelper
     public static bool IsTreasureOnCooldown(IReadOnlyDictionary<int, DateTimeOffset> treasureFoundAtByPet, DateTimeOffset now) =>
         treasureFoundAtByPet.Values.Any(foundAt => now - foundAt < TreasureCooldown);
 
+    /// <summary>
+    /// Evergrove: the shortest time between a player's pet requests that query the database or are shown to the players
+    /// nearby: rename, equip, utility, favourite trick, feed and groom. Each one runs on the gateway's single packet
+    /// thread, and renames and equips are sent to everyone who sees the pet, so a client sending them as fast as it
+    /// could held up every player's packets. The pet window sends one per click, far fewer than four a second.
+    /// </summary>
+    public const int RequestIntervalMs = 250;
+
+    /// <summary>
+    /// Whether the player may make one of those requests now. If so, the next must wait <see cref="RequestIntervalMs"/>,
+    /// as ClientPathRequestPacketHandler does with <see cref="Player.NextClientPathRequestAt"/>.
+    /// </summary>
+    public static bool TryStartRequest(Player player)
+    {
+        if (Environment.TickCount64 < player.NextPetRequestAt)
+            return false;
+
+        player.NextPetRequestAt = Environment.TickCount64 + RequestIntervalMs;
+        return true;
+    }
+
     private const int FirstTreasureSpringItemDefinitionId = 23427;
     private const int NoTint = 0;
     private const int LastTreasureSpringItemDefinitionId = 23458;
@@ -156,7 +177,9 @@ public static class PetHelper
         secondDefinition = null;
         petClientInfo = player.GetActivePetClientInfo();
 
-        if (player.Pet is null || petClientInfo is null || petId != player.ActivePetId)
+        // Evergrove: feeding and grooming are pet requests too (TryStartRequest), as each runs two queries. A refusal
+        // unlocks the client's buttons like any other.
+        if (player.Pet is null || petClientInfo is null || petId != player.ActivePetId || !TryStartRequest(player))
         {
             player.PlayerPet.UnlockPetActions();
             return false;
