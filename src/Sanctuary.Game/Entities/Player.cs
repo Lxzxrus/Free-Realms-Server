@@ -102,6 +102,34 @@ public sealed class Player : ClientPcData, IEntity
     public ulong LastInteractNpcGuid { get; set; }
     public DateTime LastInteractAt { get; set; }
 
+    /// <summary>Chat messages the player may still send (<see cref="ChatLimits"/>).</summary>
+    public Allowance ChatAllowance { get; } = new(ChatLimits.Burst, ChatLimits.RefillMs, Environment.TickCount64);
+
+    /// <summary>When (<see cref="Environment.TickCount64"/>) the player may next be told they chat too fast.</summary>
+    public long NextChatTooFastNoticeAt { get; set; }
+
+    /// <summary>
+    /// When the client's "ready" is answered (<see cref="ZoneLoadReplies"/>): each answer sends the zone's whole welcome
+    /// and, in the world, reads the house list from the database.
+    /// </summary>
+    public ZoneLoadReplies ClientIsReadyReplies { get; } = new();
+
+    /// <summary>
+    /// When the client's "finished loading" is answered (<see cref="ZoneLoadReplies"/>): in a house, each answer reads
+    /// where every fixture is from the database and sends one packet per fixture.
+    /// </summary>
+    public ZoneLoadReplies ClientFinishedLoadingReplies { get; } = new();
+
+    /// <summary>
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the next request of each kind is answered. Each one
+    /// costs the server far more than the client: a path search, a move to another zone (<see cref="ZoneTeleports"/>).
+    /// Repeats sooner are dropped.
+    /// </summary>
+    public long NextTakeMeThereAt { get; set; }
+
+    /// <inheritdoc cref="NextTakeMeThereAt"/>
+    public long NextZoneTeleportAt { get; set; }
+
     public DateTime LastQuestAcceptedAt { get; set; }
 
     public Dictionary<int, bool> Quests { get; } = new();

@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -34,7 +35,7 @@ public static class QuickChatSendTellPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(QuickChatSendTellPacket), packet);
 
-        if (connection.Player.IsMuted())
+        if (connection.Player.IsMuted() || !ChatLimits.TryUseAllowance(connection.Player))
             return true;
 
         if (string.IsNullOrEmpty(packet.ToName))

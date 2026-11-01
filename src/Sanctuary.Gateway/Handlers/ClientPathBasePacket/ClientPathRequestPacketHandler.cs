@@ -36,10 +36,8 @@ public static class ClientPathRequestPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(ClientPathRequestPacket), clientPathRequestPacket);
 
-        if (clientPathRequestPacket.Guid != connection.Player.Guid || Environment.TickCount64 < connection.Player.NextClientPathRequestAt)
+        if (clientPathRequestPacket.Guid != connection.Player.Guid)
             return true;
-
-        connection.Player.NextClientPathRequestAt = Environment.TickCount64 + MinRequestIntervalMs;
 
         // Evergrove: a real client asks for paths between points in its zone. A point that isn't finite or lies far
         // outside the world never comes from one, and could freeze the Gateway inside the navmesh query
@@ -56,6 +54,20 @@ public static class ClientPathRequestPacketHandler
             Type = clientPathRequestPacket.Type,
             Id = clientPathRequestPacket.Id
         };
+
+        // Evergrove: one search every MinRequestIntervalMs. A request sooner (a click-to-move double click, or the
+        // client asking again at once after a reply with no path) still gets an answer, the straight line from start to
+        // goal: the client waits for a reply to every request, Take Me There for up to 10 s.
+        if (Environment.TickCount64 < connection.Player.NextClientPathRequestAt)
+        {
+            clientPathReplyPacket.Points.Add(clientPathRequestPacket.FromPosition);
+            clientPathReplyPacket.Points.Add(clientPathRequestPacket.ToPosition);
+
+            connection.SendTunneled(clientPathReplyPacket);
+            return true;
+        }
+
+        connection.Player.NextClientPathRequestAt = Environment.TickCount64 + MinRequestIntervalMs;
 
         var start = clientPathRequestPacket.FromPosition.ToVector3();
         var waypoints = new Queue<Vector3>();
