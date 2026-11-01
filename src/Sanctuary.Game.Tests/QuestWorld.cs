@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -17,6 +18,7 @@ using Sanctuary.Database.Sqlite;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Jobs;
+using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Zones;
@@ -29,7 +31,9 @@ namespace Sanctuary.Game.Tests;
 /// <summary>
 /// The quest manager with what a quest's steps and its turn-in touch: one character saved in an in-memory database, an
 /// Adventurer; the job manager the trainers use; and that character online in an empty zone, sent packets that go
-/// nowhere. The shipped rank levels price the stars; the Adventurer and Chef jobs have no kit of their own.
+/// nowhere. The shipped rank levels price the stars, and the shipped Games menu entries name the games; the Adventurer
+/// and Chef jobs have no kit of their own. The games an NPC opens for a quest step are recorded in <see cref="Launched"/>,
+/// where the Gateway would open them.
 /// </summary>
 public sealed class QuestWorld : IDisposable
 {
@@ -46,6 +50,7 @@ public sealed class QuestWorld : IDisposable
         StopWatcher(Resources);
 
         Assert.IsTrue(Resources.RankLevels.Load(FindSourceFile("Resources", "RankLevels.json")));
+        Assert.IsTrue(Resources.ClientActivityDefinitions.Load(FindSourceFile("Resources", "ClientActivityDefinitions.json")));
 
         foreach (var profileId in new[] { Adventurer, Chef })
             Resources.Profiles.TryAdd(profileId, new ClientProfileData { Id = profileId });
@@ -84,7 +89,8 @@ public sealed class QuestWorld : IDisposable
         // As the Gateway builds them: the job manager refreshes trainer badges through the quest manager, which takes
         // the job manager lazily.
         JobManager jobs = null!;
-        Quests = new QuestManager(Resources, null!, database, new Lazy<IJobManager>(() => jobs), NullLogger<QuestManager>.Instance);
+        Quests = new QuestManager(Resources, null!, database, new Lazy<IJobManager>(() => jobs),
+            new Lazy<IActivityLauncher>(() => new Launcher(Launched)), NullLogger<QuestManager>.Instance);
         Jobs = jobs = new JobManager(Resources, database, null!, Quests, NullLogger<JobManager>.Instance);
 
         // The pet tests' connection that never connects, so the packets a step or a turn-in sends go nowhere.
@@ -109,6 +115,9 @@ public sealed class QuestWorld : IDisposable
     public JobManager Jobs { get; }
 
     public Player Player { get; }
+
+    /// <summary>The games opened for the player through the launcher (activity ids), in order.</summary>
+    public List<int> Launched { get; } = [];
 
     /// <summary>A quest the server has, offered by nobody in particular.</summary>
     public QuestDefinition Add(QuestDefinition quest)
@@ -170,6 +179,16 @@ public sealed class QuestWorld : IDisposable
     private sealed class Database(Func<DatabaseContext> createDbContext) : IDbContextFactory<DatabaseContext>
     {
         public DatabaseContext CreateDbContext() => createDbContext();
+    }
+
+    /// <summary>The Gateway's launcher, as far as the quests see it: every game opens.</summary>
+    private sealed class Launcher(List<int> launched) : IActivityLauncher
+    {
+        public bool TryLaunch(Player player, int activityId)
+        {
+            launched.Add(activityId);
+            return true;
+        }
     }
 
     /// <summary>A zone with no NPCs in it: the badges and markers a step refreshes find nobody to update.</summary>

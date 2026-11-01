@@ -38,20 +38,8 @@ public static class ActivityPacketJoinActivityRequestHandler
         if (!_resourceManager.ClientActivityDefinitions.TryGetValue(packet.ActivityId, out var clientActivityDefinition))
             return true;
 
-        if (packet.ActivityId == DailyWheelHandler.ActivityId)
-        {
-            DailyWheelHandler.Open(connection);
+        if (TryOpen(connection, clientActivityDefinition))
             return true;
-        }
-
-        if (FlashMinigameHandler.TryOpen(connection, clientActivityDefinition))
-            return true;
-
-        if (FishingHandler.IsFishingHole(packet.ActivityId))
-        {
-            FishingHandler.Join(connection, clientActivityDefinition);
-            return true;
-        }
 
         // Free Realms Trading Card Game Lobby
         if (packet.ActivityId == 7)
@@ -130,4 +118,33 @@ public static class ActivityPacketJoinActivityRequestHandler
 
         return true;
     }
+
+    /// <summary>
+    /// Evergrove: opens one of the games the server serves, as choosing it in the Games menu does: the wheel, a Flash
+    /// minigame (match three, Cooking) or a fishing hole, each with its own checks (one game at a time...). False for any
+    /// other activity. The NPC who offers a quest step's game opens it through here too (<see cref="ActivityLauncher"/>).
+    /// </summary>
+    public static bool TryOpen(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
+    {
+        if (activity.Id == DailyWheelHandler.ActivityId)
+        {
+            DailyWheelHandler.Open(connection);
+            return true;
+        }
+
+        if (FlashMinigameHandler.TryOpen(connection, activity))
+            return true;
+
+        if (FishingHandler.IsFishingHole(activity.Id))
+        {
+            FishingHandler.Join(connection, activity);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <inheritdoc cref="TryOpen(GatewayConnection, Sanctuary.Packet.Common.ClientActivityDefinition)"/>
+    public static bool TryOpen(GatewayConnection connection, int activityId) =>
+        _resourceManager.ClientActivityDefinitions.TryGetValue(activityId, out var activity) && TryOpen(connection, activity);
 }

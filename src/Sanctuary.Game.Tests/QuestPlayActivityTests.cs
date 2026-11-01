@@ -1,8 +1,10 @@
+using System.Collections.Generic;
 using System.Linq;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Interactions;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
@@ -12,7 +14,7 @@ namespace Sanctuary.Game.Tests;
 /// <summary>
 /// A quest step won by playing a game (<see cref="PlayActivityGoal"/>), from the win the server's own game decides to
 /// the step ticking and being saved. MimicHandler and FlashMinigameHandler raise <see cref="ActivityWonEvent"/> where
-/// they pay a win; the quest manager does the rest.
+/// they pay a win; the quest manager does the rest. While the step is open, the NPC it names offers the game.
 /// </summary>
 [TestClass]
 public sealed class QuestPlayActivityTests
@@ -20,8 +22,12 @@ public sealed class QuestPlayActivityTests
     private const int Steak = 450;  // Cooking: Simone's Spiralmint Steak
     private const int Sundae = 460; // Cooking: Gummyfruit Topped Sundae
     private const int Simone = 2069;
+    private const int Samantha = 2045;
 
-    private const int CookStep = 94528;
+    // The steak's DisplayNameId in ClientActivityDefinitions.json: the title of the Cooking start screen.
+    private const int CookingTitle = 20226;
+
+    private const int CookStep = 21837;
     private const int HandInStep = 94536;
 
     private QuestWorld _world = null!;
@@ -32,20 +38,27 @@ public sealed class QuestPlayActivityTests
     [TestCleanup]
     public void Cleanup() => _world.Dispose();
 
-    /// <summary>The Cobblestone Village Cafe's two steps: win the steak, then take it to Simone.</summary>
-    private static QuestDefinition Cafe(int questId = 9103, int wins = 1) => new()
+    /// <summary>
+    /// The Cobblestone Village Cafe's two steps: win the steak, which Simone offers (or <paramref name="offeredBy"/>),
+    /// then take it to her.
+    /// </summary>
+    private static QuestDefinition Cafe(int questId = 9103, int wins = 1, int offeredBy = Simone) => new()
     {
         QuestId = questId,
         GiverNpcId = Simone,
         TargetNpcId = Simone,
         Goals =
         [
-            new PlayActivityGoal { NameId = CookStep, ActivityId = Steak, RequiredCount = wins },
+            new PlayActivityGoal { NameId = CookStep, ActivityId = Steak, RequiredCount = wins, NpcId = offeredBy },
             new TalkToNpcGoal { NameId = HandInStep, Targets = [new TalkTarget { NpcId = Simone }] }
         ]
     };
 
     private void Win(int activityId) => _world.Quests.OnEvent(_world.Player, new ActivityWonEvent(activityId));
+
+    /// <summary>What the NPC's menu offers the player for their quests, as a click on them asks.</summary>
+    private List<NpcInteractionOption> Options(int npcId) =>
+        _world.Quests.GetInteractionOptions(_world.Player, new Npc(null!) { DefinitionId = npcId });
 
     [TestMethod]
     public void AWin_TicksTheStep_AndTheNextOneIsSaved()
@@ -136,12 +149,62 @@ public sealed class QuestPlayActivityTests
         Assert.AreEqual(1, second.GoalIndex);
     }
 
+    /// <summary>
+    /// No world object starts a game yet, so while the cooking step is open Simone offers the steak herself: one option,
+    /// under the game's own title, that opens it the way the Games menu does (the Gateway's launcher, recorded here).
+    /// </summary>
     [TestMethod]
-    public void TheCookingStep_HasNoMarker_AndNothingForTakeMeThere()
+    public void WhileTheCookingStepIsOpen_SimoneOffersTheSteak()
     {
         _world.Accept(Cafe());
 
-        Assert.IsFalse(_world.Quests.TryGetActiveObjectiveTarget(_world.Player, out _),
-            "No world object starts a game yet, so there is nowhere to walk to.");
+        var option = Options(Simone).Single();
+
+        Assert.AreEqual(ContextIcons.QuestTurnIn, option.IconId, "The icon of a quest in progress, as a hand-in shows.");
+        Assert.AreEqual(CookingTitle, option.ButtonTextId);
+
+        option.Invoke(_world.Player);
+
+        CollectionAssert.AreEqual(new[] { Steak }, _world.Launched);
+        Assert.AreEqual(0, _world.Player.Quests.TryGetInProgress(9103, out var progress) ? progress.GoalIndex : -1,
+            "Opening the game ticks nothing: the win does.");
+    }
+
+    [TestMethod]
+    public void OnceTheSteakIsWon_SimoneTakesItInstead()
+    {
+        _world.Accept(Cafe());
+        var shownBeforeTheWin = Options(Simone).Single();
+
+        Win(Steak);
+
+        // Picked from a menu shown before the steak was won (from the Games menu, say): nothing opens.
+        shownBeforeTheWin.Invoke(_world.Player);
+        Assert.AreEqual(0, _world.Launched.Count);
+
+        Options(Simone).Single().Invoke(_world.Player);
+
+        Assert.AreEqual(0, _world.Launched.Count, "Her one option now is the hand-in.");
+        Assert.AreEqual(9103, _world.Player.Quests.PendingTurnInQuestId, "Handed in: her thanks and the rewards are shown.");
+    }
+
+    [TestMethod]
+    public void OnlyTheNpcTheStepNames_OffersTheGame()
+    {
+        _world.Accept(Cafe());
+
+        Assert.AreEqual(0, Options(Samantha).Count);
+    }
+
+    [TestMethod]
+    public void AStepNoNpcOffers_IsPlayedFromTheGamesMenuAlone()
+    {
+        _world.Accept(Cafe(offeredBy: 0));
+
+        Assert.AreEqual(0, Options(Simone).Count);
+
+        Win(Steak);
+
+        Assert.AreEqual(1, _world.Player.Quests.TryGetInProgress(9103, out var progress) ? progress.GoalIndex : -1);
     }
 }

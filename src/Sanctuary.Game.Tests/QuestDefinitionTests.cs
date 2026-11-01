@@ -60,7 +60,7 @@ public sealed class QuestDefinitionTests
                 "TargetNpcId": 500,
                 "TeachesProfileId": 45,
                 "Goals": [
-                  { "Type": 3, "NameId": 10, "ActivityId": 450 },
+                  { "Type": 3, "NameId": 10, "ActivityId": 450, "NpcId": 2069 },
                   { "NameId": 11, "ActivityId": 410, "RequiredCount": 3, "Type": 3 },
                   { "Type": 0, "NameId": 12 }
                 ]
@@ -74,10 +74,13 @@ public sealed class QuestDefinitionTests
         var steak = (PlayActivityGoal)quest.Goals[0];
         Assert.AreEqual(450, steak.ActivityId);
         Assert.AreEqual(1, steak.RequiredCount, "One win when the quest doesn't say.");
+        Assert.AreEqual(2069, steak.NpcId);
+        CollectionAssert.Contains(quests.ByTarget[2069], 1, "The NPC who offers the game is a quest NPC, clicked for it.");
 
         var harvest = (PlayActivityGoal)quest.Goals[1];
         Assert.AreEqual(410, harvest.ActivityId);
         Assert.AreEqual(3, harvest.RequiredCount);
+        Assert.AreEqual(0, harvest.NpcId, "No NPC offers the game unless the step says.");
 
         Assert.AreEqual(45, quest.TeachesProfileId);
         Assert.IsTrue(quests.TryGet(2, out var plain));

@@ -233,7 +233,33 @@ public sealed class QuestGoalTests
     }
 
     [TestMethod]
-    public void PlayGoal_NamesNoNpc_SoNoNpcWaitsOnIt()
+    public void PlayGoal_TheNpcWhoOffersTheGame_WaitsOnIt()
+    {
+        var quest = new QuestDefinition
+        {
+            QuestId = 3,
+            TargetNpcId = 500,
+            Goals =
+            [
+                new PlayActivityGoal { ActivityId = 450, NpcId = 2069 },
+                new TalkToNpcGoal { Targets = [new TalkTarget { NpcId = 500 }] }
+            ]
+        };
+        var progress = new QuestProgress(3);
+        progress.StartStep(quest, 0);
+
+        Assert.IsTrue(quest.IsWaitingOn(progress, Npc(2069)), "The \"?\" a talk step's NPC shows.");
+        Assert.AreEqual(2069, quest.GoalTargetNpcId(0), "And the step's target.");
+        Assert.IsFalse(quest.IsWaitingOn(progress, Npc(500)), "The turn-in NPC's \"?\" waits until the game is won.");
+
+        progress.FinishGoal(quest, 0);
+
+        Assert.IsFalse(quest.IsWaitingOn(progress, Npc(2069)));
+        Assert.IsTrue(quest.IsWaitingOn(progress, Npc(500)));
+    }
+
+    [TestMethod]
+    public void PlayGoal_NamingNoNpc_NoNpcWaitsOnIt()
     {
         var quest = new QuestDefinition
         {
@@ -245,6 +271,7 @@ public sealed class QuestGoalTests
         progress.StartStep(quest, 0);
 
         Assert.IsFalse(quest.IsWaitingOn(progress, Npc(500)), "The turn-in NPC's \"?\" waits until the game is won.");
+        Assert.IsFalse(quest.IsWaitingOn(progress, Npc(0)));
 
         progress.FinishGoal(quest, 0);
 

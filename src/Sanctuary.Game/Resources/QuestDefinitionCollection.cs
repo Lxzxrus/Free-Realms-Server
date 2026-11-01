@@ -29,7 +29,8 @@ public class QuestDefinitionCollection
 
     public ConcurrentDictionary<int, QuestDefinition> Quests => _index.Quests;
 
-    // NPC definition id -> the quests it offers, and the quests it is a goal target or turn-in for.
+    // NPC definition id -> the quests it offers, and the quests it is a goal target or turn-in for (Evergrove: or offers a
+    // play step's game for).
     public ConcurrentDictionary<int, List<int>> ByGiver => _index.ByGiver;
     public ConcurrentDictionary<int, List<int>> ByTarget => _index.ByTarget;
     public ConcurrentDictionary<int, List<int>> ByStateNpc => _index.ByStateNpc;
@@ -244,6 +245,18 @@ public class QuestDefinitionCollection
 
                     if (playGoal.RequiredCount <= 0)
                         _logger.LogWarning("Play goal on quest {id} has no RequiredCount in \"{file}\"; it can never be completed.", quest.QuestId, filePath);
+
+                    // Evergrove: the NPC who offers the step's game is clicked for it, and is the step's target, as a
+                    // talk step's NPC is.
+                    if (playGoal.NpcId != 0)
+                    {
+                        var questIds = index.ByTarget.GetOrAdd(playGoal.NpcId, _ => []);
+
+                        if (!questIds.Contains(quest.QuestId))
+                            questIds.Add(quest.QuestId);
+                    }
+                    else
+                        _logger.LogWarning("Play goal on quest {id} has no NpcId in \"{file}\"; no NPC offers its game, so it has no target or Take Me There.", quest.QuestId, filePath);
                     break;
             }
         }

@@ -67,9 +67,14 @@ public sealed class QuestDefinitionCollectionTests
         yield return ("TargetNpcId", quest.TargetNpcId);
 
         for (var i = 0; i < quest.Goals.Count; i++)
+        {
             if (quest.Goals[i] is TalkToNpcGoal talkGoal)
                 foreach (var npcId in talkGoal.AllTalkTargetNpcIds())
                     yield return ($"Goals[{i}]", npcId);
+
+            if (quest.Goals[i] is PlayActivityGoal playGoal)
+                yield return ($"Goals[{i}].NpcId", playGoal.NpcId);
+        }
     }
 
     /// <summary>Mistakes in a goal's conversation that would show a blank line or trap the player in it.</summary>
@@ -227,7 +232,8 @@ public sealed class QuestDefinitionCollectionTests
     /// <summary>
     /// A step won by playing a game (<see cref="PlayActivityGoal"/>) is credited only by a win the server reports, from a
     /// Cooking recipe or a match-three game. A step naming any other activity (a fishing hole, a game that isn't built)
-    /// could never be finished; the server only warns about it.
+    /// could never be finished; the server only warns about it. Every one names the NPC who offers its game, or it would
+    /// have no target and no Take Me There.
     /// </summary>
     [TestMethod]
     public void ShippedPlayGoals_NameAGameWhoseWinsTheServerReports()
@@ -243,8 +249,9 @@ public sealed class QuestDefinitionCollectionTests
         Assert.IsTrue(playGoals.Count > 0, "The Cobblestone Village Cafe's steak is a play step.");
 
         var problems = playGoals
-            .Where(play => !PlayableActivities.ReportsWins(play.Goal.ActivityId, mimic) || play.Goal.RequiredCount < 1)
-            .Select(play => $"Quest {play.Quest.QuestId}, goal {play.Goal.NameId}: activity {play.Goal.ActivityId}, {play.Goal.RequiredCount} wins")
+            .Where(play => !PlayableActivities.ReportsWins(play.Goal.ActivityId, mimic) || play.Goal.RequiredCount < 1 || play.Goal.NpcId == 0)
+            .Select(play => $"Quest {play.Quest.QuestId}, goal {play.Goal.NameId}: activity {play.Goal.ActivityId}, " +
+                $"{play.Goal.RequiredCount} wins, offered by NPC {play.Goal.NpcId}")
             .ToList();
 
         Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
@@ -252,7 +259,8 @@ public sealed class QuestDefinitionCollectionTests
 
     /// <summary>
     /// The Cobblestone Village Cafe (9103): Simone's Spiralmint Steak (activity 450, a Cooking recipe the Games menu
-    /// lists, as PlayableActivitiesTests checks), won once, then handed to Simone.
+    /// lists, as PlayableActivitiesTests checks), won once, then handed to Simone. No world object starts a game yet, so
+    /// Simone offers the steak herself, and no row of the quest sends the player to her cooking table.
     /// </summary>
     [TestMethod]
     public void ShippedCafe_IsWonBySimonesSteak_ThenHandedToHer()
@@ -264,10 +272,23 @@ public sealed class QuestDefinitionCollectionTests
         var steak = (PlayActivityGoal)cafe.Goals[0];
         Assert.AreEqual(450, steak.ActivityId);
         Assert.AreEqual(1, steak.RequiredCount);
+        Assert.AreEqual(simone, steak.NpcId, "Simone offers the steak.");
+        Assert.AreEqual(simone, cafe.GoalTargetNpcId(0), "So the step's marker and Take Me There point at her.");
 
         Assert.AreEqual(2, cafe.Goals.Count);
         Assert.AreEqual(simone, cafe.GoalTargetNpcId(1), "The steak is handed to Simone.");
         Assert.AreNotEqual(0, cafe.TurnInDialogueId, "Simone says something as it's handed in.");
+
+        // Her offer and the step's rows that say to click (or use) her cooking table, from the live quest and its unreleased
+        // first version: they wait for a table that opens the game.
+        int[] sendToTheTable = [94278, 94528, 100259, 100265, 21838];
+        int[] shown =
+        [
+            cafe.TitleId, cafe.DescriptionId, cafe.GiverDialogueId, cafe.ObjectiveDescriptionId,
+            .. cafe.Goals.SelectMany(goal => new[] { goal.NameId, goal.DescriptionId, goal.DialogueId })
+        ];
+
+        CollectionAssert.AreEqual(Array.Empty<int>(), shown.Intersect(sendToTheTable).ToArray());
     }
 
     /// <summary>

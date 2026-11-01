@@ -61,10 +61,16 @@ public sealed class QuestDefinition
     public int TurnInDialogueId =>
         Goals.Count > 0 && Goals[^1].ConversationFor(TargetNpcId) is { Count: > 0 } lines ? lines[^1].TextId : 0;
 
-    // Shared by the offer flow and the giver's badge so the two can't drift.
+    // Shared by the offer flow and the giver's badge so the two can't drift. Evergrove: a step won by playing a game is
+    // the NPC who offers the game, when it names one (PlayActivityGoal.NpcId).
     public int GoalTargetNpcId(int goalIndex)
-        => goalIndex >= 0 && goalIndex < Goals.Count && Goals[goalIndex] is TalkToNpcGoal talkGoal
-            ? talkGoal.TargetNpcId(this)
+        => goalIndex >= 0 && goalIndex < Goals.Count
+            ? Goals[goalIndex] switch
+            {
+                TalkToNpcGoal talkGoal => talkGoal.TargetNpcId(this),
+                PlayActivityGoal { NpcId: not 0 } playGoal => playGoal.NpcId,
+                _ => TargetNpcId
+            }
             : TargetNpcId;
 
     public IEnumerable<int> StateNpcIds()
@@ -135,6 +141,10 @@ public sealed class QuestDefinition
         {
             if (Goals[goalIndex].Matches(this, new NpcTalkedEvent(npc))
                 && !(goalProgress is TalkProgress talkProgress && talkProgress.HasTalkedTo(npc.DefinitionId)))
+                return true;
+
+            // Evergrove: the NPC who offers an open play step's game shows the "?" a talk step's NPC shows.
+            if (Goals[goalIndex] is PlayActivityGoal playGoal && playGoal.IsOfferedBy(npc.DefinitionId))
                 return true;
         }
 

@@ -14,6 +14,7 @@ using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Interactions;
 using Sanctuary.Game.Jobs;
+using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
 using Sanctuary.Game.Resources.Definitions.Rewards;
@@ -38,18 +39,25 @@ public sealed class QuestManager : IQuestManager
     // this quest manager, so it is taken lazily: neither has to be built before the other.
     private readonly Lazy<IJobManager> _jobManager;
 
+    // Evergrove: the NPC who offers a play step's game opens it the way the Games menu does, through the Gateway, which
+    // serves the games. Taken lazily too: building the quest manager doesn't build the Gateway's server (and open its
+    // port) along with it.
+    private readonly Lazy<IActivityLauncher> _activityLauncher;
+
     public QuestManager(IResourceManager resourceManager, IRewardManager rewardManager, IDbContextFactory<DatabaseContext> dbContextFactory,
-        Lazy<IJobManager> jobManager, ILogger<QuestManager> logger)
+        Lazy<IJobManager> jobManager, Lazy<IActivityLauncher> activityLauncher, ILogger<QuestManager> logger)
     {
         _resourceManager = resourceManager;
         _rewardManager = rewardManager;
         _dbContextFactory = dbContextFactory;
         _jobManager = jobManager;
+        _activityLauncher = activityLauncher;
         _logger = logger;
     }
 
     // Evergrove: job trainers (Sanctuary.Game.Jobs.JobTrainers) carry the "available" badge until they have nothing
-    // left to teach, so they go through the same badge refresh as quest NPCs.
+    // left to teach, so they go through the same badge refresh as quest NPCs. An NPC who offers a play step's game is in
+    // ByTarget, as a talk step's NPC is.
     public bool IsQuestNpc(int npcId)
         => _resourceManager.Quests.ByGiver.ContainsKey(npcId) || _resourceManager.Quests.ByTarget.ContainsKey(npcId)
             || JobTrainers.IsTrainer(npcId);
@@ -83,10 +91,24 @@ public sealed class QuestManager : IQuestManager
             if (!quests.TryGet(progress.QuestId, out var activeQuest))
                 continue;
 
-            if (!AdvancesHere(activeQuest, progress, npc) && !TurnsInHere(activeQuest, progress, npc))
-                continue;
-
             var quest = activeQuest;
+
+            // Evergrove: while a step won by playing a game is open, the NPC it names offers the game.
+            foreach (var goalIndex in progress.OpenGoals.Keys.Order())
+            {
+                if (quest.Goals[goalIndex] is not PlayActivityGoal playGoal || !playGoal.IsOfferedBy(npc.DefinitionId))
+                    continue;
+
+                options.Add(new NpcInteractionOption
+                {
+                    IconId = ContextIcons.QuestTurnIn,
+                    ButtonTextId = GameButtonTextId(playGoal),
+                    Invoke = interactingPlayer => OpenStepGame(interactingPlayer, quest, goalIndex)
+                });
+            }
+
+            if (!AdvancesHere(quest, progress, npc) && !TurnsInHere(quest, progress, npc))
+                continue;
 
             options.Add(new NpcInteractionOption
             {
@@ -167,6 +189,29 @@ public sealed class QuestManager : IQuestManager
 
         if (result != QuestGoalResult.Completed && goal is TalkToNpcGoal { IsCounted: true })
             QuestDialogue.Begin(player, goal.ConversationFor(npc.DefinitionId), npc.Guid);
+    }
+
+    // Evergrove: the game's name on its start screen (its ClientActivityDefinitions.json DisplayNameId), else the step's
+    // own row.
+    private int GameButtonTextId(PlayActivityGoal goal)
+        => _resourceManager.ClientActivityDefinitions.TryGetValue(goal.ActivityId, out var activity) && activity.DisplayNameId != 0
+            ? activity.DisplayNameId
+            : goal.NameId;
+
+    // Evergrove: opens a play step's game for the player who picked it from the NPC's menu, if the step is still open (the
+    // game may have been won from the Games menu since the menu was shown). It opens as the Games menu opens it, with the
+    // same checks, such as one game at a time; the win then counts like any other.
+    private void OpenStepGame(Player player, QuestDefinition quest, int goalIndex)
+    {
+        if (!player.Quests.TryGetInProgress(quest.QuestId, out var progress) || !progress.OpenGoals.ContainsKey(goalIndex)
+            || quest.Goals[goalIndex] is not PlayActivityGoal playGoal)
+            return;
+
+        if (!_activityLauncher.Value.TryLaunch(player, playGoal.ActivityId))
+        {
+            _logger.LogWarning("Quest {questId}'s step {goalId} couldn't open activity {activityId} for character {characterId}: " +
+                "it isn't one the Games menu opens.", quest.QuestId, playGoal.NameId, playGoal.ActivityId, player.CharacterId);
+        }
     }
 
     public void OnEvent(Player player, QuestEvent questEvent)
@@ -531,6 +576,9 @@ public sealed class QuestManager : IQuestManager
 
         foreach (var goal in quest.Goals.OfType<TalkToNpcGoal>())
             npcIds.UnionWith(goal.AllTalkTargetNpcIds());
+
+        // Evergrove: the NPC who offers a play step's game shows the "?" while the step is open.
+        npcIds.UnionWith(quest.Goals.OfType<PlayActivityGoal>().Select(goal => goal.NpcId));
 
         npcIds.UnionWith(quest.StateNpcIds());
 
@@ -1124,8 +1172,9 @@ public sealed class QuestManager : IQuestManager
     /// The objective marker for a goal, which the client's Take Me There button and map pin follow, or null when it points
     /// at nothing. The marker packet, the Take Me There counter and the tracker all take it from here. When there is
     /// none, <paramref name="clear"/> says whether the last marker comes down (a hidden objective, a step won by playing
-    /// a game, a reach step in another zone, a Collect step with nothing left to take here: the client shows Take Me
-    /// There only while there is a target) or stays as it is (an NPC that isn't in this zone), as upstream does.
+    /// a game that no NPC offers, a reach step in another zone, a Collect step with nothing left to take here: the client
+    /// shows Take Me There only while there is a target) or stays as it is (an NPC that isn't in this zone), as upstream
+    /// does.
     /// </summary>
     internal ObjectiveTarget? ObjectiveTargetFor(Player player, QuestDefinition quest, int goalIndex, out bool clear)
     {
@@ -1137,9 +1186,10 @@ public sealed class QuestManager : IQuestManager
         if (quest.HideObjectiveTarget)
             return null;
 
-        // A step won by playing a game is started from the Games menu: no world object starts a game yet, so there is
-        // nothing to point at, and the last step's marker comes down rather than send the player back to its NPC.
-        if (goal is PlayActivityGoal)
+        // A step won by playing a game points at the NPC who offers the game (PlayActivityGoal.NpcId), as a talk step
+        // points at its NPC. One that no NPC offers is played from the Games menu alone: there is nothing to point at, and
+        // the last step's marker comes down rather than send the player back to its NPC.
+        if (goal is PlayActivityGoal { NpcId: 0 })
             return null;
 
         if (goal is ReachLocationGoal reachGoal && reachGoal.ReachPosition != Vector3.Zero)

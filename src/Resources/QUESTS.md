@@ -14,8 +14,8 @@ using them, not a substitute.
 
 ## Before you start
 
-`GiverNpcId`, `TargetNpcId` and each talk goal's `Targets[].NpcId` name an NPC by its `Npcs.json` id,
-and that NPC must be spawned by a zone script: `zone:spawnFixedNpc(id, x, y, z, heading)` in
+`GiverNpcId`, `TargetNpcId`, each talk goal's `Targets[].NpcId` and a play goal's `NpcId` name an NPC by
+its `Npcs.json` id, and that NPC must be spawned by a zone script: `zone:spawnFixedNpc(id, x, y, z, heading)` in
 `src/Scripts/Zone/FabledRealms.lua`. The server derives the NPC's GUID from that id (upstream OSFR #164),
 so never write a GUID into quest data.
 
@@ -83,7 +83,7 @@ done. Each goal becomes its own tracker row.
 | `TalkToNpc` | 0 | player interacts with the NPC in `Targets` (or the quest's `TargetNpcId` when it names none) |
 | `ReachLocation` | 1 | player gets within `ReachRadius` (default 12) of `ReachPosition`, checked on every position update (2D, X/Z only; give Y the ground height all the same, as Take Me There finds its path from it) |
 | `Collect` | 2 | player gathers `RequiredCount` pickups of the node type `CollectNodeType` |
-| `PlayActivity` | 3 | player wins the game `ActivityId` (a Games menu entry) `RequiredCount` times, one if left out, as the server's own game decides it |
+| `PlayActivity` | 3 | player wins the game `ActivityId` (a Games menu entry) `RequiredCount` times, one if left out, as the server's own game decides it; the NPC `NpcId` offers the game while the step is open |
 
 That's the full set - this branch has no combat system, so there's no Kill/hunt or
 battle-instance-encounter goal type. Don't add one without also building what would drive it.
@@ -134,7 +134,7 @@ pools put out at once, or names a type that doesn't exist.
 Cooking Simone's Spiralmint Steak in the Cobblestone Village Cafe (quest 9103):
 
 ```json
-{ "Type": 3, "NameId": 94528, "DescriptionId": 94534, "ActivityId": 450 }
+{ "Type": 3, "NameId": 21837, "DescriptionId": 94534, "ActivityId": 450, "NpcId": 2069 }
 ```
 
 `ActivityId` is a Games menu entry, a `ClientActivityDefinitions.json` id. Only a win the server's own
@@ -150,8 +150,14 @@ Each win counts once, toward one quest: with two quests on a step for the same g
 them. It counts only while the step is open; a game won before is not remembered. A step needing more than
 one win saves each as it counts, so a relog keeps them.
 
-No world object starts a game yet, so the step has no objective marker and no Take Me There: the player
-opens the game from the Games menu, and the step's text should name the game.
+`NpcId` is the NPC who offers the game while the step is open: clicking them opens its start screen the
+way the Games menu does (`IActivityLauncher`, with the menu's checks, such as one game at a time), and the
+step's marker, Take Me There and "?" point at them, as a talk step's do. With nothing else on their menu
+the game opens at the click; beside other options (a trainer's job) it is one more button, the game's
+name. No world object, such as a cooking table, starts a game yet, so **a play step names the NPC who
+offers its game**: without one it has no target, and the loader warns. The game can still be won from the
+Games menu. The step's text should name the game, not a table to click: the Cafe's step uses 21837, not
+94528, which sends you to Simone's cooking table.
 
 ### Counted talk
 
@@ -241,7 +247,8 @@ icon) control the world badge shown above the giver/target's head. You'll rarely
 these - the defaults match every existing quest.
 
 The giver shows the "!" while the quest is on offer. Once it's accepted, only the NPC the current step needs shows
-the "?" (for a counted talk, each NPC not yet talked to), and each step's NPC is refreshed as the steps go by.
+the "?" (for a counted talk, each NPC not yet talked to; for a play step, the NPC who offers its game), and each
+step's NPC is refreshed as the steps go by.
 
 ## Text ids
 
