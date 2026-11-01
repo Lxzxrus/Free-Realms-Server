@@ -131,7 +131,7 @@ pools put out at once, or names a type that doesn't exist.
 
 ### PlayActivity example
 
-Cooking Simone's Spiralmint Steak (activity 450):
+Cooking Simone's Spiralmint Steak in the Cobblestone Village Cafe (quest 9103):
 
 ```json
 { "Type": 3, "NameId": 94528, "DescriptionId": 94534, "ActivityId": 450 }
@@ -142,7 +142,9 @@ game decided counts: a Cooking recipe in `Mimic.json` when `MimicHandler` pays t
 game (`FlashMinigames.Definitions`: Mining Practice 1113, Queensfields Harvesting 410, Sanctuary Mail
 Sorting 414, Forging: Quick Shot Bow 420) when `FlashMinigameHandler` pays it. A win refused as too fast,
 or anything the client sends on its own, never counts. Fishing and the wheel report no wins, so a step
-can't be won there. The server warns at startup when a step names a game whose wins aren't reported.
+can't be won there. The server warns at startup, and the test
+`ShippedPlayGoals_NameAGameWhoseWinsTheServerReports` fails, when a step names a game whose wins aren't
+reported.
 
 Each win counts once, toward one quest: with two quests on a step for the same game, one win ticks one of
 them. It counts only while the step is open; a game won before is not remembered. A step needing more than
@@ -226,8 +228,9 @@ they can be restored.
 - `TeachesProfileId` - a job (a `Profiles.json` id; 45 is Chef) the turn-in teaches before the
   rewards, the way the job's trainer gives it (`IJobManager.Grant`): saved with its starter kit, and the
   player switched into it, so the quest's stars go to the new job. A player who has the job already is
-  taught nothing and keeps the job they have on. The server warns at startup about a job
-  `Profiles.json` doesn't have.
+  taught nothing and keeps the job they have on. Chef: Assistant Needed (9102) teaches Chef. The server
+  warns at startup about a job `Profiles.json` doesn't have, and the test
+  `ShippedQuests_TeachOnlyJobsATrainerCouldGive` fails on one, or on a staff job.
 
 `RewardExperience` stars go to the job the player has on at the turn-in.
 

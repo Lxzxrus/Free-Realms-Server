@@ -8,6 +8,10 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Jobs;
+using Sanctuary.Game.Minigames;
+using Sanctuary.Game.Minigames.Mimic;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources;
 using Sanctuary.Game.Resources.Definitions;
@@ -188,13 +192,14 @@ public sealed class QuestDefinitionCollectionTests
     /// The first hour's Cobblestone Village chain (Ricky, Samantha, Simone, Jonelle): each quest is given by the NPC the
     /// one before it is handed in to, once that one is done, so a new player never has to look for the next giver. Where
     /// the earlier quest names it as <c>NextQuestId</c>, <see cref="QuestManager.OfferNextQuest"/> offers it straight
-    /// after the reward. 9103 is kept for the Cobblestone Village Cafe quest, which goes between 9102 and 9104 once a
-    /// quest step can be a cooking game; until then Simone offers 9104 when clicked again.
+    /// after the reward. Simone gives the Cobblestone Village Cafe (9103) as Assistant Needed (9102) is handed in, and
+    /// Delivery Derailed (9104) as the Cafe is.
     /// </summary>
     [TestMethod]
     [DataRow(3290, 9101, true)]
     [DataRow(9101, 9102, true)]
-    [DataRow(9102, 9104, false)]
+    [DataRow(9102, 9103, true)]
+    [DataRow(9103, 9104, true)]
     [DataRow(9104, 9105, true)]
     public void ShippedFirstHourChain_GivesEachQuestWhereTheOneBeforeEnds(int previousId, int nextId, bool offeredAtTurnIn)
     {
@@ -217,6 +222,75 @@ public sealed class QuestDefinitionCollectionTests
 
         playerQuests.AddCompleted(previousId);
         Assert.IsTrue(next.IsOfferableFor(playerQuests), $"Quest {nextId} isn't offered once {previousId} is done.");
+    }
+
+    /// <summary>
+    /// A step won by playing a game (<see cref="PlayActivityGoal"/>) is credited only by a win the server reports, from a
+    /// Cooking recipe or a match-three game. A step naming any other activity (a fishing hole, a game that isn't built)
+    /// could never be finished; the server only warns about it.
+    /// </summary>
+    [TestMethod]
+    public void ShippedPlayGoals_NameAGameWhoseWinsTheServerReports()
+    {
+        var resources = Path.GetDirectoryName(FindShippedQuests())!;
+
+        Assert.IsTrue(MimicDefinitions.TryLoad(Path.Combine(resources, "Mimic.json"), NullLogger.Instance, out var mimic));
+
+        var playGoals = LoadQuests(FindShippedQuests()).Quests.Values
+            .SelectMany(quest => quest.Goals.OfType<PlayActivityGoal>().Select(goal => (Quest: quest, Goal: goal)))
+            .ToList();
+
+        Assert.IsTrue(playGoals.Count > 0, "The Cobblestone Village Cafe's steak is a play step.");
+
+        var problems = playGoals
+            .Where(play => !PlayableActivities.ReportsWins(play.Goal.ActivityId, mimic) || play.Goal.RequiredCount < 1)
+            .Select(play => $"Quest {play.Quest.QuestId}, goal {play.Goal.NameId}: activity {play.Goal.ActivityId}, {play.Goal.RequiredCount} wins")
+            .ToList();
+
+        Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// The Cobblestone Village Cafe (9103): Simone's Spiralmint Steak (activity 450, a Cooking recipe the Games menu
+    /// lists, as PlayableActivitiesTests checks), won once, then handed to Simone.
+    /// </summary>
+    [TestMethod]
+    public void ShippedCafe_IsWonBySimonesSteak_ThenHandedToHer()
+    {
+        const int simone = 2069;
+
+        Assert.IsTrue(LoadQuests(FindShippedQuests()).TryGet(9103, out var cafe));
+
+        var steak = (PlayActivityGoal)cafe.Goals[0];
+        Assert.AreEqual(450, steak.ActivityId);
+        Assert.AreEqual(1, steak.RequiredCount);
+
+        Assert.AreEqual(2, cafe.Goals.Count);
+        Assert.AreEqual(simone, cafe.GoalTargetNpcId(1), "The steak is handed to Simone.");
+        Assert.AreNotEqual(0, cafe.TurnInDialogueId, "Simone says something as it's handed in.");
+    }
+
+    /// <summary>
+    /// A quest that teaches a job (<see cref="QuestDefinition.TeachesProfileId"/>) names one the server has and a
+    /// trainer could give: never a staff job, which only login gives with the account's flags.
+    /// </summary>
+    [TestMethod]
+    public void ShippedQuests_TeachOnlyJobsATrainerCouldGive()
+    {
+        var profiles = new ProfileDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(profiles.Load(FindSourceFile("Resources", "Profiles.json")));
+
+        var quests = LoadQuests(FindShippedQuests()).Quests.Values.Where(quest => quest.TeachesProfileId != 0).ToList();
+
+        foreach (var quest in quests)
+        {
+            Assert.IsTrue(profiles.ContainsKey(quest.TeachesProfileId), $"Quest {quest.QuestId} teaches unknown job {quest.TeachesProfileId}.");
+            Assert.IsFalse(Enum.IsDefined((SpecialProfileIds)quest.TeachesProfileId), $"Quest {quest.QuestId} teaches a staff job.");
+        }
+
+        // Simone says she'll teach you the chef job as Assistant Needed is handed in: the job her trainer menu gives.
+        var assistantNeeded = quests.Single(quest => quest.QuestId == 9102);
+        CollectionAssert.Contains(JobTrainers.JobsTaughtBy(assistantNeeded.GoalTargetNpcId(0)).ToList(), assistantNeeded.TeachesProfileId);
     }
 
     [TestMethod]

@@ -11,6 +11,8 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
 using Sanctuary.Game.Minigames.Mimic;
+using Sanctuary.Game.Quests;
+using Sanctuary.Game.Resources;
 
 namespace Sanctuary.Game.Tests;
 
@@ -487,5 +489,32 @@ public sealed class MimicTests
 
         Assert.AreEqual(MimicResult.Refused, session.SettleMimicResult());
         Assert.AreEqual(MimicResult.None, session.SettleMimicResult());
+    }
+
+    /// <summary>
+    /// The shipped Cobblestone Village Cafe (9103) is won by cooking Simone's Spiralmint Steak: its Games menu entry,
+    /// settled as a win and told to the player's quests the way MimicHandler does.
+    /// </summary>
+    [TestMethod]
+    public void CookingSimonesSteak_WinsTheCafesCookingStep()
+    {
+        var quests = new QuestDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(quests.Load(FindResource("Quests.json")));
+        Assert.IsTrue(quests.TryGet(9103, out var cafe));
+
+        using var world = new QuestWorld();
+        world.Player.Quests.AddCompleted(9102);
+        var progress = world.Accept(cafe);
+
+        var recipe = SimonesSteak();
+        var (game, _, _, client) = Start(recipe);
+        var session = SessionFor(recipe, game);
+
+        PlayToAWin(recipe, client);
+
+        if (session.SettleMimicResult() == MimicResult.Won)
+            world.Quests.OnEvent(world.Player, new ActivityWonEvent(session.Definition.ActivityId));
+
+        Assert.AreEqual(1, progress.GoalIndex, "On to taking the steak to Simone.");
     }
 }

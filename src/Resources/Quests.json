@@ -2683,16 +2683,55 @@
     "RewardCoins": 15,
     "RewardExperience": 40,
     "RewardItems": [],
+    "TeachesProfileId": 45,
     "PrerequisiteQuestId": 9101,
+    "NextQuestId": 9103,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
-    "Comment": "Simone says she'll teach you the Chef job (140529), and her trainer menu is where you take it: a quest can't grant a job yet. 9103 is kept for the Cobblestone Village Cafe quest, which comes next once a quest step can be a cooking game; until then Simone offers Delivery Derailed when you click her again, beside the Chef job.",
+    "Comment": "Simone says she'll teach you the chef job (140529), and the turn-in does: Chef (45) is given the way her trainer menu gives it, before the rewards, so the stars go to the new job. She offers the Cobblestone Village Cafe (9103) straight after.",
     "Goals": [
       {
         "Type": 0,
         "NameId": 140539,
         "DescriptionId": 140547,
         "DialogueId": 140529,
+        "Targets": [
+          {
+            "NpcId": 2069
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Chef: Cobblestone Village Cafe",
+    "QuestId": 9103,
+    "TitleId": 94275,
+    "DescriptionId": 94276,
+    "GiverDialogueId": 94278,
+    "ObjectiveDescriptionId": 100247,
+    "IconId": 43278,
+    "GiverNpcId": 2069,
+    "TargetNpcId": 2069,
+    "RewardCoins": 20,
+    "RewardExperience": 50,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 9102,
+    "NextQuestId": 9104,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Win Cooking: Simone's Spiralmint Steak (activity 450), then take it to Simone. No world object starts a game yet, so the steak is cooked from the Games menu and the step has no marker, though its row says to click her cooking table. 94278 is her offer that follows Assistant Needed; 94274, 100259 and 100265 are the same offer without the table, or for a player who hadn't met her. No row near the title is her thanks: 21841 is, from the unreleased first version of this quest (21831).",
+    "Goals": [
+      {
+        "Type": 3,
+        "NameId": 94528,
+        "DescriptionId": 94534,
+        "ActivityId": 450
+      },
+      {
+        "Type": 0,
+        "NameId": 94536,
+        "DialogueId": 21841,
         "Targets": [
           {
             "NpcId": 2069
@@ -2714,11 +2753,11 @@
     "RewardCoins": 20,
     "RewardExperience": 50,
     "RewardItems": [],
-    "PrerequisiteQuestId": 9102,
+    "PrerequisiteQuestId": 9103,
     "NextQuestId": 9105,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
-    "Comment": "Simone sends you to Jonelle, on the road north towards Sanctuary. Its prerequisite becomes the Cafe quest (9103) once that exists.",
+    "Comment": "Simone sends you to Jonelle, on the road north towards Sanctuary.",
     "Goals": [
       {
         "Type": 0,
