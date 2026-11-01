@@ -4,6 +4,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Core.Extensions;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Packet;
 
 namespace Sanctuary.Game.Tests;
 
@@ -86,5 +87,41 @@ public sealed class PositionsTests
         Assert.IsFalse(Positions.IsWithinRotationLimit(new Quaternion(float.NaN, 0f, 0f, 0f)));
         Assert.IsFalse(Positions.IsWithinRotationLimit(new Quaternion(0f, float.PositiveInfinity, 0f, 0f)));
         Assert.IsFalse(Positions.IsWithinRotationLimit(new Quaternion(0f, 0f, 0f, float.NegativeInfinity)));
+    }
+
+    [TestMethod]
+    public void JumpVelocitiesBeyondAnyRealOne_AreNotWithinTheLimit()
+    {
+        // A jump from the ground (the load-test bot sends 8), a launch far harder than any, a fall and none at all.
+        Assert.IsTrue(Positions.IsWithinVerticalVelocityLimit(8f));
+        Assert.IsTrue(Positions.IsWithinVerticalVelocityLimit(1000f));
+        Assert.IsTrue(Positions.IsWithinVerticalVelocityLimit(-50f));
+        Assert.IsTrue(Positions.IsWithinVerticalVelocityLimit(0f));
+        Assert.IsTrue(Positions.IsWithinVerticalVelocityLimit(Positions.VerticalVelocityLimit));
+
+        Assert.IsFalse(Positions.IsWithinVerticalVelocityLimit(Positions.VerticalVelocityLimit + 1f));
+        Assert.IsFalse(Positions.IsWithinVerticalVelocityLimit(float.MaxValue));
+        Assert.IsFalse(Positions.IsWithinVerticalVelocityLimit(-float.MaxValue));
+
+        // Relayed to every player who can see the jumper.
+        Assert.IsFalse(Positions.IsWithinVerticalVelocityLimit(float.NaN));
+        Assert.IsFalse(Positions.IsWithinVerticalVelocityLimit(float.PositiveInfinity));
+        Assert.IsFalse(Positions.IsWithinVerticalVelocityLimit(float.NegativeInfinity));
+    }
+
+    [TestMethod]
+    public void JumpsAndPositionUpdates_CarryNoW()
+    {
+        // The client sends X, Y and Z, and the server reads W as 1, so no client sets the W that a friend teleporting to
+        // the player, or a boombox or cake the player sets down, copies. The relay leaves W out too.
+        var jump = new PlayerUpdatePacketJump { Position = new Vector4(1f, 2f, 3f, float.NaN), VerticalVelocity = 8f };
+
+        Assert.IsTrue(PlayerUpdatePacketJump.TryDeserialize(jump.Serialize(), out var readJump));
+        Assert.AreEqual(new Vector4(1f, 2f, 3f, 1f), readJump.Position);
+
+        var update = new PlayerUpdatePacketUpdatePosition { Position = new Vector4(1f, 2f, 3f, float.MaxValue) };
+
+        Assert.IsTrue(PlayerUpdatePacketUpdatePosition.TryDeserialize(update.Serialize(), out var readUpdate));
+        Assert.AreEqual(new Vector4(1f, 2f, 3f, 1f), readUpdate.Position);
     }
 }

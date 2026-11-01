@@ -32,6 +32,14 @@ public static class Positions
     /// </summary>
     public const float RotationLimit = 10f;
 
+    /// <summary>
+    /// How fast a jump can send a player up or down, with plenty to spare: a real jump or launch pad starts a player
+    /// upwards at tens of units a second, and at this speed they would rise millions of units. A jump's vertical velocity
+    /// is relayed to every player who can see the jumper, so NaN, infinities and absurd values such as float.MaxValue must
+    /// not get through.
+    /// </summary>
+    public const float VerticalVelocityLimit = 10_000f;
+
     public static bool IsFinite(Vector4 position) =>
         float.IsFinite(position.X) && float.IsFinite(position.Y) && float.IsFinite(position.Z) && float.IsFinite(position.W);
 
@@ -49,6 +57,9 @@ public static class Positions
     public static bool IsWithinRotationLimit(Quaternion rotation) =>
         MathF.Abs(rotation.X) <= RotationLimit && MathF.Abs(rotation.Y) <= RotationLimit &&
         MathF.Abs(rotation.Z) <= RotationLimit && MathF.Abs(rotation.W) <= RotationLimit;
+
+    /// <summary>Whether a jump's vertical velocity is within <see cref="VerticalVelocityLimit"/>; false for NaN.</summary>
+    public static bool IsWithinVerticalVelocityLimit(float verticalVelocity) => MathF.Abs(verticalVelocity) <= VerticalVelocityLimit;
 
     /// <summary>Whether two points are within <paramref name="range"/> of each other; false for any NaN.</summary>
     public static bool IsWithinRange(Vector4 a, Vector4 b, float range)
