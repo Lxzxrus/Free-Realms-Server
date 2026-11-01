@@ -409,6 +409,96 @@ public class HardeningTests
         Assert.AreEqual(DisconnectReason.Application, serverA.DisconnectReason);
         Assert.IsTrue(serverA.Terminated);
         Assert.AreEqual(0, server.Stats.ConnectionFaults, "the second packet, which throws, never reached its handler");
+        Assert.AreEqual(0, serverA.QueuedPackets);
+    }
+
+    [TestMethod]
+    public void ConnectionOverTheQueuedPacketLimitIsDisconnected()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.EventQueuing = true;
+            p.MaxQueuedPacketsPerConnection = 4;
+        });
+
+        var (clientA, a) = Client(network, server, "10.0.0.2");
+        var (clientB, b) = Client(network, server, "10.0.0.3");
+        var serverA = server.Accepted[0];
+        var serverB = server.Accepted[1];
+
+        // all read in one poll, before any is handled: five from A, one over the limit, and four from B
+        for (byte i = 1; i <= 5; i++)
+        {
+            network.Deliver(clientA.EndPoint, server.EndPoint, a.Craft(i));
+
+            if (i <= 4)
+                network.Deliver(clientB.EndPoint, server.EndPoint, b.Craft(i));
+        }
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+        Assert.IsEmpty(serverA.Received, "what it had queued went with it");
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        Assert.HasCount(4, serverB.Received);
+
+        // the limit is on packets waiting, not packets sent: B's queue emptied as it was delivered
+        for (byte i = 5; i <= 8; i++)
+            network.Deliver(clientB.EndPoint, server.EndPoint, b.Craft(i));
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        Assert.HasCount(8, serverB.Received);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+    }
+
+    [TestMethod]
+    public void SocketAndConnectionsGetTimeWhileABacklogOfEventsDrains()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.EventQueuing = true);
+
+        // each of these takes 60 ms to handle, so two use up one GiveTime's time for delivering events
+        const byte Slow = 0x51;
+
+        server.Behaviour.OnPacket = (_, packet) =>
+        {
+            if (packet[0] == Slow)
+                network.Now += 60;
+        };
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        for (byte i = 0; i < 10; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(Slow, i));
+
+        server.GiveTime();
+
+        Assert.HasCount(2, serverA.Received);
+        Assert.AreEqual(8, server.Stats.EventListCount);
+
+        // events are still waiting, and the next GiveTime reads the socket and gives the connection its time anyway
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(7));
+
+        var serviced = server.Stats.PriorityQueueProcessed;
+
+        server.GiveTime();
+
+        Assert.IsEmpty(server.Driver.Inbox, "the socket was read");
+        Assert.IsTrue(server.Stats.PriorityQueueProcessed > serviced, "the connection got its time");
+        Assert.HasCount(4, serverA.Received);
+
+        network.Pump(10, server, client);
+
+        Assert.HasCount(11, serverA.Received, "and the backlog drained");
+        CollectionAssert.AreEqual(new byte[] { 7 }, serverA.Received[^1], "in order");
+        Assert.AreEqual(Status.Connected, serverA.Status);
     }
 
     // ---- Task 10: a connection that falls behind is disconnected instead of queueing without bound ----
@@ -494,6 +584,7 @@ public class HardeningTests
         Assert.IsTrue(udpParams.ReliableOverflowBytes > 4400 * 1024, "above the 4.2 MiB a zone entry queues");
         Assert.IsTrue(udpParams.ReliableBacklogTimeout > 0);
         Assert.IsTrue(udpParams.FaultLimit > 0);
+        Assert.IsTrue(udpParams.MaxQueuedPacketsPerConnection > 0);
     }
 }
 

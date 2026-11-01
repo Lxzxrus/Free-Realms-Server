@@ -28,6 +28,7 @@ The server-to-server link between Login and Gateway (UDP 20041) doesn't use them
 | `ReliableBacklogBytes` | 512 KiB | See `ReliableBacklogTimeout` |
 | `FaultLimit` | 5 | Exceptions handling one connection's packets, within `FaultWindow`, before it's disconnected |
 | `FaultWindow` | 60000 ms | The window `FaultLimit` counts over |
+| `MaxQueuedPacketsPerConnection` | 512 | Gateway only: packets one connection may have waiting for their handlers, which the Gateway runs from a queue after the UDP library's locks are released. A real client sends a few a second and the queue is delivered many times a second, so only a client sending them faster than they can be handled reaches it |
 
 A connect request over a connection limit is ignored, so the client times out as if the server were full. All other
 limits disconnect. Every one of them logs a warning saying which limit and why; refused connects are logged once a

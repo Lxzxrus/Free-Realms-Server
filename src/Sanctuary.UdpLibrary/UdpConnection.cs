@@ -139,6 +139,9 @@ public class UdpConnection : PriorityQueueMember
     // bytes reserved by fragmented packets being reassembled, across all reliable channels (see UdpParams.IncomingFragmentBytesMax)
     internal int IncomingFragmentBytes;
 
+    // packets waiting in the manager's event queue for OnRoutePacket (see UdpParams.MaxQueuedPacketsPerConnection)
+    internal int QueuedPackets;
+
     private delegate int CryptFunction(Span<byte> destData, Span<byte> sourceData);
 
     private readonly byte[][] _tempDecryptBuffer;

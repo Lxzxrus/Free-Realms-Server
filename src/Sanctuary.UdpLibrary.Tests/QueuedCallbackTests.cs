@@ -160,6 +160,7 @@ public sealed class QueuedCallbackTests
 
         Assert.HasCount(0, connection.Packets);
         Assert.AreEqual(1, connection.TerminatedCallbacks);
+        Assert.AreEqual(0, connection.QueuedPackets);
         manager.GetStats(out var stats);
         Assert.AreEqual(0, stats.EventListCount);
         Assert.AreEqual(0, stats.EventListBytes);

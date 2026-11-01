@@ -327,18 +327,14 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         return UdpMisc.ClockDiff(start, CachedClock);
     }
 
+    // the longest one GiveTime delivers queued events for, before the connections get their time
+    private const int MaxDeliveryTime = 100;
+
     public bool GiveTime(int maxPollingTime = 500, bool giveConnectionsTime = true)
     {
         lock (_giveTimeGuard)
         {
             Clock();
-
-            if (Params.EventQueuing && EventList.Count > 0)
-            {
-                // Deliver application callbacks outside ProcessRawPacket/GiveTime's connection locks.
-                DeliverEvents(maxPollingTime);
-                return true;
-            }
 
             lock (_statsGuard)
             {
@@ -403,6 +399,15 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                         break;
                     }
                 }
+            }
+
+            if (Params.EventQueuing && EventList.Count > 0)
+            {
+                // Deliver application callbacks outside ProcessRawPacket/GiveTime's connection locks. For a slice of time,
+                // then on to the connections: returning here instead left the socket unread and every connection without
+                // its acks, resends and timeouts until a whole backlog was delivered, so one client's burst stalled everyone.
+                DeliverEvents(Math.Min(maxPollingTime, MaxDeliveryTime));
+                found = true;
             }
 
             if (giveConnectionsTime)
@@ -542,10 +547,15 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         {
             case CallbackEventType.RoutePacket:
                 {
+                    if (ce.Source is null)
+                        break;
+
+                    Interlocked.Decrement(ref ce.Source.QueuedPackets);
+
                     // Inline, a packet is routed only while its connection is connected (UdpConnection.CallbackRoutePacket).
                     // Queued, the connection may have gone since: a refused login or a kick in the packet before this one,
                     // a fault limit. Its handlers must not run for a connection that is no longer there.
-                    if (ce.Payload is null || ce.Source is not { Status: Status.Connected })
+                    if (ce.Payload is null || ce.Source.Status != Status.Connected)
                         break;
 
                     ce.Source.OnRoutePacket(ce.Payload.GetDataPtr().Slice(0, ce.Payload.GetDataLen()));
@@ -1038,6 +1048,24 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     {
         if (Params.EventQueuing)
         {
+            // Queued, the handlers run when the queue is delivered, so a connection sending packets faster than they run
+            // would queue them without limit, and every other connection's packets would wait behind its own.
+            if (Params.MaxQueuedPacketsPerConnection > 0 && con.QueuedPackets >= Params.MaxQueuedPacketsPerConnection)
+            {
+                lock (_statsGuard)
+                {
+                    ManagerStats.QueueLimitDisconnects++;
+                }
+
+                Logger.LogWarning("Disconnecting {connection}: it sent packets faster than their handlers run, and {count} were waiting, the most allowed.",
+                    con, con.QueuedPackets);
+
+                con.InternalDisconnect(0, DisconnectReason.CorruptPacket);
+                return;
+            }
+
+            Interlocked.Increment(ref con.QueuedPackets);
+
             var ce = AvailableEventBorrow();
             var packet = CreatePacket(data, data.Length);
             ce.SetEventData(CallbackEventType.RoutePacket, con, packet);
