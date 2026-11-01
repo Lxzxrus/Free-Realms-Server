@@ -44,11 +44,16 @@ public class HardeningTests
 
     // ---- F4: an exception while processing one connection drops that connection, never the host ----
 
+    // The F4 and F10 tests run twice: with the application's callbacks inline, as the Login server has them, and queued, as
+    // the Gateway has them (GatewayServer sets EventQueuing).
+
     [TestMethod]
-    public void HandlerExceptionDropsOnlyThatConnection()
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void HandlerExceptionDropsOnlyThatConnection(bool queued)
     {
         var network = new FakeNetwork();
-        var server = Server(network);
+        var server = Server(network, p => p.EventQueuing = queued);
         var (clientA, a) = Client(network, server, "10.0.0.2");
         var (clientB, b) = Client(network, server, "10.0.0.3");
 
@@ -80,10 +85,12 @@ public class HardeningTests
     }
 
     [TestMethod]
-    public void ExceptionFromDisconnectCallbackDoesNotEscape()
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void ExceptionFromDisconnectCallbackDoesNotEscape(bool queued)
     {
         var network = new FakeNetwork();
-        var server = Server(network);
+        var server = Server(network, p => p.EventQueuing = queued);
         server.Behaviour.ThrowOnTerminated = true;
 
         var (_, _) = Client(network, server, "10.0.0.2");
@@ -329,7 +336,9 @@ public class HardeningTests
     // ---- F10: a connection that throws repeatedly is disconnected ----
 
     [TestMethod]
-    public void RepeatedHandlerFaultsDisconnect()
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void RepeatedHandlerFaultsDisconnect(bool queued)
     {
         var network = new FakeNetwork();
         var server = Server(network, p =>
@@ -337,6 +346,7 @@ public class HardeningTests
             p.FaultLimit = 3;
             p.FaultWindow = 60000;
             p.NoDataTimeout = 0;
+            p.EventQueuing = queued;
         });
 
         server.Behaviour.ReportFaults = true;
@@ -366,6 +376,129 @@ public class HardeningTests
         Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
         Assert.AreEqual(1, server.Stats.FaultLimitDisconnects);
         Assert.AreEqual(0, server.Stats.ConnectionFaults, "reported faults never reach the exception guard");
+    }
+
+    // ---- Queued callbacks, as on the Gateway ----
+
+    // a packet whose handler disconnects its connection, as the Gateway's login handler does when it refuses a ticket
+    private const byte DisconnectMe = 0xDC;
+
+    [TestMethod]
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void NoPacketIsHandledAfterItsConnectionDisconnects(bool queued)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.EventQueuing = queued);
+
+        server.Behaviour.OnPacket = (connection, packet) =>
+        {
+            if (packet[0] == DisconnectMe)
+                connection.Disconnect();
+        };
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // one datagram grouping two packets (00 03): queued, the second waits in the queue before the first is handled
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(0, 3, 2, DisconnectMe, 1, 2, FakeBehaviour.Throw, 2));
+        network.Pump(3, server);
+
+        CollectionAssert.AreEqual(new byte[] { DisconnectMe, 1 }, serverA.Received.Single());
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.Application, serverA.DisconnectReason);
+        Assert.IsTrue(serverA.Terminated);
+        Assert.AreEqual(0, server.Stats.ConnectionFaults, "the second packet, which throws, never reached its handler");
+        Assert.AreEqual(0, serverA.QueuedPackets);
+    }
+
+    [TestMethod]
+    public void ConnectionOverTheQueuedPacketLimitIsDisconnected()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.EventQueuing = true;
+            p.MaxQueuedPacketsPerConnection = 4;
+        });
+
+        var (clientA, a) = Client(network, server, "10.0.0.2");
+        var (clientB, b) = Client(network, server, "10.0.0.3");
+        var serverA = server.Accepted[0];
+        var serverB = server.Accepted[1];
+
+        // all read in one poll, before any is handled: five from A, one over the limit, and four from B
+        for (byte i = 1; i <= 5; i++)
+        {
+            network.Deliver(clientA.EndPoint, server.EndPoint, a.Craft(i));
+
+            if (i <= 4)
+                network.Deliver(clientB.EndPoint, server.EndPoint, b.Craft(i));
+        }
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+        Assert.IsEmpty(serverA.Received, "what it had queued went with it");
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        Assert.HasCount(4, serverB.Received);
+
+        // the limit is on packets waiting, not packets sent: B's queue emptied as it was delivered
+        for (byte i = 5; i <= 8; i++)
+            network.Deliver(clientB.EndPoint, server.EndPoint, b.Craft(i));
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        Assert.HasCount(8, serverB.Received);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+    }
+
+    [TestMethod]
+    public void SocketAndConnectionsGetTimeWhileABacklogOfEventsDrains()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.EventQueuing = true);
+
+        // each of these takes 60 ms to handle, so two use up one GiveTime's time for delivering events
+        const byte Slow = 0x51;
+
+        server.Behaviour.OnPacket = (_, packet) =>
+        {
+            if (packet[0] == Slow)
+                network.Now += 60;
+        };
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        for (byte i = 0; i < 10; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(Slow, i));
+
+        server.GiveTime();
+
+        Assert.HasCount(2, serverA.Received);
+        Assert.AreEqual(8, server.Stats.EventListCount);
+
+        // events are still waiting, and the next GiveTime reads the socket and gives the connection its time anyway
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(7));
+
+        var serviced = server.Stats.PriorityQueueProcessed;
+
+        server.GiveTime();
+
+        Assert.IsEmpty(server.Driver.Inbox, "the socket was read");
+        Assert.IsTrue(server.Stats.PriorityQueueProcessed > serviced, "the connection got its time");
+        Assert.HasCount(4, serverA.Received);
+
+        network.Pump(10, server, client);
+
+        Assert.HasCount(11, serverA.Received, "and the backlog drained");
+        CollectionAssert.AreEqual(new byte[] { 7 }, serverA.Received[^1], "in order");
+        Assert.AreEqual(Status.Connected, serverA.Status);
     }
 
     // ---- Task 10: a connection that falls behind is disconnected instead of queueing without bound ----
@@ -451,6 +584,7 @@ public class HardeningTests
         Assert.IsTrue(udpParams.ReliableOverflowBytes > 4400 * 1024, "above the 4.2 MiB a zone entry queues");
         Assert.IsTrue(udpParams.ReliableBacklogTimeout > 0);
         Assert.IsTrue(udpParams.FaultLimit > 0);
+        Assert.IsTrue(udpParams.MaxQueuedPacketsPerConnection > 0);
     }
 }
 

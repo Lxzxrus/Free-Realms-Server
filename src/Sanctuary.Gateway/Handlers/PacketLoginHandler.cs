@@ -110,9 +110,6 @@ public static class PacketLoginHandler
             return true;
         }
 
-        // Use ticket as key.
-        connection.InitializeCipher(packetLogin.Ticket);
-
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var character = dbContext.Characters
@@ -240,6 +237,9 @@ public static class PacketLoginHandler
             return true;
         }
 #endif
+
+        // Use ticket as key, now that it has been checked: a refused login gets no cipher to decrypt what it sends next.
+        connection.InitializeCipher(packetLogin.Ticket);
 
         if (!connection.CreatePlayerFromDatabase(character))
         {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 
@@ -116,6 +117,59 @@ public sealed class QueuedCallbackTests
         CollectionAssert.AreEqual(new byte[] { 9, 2, 3 }, connection.Packets[1]);
     }
 
+    [TestMethod]
+    public void QueuedCallbackThatThrows_DropsOnlyItsConnection()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        using var manager = new CallbackManager(services, true);
+        var faulty = manager.CreateConnection(12345);
+        var healthy = manager.CreateConnection(12346);
+        faulty.PacketAction = _ => throw new InvalidOperationException("A handler bug.");
+
+        manager.Receive(faulty, [1, 1, 1]);
+        manager.Receive(healthy, [2, 2, 2]);
+        manager.Receive(faulty, [3, 3, 3]);
+
+        // Without the guard this throws out of GiveTime, which on the Gateway is the server's only loop. Each call delivers
+        // at least one event, so four deliver all four (three packets and faulty's disconnect) whatever the clock does.
+        for (var i = 0; i < 4; i++)
+            manager.GiveTime(50, giveConnectionsTime: false);
+
+        Assert.AreEqual(Status.Disconnected, faulty.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, faulty.DisconnectReason);
+        Assert.AreEqual(1, faulty.TerminatedCallbacks);
+        Assert.HasCount(1, faulty.Packets, "nothing after the packet that threw");
+        Assert.AreEqual(Status.Connected, healthy.Status);
+        CollectionAssert.AreEqual(new byte[] { 2, 2, 2 }, healthy.Packets.Single());
+        manager.GetStats(out var stats);
+        Assert.AreEqual(1, stats.ConnectionFaults);
+        Assert.AreEqual(0, stats.EventListCount);
+    }
+
+    [TestMethod]
+    public void QueuedPackets_AreNotDelivered_OnceTheirConnectionHasDisconnected()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        using var manager = new CallbackManager(services, true);
+        var connection = manager.CreateConnection();
+        manager.Receive(connection, [1, 2, 3]);
+        manager.Receive(connection, [4, 5]);
+
+        // a kick, say, after the packets were read and before they were handled
+        connection.Disconnect();
+
+        // each call delivers at least one event, so three deliver all three whatever the clock does
+        for (var i = 0; i < 3; i++)
+            manager.GiveTime(50, giveConnectionsTime: false);
+
+        Assert.HasCount(0, connection.Packets);
+        Assert.AreEqual(1, connection.TerminatedCallbacks);
+        Assert.AreEqual(0, connection.QueuedPackets);
+        manager.GetStats(out var stats);
+        Assert.AreEqual(0, stats.EventListCount);
+        Assert.AreEqual(0, stats.EventListBytes);
+    }
+
     private sealed class CallbackManager : UdpManager<CallbackConnection>
     {
         public CallbackManager(IServiceProvider services, bool queued)
@@ -123,9 +177,9 @@ public sealed class QueuedCallbackTests
         {
         }
 
-        public CallbackConnection CreateConnection()
+        public CallbackConnection CreateConnection(int port = 12345)
         {
-            var connection = new CallbackConnection(this);
+            var connection = new CallbackConnection(this, port);
             AddConnection(connection);
             return connection;
         }
@@ -141,8 +195,8 @@ public sealed class QueuedCallbackTests
         public int ConnectedCallbacks { get; private set; }
         public int TerminatedCallbacks { get; private set; }
 
-        public CallbackConnection(CallbackManager manager)
-            : base(manager, new IPEndPoint(IPAddress.Loopback, 12345).Serialize(), 1)
+        public CallbackConnection(CallbackManager manager, int port)
+            : base(manager, new IPEndPoint(IPAddress.Loopback, port).Serialize(), port)
         {
         }
 

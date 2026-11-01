@@ -506,6 +506,15 @@ public class UdpParams
     /// <remarks>default = 60000</remarks>
     public int FaultWindow;
 
+    /// <summary>
+    /// Most packets one connection may have waiting for the application while <see cref="EventQueuing"/> is on.  Queued, a
+    /// packet's handler runs when the queue is delivered, not as the packet arrives, so a connection that sends packets
+    /// faster than its handlers run could fill the queue without limit, with every other connection's packets waiting
+    /// behind its own.  A connection that goes over is disconnected.  0 = no limit.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int MaxQueuedPacketsPerConnection;
+
     public string ProtocolName;
 
     /// <summary>
@@ -575,6 +584,7 @@ public class UdpParams
         UnverifiedReplyWindow = 10000;
         FaultLimit = 0;
         FaultWindow = 60000;
+        MaxQueuedPacketsPerConnection = 0;
         ProtocolName = string.Empty;
         UserSuppliedEncryptExpansionBytes = 0;
         UserSuppliedEncryptExpansionBytes2 = 0;
