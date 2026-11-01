@@ -329,10 +329,9 @@ public sealed class PlayerPet
 
     public void SummonPet(int id)
     {
-        // Evergrove: summoning the pet that is already out would only rebuild it for everyone nearby.
-        if (Pet is not null && _summonedPetId == id)
-            return;
-
+        // Evergrove: a summon of the pet that is already out builds it again, as upstream did. Picking that pet in the
+        // activity portal puts it away and summons it, and the client shows its pet window again only for a pet list
+        // naming a new pet guid. PetSummonRequests keeps summons a second apart.
         if (_player.Zone is not WorldZone && _player.Zone is not HousingZone)
             return;
 
