@@ -2007,9 +2007,31 @@ public sealed class HousingZoneRuntime : IDisposable
 
         return IsFinite(normalizedPosition) &&
             IsFinite(normalizedRotation) &&
+            IsWithinTransformLimit(normalizedPosition, normalizedRotation) &&
             float.IsFinite(scale) &&
             normalizedScale is >= 0.05f and <= 20f &&
             (!requireBuildArea || IsInsideBuildArea(normalizedPosition));
+    }
+
+    /// <summary>
+    /// How large a part's rotation components and its position's W may be. The client sends a rotation as angles in
+    /// radians, each within pi (FreeRealms.exe 0x8b2e10 makes them with atan2 and asin), or as a heading, and W is 0 or
+    /// 1, so this leaves plenty to spare, an angle in degrees included. Not every finite float can be saved: MariaDB
+    /// refuses float.MaxValue.
+    /// </summary>
+    internal const float TransformLimit = 100_000f;
+
+    /// <summary>
+    /// Whether each rotation component and the position's W are within <see cref="TransformLimit"/>, false for NaN. Both
+    /// are saved as they come; X, Y and Z are held to the build area.
+    /// </summary>
+    internal static bool IsWithinTransformLimit(Vector4 position, Quaternion rotation)
+    {
+        return MathF.Abs(position.W) <= TransformLimit &&
+            MathF.Abs(rotation.X) <= TransformLimit &&
+            MathF.Abs(rotation.Y) <= TransformLimit &&
+            MathF.Abs(rotation.Z) <= TransformLimit &&
+            MathF.Abs(rotation.W) <= TransformLimit;
     }
 
     private bool IsInsideBuildArea(Vector4 position)
