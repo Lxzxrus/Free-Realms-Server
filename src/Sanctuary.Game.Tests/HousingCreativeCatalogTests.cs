@@ -83,6 +83,22 @@ public sealed class HousingCreativeCatalogTests
     }
 
     [TestMethod]
+    public void SavingAPart_TakesOnlyATintPaintingCouldGive()
+    {
+        // A part picked up goes back to inventory in its tint. Saved with any tint the client named, a free Snowman
+        // placed, saved and picked up again was a new inventory row in a made-up tint every time.
+        AddItem(900, type: 1, category: 4, model: "ramp.adr", iconTint: 227, isTintable: true);
+
+        Assert.IsTrue(HousingFixtureRules.CanPaint(_resourceManager, 900, 254), "amethyst, a palette dye");
+        Assert.IsFalse(HousingFixtureRules.CanPaint(_resourceManager, 900, 96), "a coin store colour, not a palette dye");
+        Assert.IsFalse(HousingFixtureRules.CanPaint(_resourceManager, 900, 100_000), "made up");
+        Assert.IsFalse(HousingFixtureRules.CanPaint(_resourceManager, 900, 0));
+        Assert.IsFalse(HousingFixtureRules.CanPaint(_resourceManager, Chair, 254), "takes no dye");
+        Assert.IsFalse(HousingFixtureRules.CanPaint(_resourceManager, YellowBlock, 254), "a colour variant takes no dye");
+        Assert.IsFalse(HousingFixtureRules.CanPaint(_resourceManager, 999_999, 254), "an unknown item");
+    }
+
+    [TestMethod]
     public void Catalog_OffersEachColourVariantInItsOwnTint()
     {
         Assert.IsTrue(_catalog.TryGetByDefinitionId(YellowBlock, out var yellow));
