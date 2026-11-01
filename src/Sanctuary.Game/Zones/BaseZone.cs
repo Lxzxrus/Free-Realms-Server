@@ -678,6 +678,9 @@ public abstract class BaseZone : IZone, IDisposable
                 .Select(definition => definition.StoreBundleId)
                 .ToHashSet();
 
+            // Evergrove: every account is given the starter house (the Apartment), so while it is, it isn't offered.
+            var starterHouseBundleId = StarterHouse.BundleLeftOffTheShelf(_housingOptions, _resourceManager.Zones);
+
             packetInGamePurchaseStoreBundles.StoreId = mainStore.Id;
 
             packetInGamePurchaseStoreBundles.Store.Id = mainStore.Id;
@@ -692,6 +695,9 @@ public abstract class BaseZone : IZone, IDisposable
                     definition.Type == 16);
 
                 if (containsHouseItem && !availableHouseBundleIds.Contains(storeBundle.Id))
+                    continue;
+
+                if (storeBundle.Id == starterHouseBundleId)
                     continue;
 
                 var valid = storeBundle.Entries.All(x => _resourceManager.ClientItemDefinitions.ContainsKey(x.MarketingItemId));

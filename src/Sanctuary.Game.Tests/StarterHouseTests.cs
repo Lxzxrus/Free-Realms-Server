@@ -244,6 +244,30 @@ public sealed class StarterHouseTests
     }
 
     /// <summary>
+    /// Nate's decision 5: while every account is given the Apartment, the Marketplace leaves its bundle off the Lots &amp;
+    /// Farms shelf (<c>BaseZone</c>) and refuses an order for it at no charge (the order handler), as buying it could only
+    /// fail. With the grant off, or set to no lot the server serves, it's back on the shelf like any lot. Another lot in
+    /// the setting is the one left off, and only that one.
+    /// </summary>
+    [TestMethod]
+    public void TheMarketplace_LeavesOffOnlyTheLotEveryAccountIsGiven()
+    {
+        var zones = _world.Quests.Resources.Zones;
+
+        Assert.IsTrue(zones.TryGetValue(HouseWorld.Apartment, out var apartment));
+        Assert.IsTrue(zones.TryGetValue(HouseWorld.Seaside, out var seaside));
+
+        Assert.AreEqual(900224, ((HousingZoneDefinition)apartment).StoreBundleId, "The Apartment's Marketplace bundle.");
+        Assert.AreEqual(900224, StarterHouse.BundleLeftOffTheShelf(new HousingOptions(), zones));
+
+        foreach (var off in new[] { 0, 1, 424242 })
+            Assert.IsNull(StarterHouse.BundleLeftOffTheShelf(new HousingOptions { StarterHouseZoneId = off }, zones), $"Setting {off}.");
+
+        Assert.AreEqual(((HousingZoneDefinition)seaside).StoreBundleId,
+            StarterHouse.BundleLeftOffTheShelf(new HousingOptions { StarterHouseZoneId = HouseWorld.Seaside }, zones));
+    }
+
+    /// <summary>
     /// The chat line on a grant goes to a character who has quests; one with none yet is sent to Samantha by the welcome
     /// line instead, and gets nothing more to read.
     /// </summary>

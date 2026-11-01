@@ -55,8 +55,9 @@
     // "FreeLots": true,
 
     // The lot every account owns free, by its zone id: 1024 is the Apartment. The first login of each session gives
-    // one to an account none of whose characters has one, whatever FreeLots says. 0 turns this off. An id that isn't
-    // a housing lot the server serves turns it off too, with a warning in the log.
+    // one to an account none of whose characters has one, whatever FreeLots says, and the Marketplace doesn't offer
+    // that lot. 0 turns this off and puts the lot back in the Marketplace. An id that isn't a housing lot the server
+    // serves turns it off too, with a warning in the log.
     // "StarterHouseZoneId": 1024,
   },
 

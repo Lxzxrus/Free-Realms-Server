@@ -38,6 +38,14 @@ public static class StarterHouse
             : null;
 
     /// <summary>
+    /// The Marketplace bundle the store leaves off its shelf, and refuses an order for at no charge: the starter house's,
+    /// while every account is given it, as an order for it could only fail. <c>null</c> while no account is given one,
+    /// when the lot is back on the shelf like any other.
+    /// </summary>
+    public static int? BundleLeftOffTheShelf(HousingOptions options, ZoneDefinitionCollection zones) =>
+        Lot(options, zones) is { StoreBundleId: not 0 } lot ? lot.StoreBundleId : null;
+
+    /// <summary>
     /// What the player is told in chat when their account has just been given one at login, or <c>null</c> for a
     /// character with no quests yet, whom the welcome line sends to Samantha instead.
     /// </summary>
