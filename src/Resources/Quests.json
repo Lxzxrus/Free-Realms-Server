@@ -2614,6 +2614,7 @@
     "RewardExperience": 70,
     "RewardItems": [],
     "PrerequisiteQuestId": 1801,
+    "NextQuestId": 9101,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
     "Goals": [
@@ -2625,6 +2626,165 @@
         "Targets": [
           {
             "NpcId": 2045
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Samantha's Mail",
+    "QuestId": 9101,
+    "TitleId": 46179,
+    "DescriptionId": 46158,
+    "GiverDialogueId": 47895,
+    "ObjectiveDescriptionId": 46158,
+    "IconId": 43278,
+    "GiverNpcId": 2045,
+    "TargetNpcId": 2045,
+    "RewardCoins": 25,
+    "RewardExperience": 60,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3290,
+    "NextQuestId": 9102,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Evergrove's first hour: Samantha's bundle of mail lies beside the warpstone outside Sanctuary (pool sanctuary-samanthas-mail), and the return step's text teaches teleporting home with the world map. 47895 is Samantha's own offer line; the rows near the title have none.",
+    "Goals": [
+      {
+        "Type": 1,
+        "NameId": 46176,
+        "ReachPosition": [
+          -1418.32,
+          -27.0,
+          347.82
+        ],
+        "ReachRadius": 15
+      },
+      {
+        "Type": 2,
+        "NameId": 46175,
+        "CollectNodeType": "samanthas-mail",
+        "RequiredCount": 1
+      },
+      {
+        "Type": 0,
+        "NameId": 46177,
+        "DescriptionId": 46178,
+        "DialogueId": 46160,
+        "Targets": [
+          {
+            "NpcId": 2045
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Chef: Assistant Needed",
+    "QuestId": 9102,
+    "TitleId": 140523,
+    "DescriptionId": 140524,
+    "GiverDialogueId": 140522,
+    "ObjectiveDescriptionId": 140547,
+    "IconId": 43278,
+    "GiverNpcId": 2045,
+    "TargetNpcId": 2069,
+    "RewardCoins": 15,
+    "RewardExperience": 40,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 9101,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Simone says she'll teach you the Chef job (140529), and her trainer menu is where you take it: a quest can't grant a job yet. 9103 is kept for the Cobblestone Village Cafe quest, which comes next once a quest step can be a cooking game; until then Simone offers Delivery Derailed when you click her again, beside the Chef job.",
+    "Goals": [
+      {
+        "Type": 0,
+        "NameId": 140539,
+        "DescriptionId": 140547,
+        "DialogueId": 140529,
+        "Targets": [
+          {
+            "NpcId": 2069
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Chef: Delivery Derailed",
+    "QuestId": 9104,
+    "TitleId": 94291,
+    "DescriptionId": 94292,
+    "GiverDialogueId": 94290,
+    "ObjectiveDescriptionId": 100536,
+    "IconId": 43278,
+    "GiverNpcId": 2069,
+    "TargetNpcId": 4096,
+    "RewardCoins": 20,
+    "RewardExperience": 50,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 9102,
+    "NextQuestId": 9105,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Simone sends you to Jonelle, on the road north towards Sanctuary. Its prerequisite becomes the Cafe quest (9103) once that exists.",
+    "Goals": [
+      {
+        "Type": 0,
+        "NameId": 100158,
+        "DescriptionId": 100159,
+        "DialogueId": 94293,
+        "Targets": [
+          {
+            "NpcId": 4096
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Chef: Package Recovery!",
+    "QuestId": 9105,
+    "TitleId": 94299,
+    "DescriptionId": 94300,
+    "GiverDialogueId": 94298,
+    "ObjectiveDescriptionId": 100537,
+    "IconId": 43278,
+    "GiverNpcId": 4096,
+    "TargetNpcId": 4096,
+    "RewardCoins": 30,
+    "RewardExperience": 70,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 9104,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "The pickups stand in for the Package Recovery! minigame (100540), which this server doesn't have: any five of the six packages on the road around Jonelle (pool cobblestone-jonelles-packages). 101999, the step's row, is that minigame's own words for it.",
+    "Goals": [
+      {
+        "Type": 0,
+        "NameId": 100538,
+        "DescriptionId": 100539,
+        "Targets": [
+          {
+            "NpcId": 4095
+          }
+        ]
+      },
+      {
+        "Type": 2,
+        "NameId": 101999,
+        "DescriptionId": 100537,
+        "CollectNodeType": "jonelles-packages",
+        "RequiredCount": 5
+      },
+      {
+        "Type": 0,
+        "NameId": 139895,
+        "DescriptionId": 139896,
+        "DialogueId": 94301,
+        "Targets": [
+          {
+            "NpcId": 4096
           }
         ]
       }

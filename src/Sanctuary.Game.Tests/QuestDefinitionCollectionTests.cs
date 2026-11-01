@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
@@ -181,6 +182,39 @@ public sealed class QuestDefinitionCollectionTests
                 Assert.IsTrue(quests.Quests.ContainsKey(reference),
                     $"Quest {quest.QuestId} references quest {reference}, which Quests.json doesn't have.");
         }
+    }
+
+    /// <summary>
+    /// The first hour's Cobblestone Village chain (Ricky, Samantha, Simone, Jonelle): each quest is given by the NPC the
+    /// one before it is handed in to, once that one is done, so a new player never has to look for the next giver. Where
+    /// the earlier quest names it as <c>NextQuestId</c>, <see cref="QuestManager.OfferNextQuest"/> offers it straight
+    /// after the reward. 9103 is kept for the Cobblestone Village Cafe quest, which goes between 9102 and 9104 once a
+    /// quest step can be a cooking game; until then Simone offers 9104 when clicked again.
+    /// </summary>
+    [TestMethod]
+    [DataRow(3290, 9101, true)]
+    [DataRow(9101, 9102, true)]
+    [DataRow(9102, 9104, false)]
+    [DataRow(9104, 9105, true)]
+    public void ShippedFirstHourChain_GivesEachQuestWhereTheOneBeforeEnds(int previousId, int nextId, bool offeredAtTurnIn)
+    {
+        var quests = LoadQuests(FindShippedQuests());
+
+        Assert.IsTrue(quests.TryGet(previousId, out var previous), $"Quest {previousId} is missing.");
+        Assert.IsTrue(quests.TryGet(nextId, out var next), $"Quest {nextId} is missing.");
+
+        var handedInTo = previous.GoalTargetNpcId(previous.Goals.Count - 1);
+        Assert.AreEqual(handedInTo, next.GiverNpcId, $"Quest {nextId} isn't given by npc {handedInTo}, where {previousId} is handed in.");
+        Assert.AreEqual(previousId, next.PrerequisiteQuestId, $"Quest {nextId} doesn't wait for {previousId}.");
+
+        if (offeredAtTurnIn)
+            Assert.AreEqual(nextId, previous.NextQuestId, $"Quest {previousId} doesn't offer {nextId} at its turn-in.");
+
+        var playerQuests = new QuestLog();
+        Assert.IsFalse(next.IsOfferableFor(playerQuests), $"Quest {nextId} is offered before {previousId} is done.");
+
+        playerQuests.AddCompleted(previousId);
+        Assert.IsTrue(next.IsOfferableFor(playerQuests), $"Quest {nextId} isn't offered once {previousId} is done.");
     }
 
     [TestMethod]
