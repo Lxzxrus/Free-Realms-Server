@@ -50,8 +50,10 @@ public static class PetHelper
     /// as ClientPathRequestPacketHandler does with <see cref="Player.NextClientPathRequestAt"/>. If not, the request
     /// (<paramref name="later"/>) waits its turn behind any already waiting, and <see cref="StartWaitingRequest"/>
     /// carries it out then: dropped, a click in the pet window that came within the wait of another went unanswered.
+    /// One that finds <see cref="MaxWaitingRequests"/> already waiting is dropped, and <paramref name="dropped"/>
+    /// answers it instead, for a request the client waits on.
     /// </summary>
-    public static bool TryStartRequest(Player player, Action later)
+    public static bool TryStartRequest(Player player, Action later, Action? dropped = null)
     {
         var now = Environment.TickCount64;
 
@@ -59,6 +61,8 @@ public static class PetHelper
         {
             if (player.WaitingPetRequests.Count < MaxWaitingRequests)
                 player.WaitingPetRequests.Enqueue(later);
+            else
+                dropped?.Invoke();
 
             return false;
         }

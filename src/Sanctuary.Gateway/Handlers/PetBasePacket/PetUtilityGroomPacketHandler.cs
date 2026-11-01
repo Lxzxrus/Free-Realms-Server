@@ -39,8 +39,10 @@ public static class PetUtilityGroomPacketHandler
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PetUtilityGroomPacket), petUtilityGroomPacket);
 
         // Evergrove: one pet request every PetHelper.RequestIntervalMs, as grooming runs two queries, and one that comes
-        // sooner waits its turn. The client keeps its pet buttons locked until the grooming starts or is refused.
-        if (PetHelper.TryStartRequest(connection.Player, () => Groom(connection, petUtilityGroomPacket)))
+        // sooner waits its turn. The client keeps its pet buttons locked until the grooming starts or is refused, so a
+        // grooming dropped because too many requests are waiting unlocks them, as a refused one does.
+        if (PetHelper.TryStartRequest(connection.Player, () => Groom(connection, petUtilityGroomPacket),
+                connection.Player.PlayerPet.UnlockPetActions))
             Groom(connection, petUtilityGroomPacket);
 
         return true;
