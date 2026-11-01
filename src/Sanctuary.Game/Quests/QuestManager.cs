@@ -191,12 +191,19 @@ public sealed class QuestManager : IQuestManager
             QuestDialogue.Begin(player, goal.ConversationFor(npc.DefinitionId), npc.Guid);
     }
 
-    // Evergrove: the game's name on its start screen (its ClientActivityDefinitions.json DisplayNameId), else the step's
-    // own row.
+    // Evergrove: the game's name as the Games menu lists it (its ClientActivityDefinitions.json NameId, which names the
+    // recipe), so two games at one NPC never share a button; else the title of its start screen (DisplayNameId, which
+    // every Cooking recipe shares); else the step's own row.
     private int GameButtonTextId(PlayActivityGoal goal)
-        => _resourceManager.ClientActivityDefinitions.TryGetValue(goal.ActivityId, out var activity) && activity.DisplayNameId != 0
-            ? activity.DisplayNameId
-            : goal.NameId;
+    {
+        if (!_resourceManager.ClientActivityDefinitions.TryGetValue(goal.ActivityId, out var activity))
+            return goal.NameId;
+
+        if (activity.NameId != 0)
+            return activity.NameId;
+
+        return activity.DisplayNameId != 0 ? activity.DisplayNameId : goal.NameId;
+    }
 
     // Evergrove: opens a play step's game for the player who picked it from the NPC's menu, if the step is still open (the
     // game may have been won from the Games menu since the menu was shown). It opens as the Games menu opens it, with the

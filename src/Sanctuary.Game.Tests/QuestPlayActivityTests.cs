@@ -8,6 +8,7 @@ using Sanctuary.Game.Interactions;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
+using Sanctuary.Packet.Common;
 
 namespace Sanctuary.Game.Tests;
 
@@ -24,7 +25,11 @@ public sealed class QuestPlayActivityTests
     private const int Simone = 2069;
     private const int Samantha = 2045;
 
-    // The steak's DisplayNameId in ClientActivityDefinitions.json: the title of the Cooking start screen.
+    // NameIds in ClientActivityDefinitions.json: each recipe's name in the Games menu.
+    private const int SteakOnTheGamesMenu = 386024;
+    private const int SundaeOnTheGamesMenu = 386045;
+
+    // The steak's DisplayNameId: the title of the Cooking start screen, which every recipe shares.
     private const int CookingTitle = 20226;
 
     private const int CookStep = 21837;
@@ -39,17 +44,17 @@ public sealed class QuestPlayActivityTests
     public void Cleanup() => _world.Dispose();
 
     /// <summary>
-    /// The Cobblestone Village Cafe's two steps: win the steak, which Simone offers (or <paramref name="offeredBy"/>),
-    /// then take it to her.
+    /// The Cobblestone Village Cafe's two steps: win the steak (or <paramref name="game"/>), which Simone offers (or
+    /// <paramref name="offeredBy"/>), then take it to her.
     /// </summary>
-    private static QuestDefinition Cafe(int questId = 9103, int wins = 1, int offeredBy = Simone) => new()
+    private static QuestDefinition Cafe(int questId = 9103, int wins = 1, int offeredBy = Simone, int game = Steak) => new()
     {
         QuestId = questId,
         GiverNpcId = Simone,
         TargetNpcId = Simone,
         Goals =
         [
-            new PlayActivityGoal { NameId = CookStep, ActivityId = Steak, RequiredCount = wins, NpcId = offeredBy },
+            new PlayActivityGoal { NameId = CookStep, ActivityId = game, RequiredCount = wins, NpcId = offeredBy },
             new TalkToNpcGoal { NameId = HandInStep, Targets = [new TalkTarget { NpcId = Simone }] }
         ]
     };
@@ -59,6 +64,22 @@ public sealed class QuestPlayActivityTests
     /// <summary>What the NPC's menu offers the player for their quests, as a click on them asks.</summary>
     private List<NpcInteractionOption> Options(int npcId) =>
         _world.Quests.GetInteractionOptions(_world.Player, new Npc(null!) { DefinitionId = npcId });
+
+    /// <summary>The game each of the NPC's buttons opens, by the button's text; no two buttons read the same.</summary>
+    private Dictionary<int, int> GamesByButton(int npcId)
+    {
+        var games = new Dictionary<int, int>();
+
+        foreach (var option in Options(npcId))
+        {
+            _world.Launched.Clear();
+            option.Invoke(_world.Player);
+
+            Assert.IsTrue(games.TryAdd(option.ButtonTextId, _world.Launched.Single()), $"Two buttons read {option.ButtonTextId}.");
+        }
+
+        return games;
+    }
 
     [TestMethod]
     public void AWin_TicksTheStep_AndTheNextOneIsSaved()
@@ -190,7 +211,8 @@ public sealed class QuestPlayActivityTests
 
     /// <summary>
     /// No world object starts a game yet, so while the cooking step is open Simone offers the steak herself: one option,
-    /// under the game's own title, that opens it the way the Games menu does (the Gateway's launcher, recorded here).
+    /// under the game's name in the Games menu, that opens it the way the Games menu does (the Gateway's launcher,
+    /// recorded here).
     /// </summary>
     [TestMethod]
     public void WhileTheCookingStepIsOpen_SimoneOffersTheSteak()
@@ -200,7 +222,7 @@ public sealed class QuestPlayActivityTests
         var option = Options(Simone).Single();
 
         Assert.AreEqual(ContextIcons.QuestTurnIn, option.IconId, "The icon of a quest in progress, as a hand-in shows.");
-        Assert.AreEqual(CookingTitle, option.ButtonTextId);
+        Assert.AreEqual(SteakOnTheGamesMenu, option.ButtonTextId);
 
         option.Invoke(_world.Player);
 
@@ -233,6 +255,44 @@ public sealed class QuestPlayActivityTests
         _world.Accept(Cafe());
 
         Assert.AreEqual(0, Options(Samantha).Count);
+    }
+
+    /// <summary>
+    /// Two games at one NPC (two quests' steps) are two buttons, each naming its recipe as the Games menu does. The start
+    /// screen's title, which every Cooking recipe shares, would make them two alike.
+    /// </summary>
+    [TestMethod]
+    public void TwoGamesAtOneNpc_AreTwoButtons_EachNamingItsRecipe()
+    {
+        _world.Accept(Cafe(questId: 1, game: Steak));
+        _world.Accept(Cafe(questId: 2, game: Sundae));
+
+        var games = GamesByButton(Simone);
+
+        Assert.AreEqual(2, games.Count);
+        Assert.AreEqual(Steak, games[SteakOnTheGamesMenu]);
+        Assert.AreEqual(Sundae, games[SundaeOnTheGamesMenu]);
+    }
+
+    /// <summary>
+    /// A game the Games menu doesn't name is called by its start screen's title, and one the server doesn't know by the
+    /// step's own row.
+    /// </summary>
+    [TestMethod]
+    public void AGameWithNoGamesMenuName_IsCalledByItsStartScreen_ElseByTheStep()
+    {
+        const int unnamed = 90_001, unknown = 90_002;
+        _world.Resources.ClientActivityDefinitions.TryAdd(unnamed,
+            new ClientActivityDefinition { Id = unnamed, DisplayNameId = CookingTitle });
+
+        _world.Accept(Cafe(questId: 1, game: unnamed));
+        _world.Accept(Cafe(questId: 2, game: unknown));
+
+        var games = GamesByButton(Simone);
+
+        Assert.AreEqual(2, games.Count);
+        Assert.AreEqual(unnamed, games[CookingTitle]);
+        Assert.AreEqual(unknown, games[CookStep]);
     }
 
     [TestMethod]
