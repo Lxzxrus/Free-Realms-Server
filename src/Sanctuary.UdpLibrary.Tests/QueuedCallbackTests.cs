@@ -130,9 +130,10 @@ public sealed class QueuedCallbackTests
         manager.Receive(healthy, [2, 2, 2]);
         manager.Receive(faulty, [3, 3, 3]);
 
-        // without the guard this throws out of GiveTime, which on the Gateway is the server's only loop
-        manager.GiveTime(50, giveConnectionsTime: false);
-        manager.GiveTime(50, giveConnectionsTime: false);
+        // Without the guard this throws out of GiveTime, which on the Gateway is the server's only loop. Each call delivers
+        // at least one event, so four deliver all four (three packets and faulty's disconnect) whatever the clock does.
+        for (var i = 0; i < 4; i++)
+            manager.GiveTime(50, giveConnectionsTime: false);
 
         Assert.AreEqual(Status.Disconnected, faulty.Status);
         Assert.AreEqual(DisconnectReason.CorruptPacket, faulty.DisconnectReason);
@@ -156,7 +157,10 @@ public sealed class QueuedCallbackTests
 
         // a kick, say, after the packets were read and before they were handled
         connection.Disconnect();
-        manager.GiveTime(50, giveConnectionsTime: false);
+
+        // each call delivers at least one event, so three deliver all three whatever the clock does
+        for (var i = 0; i < 3; i++)
+            manager.GiveTime(50, giveConnectionsTime: false);
 
         Assert.HasCount(0, connection.Packets);
         Assert.AreEqual(1, connection.TerminatedCallbacks);
