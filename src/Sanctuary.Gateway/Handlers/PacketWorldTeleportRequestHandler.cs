@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
@@ -48,13 +49,17 @@ public static class PacketWorldTeleportRequestHandler
         {
             if (player.Zone is HousingZone housingZone)
             {
-                _houseManager.EnterHouse(
-                    connection.Player,
-                    GuidHelper.GetHouseGuid(housingZone.HouseId));
+                if (ZoneTeleports.TryStart(connection.Player))
+                {
+                    _houseManager.EnterHouse(
+                        connection.Player,
+                        GuidHelper.GetHouseGuid(housingZone.HouseId));
+                }
+
                 return true;
             }
 
-            if (player.Zone is not WorldZone ||
+            if (player.Zone is not WorldZone || !ZoneTeleports.TryStart(connection.Player) ||
                 !connection.Player.TeleportToZone(player.Zone, position, rotation))
             {
                 return true;
