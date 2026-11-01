@@ -17,6 +17,7 @@ using Sanctuary.Game;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions.Zones;
+using Sanctuary.Game.Store;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -291,6 +292,12 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
             else if (clientItemDefinition.Type == ItemDefinitionHelper.PetItemType)
             {
                 if (!PetHelper.TryGetModel(_resourceManager, clientItemDefinition, out var modelDefinition))
+                {
+                    return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
+                }
+
+                // Each pet is a database row, made in this one save: no more than the Marketplace's quantity picker allows.
+                if (!StorePurchase.IsQuantityAllowed(clientItemDefinition, totalQuantityValue))
                 {
                     return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
                 }

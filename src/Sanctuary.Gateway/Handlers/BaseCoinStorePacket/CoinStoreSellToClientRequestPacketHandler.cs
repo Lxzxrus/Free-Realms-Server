@@ -12,6 +12,7 @@ using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Store;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -74,6 +75,17 @@ public static class CoinStoreSellToClientRequestPacketHandler
             clientItemDefinition.Type != ItemDefinitionHelper.PetUtilityItemType)
         {
             coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.Error;
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
+
+        // No more than the client's quantity picker allows. A free item could otherwise be had by the billion in one
+        // request, and a pet is a database row per unit.
+        if (!StorePurchase.IsQuantityAllowed(clientItemDefinition, coinStoreSellToClientRequestPacket.Quantity))
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidQuantity;
 
             connection.SendTunneled(coinStoreTransactionCompletePacket);
 
