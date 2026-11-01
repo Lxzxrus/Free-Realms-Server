@@ -653,8 +653,10 @@ public sealed class HousingZoneRuntime : IDisposable
             fixture.RotationW = rotation.W;
             fixture.Scale = scale;
 
-            if (customization.TintId > 0)
-                fixture.TintId = ResolveItemTintId(fixture.ItemDefinitionId, customization.TintId);
+            // The client sends back the tint it was shown, so only a palette dye on a part that takes dye, as painting
+            // gives, may change it. A part goes back to inventory in its tint, and a made-up one was a new row each time.
+            if (HousingFixtureRules.CanPaint(_resourceManager, fixture.ItemDefinitionId, customization.TintId))
+                fixture.TintId = customization.TintId;
 
             dbContext.SaveChanges();
 
