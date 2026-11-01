@@ -44,11 +44,16 @@ public class HardeningTests
 
     // ---- F4: an exception while processing one connection drops that connection, never the host ----
 
+    // The F4 and F10 tests run twice: with the application's callbacks inline, as the Login server has them, and queued, as
+    // the Gateway has them (GatewayServer sets EventQueuing).
+
     [TestMethod]
-    public void HandlerExceptionDropsOnlyThatConnection()
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void HandlerExceptionDropsOnlyThatConnection(bool queued)
     {
         var network = new FakeNetwork();
-        var server = Server(network);
+        var server = Server(network, p => p.EventQueuing = queued);
         var (clientA, a) = Client(network, server, "10.0.0.2");
         var (clientB, b) = Client(network, server, "10.0.0.3");
 
@@ -80,10 +85,12 @@ public class HardeningTests
     }
 
     [TestMethod]
-    public void ExceptionFromDisconnectCallbackDoesNotEscape()
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void ExceptionFromDisconnectCallbackDoesNotEscape(bool queued)
     {
         var network = new FakeNetwork();
-        var server = Server(network);
+        var server = Server(network, p => p.EventQueuing = queued);
         server.Behaviour.ThrowOnTerminated = true;
 
         var (_, _) = Client(network, server, "10.0.0.2");
@@ -329,7 +336,9 @@ public class HardeningTests
     // ---- F10: a connection that throws repeatedly is disconnected ----
 
     [TestMethod]
-    public void RepeatedHandlerFaultsDisconnect()
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void RepeatedHandlerFaultsDisconnect(bool queued)
     {
         var network = new FakeNetwork();
         var server = Server(network, p =>
@@ -337,6 +346,7 @@ public class HardeningTests
             p.FaultLimit = 3;
             p.FaultWindow = 60000;
             p.NoDataTimeout = 0;
+            p.EventQueuing = queued;
         });
 
         server.Behaviour.ReportFaults = true;

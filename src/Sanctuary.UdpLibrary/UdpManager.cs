@@ -490,65 +490,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
             if (ce is null)
                 break;
 
-            switch (ce.EventType)
-            {
-                case CallbackEventType.RoutePacket:
-                    {
-                        if (ce.Payload is null)
-                            break;
-
-                        ce.Source?.OnRoutePacket(ce.Payload.GetDataPtr().Slice(0, ce.Payload.GetDataLen()));
-                    }
-                    break;
-
-                case CallbackEventType.ConnectComplete:
-                    {
-                        ce.Source?.OnConnectComplete();
-                    }
-                    break;
-
-                case CallbackEventType.Terminated:
-                    {
-                        ce.Source?.OnTerminated();
-                    }
-                    break;
-
-                case CallbackEventType.CrcReject:
-                    {
-                        if (ce.Payload is null)
-                            break;
-
-                        var data = ce.Payload.GetDataPtr();
-
-                        ce.Source?.OnCrcReject(data.Slice(0, ce.Payload.GetDataLen()));
-                    }
-                    break;
-
-                case CallbackEventType.PacketCorrupt:
-                    {
-                        if (ce.Payload is null)
-                            break;
-
-                        var data = ce.Payload.GetDataPtr();
-
-                        ce.Source?.OnPacketCorrupt(data.Slice(0, ce.Payload.GetDataLen()), ce.Reason);
-                    }
-                    break;
-
-                case CallbackEventType.ConnectRequest:
-                    {
-                        if (ce.Source is null)
-                            break;
-
-                        if (!OnConnectRequest(ce.Source))
-                            ce.Source.InternalDisconnect(0, DisconnectReason.ConnectionRefused);
-
-                    }
-                    break;
-
-                default:
-                    break;
-            }
+            DeliverEventGuarded(ce);
 
             if (ClockElapsed(start) >= maxProcessingTime)
             {
@@ -559,6 +501,101 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
                 break;
             }
+        }
+    }
+
+    /// <summary>
+    /// Delivers one queued event. As for a packet whose callbacks run inline (<see cref="ProcessRawPacketGuarded"/>), an
+    /// exception from the application's callback must never reach the caller of <see cref="GiveTime"/>: the connection it
+    /// belongs to is dropped instead, and the events after it are still delivered.
+    /// </summary>
+    private void DeliverEventGuarded(CallbackEvent ce)
+    {
+        try
+        {
+            DeliverEvent(ce);
+        }
+        catch (Exception ex)
+        {
+            if (ce.Source is null)
+            {
+                Logger.LogError(ex, "An exception escaped while delivering a queued {event} event.", ce.EventType);
+                return;
+            }
+
+            var activity = $"delivering a queued {ce.EventType} event";
+
+            if (ce.Payload is not null)
+            {
+                var data = ce.Payload.GetDataPtr().Slice(0, ce.Payload.GetDataLen());
+
+                activity += $" (a {data.Length} byte packet: {Convert.ToHexString(data.Slice(0, Math.Min(data.Length, 32)))}{(data.Length > 32 ? "..." : "")})";
+            }
+
+            DropFaultedConnection(ce.Source, ce.Source.SocketAddress, ex, activity);
+        }
+    }
+
+    private void DeliverEvent(CallbackEvent ce)
+    {
+        switch (ce.EventType)
+        {
+            case CallbackEventType.RoutePacket:
+                {
+                    if (ce.Payload is null)
+                        break;
+
+                    ce.Source?.OnRoutePacket(ce.Payload.GetDataPtr().Slice(0, ce.Payload.GetDataLen()));
+                }
+                break;
+
+            case CallbackEventType.ConnectComplete:
+                {
+                    ce.Source?.OnConnectComplete();
+                }
+                break;
+
+            case CallbackEventType.Terminated:
+                {
+                    ce.Source?.OnTerminated();
+                }
+                break;
+
+            case CallbackEventType.CrcReject:
+                {
+                    if (ce.Payload is null)
+                        break;
+
+                    var data = ce.Payload.GetDataPtr();
+
+                    ce.Source?.OnCrcReject(data.Slice(0, ce.Payload.GetDataLen()));
+                }
+                break;
+
+            case CallbackEventType.PacketCorrupt:
+                {
+                    if (ce.Payload is null)
+                        break;
+
+                    var data = ce.Payload.GetDataPtr();
+
+                    ce.Source?.OnPacketCorrupt(data.Slice(0, ce.Payload.GetDataLen()), ce.Reason);
+                }
+                break;
+
+            case CallbackEventType.ConnectRequest:
+                {
+                    if (ce.Source is null)
+                        break;
+
+                    if (!OnConnectRequest(ce.Source))
+                        ce.Source.InternalDisconnect(0, DisconnectReason.ConnectionRefused);
+
+                }
+                break;
+
+            default:
+                break;
         }
     }
 
