@@ -287,7 +287,9 @@ public sealed class HouseChatCommand : IChatCommand
             return true;
         }
 
-        SendEnterResult(invoker, _houseManager.EnterOwnedHouse(invoker, definition.Id));
+        // A move to another zone: one that comes too soon after the last waits for its turn (ZoneTeleports).
+        ZoneTeleports.Request(invoker, Environment.TickCount64,
+            () => SendEnterResult(invoker, _houseManager.EnterOwnedHouse(invoker, definition.Id)));
         return true;
     }
 
@@ -301,14 +303,18 @@ public sealed class HouseChatCommand : IChatCommand
             return true;
         }
 
-        SendEnterResult(invoker, _houseManager.VisitHouse(invoker, definition.Id, ownerName));
+        ZoneTeleports.Request(invoker, Environment.TickCount64,
+            () => SendEnterResult(invoker, _houseManager.VisitHouse(invoker, definition.Id, ownerName)));
         return true;
     }
 
     private bool Leave(Player invoker)
     {
-        if (!_houseManager.LeaveHouse(invoker))
-            ChatHelper.SendSystemMessage(invoker, "You are not in a house.");
+        ZoneTeleports.Request(invoker, Environment.TickCount64, () =>
+        {
+            if (!_houseManager.LeaveHouse(invoker))
+                ChatHelper.SendSystemMessage(invoker, "You are not in a house.");
+        });
 
         return true;
     }

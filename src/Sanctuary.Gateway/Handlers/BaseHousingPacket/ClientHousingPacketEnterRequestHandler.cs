@@ -34,10 +34,18 @@ public static class ClientHousingPacketEnterRequestHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(ClientHousingPacketEnterRequest), packet);
 
-        var result = _houseManager.EnterHouse(connection.Player, packet.HouseGuid);
+        var player = connection.Player;
+        var houseGuid = packet.HouseGuid;
 
-        if (result != EnterHouseResult.Success)
-            ChatHelper.SendSystemMessage(connection.Player, "That house could not be entered.");
+        // A move to another zone: one that comes too soon after the last waits for its turn (ZoneTeleports), and the
+        // client waits for it.
+        ZoneTeleports.Request(player, Environment.TickCount64, () =>
+        {
+            var result = _houseManager.EnterHouse(player, houseGuid);
+
+            if (result != EnterHouseResult.Success)
+                ChatHelper.SendSystemMessage(player, "That house could not be entered.");
+        });
 
         return true;
     }

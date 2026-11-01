@@ -47,24 +47,22 @@ public static class PacketWorldTeleportRequestHandler
 
         if (!ReferenceEquals(connection.Player.Zone, player.Zone))
         {
-            if (player.Zone is HousingZone housingZone)
-            {
-                if (ZoneTeleports.TryStart(connection.Player))
-                {
-                    _houseManager.EnterHouse(
-                        connection.Player,
-                        GuidHelper.GetHouseGuid(housingZone.HouseId));
-                }
+            // A move to another zone: one that comes too soon after the last waits for its turn (ZoneTeleports).
+            var self = connection.Player;
+            var zone = player.Zone;
 
+            if (zone is HousingZone housingZone)
+            {
+                var houseGuid = GuidHelper.GetHouseGuid(housingZone.HouseId);
+
+                ZoneTeleports.Request(self, Environment.TickCount64, () => _houseManager.EnterHouse(self, houseGuid));
                 return true;
             }
 
-            if (player.Zone is not WorldZone || !ZoneTeleports.TryStart(connection.Player) ||
-                !connection.Player.TeleportToZone(player.Zone, position, rotation))
-            {
+            if (zone is not WorldZone)
                 return true;
-            }
 
+            ZoneTeleports.Request(self, Environment.TickCount64, () => self.TeleportToZone(zone, position, rotation));
             return true;
         }
 

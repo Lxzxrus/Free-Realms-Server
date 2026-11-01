@@ -89,14 +89,22 @@ public sealed class Player : ClientPcData, IEntity
     public ZoneLoadReplies ClientFinishedLoadingReplies { get; } = new();
 
     /// <summary>
-    /// The earliest time (<see cref="Environment.TickCount64"/>) the next request of each kind is answered. Each one
-    /// costs the server far more than the client: a path search, a move to another zone (<see cref="ZoneTeleports"/>).
-    /// Repeats sooner are dropped.
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the next Take Me There is answered: each one costs
+    /// the server a path search, far more than the client. Repeats sooner are dropped.
     /// </summary>
     public long NextTakeMeThereAt { get; set; }
 
-    /// <inheritdoc cref="NextTakeMeThereAt"/>
+    /// <summary>
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the player's next move to another zone is made
+    /// (<see cref="ZoneTeleports"/>). One asked for sooner waits in <see cref="WaitingZoneMove"/>.
+    /// </summary>
     public long NextZoneTeleportAt { get; set; }
+
+    /// <summary>
+    /// The move to another zone that came too soon and waits for its turn (<see cref="ZoneTeleports"/>), or
+    /// <c>null</c>.
+    /// </summary>
+    public Action? WaitingZoneMove { get; set; }
 
     public DateTime LastQuestAcceptedAt { get; set; }
 
