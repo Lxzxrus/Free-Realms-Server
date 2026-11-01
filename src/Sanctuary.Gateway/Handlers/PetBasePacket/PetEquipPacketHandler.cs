@@ -87,18 +87,24 @@ public static class PetEquipPacketHandler
             dbPet.Items.Add(dbItem);
 
         dbContext.SaveChanges();
-        petClientInfo.ItemGuids.Clear();
-        petClientInfo.ItemGuids.AddRange(dbPet.Items.OrderBy(item => item.Id).Select(item => item.Id));
 
+        var itemGuids = dbPet.Items.OrderBy(item => item.Id).Select(item => item.Id).ToArray();
         var equippedItemGuid = dbItem?.Id ?? PetHelper.NoItemGuid;
         var attachment = dbItem is null ? null : PetHelper.GetAttachment(dbItem.Tint, clientItemDefinition!);
 
+        // Evergrove: the pet's item list changes on the zone's tick with its attachments. The zone reads the list to
+        // summon the pet and send the pet list, and changing it from here could break the tick for the whole zone.
         player.PlayerPet.QueueAction(() =>
         {
+            petClientInfo.ItemGuids.Clear();
+            petClientInfo.ItemGuids.AddRange(itemGuids);
+
             if (attachment is null)
                 PetHelper.UnequipItem(player, pet, petEquipPacket.Slot);
             else
                 PetHelper.EquipItem(player, pet, equippedItemGuid, attachment);
+
+            player.PlayerPet.SendPetList();
         });
 
         connection.SendTunneled(new PetEquipPacket
@@ -107,7 +113,6 @@ public static class PetEquipPacketHandler
             Slot = petEquipPacket.Slot,
             ItemGuid = equippedItemGuid
         });
-        player.PlayerPet.SendPetList();
 
         return true;
     }

@@ -339,6 +339,21 @@ public sealed class PlayerPet
             return;
         }
 
+        // Evergrove: the clothes are gathered before the npc joins the zone. The player's items can change on the packet
+        // thread meanwhile, and a throw after TryCreateNpc left an npc in the zone that no pet owned and nothing removed.
+        var attachments = new List<CharacterAttachmentData>();
+
+        foreach (var itemGuid in petClientInfo.ItemGuids)
+        {
+            var clientItem = _player.Items.FirstOrDefault(item => item.Id == itemGuid);
+
+            if (clientItem is not null && _resourceManager.ClientItemDefinitions.TryGetValue(clientItem.Definition, out var definition)
+                && definition.Type == ItemDefinitionHelper.PetClothingItemType)
+            {
+                attachments.Add(PetHelper.GetAttachment(clientItem.Tint, definition));
+            }
+        }
+
         RecallPet();
 
         if (!_player.Zone.TryCreateNpc(out var npc))
@@ -354,17 +369,7 @@ public sealed class PlayerPet
             ? petDefinition.DefaultTintAlias
             : clientItemDefinition.TintAlias;
         npc.TintId = petClientInfo.TintId;
-        foreach (var itemGuid in petClientInfo.ItemGuids)
-        {
-            var clientItem = _player.Items.FirstOrDefault(item => item.Id == itemGuid);
-
-            if (clientItem is not null && _resourceManager.ClientItemDefinitions.TryGetValue(clientItem.Definition, out var definition)
-                && definition.Type == ItemDefinitionHelper.PetClothingItemType)
-            {
-                npc.Attachments.Add(PetHelper.GetAttachment(clientItem.Tint, definition));
-            }
-        }
-
+        npc.Attachments.AddRange(attachments);
         npc.IsInteractable = false;
         npc.Scale = modelDefinition.Scale > 0f ? modelDefinition.Scale : PetDefaultScale;
         npc.Disposition = PetNpcDisposition;

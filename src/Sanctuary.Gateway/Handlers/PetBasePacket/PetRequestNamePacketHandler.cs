@@ -76,9 +76,14 @@ public static class PetRequestNamePacketHandler
         dbContext.SaveChanges();
         petClientInfo.Name = dbPet.Name;
         petSetNamePacket.Accepted = true;
-        player.PlayerPet.QueueAction(() => pet.Name = petClientInfo.Name);
+
+        // Evergrove: the pet list is sent from the zone's tick, which is where the pets' item lists in it change.
+        player.PlayerPet.QueueAction(() =>
+        {
+            pet.Name = petClientInfo.Name;
+            player.PlayerPet.SendPetList();
+        });
         player.SendTunneledToVisible(petSetNamePacket, true);
-        player.PlayerPet.SendPetList();
 
         return true;
     }

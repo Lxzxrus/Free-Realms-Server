@@ -141,8 +141,9 @@ public static class CoinStoreBuyFromClientRequestPacketHandler
         {
             connection.Player.Items.Remove(clientItem);
 
+            // Evergrove: on the zone's tick, which reads the pets' item lists and the pet's attachments this changes.
             if (isPetItem)
-                PetHelper.RemoveItem(connection.Player, clientItem.Id, clientItemDefinition.Slot);
+                connection.Player.PlayerPet.QueueAction(() => PetHelper.RemoveItem(connection.Player, clientItem.Id, clientItemDefinition.Slot));
         }
         else
             clientItem.Count = dbItem.Count;
