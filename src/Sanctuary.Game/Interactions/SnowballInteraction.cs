@@ -19,6 +19,10 @@ public class SnowballInteraction : IInteraction
     private const int ProjectileUnknown27 = 100;
     private const int AbilityFailedStringId = 3079;
     private const float MillisecondsPerSecond = 1000f;
+    // Evergrove: every pickup is shown to everyone near the player, so one within a second of the player's last is
+    // ignored. The snowball from that last one lasts its DurationMs (a minute, for every pile), so a person loses
+    // nothing; a client sending pickups as fast as it could made each player near it receive two packets for each.
+    private const int MinPickupIntervalMs = 1000;
     public static readonly InteractionData Data = new() { Id = IInteraction.UniqueId++, Type = Type };
     public int Id => Data.Id;
 
@@ -31,6 +35,9 @@ public class SnowballInteraction : IInteraction
 
         var definition = npc.Ability;
         if (definition.Slot < 0 || definition.Slot >= ActionBarSlotCount || definition.DurationMs <= 0)
+            return;
+
+        if (!TryStartPickup(player, DateTimeOffset.UtcNow))
             return;
 
         if (player.NpcAbilityEffectId != 0)
@@ -76,6 +83,19 @@ public class SnowballInteraction : IInteraction
         var abilityPacketSetDefinition = new AbilityPacketSetDefinition { ProfileId = player.NpcAbilityProfileId };
         abilityPacketSetDefinition.AbilitySet.Abilities[definition.Slot] = definition.Ability;
         player.SendTunneled(abilityPacketSetDefinition);
+    }
+
+    /// <summary>
+    /// Whether a pickup at <paramref name="now"/> goes ahead: not if it comes within <see cref="MinPickupIntervalMs"/>
+    /// of the player's last one. One that goes ahead starts that wait again.
+    /// </summary>
+    internal static bool TryStartPickup(Player player, DateTimeOffset now)
+    {
+        if (now < player.NpcAbilityNextPickupAt)
+            return false;
+
+        player.NpcAbilityNextPickupAt = now.AddMilliseconds(MinPickupIntervalMs);
+        return true;
     }
 
     public static void Update(Player player)
