@@ -55,14 +55,27 @@ public static class PacketWorldTeleportRequestHandler
             {
                 var houseGuid = GuidHelper.GetHouseGuid(housingZone.HouseId);
 
-                ZoneTeleports.Request(self, Environment.TickCount64, () => _houseManager.EnterHouse(self, houseGuid));
+                ZoneTeleports.Request(self, Environment.TickCount64, () =>
+                {
+                    if (_houseManager.EnterHouse(self, houseGuid) != EnterHouseResult.Success)
+                        ChatHelper.SendSystemMessage(self, "That house could not be entered.");
+                });
+
                 return true;
             }
 
             if (zone is not WorldZone)
+            {
+                ChatHelper.SendSystemMessage(self, "You can't join that player where they are.");
                 return true;
+            }
 
-            ZoneTeleports.Request(self, Environment.TickCount64, () => self.TeleportToZone(zone, position, rotation));
+            ZoneTeleports.Request(self, Environment.TickCount64, () =>
+            {
+                if (!self.TeleportToZone(zone, position, rotation))
+                    ChatHelper.SendSystemMessage(self, "The teleport failed. Please try again.");
+            });
+
             return true;
         }
 

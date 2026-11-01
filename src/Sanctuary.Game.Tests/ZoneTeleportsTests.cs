@@ -96,6 +96,34 @@ public sealed class ZoneTeleportsTests
     }
 
     [TestMethod]
+    public void AMoveThatDidNotHappen_StartsNoWait()
+    {
+        var house = NewHouse();
+        var player = NewPlayer(NewWorld());
+
+        // Refused (a house the player may not enter, say), or to the zone they're already in: they stay where they are.
+        ZoneTeleports.Request(player, Start, () => { });
+        ZoneTeleports.Request(player, Start + 1, () => player.Zone = house);
+
+        Assert.AreSame(house, player.Zone, "The next real move is made at once.");
+    }
+
+    [TestMethod]
+    public void AMoveRefusedWhenItsTurnCame_StartsNoWait()
+    {
+        var world = NewWorld();
+        var house = NewHouse();
+        var player = NewPlayer(world);
+
+        ZoneTeleports.Request(player, Start, () => player.Zone = house);
+        ZoneTeleports.Request(player, Start + 1, () => { });
+        ZoneTeleports.Tick(player, Start + ZoneTeleports.MinIntervalMs);
+        ZoneTeleports.Request(player, Start + ZoneTeleports.MinIntervalMs + 1, () => player.Zone = world);
+
+        Assert.AreSame(world, player.Zone);
+    }
+
+    [TestMethod]
     public void AMoveAskedForOnceItsTurnHasCome_IsMadeAtOnce_InPlaceOfTheOneWaiting()
     {
         var world = NewWorld();

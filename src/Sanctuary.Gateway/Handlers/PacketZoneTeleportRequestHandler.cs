@@ -55,8 +55,12 @@ public static class PacketZoneTeleportRequestHandler
         {
             var player = connection.Player;
 
-            ZoneTeleports.Request(player, Environment.TickCount64,
-                () => player.TeleportToZone(_zoneManager.StartingZone, position, rotation));
+            ZoneTeleports.Request(player, Environment.TickCount64, () =>
+            {
+                if (!player.TeleportToZone(_zoneManager.StartingZone, position, rotation))
+                    ChatHelper.SendSystemMessage(player, "The teleport failed. Please try again.");
+            });
+
             return true;
         }
 

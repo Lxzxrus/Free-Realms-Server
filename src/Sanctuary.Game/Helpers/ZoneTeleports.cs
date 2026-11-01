@@ -28,7 +28,7 @@ public static class ZoneTeleports
     /// <see cref="MinIntervalMs"/> ago, otherwise keeps it, in place of any move already waiting, until then.
     /// </summary>
     /// <param name="now"><see cref="Environment.TickCount64"/>.</param>
-    /// <param name="move">Moves the player, or tells them why it can't.</param>
+    /// <param name="move">Moves the player, or tells them why it can't: a move refused starts no wait.</param>
     public static void Request(Player player, long now, Action move)
     {
         if (now < player.NextZoneTeleportAt)
@@ -56,8 +56,13 @@ public static class ZoneTeleports
 
     private static void Move(Player player, Action move, long now)
     {
+        var zone = player.Zone;
+
         move();
 
-        player.NextZoneTeleportAt = now + MinIntervalMs;
+        // Only a move that happened starts the wait: one refused, or to where the player already is, costs little, and
+        // must not hold up the next real one.
+        if (!ReferenceEquals(player.Zone, zone))
+            player.NextZoneTeleportAt = now + MinIntervalMs;
     }
 }
