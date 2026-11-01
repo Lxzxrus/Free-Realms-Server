@@ -70,6 +70,49 @@ public sealed class Player : ClientPcData, IEntity
     public ulong LastInteractNpcGuid { get; set; }
     public DateTime LastInteractAt { get; set; }
 
+    /// <summary>Chat messages the player may still send (<see cref="ChatLimits"/>).</summary>
+    public Allowance ChatAllowance { get; } = new(ChatLimits.Burst, ChatLimits.RefillMs, Environment.TickCount64);
+
+    /// <summary>When (<see cref="Environment.TickCount64"/>) the player may next be told they chat too fast.</summary>
+    public long NextChatTooFastNoticeAt { get; set; }
+
+    /// <summary>
+    /// Counts the player's entries into a zone since they logged in; the zone they logged in to is 0. Each is a zone
+    /// load for the client, even back in the zone it was last in, so the zone-load replies are kept per entry
+    /// (<see cref="ZoneLoadReplies"/>).
+    /// </summary>
+    public int ZoneEntry { get; private set; }
+
+    /// <summary>
+    /// When the client's "ready" is answered (<see cref="ZoneLoadReplies"/>): each answer sends the zone's whole welcome
+    /// and, in the world, reads the house list from the database.
+    /// </summary>
+    public ZoneLoadReplies ClientIsReadyReplies { get; } = new();
+
+    /// <summary>
+    /// When the client's "finished loading" is answered (<see cref="ZoneLoadReplies"/>): in a house, each answer reads
+    /// where every fixture is from the database and sends one packet per fixture.
+    /// </summary>
+    public ZoneLoadReplies ClientFinishedLoadingReplies { get; } = new();
+
+    /// <summary>
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the next Take Me There is answered: each one costs
+    /// the server a path search, far more than the client. Repeats sooner are dropped.
+    /// </summary>
+    public long NextTakeMeThereAt { get; set; }
+
+    /// <summary>
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the player's next move to another zone is made
+    /// (<see cref="ZoneTeleports"/>). One asked for sooner waits in <see cref="WaitingZoneMove"/>.
+    /// </summary>
+    public long NextZoneTeleportAt { get; set; }
+
+    /// <summary>
+    /// The move to another zone that came too soon and waits for its turn (<see cref="ZoneTeleports"/>), or
+    /// <c>null</c>.
+    /// </summary>
+    public Action? WaitingZoneMove { get; set; }
+
     public DateTime LastQuestAcceptedAt { get; set; }
 
     public Dictionary<int, bool> Quests { get; } = new();
@@ -111,6 +154,8 @@ public sealed class Player : ClientPcData, IEntity
     public Minigames.Fishing.FishingSession? FishingSession { get; set; }
 
     public ConcurrentDictionary<ChatChannel, bool> ChatChannelStatus { get; set; } = [];
+
+    public long NextClientPathRequestAt { get; set; }
 
     public int StationCash { get; set; }
     public List<CoinStoreTransactionRecord> CoinStoreTransactions { get; set; } = [];
@@ -1210,6 +1255,7 @@ public sealed class Player : ClientPcData, IEntity
         ZoneTile.Entities.Remove(Guid, out _);
 
         Zone = zone;
+        ZoneEntry++;
 
         ZoneTile = ZoneTile.Empty;
 

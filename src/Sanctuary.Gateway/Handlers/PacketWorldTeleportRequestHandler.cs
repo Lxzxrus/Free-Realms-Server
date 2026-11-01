@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
@@ -46,19 +47,34 @@ public static class PacketWorldTeleportRequestHandler
 
         if (!ReferenceEquals(connection.Player.Zone, player.Zone))
         {
-            if (player.Zone is HousingZone housingZone)
+            // A move to another zone: one that comes too soon after the last waits for its turn (ZoneTeleports).
+            var self = connection.Player;
+            var zone = player.Zone;
+
+            if (zone is HousingZone housingZone)
             {
-                _houseManager.EnterHouse(
-                    connection.Player,
-                    GuidHelper.GetHouseGuid(housingZone.HouseId));
+                var houseGuid = GuidHelper.GetHouseGuid(housingZone.HouseId);
+
+                ZoneTeleports.Request(self, Environment.TickCount64, () =>
+                {
+                    if (_houseManager.EnterHouse(self, houseGuid) != EnterHouseResult.Success)
+                        ChatHelper.SendSystemMessage(self, "That house could not be entered.");
+                });
+
                 return true;
             }
 
-            if (player.Zone is not WorldZone ||
-                !connection.Player.TeleportToZone(player.Zone, position, rotation))
+            if (zone is not WorldZone)
             {
+                ChatHelper.SendSystemMessage(self, "You can't join that player where they are.");
                 return true;
             }
+
+            ZoneTeleports.Request(self, Environment.TickCount64, () =>
+            {
+                if (!self.TeleportToZone(zone, position, rotation))
+                    ChatHelper.SendSystemMessage(self, "The teleport failed. Please try again.");
+            });
 
             return true;
         }

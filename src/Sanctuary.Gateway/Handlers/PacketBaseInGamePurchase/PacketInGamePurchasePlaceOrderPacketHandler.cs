@@ -16,6 +16,7 @@ using Sanctuary.Database.Entities;
 using Sanctuary.Game;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions.Zones;
+using Sanctuary.Game.Store;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -74,6 +75,17 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
         }
 
         if (!storeDefinition.Bundles.TryGetValue(orderDetail.StoreBundleId, out var appStoreBundleDefinition))
+        {
+            packetInGamePurchasePlaceOrderResponse.Result = 2;
+
+            connection.SendTunneled(packetInGamePurchasePlaceOrderResponse);
+
+            return true;
+        }
+
+        // No more of a bundle than the quantity picker offers. A free one could otherwise be had by the billion in one
+        // order.
+        if (!StorePurchase.IsOrderQuantityAllowed(appStoreBundleDefinition, orderDetail.Quantity))
         {
             packetInGamePurchasePlaceOrderResponse.Result = 2;
 
@@ -149,6 +161,17 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
         }
 
         var totalCost = (int)totalCostValue;
+
+        // Each colour of an item is an inventory row of its own, so a free bundle comes only in a colour the store offers
+        // it in. A made-up tint was a new free row on every order, and every login loads them all.
+        if (totalCost == 0 && !StorePurchase.IsOfferedTint(appStoreBundleDefinition, orderDetailTint))
+        {
+            packetInGamePurchasePlaceOrderResponse.Result = 2;
+
+            connection.SendTunneled(packetInGamePurchasePlaceOrderResponse);
+
+            return true;
+        }
 
         if (connection.Player.StationCash < totalCost)
         {

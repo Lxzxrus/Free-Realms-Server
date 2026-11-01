@@ -15,6 +15,8 @@ public static class ClientPathBasePacketHandler
 {
     private static ILogger _logger = null!;
 
+    private const int MinRequestIntervalMs = 250;
+
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
@@ -47,9 +49,15 @@ public static class ClientPathBasePacketHandler
 
         reply.Path.Add(request.Start);
 
+        // A search walks the zone's roads on the thread that handles every player's packets, so a player gets at most
+        // one every MinRequestIntervalMs, upstream's limit. A request sooner is still answered, with the straight line
+        // from start to end as in a zone without roads: with click-to-move on, the client asks once per click, and a
+        // request left unanswered keeps it waiting (Take Me There gives up after 10 s).
         var pathfinder = connection.Player.Zone.Pathfinder;
-        if (pathfinder is not null)
+        if (pathfinder is not null && Environment.TickCount64 >= connection.Player.NextClientPathRequestAt)
         {
+            connection.Player.NextClientPathRequestAt = Environment.TickCount64 + MinRequestIntervalMs;
+
             var start = new Vector3(request.Start.X, request.Start.Y, request.Start.Z);
             var goal = new Vector3(request.End.X, request.End.Y, request.End.Z);
 
