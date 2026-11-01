@@ -273,9 +273,9 @@ featured winner, reports) is not built.
   one, and an order for it is refused at no charge.
 - **The Housing door.** A door named Housing stands behind Samantha in Cobblestone Village (`HouseDoors`). Clicking it
   walks the player up to it, then takes them into their account's own house: straight in with one; with several, a
-  menu of at most 6, the ranked plot first, then the most recently visited (My Houses lists them all). An account with
-  no house at all is given its Apartment there first. Anyone can use it, any time. More doors need only an `Npcs.json`
-  row, a spawn and an id in `HouseDoors`.
+  menu of at most 6, the ranked plot first, then the most recently visited (My Houses lists them all). An account
+  still without its Apartment (its grant at login failed) is given it there first. Anyone can use it, any time; it
+  never shows quest buttons. More doors need only an `Npcs.json` row, a spawn and an id in `HouseDoors`.
 - **The Housing quest** (9100, Samantha → the door → Samantha) comes between Back for More and Samantha's Mail. The
   door step is ticked as the player really goes in, just before the zone change, so nothing quest-related happens in
   the house, and a refused entry ticks nothing. It pays 10 coins and 50 stars, once per character, like any quest.

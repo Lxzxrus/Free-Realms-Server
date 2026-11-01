@@ -28,8 +28,8 @@ public sealed class HouseChatCommand : IChatCommand
     private readonly ILogger<HouseChatCommand> _logger;
 
     public string KeyWord => "house";
-    public string Usage => "list | enter <seaside|blackspore> | visit <seaside|blackspore> <player> | leave | ranked | personal";
-    public string Description => "List, enter, visit, or leave a house. In your own house, ranked makes it your account's ranked plot, the one in the weekly competition; personal takes it out.";
+    public string Usage => "list | enter <lot> | visit <lot> <player> | leave | ranked | personal";
+    public string Description => "List, enter, visit, or leave a house. A lot is named in one word: apartment, seaside, blackspore and so on. In your own house, ranked makes it your account's ranked plot, the one in the weekly competition; personal takes it out.";
     public ChatCommandRole RequiredRole => ChatCommandRole.Player;
 
     public HouseChatCommand(
@@ -329,18 +329,7 @@ public sealed class HouseChatCommand : IChatCommand
 
     private static void SendEnterResult(Player player, EnterHouseResult result)
     {
-        var message = result switch
-        {
-            EnterHouseResult.Success => null,
-            EnterHouseResult.HouseNotFound => "That house is not available.",
-            EnterHouseResult.NotAuthorized => "Only the owner and their friends can enter that house.",
-            EnterHouseResult.UnsupportedSourceZone => "Return to the main world before entering a house.",
-            EnterHouseResult.ZoneUnavailable => "The house instance could not be created.",
-            EnterHouseResult.TransferFailed => "The house transfer failed.",
-            _ => "The house could not be entered."
-        };
-
-        if (message is not null)
+        if (HouseEntryMessages.For(result) is { } message)
             ChatHelper.SendSystemMessage(player, message);
     }
 }
