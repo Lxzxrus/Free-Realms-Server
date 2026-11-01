@@ -16,8 +16,9 @@ namespace Sanctuary.Game.Tests;
 
 /// <summary>
 /// A quest step won by playing a game (<see cref="PlayActivityGoal"/>), from the win the server pays to the step
-/// ticking and being saved. MimicHandler and FlashMinigameHandler raise <see cref="ActivityWonEvent"/> where
-/// they pay a win; the quest manager does the rest. While the step is open, the NPC it names offers the game.
+/// ticking and being saved. <see cref="MinigameSettlement"/>, which the Gateway's FlashMinigameHandler and MimicHandler
+/// both run, raises <see cref="ActivityWonEvent"/> once it has paid a win; the quest manager does the rest. While the
+/// step is open, the NPC it names offers the game.
 /// </summary>
 [TestClass]
 public sealed class QuestPlayActivityTests
