@@ -51,6 +51,21 @@ public static class PetHelper
         return true;
     }
 
+    /// <summary>The longest pet name, the length of its database column.</summary>
+    public const int NameMaxLength = 32;
+
+    /// <summary>
+    /// Evergrove: whether a player may give a pet this name. Everyone near the pet sees it on its name plate, so it
+    /// follows the rules for character names (CheckNamePacketHandler): only the letters
+    /// <see cref="CharacterNameHelper.ContainsIllegalCharacters"/> allows, and no word from the server's name filter.
+    /// Upstream refused only blank and long names and control characters, so a pet could carry a word the filter keeps
+    /// out of every other name, or invisible and right-to-left marks.
+    /// </summary>
+    public static bool IsValidName(string name, IEnumerable<string> nameFilter) =>
+        !string.IsNullOrWhiteSpace(name) && name.Length <= NameMaxLength && !name.Any(char.IsControl)
+        && !CharacterNameHelper.ContainsIllegalCharacters(name)
+        && !nameFilter.Any(token => name.Contains(token, StringComparison.OrdinalIgnoreCase));
+
     private const int FirstTreasureSpringItemDefinitionId = 23427;
     private const int NoTint = 0;
     private const int LastTreasureSpringItemDefinitionId = 23458;

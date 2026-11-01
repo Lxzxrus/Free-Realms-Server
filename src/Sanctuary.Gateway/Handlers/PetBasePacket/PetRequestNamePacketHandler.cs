@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,6 +6,7 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
+using Sanctuary.Game;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
@@ -17,15 +17,15 @@ namespace Sanctuary.Gateway.Handlers;
 public static class PetRequestNamePacketHandler
 {
     private static ILogger _logger = null!;
+    private static IResourceManager _resourceManager = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
-
-    private const int PetNameMaxLength = 32;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
         _logger = loggerFactory.CreateLogger(nameof(PetRequestNamePacketHandler));
 
+        _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
     }
 
@@ -52,8 +52,8 @@ public static class PetRequestNamePacketHandler
             Name = petRequestNamePacket.Name
         };
 
-        if (string.IsNullOrWhiteSpace(petRequestNamePacket.Name) || petRequestNamePacket.Name.Length > PetNameMaxLength
-            || petRequestNamePacket.Name.Any(char.IsControl))
+        // Evergrove: the character name rules and name filter (PetHelper.IsValidName).
+        if (!PetHelper.IsValidName(petRequestNamePacket.Name, _resourceManager.NameFilter))
         {
             connection.SendTunneled(petSetNamePacket);
             return true;
