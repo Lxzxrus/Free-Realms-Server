@@ -34,11 +34,17 @@ public sealed class QuestManager : IQuestManager
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
     private readonly ILogger<QuestManager> _logger;
 
-    public QuestManager(IResourceManager resourceManager, IRewardManager rewardManager, IDbContextFactory<DatabaseContext> dbContextFactory, ILogger<QuestManager> logger)
+    // Evergrove: a quest that teaches a job grants it through the job manager, which refreshes trainer badges through
+    // this quest manager, so it is taken lazily: neither has to be built before the other.
+    private readonly Lazy<IJobManager> _jobManager;
+
+    public QuestManager(IResourceManager resourceManager, IRewardManager rewardManager, IDbContextFactory<DatabaseContext> dbContextFactory,
+        Lazy<IJobManager> jobManager, ILogger<QuestManager> logger)
     {
         _resourceManager = resourceManager;
         _rewardManager = rewardManager;
         _dbContextFactory = dbContextFactory;
+        _jobManager = jobManager;
         _logger = logger;
     }
 
@@ -357,6 +363,8 @@ public sealed class QuestManager : IQuestManager
         });
 
         SendJournalQuestStates(player);
+
+        TeachJob(player, quest);
 
         GrantReward(player, quest);
 
@@ -1218,6 +1226,25 @@ public sealed class QuestManager : IQuestManager
         quest = q;
         goalIndex = currentGoalIndex;
         return true;
+    }
+
+    // Evergrove: a quest that teaches a job (TeachesProfileId) gives it at the turn-in through the trainer's own grant,
+    // JobManager.Grant: saved, its kit sent, and the player switched into it with the job swirl. It comes before the
+    // rewards, so the quest's stars go to the new job. A player who has the job already keeps the job they have on.
+    private void TeachJob(Player player, QuestDefinition quest)
+    {
+        var profileId = quest.TeachesProfileId;
+
+        if (profileId == 0 || player.Profiles.Any(profile => profile.Id == profileId))
+            return;
+
+        var result = _jobManager.Value.Grant(player, profileId);
+
+        if (result != JobGrantResult.Granted)
+        {
+            _logger.LogWarning("Quest {questId} teaches job {profileId}, but character {characterId} wasn't given it: {result}.",
+                quest.QuestId, profileId, player.CharacterId, result);
+        }
     }
 
     // Evergrove: the reward payout is Evergrove's from before the merge, verified in game: coins saved without a toast

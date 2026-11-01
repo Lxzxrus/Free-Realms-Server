@@ -91,7 +91,7 @@ public sealed class QuestObjectiveTargetTests
         var quest = PackageQuest();
         ((QuestResources)(object)resources).Quests.Quests[quest.QuestId] = quest;
 
-        _questManager = new QuestManager(resources, null!, null!, NullLogger<QuestManager>.Instance);
+        _questManager = new QuestManager(resources, null!, null!, null!, NullLogger<QuestManager>.Instance);
 
         _player = new Player(null!, null!, null!, null!, null!) { Zone = _zone };
         _player.UpdatePosition(new Vector4(0f, 0f, 0f, 1f), Quaternion.Identity);

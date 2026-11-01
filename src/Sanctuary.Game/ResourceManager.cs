@@ -429,6 +429,10 @@ public class ResourceManager : IResourceManager, IDisposable
                     _logger.LogWarning("Collect goal on quest {id} uses node type {type}, which has no player-specific pool; it can never be credited.",
                         quest.QuestId, collectGoal.CollectNodeType);
             }
+
+            if (quest.TeachesProfileId != 0 && !Profiles.ContainsKey(quest.TeachesProfileId))
+                _logger.LogWarning("Quest {id} teaches job {profileId}, which isn't in Profiles.json; its turn-in teaches nothing.",
+                    quest.QuestId, quest.TeachesProfileId);
         }
 
         foreach (var coin in CollectionCoins.Values)

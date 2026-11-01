@@ -40,6 +40,10 @@ public sealed class QuestDefinition
 
     public int RewardCollectionId { get; set; }
 
+    // Evergrove: a job (a Profiles.json id) the turn-in teaches, as the job's trainer would, before the rewards, so the
+    // quest's stars go to it. A player who has the job already is taught nothing. 0 = none.
+    public int TeachesProfileId { get; set; }
+
     public int? PrerequisiteQuestId { get; set; }
     public int? NextQuestId { get; set; }
 

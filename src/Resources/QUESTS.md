@@ -200,6 +200,13 @@ they can be restored.
 - `RewardCollectionId` - a quest collection (`Collections.json`) shown with the rewards on the offer
   and the turn-in (upstream OSFR #166). Its entries are ticked by the quest's pickups, not by the
   turn-in.
+- `TeachesProfileId` - a job (a `Profiles.json` id; 45 is Chef) the turn-in teaches before the
+  rewards, the way the job's trainer gives it (`IJobManager.Grant`): saved with its starter kit, and the
+  player switched into it, so the quest's stars go to the new job. A player who has the job already is
+  taught nothing and keeps the job they have on. The server warns at startup about a job
+  `Profiles.json` doesn't have.
+
+`RewardExperience` stars go to the job the player has on at the turn-in.
 
 ## Badges
 

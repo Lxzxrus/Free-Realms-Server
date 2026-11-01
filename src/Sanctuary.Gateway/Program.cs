@@ -130,6 +130,11 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<IChatCommandManager, ChatCommandManager>();
     serviceCollection.AddSingleton<IQuestManager, QuestManager>();
     serviceCollection.AddSingleton<IJobManager, JobManager>();
+
+    // A quest that teaches a job grants it through the job manager, which refreshes trainer badges through the quest
+    // manager: the quest manager takes the job manager lazily, so neither has to be built before the other.
+    serviceCollection.AddSingleton(serviceProvider => new Lazy<IJobManager>(() => serviceProvider.GetRequiredService<IJobManager>()));
+
     serviceCollection.AddSingleton<IHouseManager, HouseManager>();
     serviceCollection.AddSingleton<HouseInvites>();
     serviceCollection.AddSingleton<HousingCreativeCatalog>();
