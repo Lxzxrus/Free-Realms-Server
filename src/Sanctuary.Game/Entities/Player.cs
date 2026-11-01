@@ -131,6 +131,8 @@ public sealed class Player : ClientPcData, IEntity
 
     public ConcurrentDictionary<ChatChannel, bool> ChatChannelStatus { get; set; } = [];
 
+    public long NextClientPathRequestAt { get; set; }
+
     public int StationCash { get; set; }
     public List<CoinStoreTransactionRecord> CoinStoreTransactions { get; set; } = [];
 
