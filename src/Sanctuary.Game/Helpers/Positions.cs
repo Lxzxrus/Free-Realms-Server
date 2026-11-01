@@ -25,6 +25,13 @@ public static class Positions
     /// </summary>
     public const float HeightLimit = 10_000_000f;
 
+    /// <summary>
+    /// How large a rotation's components can be, with plenty to spare: a real one is a heading (a direction) or a unit
+    /// quaternion, whose components lie between -1 and 1. A finite rotation can still be absurd: MariaDB refuses to save
+    /// float.MaxValue, and turning a point by a huge rotation gives infinities and NaN.
+    /// </summary>
+    public const float RotationLimit = 10f;
+
     public static bool IsFinite(Vector4 position) =>
         float.IsFinite(position.X) && float.IsFinite(position.Y) && float.IsFinite(position.Z) && float.IsFinite(position.W);
 
@@ -37,6 +44,11 @@ public static class Positions
     /// </summary>
     public static bool IsInWorld(Vector4 position) =>
         MathF.Abs(position.X) <= WorldLimit && MathF.Abs(position.Z) <= WorldLimit && MathF.Abs(position.Y) <= HeightLimit;
+
+    /// <summary>Whether every component of the rotation is within <see cref="RotationLimit"/>; false for any NaN.</summary>
+    public static bool IsWithinRotationLimit(Quaternion rotation) =>
+        MathF.Abs(rotation.X) <= RotationLimit && MathF.Abs(rotation.Y) <= RotationLimit &&
+        MathF.Abs(rotation.Z) <= RotationLimit && MathF.Abs(rotation.W) <= RotationLimit;
 
     /// <summary>Whether two points are within <paramref name="range"/> of each other; false for any NaN.</summary>
     public static bool IsWithinRange(Vector4 a, Vector4 b, float range)

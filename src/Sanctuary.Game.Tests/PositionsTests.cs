@@ -2,6 +2,7 @@ using System.Numerics;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Core.Extensions;
 using Sanctuary.Game.Helpers;
 
 namespace Sanctuary.Game.Tests;
@@ -65,5 +66,25 @@ public sealed class PositionsTests
         // Finite, yet MariaDB refuses to save it: the character's save on disconnect failed and stopped the Gateway.
         Assert.IsFalse(Positions.IsInWorld(new Vector4(0f, float.MaxValue, 0f, 1f)));
         Assert.IsFalse(Positions.IsInWorld(new Vector4(0f, -float.MaxValue, 0f, 1f)));
+    }
+
+    [TestMethod]
+    public void RotationsBeyondAnyRealOne_AreNotWithinTheLimit()
+    {
+        // FabledRealms' spawn heading, a heading made from an angle, a unit quaternion and no rotation at all.
+        Assert.IsTrue(Positions.IsWithinRotationLimit(new Quaternion(0.5531712f, 0f, 0.8330676f, 0f)));
+        Assert.IsTrue(Positions.IsWithinRotationLimit(QuaternionExtensions.FromHeading(-2.5f)));
+        Assert.IsTrue(Positions.IsWithinRotationLimit(Quaternion.Identity));
+        Assert.IsTrue(Positions.IsWithinRotationLimit(default));
+
+        Assert.IsFalse(Positions.IsWithinRotationLimit(new Quaternion(0f, 0f, Positions.RotationLimit + 1f, 0f)));
+
+        // Finite, yet MariaDB refuses to save it.
+        Assert.IsFalse(Positions.IsWithinRotationLimit(new Quaternion(float.MaxValue, 0f, 0f, 0f)));
+        Assert.IsFalse(Positions.IsWithinRotationLimit(new Quaternion(0f, 0f, -float.MaxValue, 0f)));
+
+        Assert.IsFalse(Positions.IsWithinRotationLimit(new Quaternion(float.NaN, 0f, 0f, 0f)));
+        Assert.IsFalse(Positions.IsWithinRotationLimit(new Quaternion(0f, float.PositiveInfinity, 0f, 0f)));
+        Assert.IsFalse(Positions.IsWithinRotationLimit(new Quaternion(0f, 0f, 0f, float.NegativeInfinity)));
     }
 }
