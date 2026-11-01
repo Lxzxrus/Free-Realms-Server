@@ -549,6 +549,9 @@ public static class CommandPacketInteractRequestHandler
     private static void SendCollectionCompleted(GatewayConnection connection, CollectionDefinition definition,
         IReadOnlyList<GrantedItem> grantedRewards, ulong sourceGuid)
     {
+        if (!definition.ShowsCompletionWindow)
+            return;
+
         var packet = new RewardBundlePacket();
         var bundle = packet.RewardBundle;
 

@@ -214,8 +214,7 @@ public sealed class CollectionCompletionTests
         Assert.AreEqual(50, ReadProfile(MedicCharacterId, Medic).LevelXP);
     }
 
-    [TestMethod]
-    public void TheShippedMushrooms_PayFiftyMedicStars()
+    private static CollectionDefinitionCollection LoadShippedCollections()
     {
         string? path = null;
 
@@ -235,11 +234,43 @@ public sealed class CollectionCompletionTests
         var collections = new CollectionDefinitionCollection(NullLogger.Instance);
         Assert.IsTrue(collections.Load(path));
 
+        return collections;
+    }
+
+    [TestMethod]
+    public void TheShippedMushrooms_PayFiftyMedicStars()
+    {
+        var collections = LoadShippedCollections();
+
         var paying = collections.Values.Where(collection => collection.RewardExperience > 0).ToArray();
 
         Assert.HasCount(1, paying, "Only the Briarwood mushrooms pay stars today.");
         Assert.AreEqual(Briarwood.Id, paying[0].Id);
         Assert.AreEqual(Briarwood.RewardExperience, paying[0].RewardExperience);
         Assert.AreEqual(Briarwood.RewardProfileId, paying[0].RewardProfileId);
+    }
+
+    [TestMethod]
+    public void TheShippedQuestCollections_PayNothing_SoTheyOpenNoWindow()
+    {
+        var shipped = LoadShippedCollections().Values.ToArray();
+        var questCollections = shipped
+            .Where(collection => collection.CategoryId == CollectionDefinition.QuestCategoryId)
+            .ToArray();
+
+        // Upstream OSFR #166's six: skipping their window hides nothing, because there is nothing in it.
+        Assert.HasCount(6, questCollections);
+
+        foreach (var collection in questCollections)
+        {
+            Assert.IsFalse(collection.ShowsCompletionWindow, $"Collection {collection.Id}");
+            Assert.AreEqual(0, collection.RewardCoins, $"Collection {collection.Id}");
+            Assert.AreEqual(0, collection.RewardExperience, $"Collection {collection.Id}");
+            Assert.IsEmpty(collection.RewardItemIds, $"Collection {collection.Id}");
+            Assert.IsEmpty(collection.RewardItemIdsGirls, $"Collection {collection.Id}");
+        }
+
+        Assert.IsTrue(shipped.Except(questCollections).All(collection => collection.ShowsCompletionWindow),
+            "Every other collection still opens its reward window.");
     }
 }
