@@ -71,6 +71,7 @@ public sealed class PlayerPet
         public long ShakeAnimationAt;
         public int ShakeDurationMs;
         public readonly HashSet<ulong> NoticedCollectionNodes = [];
+        public long NextWarpAt;
         public long TreasureAt;
         public bool TreasurePending;
         public long TreasureDigAt;
@@ -174,6 +175,11 @@ public sealed class PlayerPet
     private const int PetCannotCatchUpMs = 5000;
     private const float PetChaseProgressDistance = 0.5f;
     private const float PetWarpSideDistance = 1.2f;
+
+    // Evergrove: at most one warp a second. A warp makes everyone who sees the pet drop it and add it again, and a
+    // client that moved its player back and forth further than OwnerTeleportDistance warped the pet on every tick.
+    private const int PetWarpIntervalMs = 1000;
+
     private const float PetSummonSideDistance = 2f;
     private const float PetWarpHeight = 6f;
     private const float PetMaxStepDownHeight = 3f;
@@ -1052,8 +1058,8 @@ public sealed class PlayerPet
 
         if (_petState.OwnerTeleported)
         {
-            _petState.OwnerTeleported = false;
-            WarpPetBesideOwner(npc, ownerPosition);
+            // Evergrove: a warp held back by PetWarpIntervalMs stays due, and the pet waits for it.
+            _petState.OwnerTeleported = !WarpPetBesideOwner(npc, ownerPosition);
             return;
         }
 
@@ -1255,12 +1261,18 @@ public sealed class PlayerPet
         return ownerGroundedPositions[0];
     }
 
-    private void WarpPetBesideOwner(Npc npc, Vector3 ownerPosition) =>
+    private bool WarpPetBesideOwner(Npc npc, Vector3 ownerPosition) =>
         WarpPet(npc, GetPetStandPosition(npc.Zone, ownerPosition,
             ownerPosition + Vector3.Cross(Vector3.UnitY, _player.GetFacingDirection()) * PetWarpSideDistance * _petState.FollowSide));
 
-    private void WarpPet(Npc npc, Vector3 position)
+    /// <returns>Evergrove: false when the warp is held back by <see cref="PetWarpIntervalMs"/>.</returns>
+    private bool WarpPet(Npc npc, Vector3 position)
     {
+        if (Environment.TickCount64 < _petState.NextWarpAt)
+            return false;
+
+        _petState.NextWarpAt = Environment.TickCount64 + PetWarpIntervalMs;
+
         if (_petState.StandAt != 0)
             StandPet(npc);
 
@@ -1278,6 +1290,7 @@ public sealed class PlayerPet
         _petState.FollowGoal = position;
         _petState.LastPosition = position;
         _petState.FaceOwnerAt = PetFaceOwnerDone;
+        return true;
     }
 
     private Quaternion GetFacingOwnerRotation(Vector3 position)
