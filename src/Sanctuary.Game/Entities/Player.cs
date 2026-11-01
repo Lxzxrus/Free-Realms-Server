@@ -77,19 +77,25 @@ public sealed class Player : ClientPcData, IEntity
     public long NextChatTooFastNoticeAt { get; set; }
 
     /// <summary>
-    /// The earliest time (<see cref="Environment.TickCount64"/>) the next request of each kind is answered. Each one
-    /// costs the server far more than the client: the zone's whole welcome (<see cref="ReadyZone"/>), a path search, a
-    /// move to another zone (<see cref="ZoneTeleports"/>). Repeats sooner are dropped.
+    /// When the client's "ready" is answered (<see cref="ZoneLoadReplies"/>): each answer sends the zone's whole welcome
+    /// and, in the world, reads the house list from the database.
     /// </summary>
-    public long NextClientIsReadyAt { get; set; }
+    public ZoneLoadReplies ClientIsReadyReplies { get; } = new();
 
-    /// <summary>The zone the last answered "client is ready" was for: the first one in a new zone is always answered.</summary>
-    public IZone? ReadyZone { get; set; }
+    /// <summary>
+    /// When the client's "finished loading" is answered (<see cref="ZoneLoadReplies"/>): in a house, each answer reads
+    /// where every fixture is from the database and sends one packet per fixture.
+    /// </summary>
+    public ZoneLoadReplies ClientFinishedLoadingReplies { get; } = new();
 
-    /// <inheritdoc cref="NextClientIsReadyAt"/>
+    /// <summary>
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the next request of each kind is answered. Each one
+    /// costs the server far more than the client: a path search, a move to another zone (<see cref="ZoneTeleports"/>).
+    /// Repeats sooner are dropped.
+    /// </summary>
     public long NextTakeMeThereAt { get; set; }
 
-    /// <inheritdoc cref="NextClientIsReadyAt"/>
+    /// <inheritdoc cref="NextTakeMeThereAt"/>
     public long NextZoneTeleportAt { get; set; }
 
     public DateTime LastQuestAcceptedAt { get; set; }
