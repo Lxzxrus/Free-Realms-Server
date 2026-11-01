@@ -125,9 +125,10 @@ public static class CoinStoreSellToClientRequestPacketHandler
                 ? packet.ItemRecord.Tint
                 : clientItemDefinition.Icon.TintId;
 
-        // Each colour of an item is an inventory row of its own, so a free item comes only in a colour the store offers
-        // it in. A made-up tint was a new free row on every request, and every login loads them all.
-        if (totalCost == 0 && !StorePurchase.IsOfferedTint(clientItemDefinition, coinStoreItem.TintGroupId, tint))
+        // Each colour of an item is an inventory row of its own, so an item comes only in a colour the store offers it in.
+        // A made-up tint was a new row on every request, free or for a few coins, and every login loads them all. The
+        // colour picker sends no other tint, whatever the price.
+        if (!StorePurchase.IsOfferedTint(clientItemDefinition, coinStoreItem.TintGroupId, tint))
         {
             coinStoreTransactionCompletePacket.Result = 3; // Invalid item
 
