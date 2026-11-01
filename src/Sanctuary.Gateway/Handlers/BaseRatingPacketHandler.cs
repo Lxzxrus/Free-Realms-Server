@@ -464,7 +464,7 @@ public static class BaseRatingPacketHandler
             : null;
     }
 
-    /// <summary>Whoever may come into the house while it's locked: the friends of the character who bought it.</summary>
+    /// <summary>Whoever may come into the house while it's locked: the friends of the character holding it.</summary>
     private static string OwnersFriends(GatewayConnection connection, DbHouse house)
     {
         return house.CharacterId == GuidHelper.GetPlayerId(connection.Player.Guid)

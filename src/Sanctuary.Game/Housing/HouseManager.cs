@@ -258,7 +258,7 @@ public sealed class HouseManager : IHouseManager
         return EnterHouseResult.Success;
     }
 
-    /// <summary>The account that owns the house: that of the character who bought it.</summary>
+    /// <summary>The account that owns the house: that of the character holding it.</summary>
     private ulong FindOwnerUserId(DbHouse house)
     {
         using var dbContext = _dbContextFactory.CreateDbContext();

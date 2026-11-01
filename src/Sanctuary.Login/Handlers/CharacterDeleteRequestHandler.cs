@@ -1,12 +1,16 @@
 ﻿using System;
+using System.Data;
+using System.Data.Common;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
+using Sanctuary.Game.Housing;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -61,10 +65,14 @@ public static class CharacterDeleteRequestHandler
             return true;
         }
 
+        HouseHandoverResult? handover = null;
+
         var strategy = dbContext.Database.CreateExecutionStrategy();
-        var committed = strategy.Execute(() =>
+        var committed = TryExecute(strategy, character.Id, () =>
         {
-            using var transaction = dbContext.Database.BeginTransaction();
+            // Evergrove: serializable, as for buying a lot. The houses' new characters are picked by the lots each already
+            // has, so two deletes on one account at once mustn't both give one character the same lot.
+            using var transaction = dbContext.Database.BeginTransaction(IsolationLevel.Serializable);
 
             try
             {
@@ -107,6 +115,10 @@ public static class CharacterDeleteRequestHandler
                     }
                 }
 
+                // Evergrove: houses belong to the account, so they move to another of its characters before the
+                // delete's cascade can take them (docs/design/evergrove-housing.md, section 8).
+                handover = HouseHandover.MoveOff(dbContext, character.Id);
+
                 // Delete references first to avoid foreign key constraint violations.
                 var characterId = character.Id;
 
@@ -143,11 +155,52 @@ public static class CharacterDeleteRequestHandler
             return true;
         }
 
+        if (handover is not null)
+            LogHandover(character.Id, handover);
+
         characterDeleteReply.Status = 1;
         characterDeleteReply.EntityKey = packet.EntityKey;
 
         connection.Send(characterDeleteReply);
 
         return true;
+    }
+
+    /// <summary>
+    /// Evergrove: runs the delete through the execution strategy, which on MariaDB tries it again after a deadlock. A
+    /// database error that still gets out (from moving the houses, say, or a deadlock it gave up on) refuses the delete
+    /// with nothing changed, rather than leaving the client with no answer.
+    /// </summary>
+    private static bool TryExecute(IExecutionStrategy strategy, ulong characterId, Func<bool> delete)
+    {
+        try
+        {
+            return strategy.Execute(delete);
+        }
+        catch (Exception exception) when (exception is DbException or RetryLimitExceededException)
+        {
+            _logger.LogError(exception, "Failed to delete character {CharacterId}.", characterId);
+
+            return false;
+        }
+    }
+
+    private static void LogHandover(ulong characterId, HouseHandoverResult handover)
+    {
+        foreach (var move in handover.Moved)
+        {
+            _logger.LogInformation("Deleted character {CharacterId}'s house {HouseId} (lot {ZoneDefinitionId}) moved to character {HolderId}.",
+                characterId, move.HouseId, move.ZoneDefinitionId, move.HolderId);
+        }
+
+        if (handover.Unmoved.Count == 0)
+            return;
+
+        _logger.LogInformation("Deleted character {CharacterId}'s houses {HouseIds} went with it: {Reason}.",
+            characterId,
+            string.Join(", ", handover.Unmoved),
+            handover.OtherCharacters == 0
+                ? "its account has no other character"
+                : "every other character on its account already has that lot");
     }
 }

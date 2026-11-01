@@ -1925,7 +1925,7 @@ public sealed class HousingZoneRuntime : IDisposable
     /// <summary>
     /// Who the house is shown to <paramref name="viewer"/> as belonging to. A character on the owning account sees it as
     /// their own, as the client expects of a house it lets them edit (the owner's guid is also the one edit permission
-    /// in <see cref="PlayerHousingInstanceData.Permissions"/>). Everyone else sees the character who bought it.
+    /// in <see cref="PlayerHousingInstanceData.Permissions"/>). Everyone else sees the character holding it.
     /// </summary>
     private (ulong Guid, string Name) ShownOwner(DbHouse house, Player viewer)
     {
