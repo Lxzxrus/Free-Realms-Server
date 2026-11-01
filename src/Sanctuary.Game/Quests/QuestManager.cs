@@ -1285,7 +1285,8 @@ public sealed class QuestManager : IQuestManager
 
     // Evergrove: a quest that teaches a job (TeachesProfileId) gives it at the turn-in through the trainer's own grant,
     // JobManager.Grant: saved, its kit sent, and the player switched into it with the job swirl. It comes before the
-    // rewards, so the quest's stars go to the new job. A player who has the job already keeps the job they have on.
+    // rewards, so the quest's stars can go to the new job (RewardProfileId). A player who has the job already keeps the
+    // job they have on.
     private void TeachJob(Player player, QuestDefinition quest)
     {
         var profileId = quest.TeachesProfileId;
@@ -1303,8 +1304,8 @@ public sealed class QuestManager : IQuestManager
     }
 
     // Evergrove: the reward payout is Evergrove's from before the merge, verified in game: coins saved without a toast
-    // of their own, the stars paid to the active job (task 31; upstream's version only shows them), and each reward
-    // item fitted to the player's gender in its own tint, with the non-bundled item toast.
+    // of their own, the stars paid to a job (task 31; upstream's version only shows them), and each reward item fitted to
+    // the player's gender in its own tint, with the non-bundled item toast.
     private void GrantReward(Player player, QuestDefinition quest)
     {
         var coins = quest.RewardCoins;
@@ -1326,13 +1327,17 @@ public sealed class QuestManager : IQuestManager
             player.SendTunneled(new ClientUpdatePacketCoinCount { Coins = newTotal });
         }
 
-        // The stars go to the job the player has on. The celebration below shows them, so no toast of their own.
+        // The stars go to the quest's job (RewardProfileId) when the character has it, whichever job they wear, else to
+        // the job they have on. The celebration below shows them, so no toast of their own.
         var experience = quest.RewardExperience;
         if (experience > 0)
         {
+            var profileId = quest.RewardProfileId != 0 && player.Profiles.Any(profile => profile.Id == quest.RewardProfileId)
+                ? quest.RewardProfileId
+                : player.ActiveProfileId;
+
             using var db = _dbContextFactory.CreateDbContext();
-            RewardHelper.TryGrantExperience(_resourceManager, db, _logger, player, player.ActiveProfileId, experience,
-                showReward: false);
+            RewardHelper.TryGrantExperience(_resourceManager, db, _logger, player, profileId, experience, showReward: false);
         }
 
         var grantedCollection = quest.RewardCollectionId != 0 &&

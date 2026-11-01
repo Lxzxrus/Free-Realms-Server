@@ -341,6 +341,31 @@ public sealed class QuestDefinitionCollectionTests
         CollectionAssert.Contains(JobTrainers.JobsTaughtBy(assistantNeeded.GoalTargetNpcId(0)).ToList(), assistantNeeded.TeachesProfileId);
     }
 
+    /// <summary>
+    /// A quest's stars go to its job (<see cref="QuestDefinition.RewardProfileId"/>) when the character has it: a job the
+    /// server has, or they would always go to the job worn. The Cobblestone chef quests (9102 to 9105) pay Chef.
+    /// </summary>
+    [TestMethod]
+    public void ShippedQuests_PayTheirStarsToJobsTheServerHas()
+    {
+        const int chef = 45;
+
+        var profiles = new ProfileDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(profiles.Load(FindSourceFile("Resources", "Profiles.json")));
+
+        var quests = LoadQuests(FindShippedQuests());
+
+        var unknown = quests.Quests.Values
+            .Where(quest => quest.RewardProfileId != 0 && !profiles.ContainsKey(quest.RewardProfileId))
+            .Select(quest => $"{quest.QuestId}: {quest.RewardProfileId}")
+            .ToList();
+
+        Assert.AreEqual(0, unknown.Count, "Quests pay stars to unknown jobs: " + string.Join(", ", unknown));
+
+        foreach (var questId in new[] { 9102, 9103, 9104, 9105 })
+            Assert.AreEqual(chef, quests.Quests[questId].RewardProfileId, $"Quest {questId} pays its stars to Chef.");
+    }
+
     [TestMethod]
     public void ShippedCollectGoals_HaveEnoughPickupsOutAtOnce()
     {

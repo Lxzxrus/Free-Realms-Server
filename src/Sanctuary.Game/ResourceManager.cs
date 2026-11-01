@@ -448,6 +448,10 @@ public class ResourceManager : IResourceManager, IDisposable
             if (quest.TeachesProfileId != 0 && !Profiles.ContainsKey(quest.TeachesProfileId))
                 _logger.LogWarning("Quest {id} teaches job {profileId}, which isn't in Profiles.json; its turn-in teaches nothing.",
                     quest.QuestId, quest.TeachesProfileId);
+
+            if (quest.RewardProfileId != 0 && !Profiles.ContainsKey(quest.RewardProfileId))
+                _logger.LogWarning("Quest {id} pays its stars to job {profileId}, which isn't in Profiles.json; they go to the job worn at the turn-in.",
+                    quest.QuestId, quest.RewardProfileId);
         }
 
         foreach (var coin in CollectionCoins.Values)

@@ -59,6 +59,7 @@ public sealed class QuestDefinitionTests
                 "QuestId": 1,
                 "TargetNpcId": 500,
                 "TeachesProfileId": 45,
+                "RewardProfileId": 45,
                 "Goals": [
                   { "Type": 3, "NameId": 10, "ActivityId": 450, "NpcId": 2069 },
                   { "NameId": 11, "ActivityId": 410, "RequiredCount": 3, "Type": 3 },
@@ -83,8 +84,10 @@ public sealed class QuestDefinitionTests
         Assert.AreEqual(0, harvest.NpcId, "No NPC offers the game unless the step says.");
 
         Assert.AreEqual(45, quest.TeachesProfileId);
+        Assert.AreEqual(45, quest.RewardProfileId);
         Assert.IsTrue(quests.TryGet(2, out var plain));
         Assert.AreEqual(0, plain.TeachesProfileId, "A quest teaches no job unless it says.");
+        Assert.AreEqual(0, plain.RewardProfileId, "Its stars go to the job worn unless it says.");
     }
 
     /// <summary>

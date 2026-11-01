@@ -20,6 +20,7 @@ using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Quests;
+using Sanctuary.Game.Resources;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet.Common;
@@ -119,6 +120,17 @@ public sealed class QuestWorld : IDisposable
     /// <summary>The games opened for the player through the launcher (activity ids), in order.</summary>
     public List<int> Launched { get; } = [];
 
+    /// <summary>A quest as <c>src/Resources/Quests.json</c> ships it.</summary>
+    public static QuestDefinition Shipped(int questId)
+    {
+        var quests = new QuestDefinitionCollection(NullLogger.Instance);
+
+        Assert.IsTrue(quests.Load(FindSourceFile("Resources", "Quests.json")));
+        Assert.IsTrue(quests.TryGet(questId, out var quest), $"Quest {questId} isn't shipped.");
+
+        return quest;
+    }
+
     /// <summary>A quest the server has, offered by nobody in particular.</summary>
     public QuestDefinition Add(QuestDefinition quest)
     {
@@ -147,6 +159,10 @@ public sealed class QuestWorld : IDisposable
 
         AddClientJob(profileId);
     }
+
+    /// <summary>A job's saved level and stars, or null if the character hasn't got it.</summary>
+    public (int Level, int Stars)? SavedJob(int profileId) =>
+        ReadCharacter().Profiles.SingleOrDefault(profile => profile.Id == profileId) is { } job ? (job.Level, job.LevelXP) : null;
 
     /// <summary>The character as the login query reads it back.</summary>
     public DbCharacter ReadCharacter()

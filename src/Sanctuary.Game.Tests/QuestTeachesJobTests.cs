@@ -10,7 +10,7 @@ namespace Sanctuary.Game.Tests;
 /// <summary>
 /// A quest that teaches a job (<see cref="QuestDefinition.TeachesProfileId"/>), as Simone's Chef: Assistant Needed
 /// does: the turn-in gives the job through the job manager a trainer uses, before the rewards, so the quest's stars go
-/// to the new job, and only to a player who hasn't got it yet.
+/// to the new job (<see cref="QuestDefinition.RewardProfileId"/>), and only to a player who hasn't got it yet.
 /// </summary>
 [TestClass]
 public sealed class QuestTeachesJobTests
@@ -27,7 +27,10 @@ public sealed class QuestTeachesJobTests
     [TestCleanup]
     public void Cleanup() => _world.Dispose();
 
-    /// <summary>Find Simone, who teaches you the chef job: Assistant Needed's one step, done, waiting to be handed in.</summary>
+    /// <summary>
+    /// Find Simone, who teaches you the chef job: Assistant Needed's one step, done, waiting to be handed in. Its stars go
+    /// to the job it teaches, as the shipped quest's do.
+    /// </summary>
     private QuestDefinition AssistantNeeded(int teaches = QuestWorld.Chef)
     {
         var quest = new QuestDefinition
@@ -36,6 +39,7 @@ public sealed class QuestTeachesJobTests
             TargetNpcId = Simone,
             RewardCoins = Coins,
             RewardExperience = Stars,
+            RewardProfileId = teaches,
             TeachesProfileId = teaches,
             Goals = [new TalkToNpcGoal { NameId = 140539, Targets = [new TalkTarget { NpcId = Simone }] }]
         };
@@ -45,8 +49,7 @@ public sealed class QuestTeachesJobTests
         return quest;
     }
 
-    private (int Level, int Stars)? SavedJob(int profileId) =>
-        _world.ReadCharacter().Profiles.SingleOrDefault(profile => profile.Id == profileId) is { } job ? (job.Level, job.LevelXP) : null;
+    private (int Level, int Stars)? SavedJob(int profileId) => _world.SavedJob(profileId);
 
     [TestMethod]
     public void TheTurnIn_TeachesTheJob_AndItsStarsGoToIt()
@@ -64,7 +67,7 @@ public sealed class QuestTeachesJobTests
     }
 
     [TestMethod]
-    public void APlayerWhoHasTheJob_KeepsTheJobTheyHaveOn()
+    public void APlayerWhoHasTheJob_KeepsTheJobTheyHaveOn_AndGetsTheStarsOnIt()
     {
         _world.Give(QuestWorld.Chef);
         AssistantNeeded();
@@ -73,8 +76,8 @@ public sealed class QuestTeachesJobTests
 
         Assert.AreEqual(QuestWorld.Adventurer, _world.Player.ActiveProfileId, "Not switched: nothing was taught.");
         Assert.AreEqual(1, _world.Player.Profiles.Count(profile => profile.Id == QuestWorld.Chef));
-        Assert.AreEqual((1, Stars), SavedJob(QuestWorld.Adventurer), "The stars go to the job they have on.");
-        Assert.AreEqual((1, 0), SavedJob(QuestWorld.Chef));
+        Assert.AreEqual((1, Stars), SavedJob(QuestWorld.Chef), "A Chef quest's stars go to Chef, whichever job is worn.");
+        Assert.AreEqual((1, 0), SavedJob(QuestWorld.Adventurer));
     }
 
     [TestMethod]

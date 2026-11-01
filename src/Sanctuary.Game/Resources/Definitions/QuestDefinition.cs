@@ -33,8 +33,12 @@ public sealed class QuestDefinition
 
     public int RewardCoins { get; set; }
 
-    // Goes to the player's active profile.
+    // Stars, on the job worn at the turn-in. Evergrove: on RewardProfileId's job instead when the character has it.
     public int RewardExperience { get; set; }
+
+    // Evergrove: the job (a Profiles.json id) RewardExperience goes to when the character has it, whichever job they
+    // wear, so a Chef quest's stars fill the Chef bar. 0 = the job worn at the turn-in, as for a character without it.
+    public int RewardProfileId { get; set; }
 
     // Item definition ids.
     public List<int> RewardItems { get; set; } = [];
@@ -42,7 +46,8 @@ public sealed class QuestDefinition
     public int RewardCollectionId { get; set; }
 
     // Evergrove: a job (a Profiles.json id) the turn-in teaches, as the job's trainer would, before the rewards, so the
-    // quest's stars go to it. A player who has the job already is taught nothing. 0 = none.
+    // quest's stars can go to it (RewardProfileId, or the job worn: the player is switched into it). A player who has
+    // the job already is taught nothing. 0 = none.
     public int TeachesProfileId { get; set; }
 
     public int? PrerequisiteQuestId { get; set; }

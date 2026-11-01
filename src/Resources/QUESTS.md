@@ -237,6 +237,11 @@ they can be restored.
 ## Rewards
 
 - `RewardCoins`, `RewardExperience` - plain ints, granted on completion.
+- `RewardProfileId` - the job (a `Profiles.json` id; 45 is Chef) the stars go to when the character
+  has it, whichever job they wear, so the Cobblestone chef quests (9102 to 9105) fill the Chef bar. A
+  character without that job gets them on the job they have on, and `0` (the default) always pays the job
+  worn at the turn-in. The server warns at startup about a job `Profiles.json` doesn't have, and the test
+  `ShippedQuests_PayTheirStarsToJobsTheServerHas` fails on one. (Collections have a field of the same name.)
 - `RewardItems` - a list of item definition ids added to the player's bags. These **are**
   validated against the item definitions at grant time; an unknown id won't grant (check the
   server log if a reward item silently doesn't show up).
@@ -245,12 +250,11 @@ they can be restored.
   turn-in.
 - `TeachesProfileId` - a job (a `Profiles.json` id; 45 is Chef) the turn-in teaches before the
   rewards, the way the job's trainer gives it (`IJobManager.Grant`): saved with its starter kit, and the
-  player switched into it, so the quest's stars go to the new job. A player who has the job already is
-  taught nothing and keeps the job they have on. Chef: Assistant Needed (9102) teaches Chef. The server
-  warns at startup about a job `Profiles.json` doesn't have, and the test
-  `ShippedQuests_TeachOnlyJobsATrainerCouldGive` fails on one, or on a staff job.
-
-`RewardExperience` stars go to the job the player has on at the turn-in.
+  player switched into it, so the quest's stars can go to the new job (give it the same
+  `RewardProfileId`). A player who has the job already is taught nothing and keeps the job they have on.
+  Chef: Assistant Needed (9102) teaches Chef. The server warns at startup about a job `Profiles.json`
+  doesn't have, and the test `ShippedQuests_TeachOnlyJobsATrainerCouldGive` fails on one, or on a staff
+  job.
 
 ## Badges
 
