@@ -2,7 +2,12 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
+using Sanctuary.Game;
+using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Housing;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -12,12 +17,18 @@ namespace Sanctuary.Gateway.Handlers;
 public static class PacketClientIsReadyHandler
 {
     private static ILogger _logger = null!;
+    private static IResourceManager _resourceManager = null!;
+    private static IHouseManager _houseManager = null!;
+    private static HousingOptions _housingOptions = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
 
         _logger = loggerFactory.CreateLogger(nameof(PacketClientIsReadyHandler));
+        _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _houseManager = serviceProvider.GetRequiredService<IHouseManager>();
+        _housingOptions = serviceProvider.GetRequiredService<IOptions<HousingOptions>>().Value;
     }
 
     public static bool HandlePacket(GatewayConnection connection)
@@ -36,8 +47,25 @@ public static class PacketClientIsReadyHandler
         // entering the world so a relog, or a lot bought earlier, shows up. Not inside a house: the house sends
         // its own instance list, and a second one after it may override what the client needs to decorate.
         if (connection.Player.Zone is not Sanctuary.Game.Zones.HousingZone)
+        {
+            // Evergrove: every account owns a free Apartment (docs/design/evergrove-housing.md, section 10). The session's
+            // first world login gives one to an account that has none, before the list goes out, so My Houses shows it
+            // without a relog. A login always starts in the world.
+            if (connection.Player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.StarterHouse))
+                GiveStarterHouse(connection.Player);
+
             ClientHousingPacketRequestPlayerHousesHandler.SendHouseList(connection);
+        }
 
         return true;
+    }
+
+    private static void GiveStarterHouse(Player player)
+    {
+        if (_houseManager.EnsureStarterHouse(player) != StarterHouseResult.Granted)
+            return;
+
+        if (StarterHouse.Lot(_housingOptions, _resourceManager.Zones) is { } lot && StarterHouse.LineOnGrant(player, lot) is { } line)
+            ChatHelper.SendSystemMessage(player, line);
     }
 }

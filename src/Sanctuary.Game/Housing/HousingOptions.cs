@@ -28,4 +28,12 @@ public sealed class HousingOptions
     /// Lots cost nothing, in the store's price list and when ordered.
     /// </summary>
     public bool FreeLots { get; set; } = true;
+
+    /// <summary>
+    /// Evergrove: the lot every account owns free, by its zone id; 1024 is the Apartment (<c>docs/design/evergrove-housing.md</c>,
+    /// section 10). The first world login of each session gives one to an account none of whose characters has one, on
+    /// the character logging in, free whatever <see cref="FreeLots"/> says (<see cref="IHouseManager.EnsureStarterHouse"/>).
+    /// 0 turns this off, and so does an id that isn't a housing lot the server serves, which is logged once.
+    /// </summary>
+    public int StarterHouseZoneId { get; set; } = 1024;
 }

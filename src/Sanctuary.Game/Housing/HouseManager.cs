@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
@@ -22,19 +24,25 @@ public sealed class HouseManager : IHouseManager
     private readonly IZoneManager _zoneManager;
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
     private readonly HouseInvites _invites;
+    private readonly HousingOptions _housingOptions;
     private readonly ILogger<HouseManager> _logger;
+
+    // Set once a starter house setting that names no lot the server serves has been logged.
+    private int _reportedUnservedStarterHouse;
 
     public HouseManager(
         IResourceManager resourceManager,
         IZoneManager zoneManager,
         IDbContextFactory<DatabaseContext> dbContextFactory,
         HouseInvites invites,
-        ILogger<HouseManager> logger)
+        ILogger<HouseManager> logger,
+        IOptions<HousingOptions> housingOptions)
     {
         _resourceManager = resourceManager;
         _zoneManager = zoneManager;
         _dbContextFactory = dbContextFactory;
         _invites = invites;
+        _housingOptions = housingOptions.Value;
         _logger = logger;
     }
 
@@ -50,6 +58,57 @@ public sealed class HouseManager : IHouseManager
             .OrderBy(house => house.Id)
             .Where(house => IsAvailableHouse(house.ZoneDefinitionId))
             .ToList();
+    }
+
+    public StarterHouseResult EnsureStarterHouse(Player player)
+    {
+        var characterId = GuidHelper.GetPlayerId(player.Guid);
+
+        try
+        {
+            if (StarterHouse.Lot(_housingOptions, _resourceManager.Zones) is not { } lot)
+            {
+                if (_housingOptions.StarterHouseZoneId != 0 && Interlocked.Exchange(ref _reportedUnservedStarterHouse, 1) == 0)
+                {
+                    _logger.LogWarning("Housing:StarterHouseZoneId is {ZoneDefinitionId}, which isn't a housing lot the server serves, " +
+                        "so no account is given a starter house.", _housingOptions.StarterHouseZoneId);
+                }
+
+                return StarterHouseResult.Off;
+            }
+
+            // Almost every login finds the house already there, so a plain read comes first, outside the transaction.
+            using (var dbContext = _dbContextFactory.CreateDbContext())
+            {
+                if (HouseOwnership.OwnedByAccountOf(dbContext, characterId).Any(house => house.ZoneDefinitionId == lot.Id))
+                    return StarterHouseResult.AlreadyOwned;
+            }
+
+            // Free whatever Housing:FreeLots says: it's every account's, so it never touches Station Cash.
+            var result = HouseGrants.Add(_dbContextFactory, _logger, characterId, lot.Id, stationCashCost: 0, out _);
+
+            switch (result)
+            {
+                case HouseGrantResult.Added:
+                    _logger.LogInformation("Gave {Player}'s account its free {Lot} (zone {ZoneDefinitionId}), on character {CharacterId}.",
+                        player.Name.FullName, lot.DisplayName, lot.Id, characterId);
+                    return StarterHouseResult.Granted;
+
+                case HouseGrantResult.AlreadyOwned:
+                    return StarterHouseResult.AlreadyOwned;
+
+                default:
+                    _logger.LogWarning("Couldn't give character {CharacterId}'s account its free {Lot}: {Result}.",
+                        characterId, lot.DisplayName, result);
+                    return StarterHouseResult.Failed;
+            }
+        }
+        catch (Exception exception)
+        {
+            // The login goes on without it, and the next one tries again.
+            _logger.LogWarning(exception, "Couldn't give character {CharacterId}'s account its free starter house.", characterId);
+            return StarterHouseResult.Failed;
+        }
     }
 
     public EnterHouseResult EnterOwnedHouse(Player player, int zoneDefinitionId)
