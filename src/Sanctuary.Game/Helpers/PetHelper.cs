@@ -30,6 +30,42 @@ public static class PetHelper
     public static bool IsTreasureOnCooldown(IReadOnlyDictionary<int, DateTimeOffset> treasureFoundAtByPet, DateTimeOffset now) =>
         treasureFoundAtByPet.Values.Any(foundAt => now - foundAt < TreasureCooldown);
 
+    /// <summary>
+    /// Evergrove: the shortest time between a player's pet requests that query the database or are shown to the players
+    /// nearby: rename, equip, utility, favourite trick, feed and groom. Each one runs on the gateway's single packet
+    /// thread, and renames and equips are sent to everyone who sees the pet, so a client sending them as fast as it
+    /// could held up every player's packets. The pet window sends one per click, far fewer than four a second.
+    /// </summary>
+    public const int RequestIntervalMs = 250;
+
+    /// <summary>
+    /// Whether the player may make one of those requests now. If so, the next must wait <see cref="RequestIntervalMs"/>,
+    /// as ClientPathRequestPacketHandler does with <see cref="Player.NextClientPathRequestAt"/>.
+    /// </summary>
+    public static bool TryStartRequest(Player player)
+    {
+        if (Environment.TickCount64 < player.NextPetRequestAt)
+            return false;
+
+        player.NextPetRequestAt = Environment.TickCount64 + RequestIntervalMs;
+        return true;
+    }
+
+    /// <summary>The longest pet name, the length of its database column.</summary>
+    public const int NameMaxLength = 32;
+
+    /// <summary>
+    /// Evergrove: whether a player may give a pet this name. Everyone near the pet sees it on its name plate, so it
+    /// follows the rules for character names (CheckNamePacketHandler): only the letters
+    /// <see cref="CharacterNameHelper.ContainsIllegalCharacters"/> allows, and no word from the server's name filter.
+    /// Upstream refused only blank and long names and control characters, so a pet could carry a word the filter keeps
+    /// out of every other name, or invisible and right-to-left marks.
+    /// </summary>
+    public static bool IsValidName(string name, IEnumerable<string> nameFilter) =>
+        !string.IsNullOrWhiteSpace(name) && name.Length <= NameMaxLength && !name.Any(char.IsControl)
+        && !CharacterNameHelper.ContainsIllegalCharacters(name)
+        && !nameFilter.Any(token => name.Contains(token, StringComparison.OrdinalIgnoreCase));
+
     private const int FirstTreasureSpringItemDefinitionId = 23427;
     private const int NoTint = 0;
     private const int LastTreasureSpringItemDefinitionId = 23458;
@@ -156,7 +192,9 @@ public static class PetHelper
         secondDefinition = null;
         petClientInfo = player.GetActivePetClientInfo();
 
-        if (player.Pet is null || petClientInfo is null || petId != player.ActivePetId)
+        // Evergrove: feeding and grooming are pet requests too (TryStartRequest), as each runs two queries. A refusal
+        // unlocks the client's buttons like any other.
+        if (player.Pet is null || petClientInfo is null || petId != player.ActivePetId || !TryStartRequest(player))
         {
             player.PlayerPet.UnlockPetActions();
             return false;
@@ -198,13 +236,31 @@ public static class PetHelper
             dbPet.TreasureFoundAt = treasureFoundAt;
     }
 
+    /// <summary>
+    /// Evergrove: saves when the player's pet last found treasure, for <see cref="IsTreasureOnCooldown"/>. Upstream saved
+    /// it only at logout (<see cref="SavePetState"/>), so after a gateway restart while the player was online the
+    /// player could dig up another chest at once.
+    /// </summary>
+    public static void SaveTreasureFoundAt(DatabaseContext dbContext, ulong characterId, int petId, DateTimeOffset foundAt)
+    {
+        if (!TryGetDbPet(dbContext, characterId, petId, out var dbPet))
+            return;
+
+        dbPet.TreasureFoundAt = foundAt;
+        dbContext.SaveChanges();
+    }
+
     public static bool TryOpenTreasureChest(Player player, PetTreasureChest chest, IRewardManager rewardManager,
-        IResourceManager resourceManager, out RewardDropDefinition? itemDrop)
+        IResourceManager resourceManager, IDbContextFactory<DatabaseContext> dbContextFactory, out RewardDropDefinition? itemDrop)
     {
         itemDrop = null;
 
         if (!InteractionMenuHelper.CanInteract(chest, player) || !chest.IsOwner(player) || !chest.TryOpen())
             return false;
+
+        // Evergrove: the treasure rest is saved before the chest pays anything, so no restart can forget it.
+        using (var dbContext = dbContextFactory.CreateDbContext())
+            SaveTreasureFoundAt(dbContext, GuidHelper.GetPlayerId(player.Guid), chest.PetId, chest.FoundAt);
 
         EntityHelper.SetBaseAnimation(player, chest, TreasureChestOpenStandAnimationId);
         EntityHelper.SetAnimation(player, chest, TreasureChestOpenAnimationId);

@@ -50,6 +50,10 @@ public static class PetTrickFavoriteSetPacketHandler
             return true;
         }
 
+        // Evergrove: one pet request every PetHelper.RequestIntervalMs, as this one queries and saves.
+        if (!PetHelper.TryStartRequest(connection.Player))
+            return true;
+
         var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
         using var dbContext = _dbContextFactory.CreateDbContext();
 

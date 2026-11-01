@@ -66,7 +66,8 @@ public static class CommandPacketInteractRequestHandler
         // collection on the next login, not at once: Evergrove's collection updates are not wired to it yet.)
         if (entity is PetTreasureChest petTreasureChest)
         {
-            if (PetHelper.TryOpenTreasureChest(connection.Player, petTreasureChest, _rewardManager, _resourceManager, out var itemDrop) && itemDrop is not null)
+            if (PetHelper.TryOpenTreasureChest(connection.Player, petTreasureChest, _rewardManager, _resourceManager, _dbContextFactory,
+                    out var itemDrop) && itemDrop is not null)
                 _rewardManager.TryGrantReward(connection.Player, itemDrop, petTreasureChest.Guid);
 
             return true;

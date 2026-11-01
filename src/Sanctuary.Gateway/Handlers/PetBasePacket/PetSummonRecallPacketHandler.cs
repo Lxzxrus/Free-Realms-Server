@@ -29,13 +29,12 @@ public static class PetSummonRecallPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PetSummonRecallPacket), petSummonRecallPacket);
 
-        connection.Player.PlayerPet.QueueAction(() =>
-        {
-            if (petSummonRecallPacket.Summon)
-                connection.Player.PlayerPet.SummonPet(petSummonRecallPacket.PetId);
-            else
-                connection.Player.PlayerPet.RecallPet();
-        });
+        // Evergrove: the zone carries out the latest request on its tick, at most one summon a second
+        // (PetSummonRequests), instead of queueing a rebuild of the pet for every packet.
+        if (petSummonRecallPacket.Summon)
+            connection.Player.PlayerPet.RequestSummon(petSummonRecallPacket.PetId);
+        else
+            connection.Player.PlayerPet.RequestRecall();
 
         return true;
     }

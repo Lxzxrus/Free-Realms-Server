@@ -382,11 +382,16 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
-        foreach (var dbPet in pets)
-            PetHelper.AddPet(connection.Player, _resourceManager, dbPet, clientItemDefinition, modelDefinition);
+        // Evergrove: the new pets join the list on the zone's tick, which reads it every tick, and the pet list is sent there.
+        connection.Player.PlayerPet.QueueAction(() =>
+        {
+            foreach (var dbPet in pets)
+                PetHelper.AddPet(connection.Player, _resourceManager, dbPet, clientItemDefinition, modelDefinition);
+
+            connection.Player.PlayerPet.SendPetList();
+        });
 
         connection.Player.Coins = dbCharacter.Coins;
-        connection.Player.PlayerPet.SendPetList();
         connection.SendTunneled(new ClientUpdatePacketCoinCount { Coins = dbCharacter.Coins });
 
         coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.Success;

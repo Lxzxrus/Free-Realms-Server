@@ -321,13 +321,14 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
                     dbPets.Add(dbPet);
                 }
 
-                pendingUpdates.Add(() =>
+                // Evergrove: the new pets join the list on the zone's tick, which reads it every tick, and the pet list is sent there.
+                pendingUpdates.Add(() => connection.Player.PlayerPet.QueueAction(() =>
                 {
                     foreach (var dbPet in dbPets)
                         PetHelper.AddPet(connection.Player, _resourceManager, dbPet, clientItemDefinition, modelDefinition);
 
                     connection.Player.PlayerPet.SendPetList();
-                });
+                }));
             }
             else if (clientItemDefinition.Type == ItemDefinitionHelper.MountItemType)
             {
