@@ -320,16 +320,25 @@ public sealed class GameStationMenuTests
     }
 
     /// <summary>
-    /// Only another game open stops one on the player's side, so only then are they told, in the chat: the same line a
-    /// quest's NPC uses.
+    /// Only what the player can fix is told to them, in the chat: another game open, or a game picked inside a house. A
+    /// quest's NPC says the same, and the Games menu the house's line. Every result is listed, so a new one is decided here.
     /// </summary>
     [TestMethod]
-    public void OnlyAnotherOpenGame_IsToldToThePlayer()
+    public void OnlyWhatThePlayerCanFix_IsToldToThem()
     {
-        Assert.AreEqual("Finish or close the game you have open first.", ActivityLaunches.Explain(ActivityLaunchResult.AnotherGameOpen));
-        Assert.IsNull(ActivityLaunches.Explain(ActivityLaunchResult.Opened));
-        Assert.IsNull(ActivityLaunches.Explain(ActivityLaunchResult.NotConnected));
-        Assert.IsNull(ActivityLaunches.Explain(ActivityLaunchResult.NotAGamesMenuGame));
+        var told = new Dictionary<ActivityLaunchResult, string?>
+        {
+            [ActivityLaunchResult.Opened] = null,
+            [ActivityLaunchResult.NotConnected] = null,
+            [ActivityLaunchResult.NotAGamesMenuGame] = null,
+            [ActivityLaunchResult.AnotherGameOpen] = "Finish or close the game you have open first.",
+            [ActivityLaunchResult.InsideAHouse] = "Games can't be played inside a house. Step outside to play."
+        };
+
+        CollectionAssert.AreEquivalent(Enum.GetValues<ActivityLaunchResult>(), told.Keys.ToArray());
+
+        foreach (var (result, line) in told)
+            Assert.AreEqual(line, ActivityLaunches.Explain(result), result.ToString());
     }
 
     [TestMethod]

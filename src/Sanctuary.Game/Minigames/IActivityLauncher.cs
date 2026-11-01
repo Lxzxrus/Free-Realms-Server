@@ -21,7 +21,13 @@ public enum ActivityLaunchResult
     NotAGamesMenuGame,
 
     /// <summary>The player has another Flash minigame or the wheel open: one game at a time, so nothing was sent.</summary>
-    AnotherGameOpen
+    AnotherGameOpen,
+
+    /// <summary>
+    /// A Flash minigame picked inside a house, where the client shows no minigame start screen: nothing was opened, as a
+    /// session opened there could never be started or closed.
+    /// </summary>
+    InsideAHouse
 }
 
 /// <summary>
@@ -38,8 +44,8 @@ public interface IActivityLauncher
 }
 
 /// <summary>
-/// What a player who picked a game from an NPC's or a world object's menu is told when it didn't open, so the quest's NPC
-/// and the objects say the same thing.
+/// What a player who picked a game is told when it didn't open, so the quest's NPC, the world objects and the Games menu
+/// (inside a house) say the same thing.
 /// </summary>
 public static class ActivityLaunches
 {
@@ -50,6 +56,7 @@ public static class ActivityLaunches
     public static string? Explain(ActivityLaunchResult result) => result switch
     {
         ActivityLaunchResult.AnotherGameOpen => "Finish or close the game you have open first.",
+        ActivityLaunchResult.InsideAHouse => "Games can't be played inside a house. Step outside to play.",
         _ => null
     };
 }

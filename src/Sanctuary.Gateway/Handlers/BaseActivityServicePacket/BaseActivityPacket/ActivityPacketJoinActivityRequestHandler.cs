@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
@@ -39,7 +40,14 @@ public static class ActivityPacketJoinActivityRequestHandler
         if (!_resourceManager.ClientActivityDefinitions.TryGetValue(packet.ActivityId, out var clientActivityDefinition))
             return true;
 
-        if (Open(connection, clientActivityDefinition) != ActivityLaunchResult.NotAGamesMenuGame)
+        var opened = Open(connection, clientActivityDefinition);
+
+        // Evergrove: the Games menu is on the dock inside a house too, where no minigame can show; say so rather than
+        // nothing, in the words a quest's NPC and a world object use (ActivityLaunches).
+        if (opened == ActivityLaunchResult.InsideAHouse && ActivityLaunches.Explain(opened) is { } line)
+            ChatHelper.SendSystemMessage(connection.Player, line);
+
+        if (opened != ActivityLaunchResult.NotAGamesMenuGame)
             return true;
 
         // Free Realms Trading Card Game Lobby
@@ -123,7 +131,8 @@ public static class ActivityPacketJoinActivityRequestHandler
     /// <summary>
     /// Evergrove: opens one of the games the server serves, as choosing it in the Games menu does: the wheel, a Flash
     /// minigame (match three, Cooking) or a fishing hole, each with its own checks. A Flash minigame is
-    /// <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the player has one or the wheel open;
+    /// <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the player has one they started or the wheel open, and
+    /// <see cref="ActivityLaunchResult.InsideAHouse"/> inside a house;
     /// <see cref="ActivityLaunchResult.NotAGamesMenuGame"/> for any other activity. The NPC who offers a quest step's game
     /// and a world object that opens games open them through here too (<see cref="ActivityLauncher"/>).
     /// </summary>

@@ -15,6 +15,7 @@ using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
 using Sanctuary.Game.Minigames.Mimic;
 using Sanctuary.Game.Quests;
+using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -59,7 +60,8 @@ public static class FlashMinigameHandler
 
     /// <summary>
     /// Opens the start screen for a known Flash minigame. <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the
-    /// player has a Flash minigame or the wheel open (one at a time), <see cref="ActivityLaunchResult.NotAGamesMenuGame"/>
+    /// player has a Flash minigame they started or the wheel open (one at a time; one never started gives way),
+    /// <see cref="ActivityLaunchResult.InsideAHouse"/> inside a house, <see cref="ActivityLaunchResult.NotAGamesMenuGame"/>
     /// if the activity isn't a Flash minigame the server serves.
     /// </summary>
     public static ActivityLaunchResult Open(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
@@ -68,6 +70,21 @@ public static class FlashMinigameHandler
             return ActivityLaunchResult.NotAGamesMenuGame;
 
         var player = connection.Player;
+
+        // Evergrove: the client shows no minigame start screen inside a house, so a session opened there could never be
+        // started or closed, and every game after it would be refused as another one open until a relog.
+        if (player.Zone is HousingZone)
+            return ActivityLaunchResult.InsideAHouse;
+
+        // Evergrove: a start screen closed before Go may never tell the server, so a session that never started gives way
+        // to the next game the player opens. It has paid nothing and can't: once it is gone, its Go is refused (TryStart).
+        if (player.FlashMinigame is { Started: false } unstarted)
+        {
+            _logger.LogInformation("Minigame: session {stateId} for {player} never started; it gives way to activity {activity}.",
+                unstarted.StateId, player.Guid, activity.Id);
+
+            Close(connection, unstarted);
+        }
 
         if (player.FlashMinigame is not null || player.WheelSession is not null)
             return ActivityLaunchResult.AnotherGameOpen;
