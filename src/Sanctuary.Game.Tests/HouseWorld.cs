@@ -17,6 +17,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Game.Zones;
@@ -176,8 +177,9 @@ public sealed class HouseWorld : IDisposable
         };
 
     /// <summary>
-    /// A player online on the character, standing in <see cref="World"/> at its origin, whom a move takes into a stand-in
-    /// of the zone (<see cref="Moves"/>). What they are sent goes nowhere.
+    /// A player online on the character, standing in <see cref="World"/> at its origin and wearing the Adventurer job as
+    /// the quest world's player does, whom a move takes into a stand-in of the zone (<see cref="Moves"/>). What they are
+    /// sent goes nowhere.
     /// </summary>
     public Player PlayerInTheWorld(ulong characterId, ulong userId)
     {
@@ -185,13 +187,19 @@ public sealed class HouseWorld : IDisposable
         var connection = new UdpConnection(DispatchProxy.Create<IUdpManager, PetTreasureSaveTests.NoNetwork>(),
             new SocketAddress(AddressFamily.InterNetwork), timeout: 0);
 
-        return new Player(null!, connection, Quests.Resources, new MovingZoneManager(this), new NoTrades())
+        var player = new Player(null!, connection, Quests.Resources, new MovingZoneManager(this), new NoTrades())
         {
             Guid = GuidHelper.GetPlayerGuid(characterId),
             CharacterId = characterId,
             UserId = userId,
             Zone = World
         };
+
+        ProfileHelper.AddClientProfile(player, ProfileHelper.CreateClientProfile(Quests.Resources.Profiles[QuestWorld.Adventurer],
+            new DbProfile { Id = QuestWorld.Adventurer, Level = 1 }, Quests.Resources));
+        player.ActiveProfileId = QuestWorld.Adventurer;
+
+        return player;
     }
 
     /// <summary>An NPC of that <c>Npcs.json</c> id standing in <see cref="World"/>, with the GUID its fixed spawn gets.</summary>

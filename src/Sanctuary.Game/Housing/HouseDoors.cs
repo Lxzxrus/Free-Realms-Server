@@ -15,7 +15,7 @@ namespace Sanctuary.Game.Housing;
 /// </summary>
 public static class HouseDoors
 {
-    /// <summary>The door behind Samantha in Cobblestone Village.</summary>
+    /// <summary>The door behind Samantha in Cobblestone Village, where her Housing quest (9100) sends new players.</summary>
     public const int CobblestoneVillage = 90101;
 
     public static readonly IReadOnlySet<int> Ids = new HashSet<int> { CobblestoneVillage };

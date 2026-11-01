@@ -210,7 +210,13 @@ move into the house (`IQuestManager.AdvanceTalkStepsAt`), so a click that doesn'
 A door's click never opens the quest's menu, so:
 
 - **A door's step is never the quest's last**, not even beside the last talk (`WithPrevious`): the hand-in
-  can't follow the player into the house. Bring them back to an NPC for it.
+  can't follow the player into the house. Bring them back to an NPC for it, as Samantha's Housing (9100) does:
+
+  ```json
+  { "Type": 0, "NameId": 437426, "DescriptionId": 437367, "Targets": [ { "NpcId": 90101 } ] },
+  { "Type": 0, "NameId": 94363, "DescriptionId": 46177, "DialogueId": 78487, "Targets": [ { "NpcId": 2045 } ] }
+  ```
+
 - **It says nothing**: no `DialogueId`, `Dialogue`, target `DialogueId` or `CompleteAfterDialogue`. Nobody stands
   at a door to say a line, and the move would cut it off. The step's `DescriptionId` can say what to do.
 - **A door doesn't give or take a quest**, isn't one of a counted talk's NPCs, and doesn't offer a step's game.
