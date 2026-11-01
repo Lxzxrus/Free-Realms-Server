@@ -12,6 +12,8 @@ namespace Sanctuary.Gateway.Handlers;
 [PacketHandler]
 public static class SelectQuestPacketHandler
 {
+    private const int MinSelectIntervalMs = 250;
+
     private static ILogger _logger = null!;
     private static IQuestManager _questManager = null!;
 
@@ -33,7 +35,15 @@ public static class SelectQuestPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(SelectQuestPacket), packet);
 
-        _questManager.SetActiveQuest(connection.Player, packet.QuestId);
+        // Each change of tracked quest is a database write: a few a second is more than any player clicks.
+        var player = connection.Player;
+
+        if (Environment.TickCount64 < player.NextSelectQuestAt)
+            return true;
+
+        player.NextSelectQuestAt = Environment.TickCount64 + MinSelectIntervalMs;
+
+        _questManager.SetActiveQuest(player, packet.QuestId);
         return true;
     }
 }

@@ -70,6 +70,28 @@ public sealed class Player : ClientPcData, IEntity
     public ulong LastInteractNpcGuid { get; set; }
     public DateTime LastInteractAt { get; set; }
 
+    /// <summary>Chat messages the player may still send (<see cref="ChatLimits"/>).</summary>
+    public Allowance ChatAllowance { get; } = new(ChatLimits.Burst, ChatLimits.RefillMs, Environment.TickCount64);
+
+    /// <summary>When (<see cref="Environment.TickCount64"/>) the player may next be told they chat too fast.</summary>
+    public long NextChatTooFastNoticeAt { get; set; }
+
+    /// <summary>
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the next request of each kind is answered. Each one
+    /// costs the server far more than the client: the zone's whole welcome (<see cref="ReadyZone"/>), a path search, a
+    /// database write. Repeats sooner are dropped.
+    /// </summary>
+    public long NextClientIsReadyAt { get; set; }
+
+    /// <summary>The zone the last answered "client is ready" was for: the first one in a new zone is always answered.</summary>
+    public IZone? ReadyZone { get; set; }
+
+    /// <inheritdoc cref="NextClientIsReadyAt"/>
+    public long NextTakeMeThereAt { get; set; }
+
+    /// <inheritdoc cref="NextClientIsReadyAt"/>
+    public long NextSelectQuestAt { get; set; }
+
     public DateTime LastQuestAcceptedAt { get; set; }
 
     public Dictionary<int, bool> Quests { get; } = new();

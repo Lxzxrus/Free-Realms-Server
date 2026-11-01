@@ -366,8 +366,12 @@ public sealed class QuestManager : IQuestManager
 
         if (player.Quests.TryGetValue(questId, out var completed) && !completed)
         {
-            player.ActiveQuestId = questId;
-            PersistActiveQuest(player, questId);
+            // The client also re-selects the quest it already tracks: only a change is written.
+            if (player.ActiveQuestId != questId)
+            {
+                player.ActiveQuestId = questId;
+                PersistActiveQuest(player, questId);
+            }
 
             int done = player.QuestGoalProgress.TryGetValue(questId, out var progress) ? progress : 0;
             var goals = quest.Goals;

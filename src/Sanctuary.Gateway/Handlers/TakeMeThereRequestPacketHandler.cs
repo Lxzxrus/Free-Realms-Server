@@ -13,6 +13,8 @@ namespace Sanctuary.Gateway.Handlers;
 [PacketHandler]
 public static class TakeMeThereRequestPacketHandler
 {
+    private const int MinRequestIntervalMs = 250;
+
     private static ILogger _logger = null!;
     private static IQuestManager _questManager = null!;
 
@@ -32,6 +34,12 @@ public static class TakeMeThereRequestPacketHandler
         _logger.LogTrace("Received {packet} {name}.", nameof(TakeMeThereRequestPacket), request.ActionName);
 
         var player = connection.Player;
+
+        // A path search per request: no faster than the client's own path requests are answered (upstream's 250 ms).
+        if (Environment.TickCount64 < player.NextTakeMeThereAt)
+            return true;
+
+        player.NextTakeMeThereAt = Environment.TickCount64 + MinRequestIntervalMs;
 
         if (!_questManager.TryGetActiveObjectiveTarget(player, out var goalPosition))
             return true;

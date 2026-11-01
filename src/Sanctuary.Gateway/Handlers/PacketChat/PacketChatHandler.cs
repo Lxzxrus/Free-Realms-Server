@@ -65,7 +65,18 @@ public static class PacketChatHandler
             _logger.LogWarning("Received {name} packet with null message. ( {packet} )", nameof(PacketChat), packet);
             return false;
         }
-        
+
+        // Only what the real client sends: a chat channel (not System, which would show as a system message), and about
+        // as much as its chat box takes. Then no faster than a person types, commands included (ChatLimits).
+        if (!ChatLimits.IsClientChannel(packet.Channel) || packet.Message.Length > ChatLimits.MaxMessageLength)
+        {
+            _logger.LogDebug("Dropped chat on channel {channel}, {length} characters long.", packet.Channel, packet.Message.Length);
+            return true;
+        }
+
+        if (!ChatLimits.TryUseAllowance(connection.Player))
+            return true;
+
         if (packet.Message.StartsWith(_chatCommandManager.Prefix))
         {
             if (!_chatCommandManager.TryHandle(connection.Player, packet.Message))
