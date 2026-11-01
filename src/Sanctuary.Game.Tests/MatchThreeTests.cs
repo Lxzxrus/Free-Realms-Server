@@ -10,6 +10,9 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
+using Sanctuary.Game.Quests;
+using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Game.Resources.Definitions.QuestGoals;
 
 namespace Sanctuary.Game.Tests;
 
@@ -252,16 +255,19 @@ public sealed class MatchThreeTests
     /// <summary>
     /// The Gateway's side of a game (<c>FlashMinigameHandler</c>): each message from the Flash goes to the game and the
     /// clock ticks it, and after each the session settles the win, if there is one: whatever reward it hands over is
-    /// paid, and a win too quick to pay is logged. (The Gateway answers <c>FRServer_GameOver</c> itself, by ending the
-    /// session, and pays nothing there.)
+    /// paid, and the player's quests are told of the win; a win too quick to pay is logged. (The Gateway answers
+    /// <c>FRServer_GameOver</c> itself, by ending the session, and pays nothing there.)
     /// </summary>
     private sealed class Payer(FlashMinigameSession session)
     {
+        /// <summary>The player whose quests hear of a paid win, if the test has one.</summary>
+        public QuestWorld? Quests { get; init; }
+
         /// <summary>A session for the game's own Games menu entry, started.</summary>
-        public static Payer For(MatchThreeGame game)
+        public static Payer For(MatchThreeGame game, QuestWorld? quests = null)
         {
             var activity = FlashMinigames.Definitions.Values.Single(definition => definition.MatchThreeGame == game.Name);
-            return new(new FlashMinigameSession(1, activity) { Started = true, MatchThree = game });
+            return new(new FlashMinigameSession(1, activity) { Started = true, MatchThree = game }) { Quests = quests };
         }
 
         public FlashMinigameSession Session => session;
@@ -289,6 +295,9 @@ public sealed class MatchThreeTests
             {
                 case MatchThreePayout.Pay:
                     Paid.Add(reward);
+
+                    if (Quests is { } world)
+                        world.Quests.OnEvent(world.Player, new ActivityWonEvent(session.Definition.ActivityId));
                     break;
 
                 case MatchThreePayout.TooFast:
@@ -1066,6 +1075,51 @@ public sealed class MatchThreeTests
         payer.Tick();
         Assert.AreEqual(0, payer.Paid.Count);
         Assert.AreEqual(1, payer.TooFast);
+    }
+
+    /// <summary>
+    /// A quest step won by playing the game (<see cref="PlayActivityGoal"/>) counts the win the Gateway pays: a win too
+    /// quick to pay never passes it, and a paid one counts once, however often the client repeats the end.
+    /// </summary>
+    [TestMethod]
+    public void OnlyAPaidWin_CountsForAQuestStep()
+    {
+        using var world = new QuestWorld();
+        var quest = new QuestDefinition
+        {
+            QuestId = 1,
+            TargetNpcId = 500,
+            Goals =
+            [
+                new PlayActivityGoal { NameId = 10, ActivityId = 1113, RequiredCount = 2 },
+                new TalkToNpcGoal { NameId = 11, Targets = [new TalkTarget { NpcId = 500 }] }
+            ]
+        };
+        var progress = world.Accept(quest);
+
+        // Every move at once, as a bot plays: too quick to pay.
+        var (tooFast, tooFastOutput, _) = Start(QuickMining(), seed: 11);
+        var bot = Payer.For(tooFast, world);
+
+        PlayLevel(tooFast, new ScriptedClient(tooFast, tooFastOutput), bot);
+        bot.Send("OnNextLevelMsg");
+
+        Assert.AreEqual(1, bot.TooFast);
+        Assert.AreEqual(0, progress.ProgressFor(0).Count, "A win too quick to pay doesn't count.");
+
+        // At a player's pace: paid, and counted once.
+        var (game, output, clock) = Start(QuickMining(), seed: 11);
+        var payer = Payer.For(game, world);
+
+        PlayLevel(game, new ScriptedClient(game, output), payer);
+        clock.Now += SecondsAtPlayersPace * 1000;
+        payer.Send("OnNextLevelMsg");
+        payer.Send("OnNextLevelMsg");
+        payer.Send("FRServer_GameOver");
+        payer.Tick();
+
+        Assert.AreEqual(1, payer.Paid.Count);
+        Assert.AreEqual(1, progress.ProgressFor(0).Count, "One paid win, counted once.");
     }
 
     [TestMethod]

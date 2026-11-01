@@ -83,6 +83,7 @@ done. Each goal becomes its own tracker row.
 | `TalkToNpc` | 0 | player interacts with the NPC in `Targets` (or the quest's `TargetNpcId` when it names none) |
 | `ReachLocation` | 1 | player gets within `ReachRadius` (default 12) of `ReachPosition`, checked on every position update (2D, X/Z only; give Y the ground height all the same, as Take Me There finds its path from it) |
 | `Collect` | 2 | player gathers `RequiredCount` pickups of the node type `CollectNodeType` |
+| `PlayActivity` | 3 | player wins the game `ActivityId` (a Games menu entry) `RequiredCount` times, one if left out, as the server's own game decides it |
 
 That's the full set - this branch has no combat system, so there's no Kill/hunt or
 battle-instance-encounter goal type. Don't add one without also building what would drive it.
@@ -127,6 +128,28 @@ one up: Hasti's homework ticks collection 313.
 `RequiredCount` must be at least `1`, and the test
 `ShippedCollectGoals_HaveEnoughPickupsOutAtOnce` fails when a goal needs more pickups than its
 pools put out at once, or names a type that doesn't exist.
+
+### PlayActivity example
+
+Cooking Simone's Spiralmint Steak (activity 450):
+
+```json
+{ "Type": 3, "NameId": 94528, "DescriptionId": 94534, "ActivityId": 450 }
+```
+
+`ActivityId` is a Games menu entry, a `ClientActivityDefinitions.json` id. Only a win the server's own
+game decided counts: a Cooking recipe in `Mimic.json` when `MimicHandler` pays the win, or a match-three
+game (`FlashMinigames.Definitions`: Mining Practice 1113, Queensfields Harvesting 410, Sanctuary Mail
+Sorting 414, Forging: Quick Shot Bow 420) when `FlashMinigameHandler` pays it. A win refused as too fast,
+or anything the client sends on its own, never counts. Fishing and the wheel report no wins, so a step
+can't be won there. The server warns at startup when a step names a game whose wins aren't reported.
+
+Each win counts once, toward one quest: with two quests on a step for the same game, one win ticks one of
+them. It counts only while the step is open; a game won before is not remembered. A step needing more than
+one win saves each as it counts, so a relog keeps them.
+
+No world object starts a game yet, so the step has no objective marker and no Take Me There: the player
+opens the game from the Games menu, and the step's text should name the game.
 
 ### Counted talk
 
@@ -248,10 +271,10 @@ Tumbolina" row is gone, and 71001, from another quest, reads the same.
 
 Adding a quest needs no migration. `CharacterQuests` stores each character's quests by `QuestId`, with
 `CurrentGoalId` the `NameId` of the goal they are on, and `CharacterQuestProgress` stores progress
-per goal `NameId` (the NPCs talked to, the pickups gathered). So changing a live quest's goals matters:
-a character on a goal whose `NameId` is gone restarts the quest at login. When a goal's `NameId` has to
-change, add a migration for both providers that moves the rows, as `ReconcileUpstreamQuestGoals` does
-for Hasti's Homework Heist (46489 to 74443).
+per goal `NameId` (the NPCs talked to, the pickups gathered, the games won). So changing a live
+quest's goals matters: a character on a goal whose `NameId` is gone restarts the quest at login. When a
+goal's `NameId` has to change, add a migration for both providers that moves the rows, as
+`ReconcileUpstreamQuestGoals` does for Hasti's Homework Heist (46489 to 74443).
 
 ## Checklist
 
@@ -260,6 +283,7 @@ for Hasti's Homework Heist (46489 to 74443).
 3. Write the entry with its `Goals`, one per step.
 4. Wire `PrerequisiteQuestId`/`NextQuestId` if it's part of a chain, `ExcludesQuestIds` if it's
    mutually exclusive with another quest.
-5. If it has a `Collect` goal, add its node type, pool and spawn points (see Collect example).
+5. If it has a `Collect` goal, add its node type, pool and spawn points (see Collect example). A
+   `PlayActivity` goal needs a game whose wins the server reports (see PlayActivity example).
 6. Build, spawn any test NPCs with `/npc spawn`, and walk through accept -> goals -> turn-in
    in-client.

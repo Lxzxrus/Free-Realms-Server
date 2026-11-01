@@ -421,4 +421,71 @@ public sealed class MimicTests
     [DataRow("Infinity")]
     [DataRow("lots")]
     public void NotNumbers_AreRefused(string text) => Assert.IsFalse(MimicGame.TryParseNumber(text, out _));
+
+    private static MimicRecipeDefinition SimonesSteak() =>
+        Cooking().Recipes.Single(recipe => recipe.ActivityId == 450);
+
+    /// <summary>The session MimicHandler opens for a recipe's Games menu entry (MimicHandler.TryDefine), at Go.</summary>
+    private static FlashMinigameSession SessionFor(MimicRecipeDefinition recipe, MimicGame game)
+    {
+        var cooking = Cooking();
+        var definition = new FlashMinigameDefinition(recipe.ActivityId, recipe.MiniGameId, cooking.MiniGameType, cooking.Swf,
+            MimicGame: cooking.Name);
+
+        return new FlashMinigameSession(1, definition) { Started = true, Mimic = game };
+    }
+
+    private static void PlayToAWin(MimicRecipeDefinition recipe, ScriptedCookingClient client)
+    {
+        long total = 0;
+
+        for (var i = 1; i <= recipe.Phases.Count; i++)
+        {
+            total += 2_500;
+            client.PlayRound(i, seconds: 20, total);
+        }
+
+        client.Win(total, seconds: 23 * recipe.Phases.Count);
+    }
+
+    /// <summary>
+    /// What MimicHandler pays, and tells the player's quests about: the result the session settles, once per game,
+    /// however often the Flash repeats its end messages.
+    /// </summary>
+    [TestMethod]
+    public void AWin_IsSettledOnce()
+    {
+        var recipe = SimonesSteak();
+        var (game, _, _, client) = Start(recipe);
+        var session = SessionFor(recipe, game);
+
+        Assert.AreEqual(MimicResult.None, session.SettleMimicResult(), "Nothing to settle before the Flash reports a result.");
+
+        PlayToAWin(recipe, client);
+
+        Assert.AreEqual(MimicResult.Won, session.SettleMimicResult());
+
+        client.Send("FRServer_GameOver");
+        client.Send("FRServer_GameWon", "999999", "0");
+
+        Assert.AreEqual(MimicResult.None, session.SettleMimicResult(), "A repeated win settles nothing more.");
+        Assert.AreEqual(MimicResult.Won, session.SettledMimicResult);
+    }
+
+    [TestMethod]
+    public void ARefusedWin_IsSettledAsRefused_NeverAsAWin()
+    {
+        var recipe = SimonesSteak();
+        var (game, _, _, client) = Start(recipe);
+        var session = SessionFor(recipe, game);
+
+        // Every round reported, but with no time passing.
+        for (var i = 1; i <= recipe.Phases.Count; i++)
+            client.Send("FRServer_RoundTransitionPause", "true");
+
+        client.Win(50_000, seconds: 1);
+
+        Assert.AreEqual(MimicResult.Refused, session.SettleMimicResult());
+        Assert.AreEqual(MimicResult.None, session.SettleMimicResult());
+    }
 }

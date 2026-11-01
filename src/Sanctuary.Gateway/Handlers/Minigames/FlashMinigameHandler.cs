@@ -14,6 +14,7 @@ using Sanctuary.Game;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
 using Sanctuary.Game.Minigames.Mimic;
+using Sanctuary.Game.Quests;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -44,6 +45,7 @@ public static class FlashMinigameHandler
     private static ILogger _gameLogger = null!;
     private static IResourceManager _resourceManager = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
+    private static IQuestManager _questManager = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -53,6 +55,7 @@ public static class FlashMinigameHandler
 
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
+        _questManager = serviceProvider.GetRequiredService<IQuestManager>();
     }
 
     /// <summary>Opens the start screen for a known Flash minigame. False if the activity isn't one.</summary>
@@ -225,7 +228,8 @@ public static class FlashMinigameHandler
     /// Logs each new result, and pays a won game once, as Cooking pays (<see cref="MinigameReward.Pay"/>). The server's
     /// own game decides the win (<see cref="FlashMinigameSession.SettleMatchThreeWin"/>), never a message from the
     /// Flash, so a forged, repeated or replayed "game over" pays nothing more. A win quicker than its levels can be
-    /// played pays nothing either, and is logged as a warning.
+    /// played pays nothing either, and is logged as a warning. A paid win is the one a quest step that is this game
+    /// counts (<see cref="ActivityWonEvent"/>), so a win refused as too fast never passes a step.
     /// </summary>
     private static void Settle(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game)
     {
@@ -258,6 +262,8 @@ public static class FlashMinigameHandler
         _logger.LogInformation("Minigame: {player} won {game} in {seconds:0.0} s: paid {coins} coins and {stars} stars on job " +
             "{profileId}.", player.Guid, game.Name, game.SecondsToWin, paid.Coins ? reward.Coins : 0,
             paid.Stars ? reward.Experience : 0, reward.ProfileId);
+
+        _questManager.OnEvent(player, new ActivityWonEvent(session.Definition.ActivityId));
     }
 
     /// <summary>The client ended the session (the minigame frame's close button).</summary>

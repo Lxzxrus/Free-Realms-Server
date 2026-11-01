@@ -214,6 +214,27 @@ public sealed class QuestObjectiveTargetTests
     }
 
     [TestMethod]
+    public void Marker_OnAStepWonByPlayingAGame_ComesDown()
+    {
+        // The turn-in NPC stands nearest, but the step is a game started from the Games menu: nothing to point at.
+        var quest = new QuestDefinition
+        {
+            QuestId = QuestId,
+            TargetNpcId = TurnInNpcId,
+            Goals =
+            [
+                new PlayActivityGoal { NameId = 94528, ActivityId = 450 },
+                new TalkToNpcGoal { NameId = 94536, Targets = [new TalkTarget { NpcId = TurnInNpcId }] }
+            ]
+        };
+
+        Assert.IsNull(_questManager.ObjectiveTargetFor(_player, quest, 0, out var clear));
+        Assert.IsTrue(clear, "The last step's marker comes down, so Take Me There doesn't lead back to its NPC.");
+
+        Assert.AreEqual(0.5f, _questManager.ObjectiveTargetFor(_player, quest, 1, out _)?.Position.X, "Then the NPC it is handed to.");
+    }
+
+    [TestMethod]
     public void Marker_OnAHiddenObjective_ComesDown()
     {
         AddPickup(spawnId: 4, x: 10f);

@@ -430,6 +430,13 @@ public class ResourceManager : IResourceManager, IDisposable
                         quest.QuestId, collectGoal.CollectNodeType);
             }
 
+            foreach (var playGoal in quest.Goals.OfType<PlayActivityGoal>())
+            {
+                if (playGoal.ActivityId > 0 && !PlayableActivities.ReportsWins(playGoal.ActivityId, Mimic))
+                    _logger.LogWarning("Play goal on quest {id} names activity {activity}, whose wins the server doesn't report; it can never be credited.",
+                        quest.QuestId, playGoal.ActivityId);
+            }
+
             if (quest.TeachesProfileId != 0 && !Profiles.ContainsKey(quest.TeachesProfileId))
                 _logger.LogWarning("Quest {id} teaches job {profileId}, which isn't in Profiles.json; its turn-in teaches nothing.",
                     quest.QuestId, quest.TeachesProfileId);

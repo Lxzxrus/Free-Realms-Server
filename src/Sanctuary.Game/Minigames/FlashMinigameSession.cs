@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 
 using Sanctuary.Game.Minigames.MatchThree;
+using Sanctuary.Game.Minigames.Mimic;
 
 namespace Sanctuary.Game.Minigames;
 
@@ -64,7 +65,22 @@ public sealed class FlashMinigameSession
     public Mimic.MimicGame? Mimic { get; set; }
 
     /// <summary>The Mimic result already logged and paid, so each game pays once.</summary>
-    public Mimic.MimicResult SettledMimicResult { get; set; }
+    public MimicResult SettledMimicResult { get; private set; }
+
+    /// <summary>
+    /// Settles the Mimic game's result, the first time the server's own game has one (<see cref="MimicGame.Result"/>):
+    /// that result, for the caller to log and, for a win, to pay. A win the server refused is
+    /// <see cref="MimicResult.Refused"/>, never a win. <see cref="MimicResult.None"/> before then and every time after,
+    /// however often the Flash repeats its end messages, so each game is settled once.
+    /// </summary>
+    public MimicResult SettleMimicResult()
+    {
+        if (SettledMimicResult != MimicResult.None || Mimic is not { Result: not MimicResult.None } game)
+            return MimicResult.None;
+
+        SettledMimicResult = game.Result;
+        return game.Result;
+    }
 
     /// <summary>
     /// Settles the match-three game's win, the first time the server's own game is won: every level passed, as the

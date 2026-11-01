@@ -237,6 +237,14 @@ public class QuestDefinitionCollection
                     if (collectGoal.RequiredCount <= 0)
                         _logger.LogWarning("Collect goal on quest {id} has no RequiredCount in \"{file}\"; it can never be completed.", quest.QuestId, filePath);
                     break;
+
+                case PlayActivityGoal playGoal:
+                    if (playGoal.ActivityId <= 0)
+                        _logger.LogWarning("Play goal on quest {id} has no ActivityId in \"{file}\"; it can never be credited.", quest.QuestId, filePath);
+
+                    if (playGoal.RequiredCount <= 0)
+                        _logger.LogWarning("Play goal on quest {id} has no RequiredCount in \"{file}\"; it can never be completed.", quest.QuestId, filePath);
+                    break;
             }
         }
     }

@@ -1123,9 +1123,9 @@ public sealed class QuestManager : IQuestManager
     /// <summary>
     /// The objective marker for a goal, which the client's Take Me There button and map pin follow, or null when it points
     /// at nothing. The marker packet, the Take Me There counter and the tracker all take it from here. When there is
-    /// none, <paramref name="clear"/> says whether the last marker comes down (a hidden objective, a reach step in
-    /// another zone, a Collect step with nothing left to take here: the client shows Take Me There only while there is
-    /// a target) or stays as it is (an NPC that isn't in this zone), as upstream does.
+    /// none, <paramref name="clear"/> says whether the last marker comes down (a hidden objective, a step won by playing
+    /// a game, a reach step in another zone, a Collect step with nothing left to take here: the client shows Take Me
+    /// There only while there is a target) or stays as it is (an NPC that isn't in this zone), as upstream does.
     /// </summary>
     internal ObjectiveTarget? ObjectiveTargetFor(Player player, QuestDefinition quest, int goalIndex, out bool clear)
     {
@@ -1135,6 +1135,11 @@ public sealed class QuestManager : IQuestManager
         clear = true;
 
         if (quest.HideObjectiveTarget)
+            return null;
+
+        // A step won by playing a game is started from the Games menu: no world object starts a game yet, so there is
+        // nothing to point at, and the last step's marker comes down rather than send the player back to its NPC.
+        if (goal is PlayActivityGoal)
             return null;
 
         if (goal is ReachLocationGoal reachGoal && reachGoal.ReachPosition != Vector3.Zero)

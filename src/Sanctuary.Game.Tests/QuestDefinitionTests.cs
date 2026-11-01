@@ -51,6 +51,40 @@ public sealed class QuestDefinitionTests
     }
 
     [TestMethod]
+    public void Load_ReadsAPlayGoal_WithOneWinUnlessItAsksForMore()
+    {
+        var quests = LoadQuests("""
+            [
+              {
+                "QuestId": 1,
+                "TargetNpcId": 500,
+                "TeachesProfileId": 45,
+                "Goals": [
+                  { "Type": 3, "NameId": 10, "ActivityId": 450 },
+                  { "NameId": 11, "ActivityId": 410, "RequiredCount": 3, "Type": 3 },
+                  { "Type": 0, "NameId": 12 }
+                ]
+              },
+              { "QuestId": 2, "TargetNpcId": 500, "Goals": [ { "Type": 0, "NameId": 20 } ] }
+            ]
+            """);
+
+        Assert.IsTrue(quests.TryGet(1, out var quest));
+
+        var steak = (PlayActivityGoal)quest.Goals[0];
+        Assert.AreEqual(450, steak.ActivityId);
+        Assert.AreEqual(1, steak.RequiredCount, "One win when the quest doesn't say.");
+
+        var harvest = (PlayActivityGoal)quest.Goals[1];
+        Assert.AreEqual(410, harvest.ActivityId);
+        Assert.AreEqual(3, harvest.RequiredCount);
+
+        Assert.AreEqual(45, quest.TeachesProfileId);
+        Assert.IsTrue(quests.TryGet(2, out var plain));
+        Assert.AreEqual(0, plain.TeachesProfileId, "A quest teaches no job unless it says.");
+    }
+
+    [TestMethod]
     public void Load_RejectsAnUnknownGoalType()
     {
         var quests = new QuestDefinitionCollection(NullLogger.Instance);
