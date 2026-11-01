@@ -236,13 +236,31 @@ public static class PetHelper
             dbPet.TreasureFoundAt = treasureFoundAt;
     }
 
+    /// <summary>
+    /// Evergrove: saves when the player's pet last found treasure, for <see cref="IsTreasureOnCooldown"/>. Upstream saved
+    /// it only at logout (<see cref="SavePetState"/>), so after a gateway restart while the player was online the
+    /// player could dig up another chest at once.
+    /// </summary>
+    public static void SaveTreasureFoundAt(DatabaseContext dbContext, ulong characterId, int petId, DateTimeOffset foundAt)
+    {
+        if (!TryGetDbPet(dbContext, characterId, petId, out var dbPet))
+            return;
+
+        dbPet.TreasureFoundAt = foundAt;
+        dbContext.SaveChanges();
+    }
+
     public static bool TryOpenTreasureChest(Player player, PetTreasureChest chest, IRewardManager rewardManager,
-        IResourceManager resourceManager, out RewardDropDefinition? itemDrop)
+        IResourceManager resourceManager, IDbContextFactory<DatabaseContext> dbContextFactory, out RewardDropDefinition? itemDrop)
     {
         itemDrop = null;
 
         if (!InteractionMenuHelper.CanInteract(chest, player) || !chest.IsOwner(player) || !chest.TryOpen())
             return false;
+
+        // Evergrove: the treasure rest is saved before the chest pays anything, so no restart can forget it.
+        using (var dbContext = dbContextFactory.CreateDbContext())
+            SaveTreasureFoundAt(dbContext, GuidHelper.GetPlayerId(player.Guid), chest.PetId, chest.FoundAt);
 
         EntityHelper.SetBaseAnimation(player, chest, TreasureChestOpenStandAnimationId);
         EntityHelper.SetAnimation(player, chest, TreasureChestOpenAnimationId);

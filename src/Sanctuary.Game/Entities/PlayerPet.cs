@@ -964,9 +964,18 @@ public sealed class PlayerPet
     {
         var roll = Random.Shared.Next(PetTreasureChestTotalWeight);
         var chestTier = PetTreasureChestTiers.First(tier => (roll -= tier.Weight) < 0);
+        var foundAt = DateTimeOffset.UtcNow;
 
-        if (!_player.Zone.TryAddNpc((zone, guid) => new PetTreasureChest(zone, _player.Guid, chestTier.RewardTableKey) { Guid = guid }, out var chest))
+        // Evergrove: the chest knows which pet found it and when, to save the treasure rest as it pays out.
+        if (!_player.Zone.TryAddNpc((zone, guid) => new PetTreasureChest(zone, _player.Guid, chestTier.RewardTableKey)
+            {
+                Guid = guid,
+                PetId = _player.ActivePetId,
+                FoundAt = foundAt
+            }, out var chest))
+        {
             return;
+        }
 
         var petPosition = npc.Position.ToVector3();
         var position = GetPetStandPosition(npc.Zone, petPosition, petPosition + _petState.TreasureDirection * PetTreasureChestDistance);
@@ -992,7 +1001,7 @@ public sealed class PlayerPet
 
         EntityHelper.SetAnimation(_player, chest, PetTreasureChestSpawnAnimationId);
 
-        _player.PetTreasureFoundAt[_player.ActivePetId] = DateTimeOffset.UtcNow;
+        _player.PetTreasureFoundAt[_player.ActivePetId] = foundAt;
     }
 
     private void UpdatePetTreasureDig(Npc npc)
