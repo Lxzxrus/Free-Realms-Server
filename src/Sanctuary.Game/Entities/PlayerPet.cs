@@ -30,6 +30,11 @@ public sealed class PlayerPet
     private readonly Queue<Vector3> _petNavMeshWaypoints = new();
     private PetState _petState = new();
     private readonly ConcurrentQueue<Action> _queuedActions = new();
+    private readonly PetSummonRequests _summonRequests = new();
+
+    // Evergrove: how many pet actions may wait for the zone's tick. The pet packets a player sends by clicking come
+    // nowhere near it; past it they are dropped, so a client flooding them no longer grows the queue without limit.
+    internal const int MaxQueuedActions = 32;
 
     private sealed class PetState
     {
@@ -318,6 +323,10 @@ public sealed class PlayerPet
 
     public void SummonPet(int id)
     {
+        // Evergrove: summoning the pet that is already out would only rebuild it for everyone nearby.
+        if (Pet is not null && _summonedPetId == id)
+            return;
+
         if (_player.Zone is not WorldZone && _player.Zone is not HousingZone)
             return;
 
@@ -426,12 +435,32 @@ public sealed class PlayerPet
         _petState.PendingPlay += Math.Min(PetScratchMaxPlay, inputMovementSquaredSum / (float)inputDurationMs * PetScratchPlayPerMovement);
     }
 
-    public void QueueAction(Action action) => _queuedActions.Enqueue(action);
+    public void QueueAction(Action action)
+    {
+        if (_queuedActions.Count < MaxQueuedActions)
+            _queuedActions.Enqueue(action);
+    }
+
+    /// <summary>Summons the pet on the zone's tick, at most one summon a second (<see cref="PetSummonRequests"/>).</summary>
+    public void RequestSummon(int id) => _summonRequests.Summon(id);
+
+    /// <summary>Puts the pet away on the zone's tick, replacing any summon still waiting.</summary>
+    public void RequestRecall() => _summonRequests.Recall();
 
     public void UpdateEveryTick()
     {
-        while (_queuedActions.TryDequeue(out var queuedAction))
+        // Evergrove: only the actions queued before this tick, so a client that keeps sending can't hold the zone here.
+        for (var count = _queuedActions.Count; count > 0 && _queuedActions.TryDequeue(out var queuedAction); count--)
             queuedAction();
+
+        // After the queue, so changes to the pets queued in the same tick are in place before a summon builds the pet.
+        if (_summonRequests.TryTake(Environment.TickCount64, out var petId))
+        {
+            if (petId == PetSummonRequests.NoPetId)
+                RecallPet();
+            else
+                SummonPet(petId);
+        }
 
         UpdatePetSpeedBuff();
         UpdatePetStand();
