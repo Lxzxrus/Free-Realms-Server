@@ -34,7 +34,7 @@ A connect request over a connection limit is ignored, so the client times out as
 limits disconnect. Every one of them logs a warning saying which limit and why; refused connects are logged once a
 minute with a count, since a refused client retries every second.
 
-Four more things changed with no setting:
+Five more things changed with no setting:
 
 - An exception while processing one connection's packets (in the UDP library or a handler) drops that connection and
   logs the error, with the packet's first bytes. It never stops the server.
@@ -48,6 +48,10 @@ Four more things changed with no setting:
   Keep-alives are checked too: a real client's carry their CRC like everything else it sends. Anyone could send the
   rest from a player's address (a bad CRC, a 2-byte keep-alive, a connect or remap request), and they used to keep a
   player whose client had crashed in the world, unable to log in again, for as long as someone kept sending them.
+- A connection the server accepted ignores unreachable packets, which are 2 bytes and never CRC'd. It used to
+  disconnect 5 seconds after the first if the player sent nothing in between, so anyone could drop a quiet player. A
+  client that has really gone stops sending, and the Gateway times it out instead (the Login server's player port has
+  no `NoDataTimeout`).
 
 ## Replies to forged addresses
 

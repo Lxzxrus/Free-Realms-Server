@@ -605,6 +605,7 @@ public class HardeningTests
     [DataRow(new byte[] { 0, (byte)UdpPacketType.KeepAlive }, false, DisplayName = "a bare keep-alive")]
     [DataRow(new byte[] { 0, (byte)UdpPacketType.KeepAlive }, true, DisplayName = "a keep-alive with a wrong CRC")]
     [DataRow(new byte[] { 1, 2, 3 }, true, DisplayName = "a packet with a wrong CRC")]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.UnreachableConnection }, false, DisplayName = "an unreachable packet")]
     [DataRow(new byte[] { 0, (byte)UdpPacketType.RequestRemap, 0, 0, 0, 1, 0, 0, 0, 2 }, false, DisplayName = "a remap request")]
     [DataRow(new byte[] { 0, (byte)UdpPacketType.Connect, 0, 0, 0, 3, 0, 0, 0x30, 0x39, 0, 0, 2, 0, (byte)'F', (byte)'a', (byte)'k', (byte)'e', 0, 0, 0 },
         false, DisplayName = "a connect request with another code")]
@@ -679,6 +680,51 @@ public class HardeningTests
         network.Pump(20, 100, server);
         Assert.AreEqual(Status.Disconnected, serverA.Status, "31 s after it");
         Assert.AreEqual(DisconnectReason.Timeout, serverA.DisconnectReason);
+    }
+
+    [TestMethod]
+    public void UnreachablePacketsFromAPlayersAddressDontDisconnectIt()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        byte[] unreachable = [0, (byte)UdpPacketType.UnreachableConnection];
+
+        // the player says nothing for 12 s, and someone sends unreachable packets from its address 6 s apart: the second
+        // used to disconnect it, coming more than 5 s (MaximumTimeAllowedForPortRemapping) after the first
+        network.Deliver(client.EndPoint, server.EndPoint, unreachable);
+        network.Pump(600, server, client);
+        network.Deliver(client.EndPoint, server.EndPoint, unreachable);
+        network.Pump(600, server, client);
+
+        Assert.AreEqual(Status.Connected, serverA.Status);
+
+        a.Send(UdpChannel.Reliable1, [5]);
+        network.Pump(10, server, client);
+
+        CollectionAssert.AreEqual(new byte[] { 5 }, serverA.Received.Single());
+    }
+
+    [TestMethod]
+    public void ClientStillGivesUpOnAServerThatAnswersUnreachable()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+
+        byte[] unreachable = [0, (byte)UdpPacketType.UnreachableConnection];
+
+        // the server no longer knows the connection (it restarted) and answers everything with unreachable: the side that
+        // opened the connection asks for a remap for 5 s, then gives up
+        network.Deliver(server.EndPoint, client.EndPoint, unreachable);
+        network.Pump(600, client);
+        network.Deliver(server.EndPoint, client.EndPoint, unreachable);
+        network.Pump(1, client);
+
+        Assert.AreEqual(Status.Disconnected, a.Status);
+        Assert.AreEqual(DisconnectReason.UnreachableConnection, a.DisconnectReason);
     }
 
     [TestMethod]

@@ -1060,6 +1060,15 @@ public class UdpConnection : PriorityQueueMember
 
             case UdpPacketType.UnreachableConnection:
                 {
+                    // Only the side that opened the connection asks the other to remap it: a server's own address
+                    // doesn't change.  A server that answered would send 10 bytes for every 2 byte unreachable
+                    // packet anyone forges from a player's address.  Nor does a connection we accepted disconnect for
+                    // one: the packet isn't CRC'd, so anyone could forge one and drop a player who had been quiet for
+                    // MaximumTimeAllowedForPortRemapping (5 s).  If the other side has really gone, it stops sending,
+                    // so a NoDataTimeout catches it.
+                    if (AcceptedConnection)
+                        break;
+
                     if (UdpManager.Params.AllowPortRemapping)
                     {
                         if (PortRemapRequestStartStamp == 0)
@@ -1069,12 +1078,6 @@ public class UdpConnection : PriorityQueueMember
 
                         if (UdpManager.CachedClockElapsed(PortRemapRequestStartStamp) < Constants.MaximumTimeAllowedForPortRemapping)
                         {
-                            // Only the side that opened the connection asks the other to remap it: a server's own address
-                            // doesn't change.  A server that answered would send 10 bytes for every 2 byte unreachable
-                            // packet anyone forges from a player's address.
-                            if (AcceptedConnection)
-                                break;
-
                             Span<byte> buf = stackalloc byte[10];
 
                             // send confirm packet (if our connect code matches up)
