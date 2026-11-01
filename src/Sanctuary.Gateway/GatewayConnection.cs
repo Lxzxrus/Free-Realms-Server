@@ -539,12 +539,19 @@ public class GatewayConnection : UdpConnection
             rotation = Player.StartingZoneRotation;
         }
 
-        dbCharacter.PositionX = float.IsNaN(position.X) ? null : position.X;
-        dbCharacter.PositionY = float.IsNaN(position.Y) ? null : position.Y;
-        dbCharacter.PositionZ = float.IsNaN(position.Z) ? null : position.Z;
+        // Evergrove: MariaDB refuses a float it can't store, an infinity or one as large as float.MaxValue, and a failed
+        // save here stopped the whole Gateway. The packet handlers refuse such positions and rotations from the client;
+        // in case one gets here another way, a position outside the world or a rotation beyond any real one is saved as
+        // nothing, as NaN already was, and the next login uses the spawn point's instead.
+        var savePosition = Positions.IsInWorld(position);
+        var saveRotation = Positions.IsWithinRotationLimit(rotation);
 
-        dbCharacter.RotationX = float.IsNaN(rotation.X) ? null : rotation.X;
-        dbCharacter.RotationZ = float.IsNaN(rotation.Z) ? null : rotation.Z;
+        dbCharacter.PositionX = savePosition ? position.X : null;
+        dbCharacter.PositionY = savePosition ? position.Y : null;
+        dbCharacter.PositionZ = savePosition ? position.Z : null;
+
+        dbCharacter.RotationX = saveRotation ? rotation.X : null;
+        dbCharacter.RotationZ = saveRotation ? rotation.Z : null;
 
         dbCharacter.ActiveProfileId = Player.ActiveProfileId;
 
