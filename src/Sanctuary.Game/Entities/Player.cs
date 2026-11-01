@@ -150,6 +150,12 @@ public sealed class Player : ClientPcData, IEntity
 
     public long NextClientPathRequestAt { get; set; }
 
+    /// <summary>
+    /// The earliest time (<see cref="Environment.TickCount64"/>) Evergrove's Lua-metrics Take Me There is answered again:
+    /// a path search per request, throttled like <see cref="NextClientPathRequestAt"/>.
+    /// </summary>
+    public long NextTakeMeThereAt { get; set; }
+
     /// <summary>Evergrove: when the player may next rename, dress, equip or tend a pet (<see cref="PetHelper.TryStartRequest"/>).</summary>
     public long NextPetRequestAt { get; set; }
 
