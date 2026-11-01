@@ -48,7 +48,10 @@ public static class GameStations
 
     public static readonly IReadOnlyList<GameStation> All =
     [
-        new("Cooking Table", [1525, 2216, 2417, 2537, 3472, 4062, 6391, 33482, 33636], Cooking),
+        // The last six are Evergrove's own (FabledRealms.lua), standing on the zone's tables at the Cooking Table map
+        // points that had no table NPC: Simone's, Auguste Frydaze's, Helena's, Bristlewood's, Shrouded Glade's, Wugachug's.
+        new("Cooking Table", [1525, 2216, 2417, 2537, 3472, 4062, 6391, 33482, 33636, 90001, 90002, 90003, 90004, 90005,
+            90006], Cooking),
 
         // Sanctuary's mail sorting: the postboxes beside Flitter, its postmistress, and those on the warpstone plaza.
         new("mailbox", [2375], [414]),

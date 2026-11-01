@@ -1,11 +1,15 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Numerics;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Core.Helpers;
 using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.Mimic;
@@ -172,5 +176,77 @@ public sealed class GameStationsTests
             "Lakesfield Harvesting", "Perry's Pastures Harvesting", "Seaside Postboxes", "Merry Vale Postboxes",
             "Shrouded Glade Postboxes", "Snowhill Postboxes", "Copper Vein"
         }, nothingYet);
+    }
+
+    // Evergrove's own cooking tables, above every id upstream OSFR's Npcs.json uses (its highest is in the 40000s).
+    private static readonly int[] EvergrovesTables = [90001, 90002, 90003, 90004, 90005, 90006];
+
+    // The tables' and their map points' name.
+    private const int CookingTableName = 2061;
+
+    private static Vector3 SpawnedAt(int npcId)
+    {
+        var spawn = Regex.Match(_spawnScript, $@"spawnFixedNpc\({npcId}, ([-\d.e]+), ([-\d.e]+), ([-\d.e]+),");
+        Assert.IsTrue(spawn.Success, $"{npcId} isn't spawned.");
+
+        float At(int group) => float.Parse(spawn.Groups[group].Value, CultureInfo.InvariantCulture);
+
+        return new Vector3(At(1), At(2), At(3));
+    }
+
+    /// <summary>
+    /// Evergrove's own tables are copies of Sanctuary's (2417), each defined and spawned once under an id no upstream NPC
+    /// uses: Npcs.json's loader keeps the first of two rows with one id, and a second spawn of an id is refused, its GUID
+    /// being taken. Each GUID is a fixed one, below the counters zones hand out to the NPCs they make.
+    /// </summary>
+    [TestMethod]
+    public void EvergrovesOwnTables_CollideWithNothing()
+    {
+        using var npcsFile = JsonDocument.Parse(File.ReadAllText(FindSourceFile("Resources", "Npcs.json")));
+        var definedIds = npcsFile.RootElement.EnumerateArray().Select(npc => npc.GetProperty("Id").GetInt32()).ToList();
+        var sanctuarysTable = _npcs[2417];
+
+        Assert.IsTrue(definedIds.Except(EvergrovesTables).All(id => id < EvergrovesTables.Min()), "An upstream NPC has an id in Evergrove's range.");
+
+        foreach (var npcId in EvergrovesTables)
+        {
+            Assert.AreEqual(1, definedIds.Count(id => id == npcId), $"Npcs.json doesn't define {npcId} once.");
+            Assert.AreEqual(1, SpawnCount(npcId), $"{npcId} isn't spawned once.");
+
+            var guid = GuidHelper.GetNpcGuid((ulong)npcId, GuidHelper.OpenWorldInstanceId);
+            Assert.IsTrue(GuidHelper.IsFixedNpcGuid(guid), $"{npcId}'s GUID isn't a fixed one.");
+            Assert.AreEqual((ulong)npcId, GuidHelper.GetNpcCounter(guid));
+
+            var table = _npcs[npcId];
+            Assert.AreEqual((sanctuarysTable.NameId, sanctuarysTable.Name, sanctuarysTable.ModelId, sanctuarysTable.ModelFileName),
+                (table.NameId, table.Name, table.ModelId, table.ModelFileName), $"{npcId} isn't a cooking table.");
+        }
+
+        CollectionAssert.IsSubsetOf(EvergrovesTables, GameStations.All.Single(station => station.Name == "Cooking Table").NpcIds.ToArray());
+    }
+
+    /// <summary>
+    /// Every Cooking Table map icon teleports the player within the walk-in range of a table that opens the recipes, so a
+    /// click on it opens them. Six icons had only scenery there before Evergrove's own tables.
+    /// </summary>
+    [TestMethod]
+    public void EveryCookingTableMapIcon_LandsThePlayerBesideATable()
+    {
+        var tables = GameStations.All.Single(station => station.Name == "Cooking Table").NpcIds.Select(SpawnedAt).ToList();
+
+        using var pointsFile = JsonDocument.Parse(File.ReadAllText(FindSourceFile("Resources", "PointOfInterests.json")));
+        var icons = pointsFile.RootElement.EnumerateArray()
+            .Where(point => point.TryGetProperty("NameId", out var name) && name.GetInt32() == CookingTableName)
+            .ToList();
+
+        Assert.AreEqual(12, icons.Count);
+
+        foreach (var icon in icons)
+        {
+            var landing = icon.GetProperty("SpawnPosition").EnumerateArray().Select(value => value.GetSingle()).ToArray();
+            var nearest = tables.Min(table => Vector3.Distance(table, new Vector3(landing[0], landing[1], landing[2])));
+
+            Assert.IsTrue(nearest <= GameStations.WalkInRange, $"Map point {icon.GetProperty("Id")} lands {nearest:F1} from the nearest table.");
+        }
     }
 }
