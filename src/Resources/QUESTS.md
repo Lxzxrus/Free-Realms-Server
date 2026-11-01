@@ -119,10 +119,11 @@ doesn't place them. Three files do:
 
 A Collect goal counts only player-specific pickups (upstream OSFR #166): each player sees a pool's
 pickups only while one of their quests needs them, a picked one disappears for that player alone, and
-each spawn point counts once. The server warns at startup about a Collect goal whose node type has no
-player-specific pool, since nothing can ever credit it. A node type may also name a quest collection
-entry (`CollectionId`, `CollectionEntryId`), ticked when the player picks one up: Hasti's homework
-ticks collection 313.
+each spawn point counts once. The step's map marker and Take Me There point at the nearest pickup the
+player can still take, and are hidden when none is left. The server warns at startup about a Collect
+goal whose node type has no player-specific pool, since nothing can ever credit it. A node type may
+also name a quest collection entry (`CollectionId`, `CollectionEntryId`), ticked when the player picks
+one up: Hasti's homework ticks collection 313.
 `RequiredCount` must be at least `1`, and the test
 `ShippedCollectGoals_HaveEnoughPickupsOutAtOnce` fails when a goal needs more pickups than its
 pools put out at once, or names a type that doesn't exist.

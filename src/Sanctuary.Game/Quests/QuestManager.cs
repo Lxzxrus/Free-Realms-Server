@@ -834,6 +834,20 @@ public sealed class QuestManager : IQuestManager
         return NearestNpc(player, npc => untalkedNpcIds.Contains(npc.DefinitionId))?.Guid ?? 0;
     }
 
+    // Evergrove: a Collect step's target is the nearest pickup the player can still take for it. Upstream OSFR #166 hid
+    // the target on Collect steps instead, because a player-specific pickup stays in the zone after a player takes it
+    // (only that player stops seeing it), so the nearest one of its type was often one they already had. CanGather is
+    // the pickup's own test (the step's node type, a player-specific pool, not yet taken by this player), so the target
+    // is never a pickup the player has taken or couldn't pick up.
+    private static ulong NearestPickup(Player player, QuestDefinition quest, int goalIndex, CollectGoal goal)
+    {
+        if (!player.Quests.TryGetInProgress(quest.QuestId, out var progress)
+            || !progress.OpenGoals.TryGetValue(goalIndex, out var goalProgress))
+            return 0;
+
+        return NearestNpc(player, npc => npc is CollectionNode node && goal.CanGather(node, goalProgress))?.Guid ?? 0;
+    }
+
     private void CompleteGoal(Player player, QuestDefinition quest, QuestProgress progress, int goalIndex, Npc? spokenBy = null, bool playDialogue = true)
     {
         var goals = quest.Goals;
@@ -1076,6 +1090,10 @@ public sealed class QuestManager : IQuestManager
     {
         var goals = quest.Goals;
 
+        // Never the turn-in NPC: a Collect step with no pickup left to take has no target at all.
+        if (goalIndex >= 0 && goalIndex < goals.Count && goals[goalIndex] is CollectGoal collectGoal)
+            return NearestPickup(player, quest, goalIndex, collectGoal);
+
         if (goalIndex >= 0 && goalIndex < goals.Count && goals[goalIndex] is TalkToNpcGoal { IsCounted: true } countedGoal
             && player.Quests.TryGetInProgress(quest.QuestId, out var progress))
         {
@@ -1091,7 +1109,7 @@ public sealed class QuestManager : IQuestManager
     {
         var goals = quest.Goals;
 
-        if (quest.HideObjectiveTarget || (goalIndex >= 0 && goalIndex < goals.Count && goals[goalIndex] is CollectGoal))
+        if (quest.HideObjectiveTarget)
         {
             player.SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
             return;
@@ -1122,7 +1140,17 @@ public sealed class QuestManager : IQuestManager
             return;
         }
 
-        SendObjectiveTarget(player, ResolveGoalTargetGuid(player, quest, goalIndex));
+        var targetGuid = ResolveGoalTargetGuid(player, quest, goalIndex);
+
+        // The client shows Take Me There only while there is a target, so a Collect step with nothing left to take here
+        // clears the marker rather than leaving the last step's target up.
+        if (targetGuid == 0 && goalIndex >= 0 && goalIndex < goals.Count && goals[goalIndex] is CollectGoal)
+        {
+            player.SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
+            return;
+        }
+
+        SendObjectiveTarget(player, targetGuid);
     }
 
     private void SendObjectiveTarget(Player player, ulong targetGuid)
@@ -1202,7 +1230,7 @@ public sealed class QuestManager : IQuestManager
         int currentGoalIndex = progress.FirstOpenGoalIndex;
         var goals = q.Goals;
 
-        if (q.HideObjectiveTarget || (currentGoalIndex >= 0 && currentGoalIndex < goals.Count && goals[currentGoalIndex] is CollectGoal))
+        if (q.HideObjectiveTarget)
             return false;
 
         if (currentGoalIndex >= 0 && currentGoalIndex < goals.Count
