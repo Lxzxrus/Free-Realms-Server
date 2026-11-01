@@ -1,7 +1,13 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Game.Entities;
+using Sanctuary.Game.Interactions;
+using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
 
@@ -93,6 +99,40 @@ public sealed class QuestTeachesJobTests
         Assert.IsNull(SavedJob(unknownJob));
         Assert.AreEqual((1, Stars), SavedJob(QuestWorld.Adventurer));
         Assert.AreEqual(Coins, _world.ReadCharacter().Coins);
+    }
+
+    /// <summary>A job manager whose grant throws, as one would with the database out of reach for a moment.</summary>
+    private sealed class ThrowingJobs : IJobManager
+    {
+        public JobGrantResult Grant(Player player, int profileId) => throw new InvalidOperationException("The database is out of reach.");
+
+        public JobGrantResult GrantOffline(ulong characterId, int profileId) => throw new NotSupportedException();
+
+        public List<NpcInteractionOption> GetTrainerOptions(Player player, Npc npc) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// The quest is saved as done before the job is taught, so a grant that throws mustn't lose the rewards, the next
+    /// quest's offer or the quest itself: it is logged, and the turn-in goes on.
+    /// </summary>
+    [TestMethod]
+    public void AGrantThatThrows_IsLogged_AndTheRewardsArePaidAllTheSame()
+    {
+        _world.Dispose();
+        _world = new QuestWorld(questJobs: new ThrowingJobs());
+        AssistantNeeded();
+
+        Assert.IsTrue(_world.Quests.CompleteQuest(_world.Player, 9102));
+
+        Assert.AreEqual(Coins, _world.ReadCharacter().Coins);
+        Assert.AreEqual((1, Stars), SavedJob(QuestWorld.Adventurer), "Without the Chef job, the job worn takes its stars.");
+        Assert.IsNull(SavedJob(QuestWorld.Chef));
+        Assert.IsTrue(_world.ReadCharacter().Quests.Single().Completed);
+
+        var error = _world.Logged.Entries.Single(entry => entry.Level == LogLevel.Error);
+        Assert.IsInstanceOfType<InvalidOperationException>(error.Exception);
+        StringAssert.Contains(error.Message, "Quest 9102");
+        StringAssert.Contains(error.Message, $"character {QuestWorld.CharacterId}");
     }
 
     [TestMethod]

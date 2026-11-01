@@ -1294,7 +1294,20 @@ public sealed class QuestManager : IQuestManager
         if (profileId == 0 || player.Profiles.Any(profile => profile.Id == profileId))
             return;
 
-        var result = _jobManager.Value.Grant(player, profileId);
+        JobGrantResult result;
+
+        // The quest is saved as done already, so whatever the grant throws (the database out of reach for a moment) is
+        // logged, and the rewards are paid all the same: the job can still be had from its trainer.
+        try
+        {
+            result = _jobManager.Value.Grant(player, profileId);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Quest {questId} teaches job {profileId}, but giving it to character {characterId} failed; " +
+                "the rewards are paid all the same.", quest.QuestId, profileId, player.CharacterId);
+            return;
+        }
 
         if (result != JobGrantResult.Granted)
         {

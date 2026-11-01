@@ -8,6 +8,7 @@ using System.Reflection;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -34,7 +35,7 @@ namespace Sanctuary.Game.Tests;
 /// Adventurer; the job manager the trainers use; and that character online in an empty zone, sent packets that go
 /// nowhere. The shipped rank levels price the stars, and the shipped Games menu entries name the games; the Adventurer
 /// and Chef jobs have no kit of their own. The games an NPC opens for a quest step are recorded in <see cref="Launched"/>,
-/// where the Gateway would open them.
+/// where the Gateway would open them, and what the quest manager logs in <see cref="Logged"/>.
 /// </summary>
 public sealed class QuestWorld : IDisposable
 {
@@ -44,7 +45,10 @@ public sealed class QuestWorld : IDisposable
 
     private readonly SqliteConnection _connection;
 
-    public QuestWorld()
+    /// <param name="questJobs">
+    /// The job manager the quest manager teaches jobs through, when a test needs another than the trainers' own.
+    /// </param>
+    public QuestWorld(IJobManager? questJobs = null)
     {
         Directory.CreateDirectory(ResourceManager.BaseDirectory);
         Resources = new ResourceManager(NullLogger<ResourceManager>.Instance);
@@ -90,8 +94,8 @@ public sealed class QuestWorld : IDisposable
         // As the Gateway builds them: the job manager refreshes trainer badges through the quest manager, which takes
         // the job manager lazily.
         JobManager jobs = null!;
-        Quests = new QuestManager(Resources, null!, database, new Lazy<IJobManager>(() => jobs),
-            new Lazy<IActivityLauncher>(() => new Launcher(Launched)), NullLogger<QuestManager>.Instance);
+        Quests = new QuestManager(Resources, null!, database, new Lazy<IJobManager>(() => questJobs ?? jobs),
+            new Lazy<IActivityLauncher>(() => new Launcher(Launched)), Logged);
         Jobs = jobs = new JobManager(Resources, database, null!, Quests, NullLogger<JobManager>.Instance);
 
         // The pet tests' connection that never connects, so the packets a step or a turn-in sends go nowhere.
@@ -119,6 +123,9 @@ public sealed class QuestWorld : IDisposable
 
     /// <summary>The games opened for the player through the launcher (activity ids), in order.</summary>
     public List<int> Launched { get; } = [];
+
+    /// <summary>What the quest manager logged.</summary>
+    public RecordingLogger Logged { get; } = new();
 
     /// <summary>A quest as <c>src/Resources/Quests.json</c> ships it.</summary>
     public static QuestDefinition Shipped(int questId)
@@ -195,6 +202,19 @@ public sealed class QuestWorld : IDisposable
     private sealed class Database(Func<DatabaseContext> createDbContext) : IDbContextFactory<DatabaseContext>
     {
         public DatabaseContext CreateDbContext() => createDbContext();
+    }
+
+    /// <summary>Every line logged, with its level and exception.</summary>
+    public sealed class RecordingLogger : ILogger<QuestManager>
+    {
+        public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, formatter(state, exception), exception));
     }
 
     /// <summary>The Gateway's launcher, as far as the quests see it: every game opens.</summary>
