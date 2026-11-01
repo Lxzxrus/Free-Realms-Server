@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -62,17 +61,16 @@ public static class PlayerUpdatePacketItemDefinitionRequestHandler
     {
         var clientItemDefinitions = new List<ClientItemDefinition>();
 
-        foreach (var coinStoreItem in _resourceManager.CoinStoreItems.Values
-            .Where(x => x.CategoryId == requestedItemDefinitionMetaData.CategoryId)
-            .SkipWhile(x => x.Id != requestedItemDefinitionMetaData.Id))
+        // The requested item and the ones after it in its category, a batch at most, which the coin store indexed when it
+        // loaded. A repeated request costs no more than a first one: this used to copy and walk all 17,000 coin store
+        // items on every request, since items already sent didn't count towards the batch.
+        foreach (var coinStoreItemId in _resourceManager.CoinStoreItems.GetCategoryItemIdsFrom(requestedItemDefinitionMetaData.Id,
+            CoinStoreItemDefinitionBatchSize))
         {
-            if (clientItemDefinitions.Count >= CoinStoreItemDefinitionBatchSize)
-                break;
-
-            if (!player.SentCoinStoreItemDefinitionIds.TryAdd(coinStoreItem.Id) && coinStoreItem.Id != requestedItemDefinitionMetaData.Id)
+            if (!player.SentCoinStoreItemDefinitionIds.TryAdd(coinStoreItemId) && coinStoreItemId != requestedItemDefinitionMetaData.Id)
                 continue;
 
-            if (_resourceManager.ClientItemDefinitions.TryGetValue(coinStoreItem.Id, out var clientItemDefinition))
+            if (_resourceManager.ClientItemDefinitions.TryGetValue(coinStoreItemId, out var clientItemDefinition))
                 clientItemDefinitions.Add(clientItemDefinition);
         }
 
