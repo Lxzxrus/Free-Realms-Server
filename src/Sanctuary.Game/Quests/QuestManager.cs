@@ -1131,7 +1131,9 @@ public sealed class QuestManager : IQuestManager
         if (!TryGetTrackedGoal(player, out var quest, out var goalIndex))
             return false;
 
-        if (quest.Goals[goalIndex] is ReachLocationGoal reachGoal && reachGoal.ReachPosition != Vector3.Zero)
+        // Every goal done (waiting to be handed in) leaves goalIndex at Goals.Count: then the target is the turn-in NPC.
+        if (goalIndex >= 0 && goalIndex < quest.Goals.Count && quest.Goals[goalIndex] is ReachLocationGoal reachGoal
+            && reachGoal.ReachPosition != Vector3.Zero)
         {
             targetPosition = reachGoal.ReachPosition;
             return true;

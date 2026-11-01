@@ -48,6 +48,9 @@ public sealed class Player : ClientPcData, IEntity
     private const int ActionBarSlotUnknown7 = 15;
     private const float OnFootMovementSpeed = 8f;
     private const long AreaSettleMilliseconds = 1500;
+    private const long OutOfBoundsLogIntervalMs = 60_000;
+
+    private long _nextOutOfBoundsLogAt;
 
     private readonly UdpConnection _connection;
     private readonly IResourceManager _resourceManager;
@@ -711,8 +714,12 @@ public sealed class Player : ClientPcData, IEntity
         if (newZoneTile == ZoneTile)
             return;
 
-        if (!Zone.IsOutOfBounds(ZoneTile) && Zone.IsOutOfBounds(newZoneTile))
+        // Once a minute at most: the client decides its position, so it decides how often it crosses into a tile.
+        if (!Zone.IsOutOfBounds(ZoneTile) && Zone.IsOutOfBounds(newZoneTile) && Environment.TickCount64 >= _nextOutOfBoundsLogAt)
+        {
+            _nextOutOfBoundsLogAt = Environment.TickCount64 + OutOfBoundsLogIntervalMs;
             Zone.Logger.LogWarning("{name} entered out of bounds tile {tile} at {position}.", Name.FullName, newZoneTile, Position);
+        }
 
         Zone.UpdateEntityZoneTile(this, ZoneTile, newZoneTile);
 
