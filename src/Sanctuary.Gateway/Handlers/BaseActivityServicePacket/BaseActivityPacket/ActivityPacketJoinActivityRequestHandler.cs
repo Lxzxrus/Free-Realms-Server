@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
 using Sanctuary.Game;
+using Sanctuary.Game.Minigames;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -38,7 +39,7 @@ public static class ActivityPacketJoinActivityRequestHandler
         if (!_resourceManager.ClientActivityDefinitions.TryGetValue(packet.ActivityId, out var clientActivityDefinition))
             return true;
 
-        if (TryOpen(connection, clientActivityDefinition))
+        if (Open(connection, clientActivityDefinition) != ActivityLaunchResult.NotAGamesMenuGame)
             return true;
 
         // Free Realms Trading Card Game Lobby
@@ -121,30 +122,35 @@ public static class ActivityPacketJoinActivityRequestHandler
 
     /// <summary>
     /// Evergrove: opens one of the games the server serves, as choosing it in the Games menu does: the wheel, a Flash
-    /// minigame (match three, Cooking) or a fishing hole, each with its own checks (one game at a time...). False for any
-    /// other activity. The NPC who offers a quest step's game opens it through here too (<see cref="ActivityLauncher"/>).
+    /// minigame (match three, Cooking) or a fishing hole, each with its own checks. A Flash minigame is
+    /// <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the player has one or the wheel open;
+    /// <see cref="ActivityLaunchResult.NotAGamesMenuGame"/> for any other activity. The NPC who offers a quest step's game
+    /// opens it through here too (<see cref="ActivityLauncher"/>).
     /// </summary>
-    public static bool TryOpen(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
+    public static ActivityLaunchResult Open(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
     {
         if (activity.Id == DailyWheelHandler.ActivityId)
         {
             DailyWheelHandler.Open(connection);
-            return true;
+            return ActivityLaunchResult.Opened;
         }
 
-        if (FlashMinigameHandler.TryOpen(connection, activity))
-            return true;
+        var flashMinigame = FlashMinigameHandler.Open(connection, activity);
+        if (flashMinigame != ActivityLaunchResult.NotAGamesMenuGame)
+            return flashMinigame;
 
         if (FishingHandler.IsFishingHole(activity.Id))
         {
             FishingHandler.Join(connection, activity);
-            return true;
+            return ActivityLaunchResult.Opened;
         }
 
-        return false;
+        return ActivityLaunchResult.NotAGamesMenuGame;
     }
 
-    /// <inheritdoc cref="TryOpen(GatewayConnection, Sanctuary.Packet.Common.ClientActivityDefinition)"/>
-    public static bool TryOpen(GatewayConnection connection, int activityId) =>
-        _resourceManager.ClientActivityDefinitions.TryGetValue(activityId, out var activity) && TryOpen(connection, activity);
+    /// <inheritdoc cref="Open(GatewayConnection, Sanctuary.Packet.Common.ClientActivityDefinition)"/>
+    public static ActivityLaunchResult Open(GatewayConnection connection, int activityId) =>
+        _resourceManager.ClientActivityDefinitions.TryGetValue(activityId, out var activity)
+            ? Open(connection, activity)
+            : ActivityLaunchResult.NotAGamesMenuGame;
 }

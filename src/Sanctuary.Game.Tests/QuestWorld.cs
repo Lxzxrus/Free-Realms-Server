@@ -95,7 +95,7 @@ public sealed class QuestWorld : IDisposable
         // the job manager lazily.
         JobManager jobs = null!;
         Quests = new QuestManager(Resources, null!, database, new Lazy<IJobManager>(() => questJobs ?? jobs),
-            new Launcher(Launched), Logged);
+            new Launcher(this), Logged);
         Jobs = jobs = new JobManager(Resources, database, null!, Quests, NullLogger<JobManager>.Instance);
 
         // The pet tests' connection that never connects, so the packets a step or a turn-in sends go nowhere.
@@ -121,8 +121,11 @@ public sealed class QuestWorld : IDisposable
 
     public Player Player { get; }
 
-    /// <summary>The games opened for the player through the launcher (activity ids), in order.</summary>
+    /// <summary>The games the quest manager asked the launcher to open for the player (activity ids), in order.</summary>
     public List<int> Launched { get; } = [];
+
+    /// <summary>What the launcher answers: the game opened, unless a test says what stopped it.</summary>
+    public ActivityLaunchResult LaunchResult { get; set; } = ActivityLaunchResult.Opened;
 
     /// <summary>What the quest manager logged.</summary>
     public RecordingLogger Logged { get; } = new();
@@ -217,13 +220,16 @@ public sealed class QuestWorld : IDisposable
             Func<TState, Exception?, string> formatter) => Entries.Add((logLevel, formatter(state, exception), exception));
     }
 
-    /// <summary>The Gateway's launcher, as far as the quests see it: every game opens.</summary>
-    private sealed class Launcher(List<int> launched) : IActivityLauncher
+    /// <summary>
+    /// The Gateway's launcher, as far as the quests see it: each game asked for is recorded, and answered with
+    /// <see cref="LaunchResult"/>.
+    /// </summary>
+    private sealed class Launcher(QuestWorld world) : IActivityLauncher
     {
-        public bool TryLaunch(Player player, int activityId)
+        public ActivityLaunchResult Launch(Player player, int activityId)
         {
-            launched.Add(activityId);
-            return true;
+            world.Launched.Add(activityId);
+            return world.LaunchResult;
         }
     }
 

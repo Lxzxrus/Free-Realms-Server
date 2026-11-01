@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -206,19 +206,38 @@ public sealed class QuestManager : IQuestManager
         return activity.DisplayNameId != 0 ? activity.DisplayNameId : goal.NameId;
     }
 
+    // Evergrove: what the player is told when the NPC's game doesn't open because another is open, so a click never does
+    // nothing without a word.
+    private const string FinishYourGameFirst = "Finish or close the game you have open first.";
+
     // Evergrove: opens a play step's game for the player who picked it from the NPC's menu, if the step is still open (the
     // game may have been won from the Games menu since the menu was shown). It opens as the Games menu opens it, with the
-    // same checks, such as one game at a time; the win then counts like any other.
+    // same checks, such as one game at a time; the win then counts like any other. What stopped it is logged as what it
+    // is: the player's other game, a player who has left, or a step naming a game the Games menu doesn't open.
     private void OpenStepGame(Player player, QuestDefinition quest, int goalIndex)
     {
         if (!player.Quests.TryGetInProgress(quest.QuestId, out var progress) || !progress.OpenGoals.ContainsKey(goalIndex)
             || quest.Goals[goalIndex] is not PlayActivityGoal playGoal)
             return;
 
-        if (!_activityLauncher.TryLaunch(player, playGoal.ActivityId))
+        switch (_activityLauncher.Launch(player, playGoal.ActivityId))
         {
-            _logger.LogWarning("Quest {questId}'s step {goalId} couldn't open activity {activityId} for character {characterId}: " +
-                "it isn't one the Games menu opens.", quest.QuestId, playGoal.NameId, playGoal.ActivityId, player.CharacterId);
+            case ActivityLaunchResult.AnotherGameOpen:
+                ChatHelper.SendSystemMessage(player, FinishYourGameFirst);
+
+                _logger.LogDebug("Quest {questId}'s step {goalId} didn't open activity {activityId} for character {characterId}: " +
+                    "another game is open.", quest.QuestId, playGoal.NameId, playGoal.ActivityId, player.CharacterId);
+                break;
+
+            case ActivityLaunchResult.NotConnected:
+                _logger.LogInformation("Quest {questId}'s step {goalId} didn't open activity {activityId} for character {characterId}: " +
+                    "they are no longer connected.", quest.QuestId, playGoal.NameId, playGoal.ActivityId, player.CharacterId);
+                break;
+
+            case ActivityLaunchResult.NotAGamesMenuGame:
+                _logger.LogWarning("Quest {questId}'s step {goalId} couldn't open activity {activityId} for character {characterId}: " +
+                    "it isn't a game the Games menu opens.", quest.QuestId, playGoal.NameId, playGoal.ActivityId, player.CharacterId);
+                break;
         }
     }
 

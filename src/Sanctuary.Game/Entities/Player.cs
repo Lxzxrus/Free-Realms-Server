@@ -325,6 +325,12 @@ public sealed class Player : ClientPcData, IEntity
 
     #region Connection
 
+    /// <summary>
+    /// Evergrove: the connection the player plays on (the Gateway's GatewayConnection), for Gateway code that has only the
+    /// player, such as the NPC who opens a quest step's game (Sanctuary.Gateway.ActivityLauncher).
+    /// </summary>
+    public UdpConnection Connection => _connection;
+
     public void Send(ISerializablePacket serializablePacket)
     {
         var data = serializablePacket.Serialize();

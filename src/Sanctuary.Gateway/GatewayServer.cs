@@ -1,13 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Game;
-using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.UdpLibrary;
@@ -45,16 +43,6 @@ public class GatewayServer : UdpManager<GatewayConnection>
             .Where(connection => connection.Player is not null)
             .Select(connection => GuidHelper.GetPlayerId(connection.Player.Guid))
             .ToList();
-    }
-
-    /// <summary>
-    /// Evergrove: the connection a player in the game plays on, for code that has only the player, such as an NPC's menu
-    /// option that opens a game (<see cref="ActivityLauncher"/>). False once they have left. A snapshot, as the ticks take.
-    /// </summary>
-    public bool TryGetConnection(Player player, [NotNullWhen(true)] out GatewayConnection? connection)
-    {
-        connection = ConnectionList.ToArray().FirstOrDefault(candidate => ReferenceEquals(candidate?.Player, player));
-        return connection is not null;
     }
 
     /// <summary>How often fishing's bite timers are moved along.</summary>

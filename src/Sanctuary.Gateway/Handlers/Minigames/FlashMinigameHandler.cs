@@ -57,16 +57,20 @@ public static class FlashMinigameHandler
             serviceProvider.GetRequiredService<IQuestManager>(), _logger);
     }
 
-    /// <summary>Opens the start screen for a known Flash minigame. False if the activity isn't one.</summary>
-    public static bool TryOpen(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
+    /// <summary>
+    /// Opens the start screen for a known Flash minigame. <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the
+    /// player has a Flash minigame or the wheel open (one at a time), <see cref="ActivityLaunchResult.NotAGamesMenuGame"/>
+    /// if the activity isn't a Flash minigame the server serves.
+    /// </summary>
+    public static ActivityLaunchResult Open(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
     {
         if (!FlashMinigames.Definitions.TryGetValue(activity.Id, out var definition) && !MimicHandler.TryDefine(activity.Id, out definition))
-            return false;
+            return ActivityLaunchResult.NotAGamesMenuGame;
 
         var player = connection.Player;
 
         if (player.FlashMinigame is not null || player.WheelSession is not null)
-            return true;
+            return ActivityLaunchResult.AnotherGameOpen;
 
         var session = new FlashMinigameSession(Interlocked.Increment(ref _nextStateId), definition);
         player.FlashMinigame = session;
@@ -131,7 +135,7 @@ public static class FlashMinigameHandler
 
         connection.SendTunneled(new MiniGameInfoPacket(session.StateId, -1, -1) { Info = info });
 
-        return true;
+        return ActivityLaunchResult.Opened;
     }
 
     /// <summary>The player pressed Go: the game starts and the Flash opens.</summary>

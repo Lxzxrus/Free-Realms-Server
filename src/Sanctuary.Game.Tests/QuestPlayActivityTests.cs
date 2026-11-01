@@ -1,10 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Interactions;
+using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
@@ -247,6 +249,43 @@ public sealed class QuestPlayActivityTests
 
         Assert.AreEqual(0, _world.Launched.Count, "Her one option now is the hand-in.");
         Assert.AreEqual(9103, _world.Player.Quests.PendingTurnInQuestId, "Handed in: her thanks and the rewards are shown.");
+    }
+
+    /// <summary>
+    /// When the Gateway doesn't open the game, what stopped it is logged as what it is: the player's other game (one at a
+    /// time; they are told in the chat, which isn't seen here), a player who has left, or a step naming a game the Games
+    /// menu doesn't open, the only one that is a problem with the quest.
+    /// </summary>
+    [TestMethod]
+    [DataRow(ActivityLaunchResult.AnotherGameOpen, LogLevel.Debug, "another game is open")]
+    [DataRow(ActivityLaunchResult.NotConnected, LogLevel.Information, "no longer connected")]
+    [DataRow(ActivityLaunchResult.NotAGamesMenuGame, LogLevel.Warning, "isn't a game the Games menu opens")]
+    public void AGameThatDidntOpen_IsLoggedForWhatStoppedIt(ActivityLaunchResult result, LogLevel level, string reason)
+    {
+        _world.Accept(Cafe());
+        _world.Logged.Entries.Clear();
+        _world.LaunchResult = result;
+
+        Options(Simone).Single().Invoke(_world.Player);
+
+        var logged = _world.Logged.Entries.Single();
+
+        Assert.AreEqual(level, logged.Level);
+        StringAssert.Contains(logged.Message, reason);
+        StringAssert.Contains(logged.Message, "activity 450");
+        Assert.AreEqual(0, _world.Player.Quests.TryGetInProgress(9103, out var progress) ? progress.GoalIndex : -1);
+    }
+
+    [TestMethod]
+    public void AGameThatOpened_LogsNothing()
+    {
+        _world.Accept(Cafe());
+        _world.Logged.Entries.Clear();
+
+        Options(Simone).Single().Invoke(_world.Player);
+
+        CollectionAssert.AreEqual(new[] { Steak }, _world.Launched);
+        Assert.AreEqual(0, _world.Logged.Entries.Count, "The Gateway logs the game it opens.");
     }
 
     [TestMethod]
