@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
@@ -17,6 +18,9 @@ public static class ActivityPacketJoinActivityRequestHandler
 {
     private static ILogger _logger = null!;
     private static IResourceManager _resourceManager = null!;
+
+    // Evergrove: what a player who picks a minigame inside a house is told.
+    private const string NoGamesInAHouse = "Games can't be played inside a house. Step outside to play.";
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -39,7 +43,14 @@ public static class ActivityPacketJoinActivityRequestHandler
         if (!_resourceManager.ClientActivityDefinitions.TryGetValue(packet.ActivityId, out var clientActivityDefinition))
             return true;
 
-        if (Open(connection, clientActivityDefinition) != ActivityLaunchResult.NotAGamesMenuGame)
+        var opened = Open(connection, clientActivityDefinition);
+
+        // Evergrove: the Games menu is on the dock inside a house too, where no minigame can show; say so rather than
+        // nothing.
+        if (opened == ActivityLaunchResult.InsideAHouse)
+            ChatHelper.SendSystemMessage(connection.Player, NoGamesInAHouse);
+
+        if (opened != ActivityLaunchResult.NotAGamesMenuGame)
             return true;
 
         // Free Realms Trading Card Game Lobby

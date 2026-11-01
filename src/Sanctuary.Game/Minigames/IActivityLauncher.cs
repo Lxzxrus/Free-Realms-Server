@@ -21,7 +21,13 @@ public enum ActivityLaunchResult
     NotAGamesMenuGame,
 
     /// <summary>The player has another Flash minigame or the wheel open: one game at a time, so nothing was sent.</summary>
-    AnotherGameOpen
+    AnotherGameOpen,
+
+    /// <summary>
+    /// A Flash minigame picked inside a house, where the client shows no minigame start screen: nothing was opened, as a
+    /// session opened there could never be started or closed.
+    /// </summary>
+    InsideAHouse
 }
 
 /// <summary>
