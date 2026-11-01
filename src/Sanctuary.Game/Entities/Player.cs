@@ -154,6 +154,9 @@ public sealed class Player : ClientPcData, IEntity
     /// <summary>Evergrove: when the player may next rename, dress, equip or tend a pet (<see cref="PetHelper.TryStartRequest"/>).</summary>
     public long NextPetRequestAt { get; set; }
 
+    /// <summary>Evergrove: the pet requests that came too soon, carried out in turn (<see cref="PetHelper.StartWaitingRequest"/>).</summary>
+    public Queue<Action> WaitingPetRequests { get; } = new();
+
     public int SecondsSinceLastLogin { get; set; } = -1;
 
     public int StationCash { get; set; }

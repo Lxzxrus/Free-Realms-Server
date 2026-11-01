@@ -42,16 +42,22 @@ public static class PetEquipPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PetEquipPacket), petEquipPacket);
 
+        // Evergrove: one pet request every PetHelper.RequestIntervalMs, and one that comes sooner waits its turn. An equip
+        // saves and is shown to everyone nearby.
+        if (PetHelper.TryStartRequest(connection.Player, () => Equip(connection, petEquipPacket)))
+            Equip(connection, petEquipPacket);
+
+        return true;
+    }
+
+    private static void Equip(GatewayConnection connection, PetEquipPacket petEquipPacket)
+    {
         var player = connection.Player;
         var pet = player.Pet;
         var petClientInfo = player.GetActivePetClientInfo();
 
         if (pet is null || petClientInfo is null || pet.Guid != player.ActivePetGuid || !PetHelper.PetClothingSlots.Contains(petEquipPacket.Slot))
-            return true;
-
-        // Evergrove: one pet request every PetHelper.RequestIntervalMs. An equip saves and is shown to everyone nearby.
-        if (!PetHelper.TryStartRequest(player))
-            return true;
+            return;
 
         var characterId = GuidHelper.GetPlayerId(player.Guid);
         using var dbContext = _dbContextFactory.CreateDbContext();
@@ -59,7 +65,7 @@ public static class PetEquipPacketHandler
             .SingleOrDefault(ownedPet => ownedPet.CharacterId == characterId && ownedPet.Id == player.ActivePetId);
 
         if (dbPet is null)
-            return true;
+            return;
 
         DbItem? dbItem = null;
         ClientItemDefinition? clientItemDefinition = null;
@@ -72,7 +78,7 @@ public static class PetEquipPacketHandler
             if (dbItem is null || !_resourceManager.ClientItemDefinitions.TryGetValue(dbItem.Definition, out clientItemDefinition)
                 || !PetHelper.CanWearClothing(petClientInfo, clientItemDefinition, petEquipPacket.Slot))
             {
-                return true;
+                return;
             }
         }
 
@@ -113,7 +119,5 @@ public static class PetEquipPacketHandler
             Slot = petEquipPacket.Slot,
             ItemGuid = equippedItemGuid
         });
-
-        return true;
     }
 }

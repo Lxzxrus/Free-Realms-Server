@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
@@ -39,32 +40,65 @@ public static class PetHelper
     public const int RequestIntervalMs = 250;
 
     /// <summary>
-    /// Whether the player may make one of those requests now. If so, the next must wait <see cref="RequestIntervalMs"/>,
-    /// as ClientPathRequestPacketHandler does with <see cref="Player.NextClientPathRequestAt"/>.
+    /// Evergrove: how many of a player's pet requests may wait for their turn (<see cref="TryStartRequest"/>). Clicks in
+    /// the pet window leave one or two waiting at most; past it, a flood's requests are dropped.
     /// </summary>
-    public static bool TryStartRequest(Player player)
-    {
-        if (Environment.TickCount64 < player.NextPetRequestAt)
-            return false;
+    public const int MaxWaitingRequests = 8;
 
-        player.NextPetRequestAt = Environment.TickCount64 + RequestIntervalMs;
+    /// <summary>
+    /// Whether the player may make one of those requests now. If so, the next must wait <see cref="RequestIntervalMs"/>,
+    /// as ClientPathRequestPacketHandler does with <see cref="Player.NextClientPathRequestAt"/>. If not, the request
+    /// (<paramref name="later"/>) waits its turn behind any already waiting, and <see cref="StartWaitingRequest"/>
+    /// carries it out then: dropped, a click in the pet window that came within the wait of another went unanswered.
+    /// </summary>
+    public static bool TryStartRequest(Player player, Action later)
+    {
+        var now = Environment.TickCount64;
+
+        if (now < player.NextPetRequestAt || player.WaitingPetRequests.Count > 0)
+        {
+            if (player.WaitingPetRequests.Count < MaxWaitingRequests)
+                player.WaitingPetRequests.Enqueue(later);
+
+            return false;
+        }
+
+        player.NextPetRequestAt = now + RequestIntervalMs;
         return true;
+    }
+
+    /// <summary>
+    /// Evergrove: carries out the player's longest-waiting pet request once its turn has come (<see cref="TryStartRequest"/>).
+    /// On the gateway's main loop, the thread that handles the requests' packets.
+    /// </summary>
+    public static void StartWaitingRequest(Player player, long now)
+    {
+        if (now < player.NextPetRequestAt || !player.WaitingPetRequests.TryDequeue(out var request))
+            return;
+
+        player.NextPetRequestAt = now + RequestIntervalMs;
+        request();
     }
 
     /// <summary>The longest pet name, the length of its database column.</summary>
     public const int NameMaxLength = 32;
 
     /// <summary>
-    /// Evergrove: whether a player may give a pet this name. Everyone near the pet sees it on its name plate, so it
-    /// follows the rules for character names (CheckNamePacketHandler): only the letters
-    /// <see cref="CharacterNameHelper.ContainsIllegalCharacters"/> allows, and no word from the server's name filter.
-    /// Upstream refused only blank and long names and control characters, so a pet could carry a word the filter keeps
-    /// out of every other name, or invisible and right-to-left marks.
+    /// Evergrove: whether a player may give a pet this name. Everyone near the pet sees it on its name plate, so, like a
+    /// character name (CheckNamePacketHandler), it may hold no word from the server's name filter, and only the Latin
+    /// letters character names allow (<see cref="CharacterNameHelper.ContainsIllegalCharacters"/>), space and apostrophe.
+    /// It may also hold '.' and '-': the client names a pet only with its name picker, which joins a title and a name
+    /// from its Resources/PetNames.txt as "[*pet_first*] [*pet_second*]", and those include "Mr.", "Lt." and "She-Rex".
+    /// The symbols and invisible marks in the character names' range, such as the soft hyphen, which can split a
+    /// filtered word unseen, are refused. Upstream refused only blank and long names and control characters, so a pet
+    /// could carry a word the filter keeps out of every other name, or invisible and right-to-left marks.
     /// </summary>
     public static bool IsValidName(string name, IEnumerable<string> nameFilter) =>
-        !string.IsNullOrWhiteSpace(name) && name.Length <= NameMaxLength && !name.Any(char.IsControl)
-        && !CharacterNameHelper.ContainsIllegalCharacters(name)
+        !string.IsNullOrWhiteSpace(name) && name.Length <= NameMaxLength && name.All(IsNameCharacter)
         && !nameFilter.Any(token => name.Contains(token, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsNameCharacter(char character) =>
+        character is ' ' or '\'' or '.' or '-' || character is >= 'A' and <= '\u024F' && char.IsLetter(character);
 
     private const int FirstTreasureSpringItemDefinitionId = 23427;
     private const int NoTint = 0;
@@ -192,9 +226,7 @@ public static class PetHelper
         secondDefinition = null;
         petClientInfo = player.GetActivePetClientInfo();
 
-        // Evergrove: feeding and grooming are pet requests too (TryStartRequest), as each runs two queries. A refusal
-        // unlocks the client's buttons like any other.
-        if (player.Pet is null || petClientInfo is null || petId != player.ActivePetId || !TryStartRequest(player))
+        if (player.Pet is null || petClientInfo is null || petId != player.ActivePetId)
         {
             player.PlayerPet.UnlockPetActions();
             return false;
@@ -251,16 +283,28 @@ public static class PetHelper
     }
 
     public static bool TryOpenTreasureChest(Player player, PetTreasureChest chest, IRewardManager rewardManager,
-        IResourceManager resourceManager, IDbContextFactory<DatabaseContext> dbContextFactory, out RewardDropDefinition? itemDrop)
+        IResourceManager resourceManager, IDbContextFactory<DatabaseContext> dbContextFactory, ILogger logger, out RewardDropDefinition? itemDrop)
     {
         itemDrop = null;
 
         if (!InteractionMenuHelper.CanInteract(chest, player) || !chest.IsOwner(player) || !chest.TryOpen())
             return false;
 
-        // Evergrove: the treasure rest is saved before the chest pays anything, so no restart can forget it.
-        using (var dbContext = dbContextFactory.CreateDbContext())
+        // Evergrove: the treasure rest is saved before the chest pays anything, so no restart can forget it. If it can't
+        // be saved, the chest pays nothing and closes again rather than staying opened, unpaid and never removed: the
+        // player may open it again, and it goes when its time is up like any other.
+        try
+        {
+            using var dbContext = dbContextFactory.CreateDbContext();
             SaveTreasureFoundAt(dbContext, GuidHelper.GetPlayerId(player.Guid), chest.PetId, chest.FoundAt);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to save the treasure rest of pet {petId} of character {characterId}.",
+                chest.PetId, GuidHelper.GetPlayerId(player.Guid));
+            chest.Close();
+            return false;
+        }
 
         EntityHelper.SetBaseAnimation(player, chest, TreasureChestOpenStandAnimationId);
         EntityHelper.SetAnimation(player, chest, TreasureChestOpenAnimationId);
