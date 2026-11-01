@@ -77,6 +77,13 @@ public sealed class Player : ClientPcData, IEntity
     public long NextChatTooFastNoticeAt { get; set; }
 
     /// <summary>
+    /// Counts the player's entries into a zone since they logged in; the zone they logged in to is 0. Each is a zone
+    /// load for the client, even back in the zone it was last in, so the zone-load replies are kept per entry
+    /// (<see cref="ZoneLoadReplies"/>).
+    /// </summary>
+    public int ZoneEntry { get; private set; }
+
+    /// <summary>
     /// When the client's "ready" is answered (<see cref="ZoneLoadReplies"/>): each answer sends the zone's whole welcome
     /// and, in the world, reads the house list from the database.
     /// </summary>
@@ -1248,6 +1255,7 @@ public sealed class Player : ClientPcData, IEntity
         ZoneTile.Entities.Remove(Guid, out _);
 
         Zone = zone;
+        ZoneEntry++;
 
         ZoneTile = ZoneTile.Empty;
 

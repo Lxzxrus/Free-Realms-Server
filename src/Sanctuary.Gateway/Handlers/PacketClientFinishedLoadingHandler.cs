@@ -23,10 +23,10 @@ public static class PacketClientFinishedLoadingHandler
     {
         _logger.LogTrace("Received {name} packet.", nameof(PacketClientFinishedLoading));
 
-        // Like "client is ready", sent once per zone the client loads, so a repeat in the same zone soon after is
-        // dropped: in a house, each answer reads where every fixture is from the database and sends one packet per
-        // fixture.
-        if (!connection.Player.ClientFinishedLoadingReplies.TryAnswer(connection.Player.Zone, Environment.TickCount64))
+        // Like "client is ready", sent once per zone the client loads, so a repeat for the same entry into the zone
+        // soon after is dropped: in a house, each answer reads where every fixture is from the database and sends one
+        // packet per fixture.
+        if (!connection.Player.ClientFinishedLoadingReplies.TryAnswer(connection.Player.ZoneEntry, Environment.TickCount64))
             return true;
 
         connection.Player.Visible = true;
