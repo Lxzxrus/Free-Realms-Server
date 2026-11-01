@@ -125,7 +125,7 @@ public static class ActivityPacketJoinActivityRequestHandler
     /// minigame (match three, Cooking) or a fishing hole, each with its own checks. A Flash minigame is
     /// <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the player has one or the wheel open;
     /// <see cref="ActivityLaunchResult.NotAGamesMenuGame"/> for any other activity. The NPC who offers a quest step's game
-    /// opens it through here too (<see cref="ActivityLauncher"/>).
+    /// and a world object that opens games open them through here too (<see cref="ActivityLauncher"/>).
     /// </summary>
     public static ActivityLaunchResult Open(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
     {

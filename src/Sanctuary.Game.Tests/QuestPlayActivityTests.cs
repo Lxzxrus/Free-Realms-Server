@@ -213,9 +213,9 @@ public sealed class QuestPlayActivityTests
     }
 
     /// <summary>
-    /// No world object starts a game yet, so while the cooking step is open Simone offers the steak herself: one option,
-    /// under the game's name in the Games menu, that opens it the way the Games menu does (the Gateway's launcher,
-    /// recorded here).
+    /// While the cooking step is open, Simone offers the steak herself: one option, under the game's name in the Games
+    /// menu, that opens it the way the Games menu does (the Gateway's launcher, recorded here). It carries the game, so a
+    /// world object's menu that opens the steak too (a cooking table named by the step) doesn't show it twice.
     /// </summary>
     [TestMethod]
     public void WhileTheCookingStepIsOpen_SimoneOffersTheSteak()
@@ -226,6 +226,7 @@ public sealed class QuestPlayActivityTests
 
         Assert.AreEqual(ContextIcons.QuestTurnIn, option.IconId, "The icon of a quest in progress, as a hand-in shows.");
         Assert.AreEqual(SteakOnTheGamesMenu, option.ButtonTextId);
+        Assert.AreEqual(Steak, option.ActivityId);
 
         option.Invoke(_world.Player);
 
@@ -246,7 +247,10 @@ public sealed class QuestPlayActivityTests
         shownBeforeTheWin.Invoke(_world.Player);
         Assert.AreEqual(0, _world.Launched.Count);
 
-        Options(Simone).Single().Invoke(_world.Player);
+        var handIn = Options(Simone).Single();
+        Assert.AreEqual(0, handIn.ActivityId, "A hand-in opens no game.");
+
+        handIn.Invoke(_world.Player);
 
         Assert.AreEqual(0, _world.Launched.Count, "Her one option now is the hand-in.");
         Assert.AreEqual(9103, _world.Player.Quests.PendingTurnInQuestId, "Handed in: her thanks and the rewards are shown.");

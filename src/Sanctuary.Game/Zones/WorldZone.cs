@@ -11,6 +11,7 @@ using Sanctuary.Core.IO;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Interactions;
+using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Zones;
@@ -23,6 +24,7 @@ public sealed class WorldZone : BaseZone
 {
     private readonly WorldZoneDefinition _zoneDefinition;
     private readonly IQuestManager _questManager;
+    private readonly GameStationMenu _gameStations;
 
     private readonly object _clientAreasLock = new();
     private readonly HashSet<SeasonalClientAreaDefinition> _activeSeasonalClientAreas = [];
@@ -75,6 +77,12 @@ public sealed class WorldZone : BaseZone
         }
 
         _questManager = serviceProvider.GetRequiredService<IQuestManager>();
+
+        // Evergrove: a world object that opens games (Minigames.GameStations) opens them through the Gateway's launcher,
+        // as the Games menu does; whether the server serves a game is asked at each click, so a Mimic.json reload counts.
+        _gameStations = new GameStationMenu(_resourceManager.ClientActivityDefinitions,
+            activityId => PlayableActivities.IsPlayable(_resourceManager, activityId),
+            serviceProvider.GetRequiredService<IActivityLauncher>(), Logger);
     }
 
     public override void OnClientIsReady(Player player)
@@ -114,8 +122,10 @@ public sealed class WorldZone : BaseZone
             ChatHelper.SendSystemMessage(player, NewPlayerHint);
     }
 
+    // Evergrove: a world object's games follow its quest buttons, if it has any.
     public override IReadOnlyList<NpcInteractionOption> GetInteractionOptions(Player player, Npc npc)
-        => _questManager.IsQuestNpc(npc.DefinitionId) ? _questManager.GetInteractionOptions(player, npc) : [];
+        => _gameStations.OptionsAt(npc,
+            _questManager.IsQuestNpc(npc.DefinitionId) ? _questManager.GetInteractionOptions(player, npc) : []);
 
     public override NotificationInfo? GetQuestBadge(Player player, Npc npc)
         => _questManager.IsQuestNpc(npc.DefinitionId) ? _questManager.GetQuestBadge(player, npc) : null;

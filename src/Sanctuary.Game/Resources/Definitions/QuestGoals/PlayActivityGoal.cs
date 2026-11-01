@@ -22,8 +22,8 @@ public sealed class PlayActivityGoal : QuestGoal
 
     // The NPC (an Npcs.json id) whose menu offers the game while the step is open, opening it as the Games menu does, and
     // so the step's target: its marker, Take Me There and "?" point at them, as a talk step's do. 0 = none: the game is
-    // then started from the Games menu alone, and the step has no target. A stopgap until clicking a world object, such
-    // as Simone's cooking table, starts its game.
+    // then started from the Games menu alone, and the step has no target. It can be a world object that opens the game for
+    // anyone (Minigames.GameStations), such as a cooking table: its menu then shows the game once, as the quest's.
     public int NpcId { get; set; }
 
     /// <summary>Whether <paramref name="npcId"/> is the NPC who offers the step's game.</summary>

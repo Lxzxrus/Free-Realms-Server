@@ -183,11 +183,13 @@ open, nothing opens and the chat tells the player to finish or close it first), 
 Take Me There and "?" point at them, as a talk step's do. With nothing else on their menu
 the game opens at the click; beside other options (a trainer's job, another quest's game) it is one more
 button, the game's name as the Games menu lists it (the activity's `NameId`, such as 386024 for the
-steak), so two recipes at one NPC are two different buttons. No world object, such as a cooking table,
-starts a game yet, so **a play step names the NPC who offers its game**: without one it has no target,
-and the loader warns. The game can still be won from the Games menu. The step's text should name the
-game, not a table to click: the Cafe's step uses 21837, not 94528, which sends you to Simone's cooking
-table.
+steak), so two recipes at one NPC are two different buttons. **A play step names the NPC who offers its
+game**: without one it has no target, and the loader warns. The game can still be won from the Games
+menu. The NPC can be a world object that opens the game for anyone (`Minigames.GameStations`: cooking
+tables, postboxes, anvils, harvesting tools, the Frostbitten Banks fishing spot); the game then shows
+once on its menu, as the quest's button, before the object's other games. The step's text should name
+what the player clicks: the Cafe's step names Simone, so it uses 21837, not 94528, which sends you to
+the cooking table in front of her.
 
 ### Counted talk
 
