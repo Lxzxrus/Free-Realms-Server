@@ -39,12 +39,22 @@ public static class PetRequestNamePacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PetRequestNamePacket), petRequestNamePacket);
 
+        // Evergrove: one pet request every PetHelper.RequestIntervalMs, and one that comes sooner waits its turn. A rename
+        // saves and is shown to everyone nearby, and its name check scans the whole name filter, so it is spaced too.
+        if (PetHelper.TryStartRequest(connection.Player, () => Rename(connection, petRequestNamePacket)))
+            Rename(connection, petRequestNamePacket);
+
+        return true;
+    }
+
+    private static void Rename(GatewayConnection connection, PetRequestNamePacket petRequestNamePacket)
+    {
         var player = connection.Player;
         var pet = player.Pet;
         var petClientInfo = player.GetActivePetClientInfo();
 
         if (pet is null || petClientInfo is null || pet.Guid != player.ActivePetGuid)
-            return true;
+            return;
 
         var petSetNamePacket = new PetSetNamePacket
         {
@@ -52,25 +62,18 @@ public static class PetRequestNamePacketHandler
             Name = petRequestNamePacket.Name
         };
 
-        // Evergrove: the character name rules and name filter (PetHelper.IsValidName).
+        // Evergrove: the pet name rules and the name filter (PetHelper.IsValidName).
         if (!PetHelper.IsValidName(petRequestNamePacket.Name, _resourceManager.NameFilter))
         {
             connection.SendTunneled(petSetNamePacket);
-            return true;
-        }
-
-        // Evergrove: one pet request every PetHelper.RequestIntervalMs. A rename saves and is shown to everyone nearby.
-        if (!PetHelper.TryStartRequest(player))
-        {
-            connection.SendTunneled(petSetNamePacket);
-            return true;
+            return;
         }
 
         var characterId = GuidHelper.GetPlayerId(player.Guid);
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         if (!PetHelper.TryGetDbPet(dbContext, characterId, player.ActivePetId, out var dbPet))
-            return true;
+            return;
 
         dbPet.Name = petRequestNamePacket.Name;
         dbContext.SaveChanges();
@@ -84,7 +87,5 @@ public static class PetRequestNamePacketHandler
             player.PlayerPet.SendPetList();
         });
         player.SendTunneledToVisible(petSetNamePacket, true);
-
-        return true;
     }
 }

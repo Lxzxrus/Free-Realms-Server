@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.UdpLibrary;
 using Sanctuary.UdpLibrary.Configuration;
@@ -102,6 +103,35 @@ public class GatewayServer : UdpManager<GatewayConnection>
         catch (Exception exception)
         {
             _logger.LogError(exception, "Minigame: the tick failed.");
+        }
+    }
+
+    /// <summary>
+    /// Evergrove: carries out the pet requests that came too soon once their turn comes (PetHelper.StartWaitingRequest).
+    /// Main loop, the thread that handles their packets.
+    /// </summary>
+    public void TickPetRequests(long now)
+    {
+        try
+        {
+            foreach (var connection in ConnectionList.ToArray())
+            {
+                if (connection?.Player is not { } player)
+                    continue;
+
+                try
+                {
+                    PetHelper.StartWaitingRequest(player, now);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Pets: a waiting request of {player} failed.", player.Guid);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Pets: the tick failed.");
         }
     }
 

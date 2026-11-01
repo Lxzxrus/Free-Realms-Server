@@ -33,4 +33,13 @@ public sealed class PetTreasureChest : Npc
     {
         return Interlocked.CompareExchange(ref _opened, 1, 0) == 0;
     }
+
+    /// <summary>
+    /// Evergrove: closes the chest again after it couldn't pay out (PetHelper.TryOpenTreasureChest), so it can be opened
+    /// later and still goes when its time is up.
+    /// </summary>
+    public void Close()
+    {
+        Interlocked.Exchange(ref _opened, 0);
+    }
 }

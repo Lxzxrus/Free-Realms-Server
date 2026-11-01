@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -51,7 +52,9 @@ public static class PacketZoneTeleportRequestHandler
         // Every point of interest is in the starting zone, so from a house or a fishing hole this is a zone change.
         if (connection.Player.Zone != _zoneManager.StartingZone)
         {
-            connection.Player.TeleportToZone(_zoneManager.StartingZone, position, rotation);
+            if (ZoneTeleports.TryStart(connection.Player))
+                connection.Player.TeleportToZone(_zoneManager.StartingZone, position, rotation);
+
             return true;
         }
 

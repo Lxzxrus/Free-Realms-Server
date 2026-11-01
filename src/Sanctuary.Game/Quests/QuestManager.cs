@@ -451,8 +451,9 @@ public sealed class QuestManager : IQuestManager
 
         if (player.Quests.TryGetInProgress(questId, out var progress))
         {
+            // Not written to the database here: the client sends one of these per click in the quest helper. The
+            // tracked quest is saved when a quest is accepted and with the character at logout.
             player.Quests.ActiveQuestId = questId;
-            SaveActiveQuestId(player, questId);
 
             foreach (var goalIndex in progress.OpenGoals.Keys.Order())
                 SendObjectiveActivated(player, questId, quest.Goals[goalIndex]);

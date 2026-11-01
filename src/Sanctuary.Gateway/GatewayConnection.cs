@@ -99,7 +99,16 @@ public class GatewayConnection : UdpConnection
 
         _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
 
-        SavePlayerToDatabase();
+        // A save that throws (the database out of reach for a moment) is logged, and the player still leaves their zone
+        // below. Before, they stayed in it as a ghost that nothing removed.
+        try
+        {
+            SavePlayerToDatabase();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "{connection} failed to save character {characterId} at logout.", this, GuidHelper.GetPlayerId(Player.Guid));
+        }
 
         Player.Dispose();
     }
@@ -178,9 +187,25 @@ public class GatewayConnection : UdpConnection
 #endif
     }
 
+    // Anyone who knows this connection's address can send it packets that fail their CRC check, as fast as they like, so
+    // a line for each would let them fill the disk: the first is logged, then one a minute at most, with the count so far.
+    private const int CrcRejectLogInterval = 60000;
+
+    // when OnCrcReject last logged (Environment.TickCount64), 0 = never
+    private long _crcRejectLoggedAt;
+
     public override void OnCrcReject(Span<byte> data)
     {
-        _logger.LogError("[CrcReject] Guid: {guid}, Data: {data}", Player?.Guid, PacketLog.Hex(data));
+        var now = Environment.TickCount64;
+
+        if (_crcRejectLoggedAt != 0 && now - _crcRejectLoggedAt < CrcRejectLogInterval)
+            return;
+
+        _crcRejectLoggedAt = now;
+
+        GetStats(out var stats);
+
+        _logger.LogError("[CrcReject] Guid: {guid}, Data: {data} ({count} from this connection so far, logged once a minute at most)", Player?.Guid, PacketLog.Hex(data), stats.CrcRejectedPackets);
     }
 
     public override void OnPacketCorrupt(Span<byte> data, UdpCorruptionReason reason)
@@ -583,12 +608,19 @@ public class GatewayConnection : UdpConnection
             rotation = Player.StartingZoneRotation;
         }
 
-        dbCharacter.PositionX = float.IsNaN(position.X) ? null : position.X;
-        dbCharacter.PositionY = float.IsNaN(position.Y) ? null : position.Y;
-        dbCharacter.PositionZ = float.IsNaN(position.Z) ? null : position.Z;
+        // Evergrove: MariaDB refuses a float it can't store, an infinity or one as large as float.MaxValue, and a failed
+        // save here stopped the whole Gateway. The packet handlers refuse such positions and rotations from the client;
+        // in case one gets here another way, a position outside the world or a rotation beyond any real one is saved as
+        // nothing, as NaN already was, and the next login uses the spawn point's instead.
+        var savePosition = Positions.IsInWorld(position);
+        var saveRotation = Positions.IsWithinRotationLimit(rotation);
 
-        dbCharacter.RotationX = float.IsNaN(rotation.X) ? null : rotation.X;
-        dbCharacter.RotationZ = float.IsNaN(rotation.Z) ? null : rotation.Z;
+        dbCharacter.PositionX = savePosition ? position.X : null;
+        dbCharacter.PositionY = savePosition ? position.Y : null;
+        dbCharacter.PositionZ = savePosition ? position.Z : null;
+
+        dbCharacter.RotationX = saveRotation ? rotation.X : null;
+        dbCharacter.RotationZ = saveRotation ? rotation.Z : null;
 
         dbCharacter.ActiveProfileId = Player.ActiveProfileId;
 
@@ -604,6 +636,10 @@ public class GatewayConnection : UdpConnection
 
         foreach (var dbPet in dbContext.Pets.Where(pet => pet.CharacterId == dbCharacter.Id))
             PetHelper.SavePetState(Player, dbPet);
+
+        // The quest the player tracks. Picking one in the quest helper changes it in memory only (one packet per
+        // click); accepting a quest writes it at once.
+        dbCharacter.ActiveQuestId = Player.Quests.ActiveQuestId != 0 ? Player.Quests.ActiveQuestId : null;
 
         // SaveChanges returns the rows changed. Zero means nothing changed since the last save (a quick relog, or
         // logging out inside a house), not a failure; a real failure throws.

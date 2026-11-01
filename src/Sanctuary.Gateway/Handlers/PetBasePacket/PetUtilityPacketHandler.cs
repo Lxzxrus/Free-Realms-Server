@@ -39,17 +39,23 @@ public static class PetUtilityPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PetUtilityPacket), petUtilityPacket);
 
+        // Evergrove: one pet request every PetHelper.RequestIntervalMs, as this one queries and saves, and one that comes
+        // sooner waits its turn.
+        if (PetHelper.TryStartRequest(connection.Player, () => SetUtility(connection, petUtilityPacket)))
+            SetUtility(connection, petUtilityPacket);
+
+        return true;
+    }
+
+    private static void SetUtility(GatewayConnection connection, PetUtilityPacket petUtilityPacket)
+    {
         if (petUtilityPacket.Slot < PetHelper.PetFirstUtilitySlot || petUtilityPacket.Slot > PetHelper.PetLastUtilitySlot)
-            return true;
+            return;
 
         var petClientInfo = connection.Player.GetPetClientInfo(petUtilityPacket.PetId);
 
         if (petClientInfo is null)
-            return true;
-
-        // Evergrove: one pet request every PetHelper.RequestIntervalMs, as this one queries and saves.
-        if (!PetHelper.TryStartRequest(connection.Player))
-            return true;
+            return;
 
         var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
         using var dbContext = _dbContextFactory.CreateDbContext();
@@ -58,7 +64,7 @@ public static class PetUtilityPacketHandler
             || (!petUtilityPacket.Unequip && !PetHelper.TryGetUtilityItem(dbContext, _resourceManager, characterId, petClientInfo,
                 petUtilityPacket.ItemGuid, petUtilityPacket.Slot, out _, out _)))
         {
-            return true;
+            return;
         }
 
         var itemGuid = petUtilityPacket.Unequip ? PetHelper.NoItemGuid : petUtilityPacket.ItemGuid;
@@ -71,7 +77,5 @@ public static class PetUtilityPacketHandler
             Slot = petUtilityPacket.Slot,
             ItemGuid = itemGuid
         });
-
-        return true;
     }
 }

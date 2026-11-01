@@ -112,6 +112,34 @@ public sealed class Player : ClientPcData, IEntity
     public ulong LastInteractNpcGuid { get; set; }
     public DateTime LastInteractAt { get; set; }
 
+    /// <summary>Chat messages the player may still send (<see cref="ChatLimits"/>).</summary>
+    public Allowance ChatAllowance { get; } = new(ChatLimits.Burst, ChatLimits.RefillMs, Environment.TickCount64);
+
+    /// <summary>When (<see cref="Environment.TickCount64"/>) the player may next be told they chat too fast.</summary>
+    public long NextChatTooFastNoticeAt { get; set; }
+
+    /// <summary>
+    /// When the client's "ready" is answered (<see cref="ZoneLoadReplies"/>): each answer sends the zone's whole welcome
+    /// and, in the world, reads the house list from the database.
+    /// </summary>
+    public ZoneLoadReplies ClientIsReadyReplies { get; } = new();
+
+    /// <summary>
+    /// When the client's "finished loading" is answered (<see cref="ZoneLoadReplies"/>): in a house, each answer reads
+    /// where every fixture is from the database and sends one packet per fixture.
+    /// </summary>
+    public ZoneLoadReplies ClientFinishedLoadingReplies { get; } = new();
+
+    /// <summary>
+    /// The earliest time (<see cref="Environment.TickCount64"/>) the next request of each kind is answered. Each one
+    /// costs the server far more than the client: a path search, a move to another zone (<see cref="ZoneTeleports"/>).
+    /// Repeats sooner are dropped.
+    /// </summary>
+    public long NextTakeMeThereAt { get; set; }
+
+    /// <inheritdoc cref="NextTakeMeThereAt"/>
+    public long NextZoneTeleportAt { get; set; }
+
     /// <summary>
     /// Collection entries this character picked up directly (exploration coins). Loaded at login and kept in step
     /// with the CharacterCollectionEntries table. Read on the zone thread when nodes come into view.
@@ -152,6 +180,9 @@ public sealed class Player : ClientPcData, IEntity
 
     /// <summary>Evergrove: when the player may next rename, dress, equip or tend a pet (<see cref="PetHelper.TryStartRequest"/>).</summary>
     public long NextPetRequestAt { get; set; }
+
+    /// <summary>Evergrove: the pet requests that came too soon, carried out in turn (<see cref="PetHelper.StartWaitingRequest"/>).</summary>
+    public Queue<Action> WaitingPetRequests { get; } = new();
 
     public int SecondsSinceLastLogin { get; set; } = -1;
 
@@ -477,6 +508,7 @@ public sealed class Player : ClientPcData, IEntity
     public NpcAbilityDefinition? NpcAbility { get; set; }
     public DateTimeOffset NpcAbilityExpiresAt { get; set; }
     public DateTimeOffset NpcAbilityNextCastAt { get; set; }
+    public DateTimeOffset NpcAbilityNextPickupAt { get; set; }
     public int NpcAbilityProfileId { get; set; }
 
     public void UpdateEverySecond()

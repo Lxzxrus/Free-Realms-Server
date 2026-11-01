@@ -9,6 +9,7 @@ using Sanctuary.Database;
 using Sanctuary.Game;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
+using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
 using Sanctuary.Packet.Common.Chat;
 using Sanctuary.Scripting;
@@ -65,7 +66,19 @@ public static class PacketChatHandler
             _logger.LogWarning("Received {name} packet with null message. ( {packet} )", nameof(PacketChat), packet);
             return false;
         }
-        
+
+        // Only what the real client sends: a chat channel (not System, which would show as a system message), and no
+        // more text than its chat box and a character's name take. Then no faster than a person types, commands
+        // included (ChatLimits).
+        if (!ChatLimits.IsClientChannel(packet.Channel) || !ChatLimits.IsClientSized(packet))
+        {
+            _logger.LogDebug("Dropped chat on channel {channel}, {length} characters long.", packet.Channel, packet.Message.Length);
+            return true;
+        }
+
+        if (!ChatLimits.TryUseAllowance(connection.Player))
+            return true;
+
         if (packet.Message.StartsWith(_chatCommandManager.Prefix))
         {
             if (!_chatCommandManager.TryHandle(connection.Player, packet.Message))
@@ -85,6 +98,11 @@ public static class PacketChatHandler
 
         packet.FromGuid = connection.Player.Guid;
         packet.FromName = connection.Player.Name;
+
+        // Only a tell is to someone, and it's delivered only if the name is a player's. On any other channel the name
+        // would go to everyone who gets the message just as the client wrote it.
+        if (packet.Channel != ChatChannel.Tell)
+            packet.ToName = new NameData();
 
         switch (packet.Channel)
         {
