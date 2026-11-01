@@ -15,6 +15,7 @@ using Microsoft.Extensions.Options;
 
 using Sanctuary.Core.Collections;
 using Sanctuary.Core.Extensions;
+using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
@@ -51,7 +52,7 @@ public abstract class BaseZone : IZone, IDisposable
     protected readonly ZoneEnvironmentDefinition? _zoneEnvironment;
 
     private readonly object _npcGuidLock = new();
-    private ulong _nextNpcGuid = NpcBaseGuid;
+    private ulong _nextNpcCounter = FirstNpcCounter;
 
     private readonly ConcurrentDictionary<ulong, Npc> _npcs = new();
     private readonly ConcurrentDictionary<ulong, Player> _players = new();
@@ -65,7 +66,7 @@ public abstract class BaseZone : IZone, IDisposable
 
     public float TickDeltaSeconds => 1f / FrameRate;
 
-    private const ulong NpcBaseGuid = 100_000_000_000u;
+    private const ulong FirstNpcCounter = GuidHelper.MaxFixedNpcCounter + 1;
 
     private readonly record struct CollectionNodePoolRefill(string PoolKey, int CollectedHardPointId);
 
@@ -824,6 +825,14 @@ public abstract class BaseZone : IZone, IDisposable
 
         if (npcGuid.HasValue)
         {
+            if (!GuidHelper.IsFixedNpcGuid(npcGuid.Value))
+            {
+                _logger.LogWarning("Failed to spawn NPC {NpcId} with GUID {NpcGuid}: not a fixed NPC GUID.", npcId, npcGuid.Value);
+                return false;
+            }
+
+            npcGuid = GetNpcGuid(npcGuid);
+
             if (_npcs.ContainsKey(npcGuid.Value))
             {
                 _logger.LogWarning("Failed to spawn NPC {NpcId} with GUID {NpcGuid}: GUID already exists.", npcId, npcGuid.Value);
@@ -855,7 +864,7 @@ public abstract class BaseZone : IZone, IDisposable
         // Evergrove: wandering and fleeing pick their spots on the zone's navmesh and terrain, which are fetched at
         // deploy time and may be missing (tools/deploy/fetch-zone-geometry.sh). Without them an NPC that wanders stays
         // where it spawned, as every NPC did before upstream's NPC movement; patrols keep to their authored points.
-        if (_resourceManager.NpcMovements.TryGetForNpc(spawnedNpc.Guid, definition.ModelFileName, out var npcMovementDefinition)
+        if (_resourceManager.NpcMovements.TryGetForNpc(definition.Id, definition.ModelFileName, out var npcMovementDefinition)
             && (HasNavMesh || HasGroundData || npcMovementDefinition.Type == NpcMovementType.Patrol))
             spawnedNpc.MovementController = new NpcMovementController(spawnedNpc, npcMovementDefinition);
 
@@ -1709,15 +1718,23 @@ public abstract class BaseZone : IZone, IDisposable
 
     private ulong GetNpcGuid(ulong? guid)
     {
+        var instanceId = OwnerId is null ? GuidHelper.OpenWorldInstanceId : GuidHelper.GetNpcInstanceId((ulong)Id);
+
+        if (guid.HasValue)
+        {
+            // Evergrove's housing spawns each fixture as an NPC under the fixture's own GUID (GuidHelper fixture
+            // layout), which the housing runtime maps back to the fixture's database id. Upstream's re-encoding
+            // would throw on it (GetNpcCounter checks the NPC type nibble), so a GUID that isn't an NPC GUID is
+            // kept as it is.
+            if (!GuidHelper.IsNpcGuid(guid.Value))
+                return guid.Value;
+
+            return GuidHelper.GetNpcGuid(GuidHelper.GetNpcCounter(guid.Value), instanceId);
+        }
+
         lock (_npcGuidLock)
         {
-            if (guid.HasValue)
-            {
-                _nextNpcGuid = Math.Max(_nextNpcGuid, guid.Value + 1);
-                return guid.Value;
-            }
-
-            return _nextNpcGuid++;
+            return GuidHelper.GetNpcGuid(_nextNpcCounter++, instanceId);
         }
     }
 

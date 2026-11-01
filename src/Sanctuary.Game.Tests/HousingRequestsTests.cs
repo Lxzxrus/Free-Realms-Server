@@ -158,24 +158,63 @@ public sealed class HousingRequestsTests
         .. tail
     ];
 
+    /// <summary>
+    /// Upstream OSFR reads opcode 142 as a list of (hash, name, value) metrics. The playtest capture's head fits it: a
+    /// count of 7, then the first metric's hash and name. One whole metric reads back field by field.
+    /// </summary>
     [TestMethod]
     public void LuaMetrics_ReadsTheDirectoryEvent()
     {
-        Assert.IsTrue(PacketClientLuaMetrics.TryDeserialize(BrowserShown([1, 2, 3]), out var metric));
-        Assert.AreEqual(7, metric.Unknown1);
-        Assert.AreEqual(0x3E821D71, metric.Unknown2);
-        Assert.AreEqual("HousingRating_BrowserShown", metric.Name);
-        CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, metric.Data);
+        byte[] wire =
+        [
+            .. Convert.FromHexString("8E0001000000711D823E1A000000"),
+            .. Encoding.ASCII.GetBytes("HousingRating_BrowserShown"),
+            .. BitConverter.GetBytes(5)
+        ];
+
+        Assert.IsTrue(PacketClientLuaMetrics.TryDeserialize(wire, out var packet));
+        Assert.AreEqual(1, packet.Metrics.Count);
+        Assert.AreEqual(0x3E821D71u, packet.Metrics[0].Hash);
+        Assert.AreEqual("HousingRating_BrowserShown", packet.Metrics[0].Name);
+        Assert.AreEqual(5, packet.Metrics[0].Value);
+
+        // The captured packet says seven metrics follow; its head alone is refused, not misread.
+        Assert.IsFalse(PacketClientLuaMetrics.TryDeserialize(BrowserShown([]), out _));
+    }
+
+    /// <summary>A metrics report holding these counters (hash 0: the server doesn't read it).</summary>
+    private static PacketClientLuaMetrics Report(params (string Name, int Value)[] metrics)
+    {
+        var wire = Wire(writer =>
+        {
+            writer.Write(PacketClientLuaMetrics.OpCode);
+            writer.Write(metrics.Length);
+
+            foreach (var (name, value) in metrics)
+            {
+                writer.Write(0u);
+                writer.Write(name);
+                writer.Write(value);
+            }
+        });
+
+        Assert.IsTrue(PacketClientLuaMetrics.TryDeserialize(wire, out var packet));
+        return packet;
     }
 
     /// <summary>
-    /// <c>PacketClientLuaMetricsHandler</c> passes an event to Take Me There only when this read succeeds.
+    /// <c>PacketClientLuaMetricsHandler</c> passes a report on to Evergrove's Take Me There only when it holds the
+    /// TakeMeThere counter alone, the shape answered before the list was read; the directory's counter never reaches it.
     /// </summary>
     [TestMethod]
-    public void LuaMetrics_DirectoryEventDoesNotReachTakeMeThere()
+    public void LuaMetrics_OnlyTheTakeMeThereCounterReachesTakeMeThere()
     {
-        Assert.IsFalse(TakeMeThereRequestPacket.TryDeserialize(BrowserShown([]), out _));
-        Assert.IsFalse(TakeMeThereRequestPacket.TryDeserialize(BrowserShown([1, 2, 3, 4, 5, 6, 7, 8]), out _));
+        Assert.IsTrue(TakeMeThereRequestPacket.TryFrom(Report(("TakeMeThere", 3)), out var request));
+        Assert.AreEqual(3, request.RequestId);
+
+        Assert.IsFalse(TakeMeThereRequestPacket.TryFrom(Report(("HousingRating_BrowserShown", 1)), out _));
+        Assert.IsFalse(TakeMeThereRequestPacket.TryFrom(Report(("HousingRating_BrowserShown", 1), ("TakeMeThere", 1)), out _));
+        Assert.IsFalse(TakeMeThereRequestPacket.TryFrom(Report(), out _));
     }
 
     [TestMethod]

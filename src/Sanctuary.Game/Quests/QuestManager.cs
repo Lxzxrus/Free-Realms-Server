@@ -60,8 +60,9 @@ public sealed class QuestManager : IQuestManager
         }
     }
 
-    // Evergrove: shared quest pickups (no PlayerSpecific pools yet) are taken only by a player whose quest needs them,
-    // so nobody empties a spawn for nothing.
+    // Evergrove: a shared quest pickup is taken only by a player whose quest needs it, so nobody empties a spawn for
+    // nothing. Every shipped quest pickup is player-specific since upstream OSFR #166 (CanGatherQuestNode); this guards
+    // a shared one.
     public bool NeedsCollectionNode(Player player, string nodeType)
         => ActiveGoals(player).Any(active => active.Goal is CollectGoal collectGoal
             && string.Equals(collectGoal.CollectNodeType, nodeType, StringComparison.OrdinalIgnoreCase));
@@ -321,6 +322,8 @@ public sealed class QuestManager : IQuestManager
 
         RefreshQuestNotifications(player, quest);
 
+        RefreshQuestNodes(player, quest);
+
         player.SendTunneled(new CommandPacketQuestDialogComplete());
     }
 
@@ -438,6 +441,8 @@ public sealed class QuestManager : IQuestManager
         }
 
         player.SendTunneled(new QuestAbandonedPacket { QuestId = questId });
+
+        RefreshQuestNodes(player, quest);
 
         RefreshQuestNotifications(player, quest);
 
@@ -637,8 +642,34 @@ public sealed class QuestManager : IQuestManager
         return (0, false);
     }
 
+    public bool CanGatherQuestNode(Player player, CollectionNode node)
+        => ActiveGoals(player).Any(active => active.Goal is CollectGoal collectGoal
+            && collectGoal.CanGather(node, active.Progress.OpenGoals[active.GoalIndex]));
+
+    private void RefreshQuestNodes(Player player, QuestDefinition quest)
+    {
+        var nodeTypes = quest.Goals.OfType<CollectGoal>().Select(goal => goal.CollectNodeType).ToHashSet();
+        if (nodeTypes.Count == 0)
+            return;
+
+        foreach (var node in player.Zone.Npcs.OfType<CollectionNode>()
+            .Where(node => node.PoolDefinition.PlayerSpecific && nodeTypes.Contains(node.TypeDefinition.Key)).ToList())
+        {
+            var hidden = !CanGatherQuestNode(player, node);
+            var shown = player.VisibleNpcs.ContainsKey(node.Guid);
+
+            if (hidden && shown)
+                player.OnRemoveVisibleNpcGracefully(node, animate: true);
+            else if (!hidden && !shown && node.VisiblePlayers.ContainsKey(player.Guid))
+                player.OnAddVisibleNpcs(node);
+        }
+    }
+
     public bool IsHiddenByQuest(Player player, Npc npc)
     {
+        if (npc is CollectionNode { PoolDefinition.PlayerSpecific: true } questNode)
+            return !CanGatherQuestNode(player, questNode);
+
         var quests = _resourceManager.Quests;
 
         if (!quests.ByStateNpc.TryGetValue(npc.DefinitionId, out var questIds))
@@ -738,7 +769,6 @@ public sealed class QuestManager : IQuestManager
 
     private void FillRewardBundle(RewardBundleBase bundle, QuestDefinition quest)
     {
-        bundle.Success = false;
         bundle.Coins = quest.RewardCoins;
         bundle.Experience = quest.RewardExperience;
         bundle.Unknown3 = 0;
@@ -748,6 +778,8 @@ public sealed class QuestManager : IQuestManager
 
         foreach (var entry in BuildRewardEntries(quest))
             bundle.Entries.Add(entry);
+
+        bundle.Success = bundle.Entries.Any(entry => entry is RewardBundleEntryCollectionAdd);
     }
 
     private List<RewardBundleEntryBase> BuildRewardEntries(QuestDefinition quest)
@@ -820,6 +852,7 @@ public sealed class QuestManager : IQuestManager
 
         RemoveHiddenNpcs(player, completedGoal);
         RefreshNpcEffects(player, completedGoal);
+        RefreshQuestNodes(player, quest);
         RefreshQuestNotifications(player, quest);
 
         if (isFinalGoal)
@@ -1033,14 +1066,6 @@ public sealed class QuestManager : IQuestManager
     {
         var goals = quest.Goals;
 
-        if (goalIndex >= 0 && goalIndex < goals.Count
-            && goals[goalIndex] is CollectGoal collectGoal)
-        {
-            var nearest = NearestCollectionNode(player, collectGoal.CollectNodeType);
-            if (nearest is not null)
-                return nearest.Guid;
-        }
-
         if (goalIndex >= 0 && goalIndex < goals.Count && goals[goalIndex] is TalkToNpcGoal { IsCounted: true } countedGoal
             && player.Quests.TryGetInProgress(quest.QuestId, out var progress))
         {
@@ -1052,15 +1077,11 @@ public sealed class QuestManager : IQuestManager
         return NearestNpcGuid(player, quest.GoalTargetNpcId(goalIndex));
     }
 
-    private static Npc? NearestCollectionNode(Player player, string nodeType)
-        => string.IsNullOrEmpty(nodeType)
-            ? null
-            : NearestNpc(player, npc => npc is CollectionNode node && node.TypeDefinition.Key == nodeType);
     private void SendObjectiveForGoal(Player player, QuestDefinition quest, int goalIndex)
     {
         var goals = quest.Goals;
 
-        if (quest.HideObjectiveTarget)
+        if (quest.HideObjectiveTarget || (goalIndex >= 0 && goalIndex < goals.Count && goals[goalIndex] is CollectGoal))
         {
             player.SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
             return;
@@ -1122,8 +1143,9 @@ public sealed class QuestManager : IQuestManager
             player.SendTunneled(new ObjectiveTargetUpdatePacket { Active = false });
     }
 
-    // Evergrove: where the tracked goal's objective stands, the same target as the objective marker, for Evergrove's
-    // Take Me There (TakeMeThereRequestPacketHandler) until upstream's own arrives with the next catch-up.
+    // Evergrove: where the tracked goal's objective stands, the same target as the objective marker, for the Take Me
+    // There counter in the client's Lua metrics (TakeMeThereRequestPacketHandler). The button itself asks for a path
+    // with ClientPathRequestPacket, which is answered from the navmesh as upstream OSFR does.
     public bool TryGetActiveObjectiveTarget(Player player, out Vector3 targetPosition)
     {
         targetPosition = default;
@@ -1170,7 +1192,7 @@ public sealed class QuestManager : IQuestManager
         int currentGoalIndex = progress.FirstOpenGoalIndex;
         var goals = q.Goals;
 
-        if (q.HideObjectiveTarget)
+        if (q.HideObjectiveTarget || (currentGoalIndex >= 0 && currentGoalIndex < goals.Count && goals[currentGoalIndex] is CollectGoal))
             return false;
 
         if (currentGoalIndex >= 0 && currentGoalIndex < goals.Count

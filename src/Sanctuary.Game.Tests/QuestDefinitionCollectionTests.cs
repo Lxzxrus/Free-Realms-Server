@@ -41,8 +41,8 @@ public sealed class QuestDefinitionCollectionTests
         return quests;
     }
 
-    // Quests name NPCs by their Npcs.json id, which each spawn names first (spawnNpcWithGuid(id, guid, ...); upstream
-    // OSFR's #164 turns these into spawnFixedNpc(id, ...)).
+    // Quests name NPCs by their Npcs.json id, which each spawn names first: spawnFixedNpc(id, ...) since upstream OSFR's
+    // #164 derived fixed NPC GUIDs from it, spawnNpcWithGuid(id, guid, ...) before.
     private static HashSet<int> NpcIdsSpawnedByFabledRealms()
     {
         var script = File.ReadAllText(FindSourceFile("Scripts", "Zone", "FabledRealms.lua"));

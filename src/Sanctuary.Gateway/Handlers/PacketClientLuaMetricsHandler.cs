@@ -1,17 +1,17 @@
-using System;
+﻿using System;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Core.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
-using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Gateway.Handlers;
 
 /// <summary>
-/// Opcode 142, the client's Lua UI metrics. The client expects no reply, so events are read and dropped, apart from
-/// the "Take Me There" one, which is passed on to <see cref="TakeMeThereRequestPacketHandler"/>.
+/// Opcode 142, the client's Lua UI metrics. The client expects no reply, so the counters are only logged, apart from
+/// the "TakeMeThere" one, which is passed on to <see cref="TakeMeThereRequestPacketHandler"/>.
 /// </summary>
 [PacketHandler]
 public static class PacketClientLuaMetricsHandler
@@ -24,21 +24,21 @@ public static class PacketClientLuaMetricsHandler
         _logger = loggerFactory.CreateLogger(nameof(PacketClientLuaMetricsHandler));
     }
 
-    public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
+    public static bool HandlePacket(GatewayConnection connection, Span<byte> data)
     {
-        if (TakeMeThereRequestPacket.TryDeserialize(data, out var takeMeThere))
-            return TakeMeThereRequestPacketHandler.HandlePacket(connection, takeMeThere);
-
-        // Telemetry only: an event we can't read is not worth more than a debug line.
-        if (!PacketClientLuaMetrics.TryDeserialize(data, out var metric))
+        // Telemetry only (Evergrove, task 27): the client expects no reply, and an event we can't read is not worth
+        // more than a debug line, nor a dropped connection.
+        if (!PacketClientLuaMetrics.TryDeserialize(data, out var packet))
         {
-            _logger.LogDebug("Unreadable {packet}. ( {data} )", nameof(PacketClientLuaMetrics),
-                PacketLog.Hex(data));
+            _logger.LogDebug("Unreadable {packet}. ( {data} )", nameof(PacketClientLuaMetrics), PacketLog.Hex(data));
             return true;
         }
 
-        _logger.LogTrace("Received {packet} {name}. ( {data} )", nameof(PacketClientLuaMetrics), metric.Name,
-            PacketLog.Hex(metric.Data));
+        foreach (var metric in packet.Metrics)
+            _logger.LogTrace("{connection} sent client Lua metric {name} = {value}.", connection, metric.Name, metric.Value);
+
+        if (TakeMeThereRequestPacket.TryFrom(packet, out var takeMeThere))
+            return TakeMeThereRequestPacketHandler.HandlePacket(connection, takeMeThere);
 
         return true;
     }
