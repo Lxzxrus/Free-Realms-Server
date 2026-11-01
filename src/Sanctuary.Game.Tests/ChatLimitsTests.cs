@@ -1,5 +1,8 @@
+using System.Runtime.CompilerServices;
+
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Chat;
@@ -53,6 +56,20 @@ public sealed class ChatLimitsTests
         var longLastName = new PacketChat { Channel = ChatChannel.WorldShout, Message = "hi" };
         longLastName.ToName.LastName = new string('c', ChatLimits.MaxNameLength + 1);
         Assert.IsFalse(ChatLimits.IsClientSized(longLastName));
+    }
+
+    [TestMethod]
+    [DataRow(true, false)]
+    [DataRow(false, true)]
+    public void TryUseAllowance_LetsStaffThroughEveryTime(bool isAdmin, bool isMod)
+    {
+        // A Player can't be built in a test. This one has no allowance at all, so staff messages mustn't reach it.
+        var player = (Player)RuntimeHelpers.GetUninitializedObject(typeof(Player));
+        player.IsAdmin = isAdmin;
+        player.IsMod = isMod;
+
+        for (var i = 0; i < ChatLimits.Burst * 10; i++)
+            Assert.IsTrue(ChatLimits.TryUseAllowance(player));
     }
 
     [TestMethod]

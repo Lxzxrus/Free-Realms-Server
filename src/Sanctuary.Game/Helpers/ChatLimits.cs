@@ -49,9 +49,14 @@ public static class ChatLimits
 
     /// <summary>
     /// Whether the player may send another message now. If not, they're told so, at most once every few seconds.
+    /// Staff (admins and mods) always may: repeating a command with the chat box's up arrow and Enter ran past the
+    /// allowance, and every command after it was lost.
     /// </summary>
     public static bool TryUseAllowance(Player player)
     {
+        if (player.IsAdmin || player.IsMod)
+            return true;
+
         var now = Environment.TickCount64;
 
         if (player.ChatAllowance.TryUse(now))
