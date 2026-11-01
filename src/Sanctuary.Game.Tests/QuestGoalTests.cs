@@ -120,6 +120,29 @@ public sealed class QuestGoalTests
         Assert.IsTrue(goal.CanGather(PlayerNode("tin-ore", 8), loaded));
     }
 
+    /// <summary>
+    /// Evergrove: pickups saved before spawn ids were kept (stage 2, and the rows ReconcileUpstreamQuests carried over)
+    /// load as a count with no spawn id. A pickup after the update keeps them at the next save and load.
+    /// </summary>
+    [TestMethod]
+    public void CollectGoal_KeepsPickupsSavedWithoutSpawnIds()
+    {
+        var goal = new CollectGoal { CollectNodeType = "hastis-homework", RequiredCount = 8 };
+        var progress = goal.CreateProgress();
+        progress.Load(0, 3);
+
+        Assert.AreEqual(QuestGoalResult.Progressed, goal.Progress(Quest, GatherPlayerNode("hastis-homework", 11), progress));
+        Assert.AreEqual(4, progress.Count);
+
+        var loaded = goal.CreateProgress();
+        foreach (var (targetId, count) in progress.Save())
+            loaded.Load(targetId, count);
+
+        Assert.AreEqual(4, loaded.Count, "The three pages found before the update are still counted.");
+        Assert.IsFalse(goal.CanGather(PlayerNode("hastis-homework", 11), loaded));
+        CollectionAssert.AreEquivalent(new[] { (0UL, 3), (11UL, 1) }, progress.Save().ToArray());
+    }
+
     [TestMethod]
     public void ReachGoal_CompletesOnlyInsideItsRadius()
     {

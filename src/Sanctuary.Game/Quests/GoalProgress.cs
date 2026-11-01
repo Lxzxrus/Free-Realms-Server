@@ -57,8 +57,19 @@ public sealed class CollectProgress : GoalProgress
         return true;
     }
 
+    // Evergrove: pickups made before spawn ids were kept (stage 2's quest manager, and the rows ReconcileUpstreamQuests
+    // carried over) load as a count with no spawn id. They are saved again beside the spawn ids gathered since, or the
+    // first pickup after the update would drop them at the next save.
     public override IEnumerable<(ulong TargetId, int Count)> Save()
-        => _gatheredSpawnIds.Count > 0 ? _gatheredSpawnIds.Select(spawnId => ((ulong)spawnId, 1)) : base.Save();
+    {
+        var withoutSpawnId = Count - _gatheredSpawnIds.Count;
+
+        if (withoutSpawnId > 0)
+            yield return (0, withoutSpawnId);
+
+        foreach (var spawnId in _gatheredSpawnIds)
+            yield return ((ulong)spawnId, 1);
+    }
 
     public override void Load(ulong targetId, int count)
     {
