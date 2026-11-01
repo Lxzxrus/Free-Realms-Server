@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -42,7 +43,9 @@ public static class PacketZoneSafeTeleportRequestHandler
         // Out of a house or a fishing hole: the hub points of interest are all in the starting zone.
         if (connection.Player.Zone is HousingZone or FishingZone)
         {
-            connection.Player.ReturnToStartingZone();
+            if (ZoneTeleports.TryStart(connection.Player))
+                connection.Player.ReturnToStartingZone();
+
             return true;
         }
 

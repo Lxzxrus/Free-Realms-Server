@@ -458,6 +458,104 @@ public class HardeningTests
     }
 
     [TestMethod]
+    public void ConnectionOverTheQueuedPacketLimitOnAReliablePacketLeavesThePriorityQueue()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.EventQueuing = true;
+            p.MaxQueuedPacketsPerConnection = 4;
+        });
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // four unreliable packets fill the queue, then a reliable one (00 09, id 0) goes over: its acknowledgement is sent
+        // after the connection has been disconnected for it, and taken out of the priority queue
+        for (byte i = 1; i <= 4; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(i));
+
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(0, 9, 0, 0, 5));
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+        Assert.AreEqual(-1, serverA.PriorityQueuePosition, "the acknowledgement didn't put it back");
+
+        // a connection in the queue is given time at least every 10 minutes, and puts itself back each time
+        network.Pump(130, 10000, server);
+
+        Assert.AreEqual(-1, serverA.PriorityQueuePosition);
+        Assert.AreEqual(0, server.Stats.ConnectionCount);
+    }
+
+    [TestMethod]
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void ConnectionDroppedForACorruptPacketInsideAReliableOneLeavesThePriorityQueue(bool queued)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.EventQueuing = queued);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // a reliable packet (00 09, id 0) carrying a multi-packet (00 03) whose piece claims 9 bytes when 1 is left
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(0, 9, 0, 0, 0, 3, 9, 1));
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+        Assert.AreEqual(-1, serverA.PriorityQueuePosition);
+    }
+
+    [TestMethod]
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void PacketsFailingTheirCrcCheckNeverDisconnectAndOnlySoManyAreQueued(bool queued)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.EventQueuing = queued;
+            p.MaxQueuedPacketsPerConnection = 4;
+        });
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        var badCrc = a.Craft(1, 2, 3);
+        badCrc[^1] ^= 0xFF;
+
+        // all read in one poll, before any is handled: 50 that fail their CRC check from the player's address (anyone can
+        // send them, with a forged sender address), well over both limits, then three of the player's own
+        for (var i = 0; i < 50; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, badCrc);
+
+        for (byte i = 1; i <= 3; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(i));
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Connected, serverA.Status, "they prove nothing about who sent them");
+        Assert.AreEqual(0, server.Stats.QueueLimitDisconnects, "and don't count towards the player's packets");
+        Assert.HasCount(3, serverA.Received);
+        Assert.AreEqual(50, server.Stats.CrcRejectedPackets);
+
+        // queued, those over the limit are dropped; inline there is no queue to fill
+        var told = queued ? FakeManager.MaxQueuedCrcRejects : 50;
+
+        Assert.AreEqual(told, serverA.CrcRejects);
+        Assert.AreEqual(0, serverA.QueuedCrcRejects);
+
+        // the limit is on those waiting, not those sent
+        network.Deliver(client.EndPoint, server.EndPoint, badCrc);
+        network.Pump(1, server);
+
+        Assert.AreEqual(told + 1, serverA.CrcRejects);
+        Assert.AreEqual(Status.Connected, serverA.Status);
+    }
+
+    [TestMethod]
     public void SocketAndConnectionsGetTimeWhileABacklogOfEventsDrains()
     {
         var network = new FakeNetwork();

@@ -32,6 +32,12 @@ public sealed class PlayerPet
     private readonly ConcurrentQueue<Action> _queuedActions = new();
     private readonly PetSummonRequests _summonRequests = new();
 
+    // Evergrove: set when the player logs out (Dispose), on the packet thread. The zone goes on ticking the player on its
+    // own thread until it removes them a moment later, and a summon carried out then (a remembered pet restored after a
+    // zone load, or one waiting in _summonRequests) made a pet npc that nothing removed.
+    private volatile bool _disposed;
+    private readonly object _disposeLock = new();
+
     // Evergrove: how many pet actions may wait for the zone's tick. The pet packets a player sends by clicking come
     // nowhere near it; past it they are dropped, so a client flooding them no longer grows the queue without limit.
     internal const int MaxQueuedActions = 32;
@@ -329,10 +335,9 @@ public sealed class PlayerPet
 
     public void SummonPet(int id)
     {
-        // Evergrove: summoning the pet that is already out would only rebuild it for everyone nearby.
-        if (Pet is not null && _summonedPetId == id)
-            return;
-
+        // Evergrove: a summon of the pet that is already out builds it again, as upstream did. Picking that pet in the
+        // activity portal puts it away and summons it, and the client shows its pet window again only for a pet list
+        // naming a new pet guid. PetSummonRequests keeps summons a second apart.
         if (_player.Zone is not WorldZone && _player.Zone is not HousingZone)
             return;
 
@@ -405,11 +410,23 @@ public sealed class PlayerPet
             LowestNeed = PetHelper.GetLowestNeed(petClientInfo)
         };
 
-        Pet = npc;
-        _player.ActivePetId = id;
-        _player.ActivePetGuid = npc.Guid;
-        _summonedPetId = id;
-        npc.UpdatePosition(summonPosition.ToVector4(), _player.Rotation);
+        // Evergrove: the player may log out on the packet thread while the zone builds the pet (Dispose). Whichever of the
+        // two comes second removes the npc, so none is left in the zone with no pet owning it.
+        lock (_disposeLock)
+        {
+            if (_disposed)
+            {
+                npc.Dispose();
+                return;
+            }
+
+            Pet = npc;
+            _player.ActivePetId = id;
+            _player.ActivePetGuid = npc.Guid;
+            _summonedPetId = id;
+            npc.UpdatePosition(summonPosition.ToVector4(), _player.Rotation);
+        }
+
         SendPetList();
 
         _player.SendTunneledToVisible(new PlayerUpdatePacketPlayCompositeEffect
@@ -460,6 +477,10 @@ public sealed class PlayerPet
 
     public void UpdateEveryTick()
     {
+        // Evergrove: nothing is summoned or changed for a player who has logged out (_disposed).
+        if (_disposed)
+            return;
+
         // Evergrove: only the actions queued before this tick, so a client that keeps sending can't hold the zone here.
         for (var count = _queuedActions.Count; count > 0 && _queuedActions.TryDequeue(out var queuedAction); count--)
             queuedAction();
@@ -1693,7 +1714,19 @@ public sealed class PlayerPet
         UpdatePetSpeedBuff();
     }
 
-    public void Dispose() => DetachPet()?.Dispose();
+    public void Dispose()
+    {
+        Npc? npc;
+
+        // Evergrove: see _disposed.
+        lock (_disposeLock)
+        {
+            _disposed = true;
+            npc = DetachPet();
+        }
+
+        npc?.Dispose();
+    }
 
     private Npc? DetachPet()
     {

@@ -67,7 +67,7 @@ public static class CommandPacketInteractRequestHandler
         if (entity is PetTreasureChest petTreasureChest)
         {
             if (PetHelper.TryOpenTreasureChest(connection.Player, petTreasureChest, _rewardManager, _resourceManager, _dbContextFactory,
-                    out var itemDrop) && itemDrop is not null)
+                    _logger, out var itemDrop) && itemDrop is not null)
                 _rewardManager.TryGrantReward(connection.Player, itemDrop, petTreasureChest.Guid);
 
             return true;

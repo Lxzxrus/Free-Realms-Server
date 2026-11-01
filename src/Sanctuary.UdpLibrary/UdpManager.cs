@@ -576,8 +576,13 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             case CallbackEventType.CrcReject:
                 {
+                    if (ce.Source is null)
+                        break;
+
+                    Interlocked.Decrement(ref ce.Source.QueuedCrcRejects);
+
                     // as for a packet: nothing for a connection that is no longer there
-                    if (ce.Payload is null || ce.Source is not { Status: Status.Connected })
+                    if (ce.Payload is null || ce.Source.Status != Status.Connected)
                         break;
 
                     var data = ce.Payload.GetDataPtr();
@@ -1008,6 +1013,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     {
         lock (_connectionGuard)
         {
+            // a disconnected connection has been taken out of the queue for good (RemoveConnection), but can still try to
+            // schedule itself: the reliable packet whose handler disconnected it is acknowledged afterwards, for one.  Put
+            // back, nothing would take it out again, and it would hold its slot and its memory for as long as the server runs
+            if (con.Status == Status.Disconnected)
+                return;
+
             // do not ever let anybody schedule themselves for processing time sooner then mMinimumScheduledStamp
             // otherwise, they could end up getting processing time multiple times in a single UdpManager::GiveTime iteration
             // of the priority queue, which under odd circumstances could result in an infinite loop
@@ -1077,10 +1088,22 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         }
     }
 
+    // The most packets that failed their CRC check one connection may have waiting for OnCrcReject while events are queued.
+    // Such a packet proves nothing about who sent it: anyone who knows a player's address can send them, as fast as they
+    // like.  So they never disconnect the connection, nor count towards its MaxQueuedPacketsPerConnection, or they could
+    // have the player dropped; and since the event only tells the application, the ones over this are dropped instead of
+    // queued (CrcRejectedPackets still counts them).
+    internal const int MaxQueuedCrcRejects = 8;
+
     public void CallbackCrcReject(UdpConnection con, Span<byte> data)
     {
         if (Params.EventQueuing)
         {
+            if (con.QueuedCrcRejects >= MaxQueuedCrcRejects)
+                return;
+
+            Interlocked.Increment(ref con.QueuedCrcRejects);
+
             var ce = AvailableEventBorrow();
             var packet = CreatePacket(data, data.Length);
             ce.SetEventData(CallbackEventType.CrcReject, con, packet);

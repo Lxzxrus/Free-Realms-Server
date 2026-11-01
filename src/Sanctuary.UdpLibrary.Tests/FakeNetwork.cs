@@ -219,6 +219,9 @@ internal sealed class FakeConnection : UdpConnection
 
     public bool Terminated { get; private set; }
 
+    /// <summary>How many packets that failed their CRC check the application was told about.</summary>
+    public int CrcRejects { get; private set; }
+
     // client side
     public FakeConnection(FakeManager manager, SocketAddress socketAddress, long timeout) : base(manager, socketAddress, timeout)
     {
@@ -256,6 +259,8 @@ internal sealed class FakeConnection : UdpConnection
 
         _manager.Behaviour.OnPacket?.Invoke(this, packet);
     }
+
+    public override void OnCrcReject(Span<byte> data) => CrcRejects++;
 
     public override void OnTerminated()
     {

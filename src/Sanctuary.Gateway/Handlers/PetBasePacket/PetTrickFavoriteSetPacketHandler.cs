@@ -39,31 +39,35 @@ public static class PetTrickFavoriteSetPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PetTrickFavoriteSetPacket), petTrickFavoriteSetPacket);
 
+        // Evergrove: one pet request every PetHelper.RequestIntervalMs, as this one queries and saves, and one that comes
+        // sooner waits its turn.
+        if (PetHelper.TryStartRequest(connection.Player, () => SetFavoriteTrick(connection, petTrickFavoriteSetPacket)))
+            SetFavoriteTrick(connection, petTrickFavoriteSetPacket);
+
+        return true;
+    }
+
+    private static void SetFavoriteTrick(GatewayConnection connection, PetTrickFavoriteSetPacket petTrickFavoriteSetPacket)
+    {
         if (petTrickFavoriteSetPacket.Slot < PetHelper.PetFirstFavoriteTrickSlot || petTrickFavoriteSetPacket.Slot > PetHelper.PetLastFavoriteTrickSlot)
-            return true;
+            return;
 
         var petClientInfo = connection.Player.GetPetClientInfo(petTrickFavoriteSetPacket.PetId);
 
         if (petClientInfo is null || (petTrickFavoriteSetPacket.TrickId != NoTrickId &&
             !petClientInfo.PetTricks.Any(petTrickInfo => petTrickInfo.Id == petTrickFavoriteSetPacket.TrickId && petTrickInfo.Known)))
         {
-            return true;
+            return;
         }
-
-        // Evergrove: one pet request every PetHelper.RequestIntervalMs, as this one queries and saves.
-        if (!PetHelper.TryStartRequest(connection.Player))
-            return true;
 
         var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         if (!PetHelper.TryGetDbPet(dbContext, characterId, petTrickFavoriteSetPacket.PetId, out var dbPet))
-            return true;
+            return;
 
         PetHelper.SetFavoriteTrick(dbPet, petClientInfo, petTrickFavoriteSetPacket.Slot, petTrickFavoriteSetPacket.TrickId);
         dbContext.SaveChanges();
         connection.SendTunneled(petTrickFavoriteSetPacket);
-
-        return true;
     }
 }

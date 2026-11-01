@@ -1,15 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Database.Sqlite;
+using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Zones;
 
 namespace Sanctuary.Game.Tests;
 
@@ -141,5 +147,34 @@ public sealed class PetTreasureSaveTests
 
         Assert.IsNull(TreasureFoundAt(CharacterId));
         Assert.IsNull(TreasureFoundAt(OtherCharacterId));
+    }
+
+    /// <summary>The zone the chest and its owner are in; nothing on it is called before the chest pays.</summary>
+    public class StandInZone : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+            throw new NotSupportedException(targetMethod?.Name);
+    }
+
+    private sealed class UnreachableDatabase : IDbContextFactory<DatabaseContext>
+    {
+        public DatabaseContext CreateDbContext() => throw new RetryLimitExceededException("The database can't be reached.");
+    }
+
+    /// <summary>
+    /// The rest is saved before the chest pays. A chest whose rest can't be saved used to stay opened, unpaid, and was
+    /// never removed, since its despawn removes only a chest it can open.
+    /// </summary>
+    [TestMethod]
+    public void AChestWhoseRestCantBeSaved_PaysNothing_AndClosesAgain()
+    {
+        var zone = DispatchProxy.Create<IZone, StandInZone>();
+        var player = new Player(null!, null!, null!, null!, null!) { Guid = GuidHelper.GetPlayerGuid(CharacterId), Zone = zone };
+        var chest = new PetTreasureChest(zone, player.Guid, "Treasure") { PetId = PetId, FoundAt = FoundAt };
+
+        Assert.IsFalse(PetHelper.TryOpenTreasureChest(player, chest, null!, null!, new UnreachableDatabase(), NullLogger.Instance,
+            out var itemDrop));
+        Assert.IsNull(itemDrop);
+        Assert.IsTrue(chest.TryOpen(), "Closed again, for the player to open later or its despawn to remove.");
     }
 }
