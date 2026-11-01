@@ -142,8 +142,8 @@ Each phase becomes cloud tasks once the one before it has been playtested.
 - Who the staff are, and how a staff member confirms results: a chat command, or a small page on the WebAPI.
 - Every *(placeholder)* number.
 - What happens to a build when a plot changes lot type.
-- Deleting the character who bought a house still deletes the house, although it's the account's (section 8). It could
-  move to another character on the account, or the deletion could be refused while the account has other characters.
+- **Resolved before launch (1 November):** deleting the character who bought a house deleted the house, although it's
+  the account's. Now its houses move to another character on the account (section 8).
 
 ## 8. As built: plots, shared houses and weekly voting (tasks 32 and 35)
 
@@ -157,17 +157,17 @@ Build-order phases 2 and 3.
   personal.
 - **A plot's votes count from when it last became the ranked plot.** Moving the ranked plot away and back starts it
   again from no votes that week, so an account can't run two builds in a week and keep whichever scored better.
-- **Houses belong to the account (task 35).** Every character on the account can do whatever the character who bought
+- **Houses belong to the account (task 35).** Every character on the account can do whatever the character holding
   a house can: enter it, locked or unpublished, from My Houses or `!house enter`; build in it (place, move, paint,
   pick up, wallpapers and floors, `!build`); publish and unpublish it; lock it and change its other settings; and make
   it the ranked or a personal plot. My Houses and `!house list` show all the account's houses, and `!house list` says
-  which character bought those the player didn't. Inside, a character on the account is told it's the owner, so the
+  which character holds those the player doesn't. Inside, a character on the account is told it's the owner, so the
   client offers Decorate. A character on another account never gets any of this, whatever its friends.
-- **Visitors see the character who bought it.** The house still records its buyer (`Houses.CharacterId`). The
-  directory shows the buyer as the owner, "Go to House" on a character and `!house visit <lot> <name>` find the houses
-  that character bought, and the friends who may come into a locked house are the buyer's. A friend of another
-  character on the account gains nothing. So no visitor's rights changed, and nothing shows a visitor which characters
-  share an account.
+- **Visitors see the character holding it.** A house records the character holding it (`Houses.CharacterId`): the one
+  that bought it, unless that character has been deleted (below). The directory shows the holder as the owner, "Go to
+  House" on a character and `!house visit <lot> <name>` find the houses that character holds, and the friends who may
+  come into a locked house are the holder's. A friend of another character on the account gains nothing. So no
+  visitor's rights changed, and nothing shows a visitor which characters share an account, except a house that moved.
 - **One of each lot per account.** A lot any character on the account has can't be bought again. Before task 35 two
   characters on an account could each buy the same lot; both houses are kept, and `!house enter` goes to the player's
   own first.
@@ -176,7 +176,29 @@ Build-order phases 2 and 3.
   there. A part placed from inventory (only with `Housing:CreativeMode` off) goes back to the inventory of whichever
   character picks it up: another character on the account may be online, and its inventory isn't changed behind its
   back.
-- **Deleting the buyer** still deletes its houses, as before task 35 (section 7).
+- **Deleting a character keeps its houses** (section 7, decided 1 November). In the delete's own transaction, before
+  the database's cascade on `Houses.CharacterId` can take them, each of the character's houses moves to the account's
+  oldest remaining character, by creation date, that doesn't have that lot. The oldest, so where houses go never
+  depends on who played last, and an account's houses gather on one character rather than scattering. A house that
+  moves keeps everything but its holder: its id, which its votes are kept by; its plot and `RankedSince`, so a ranked
+  plot stays ranked with this week's votes; its fixtures, with who placed each; its name, description and settings. It
+  stays on its account, so nobody's right to vote on it changes and the account still has one ranked plot. To visitors
+  it's the new holder's from then on, so anyone who knew the deleted character's house can tell the two characters
+  shared an account: the price of keeping the build. Nothing about a move pays or copies: the house changes holder,
+  and the account has the houses it had, less any that went with the character.
+- **A lot every other character already has** goes with the deleted character, as every house did before. Only an
+  account with two copies of a lot from before task 35 meets this. The account keeps one of each lot, and a house on a
+  character the player isn't deleting is never touched, even when the copy that goes is the ranked plot. Its votes are
+  kept as history.
+- **The account's last character** takes its houses with it, as before: a house is always held by a character, and
+  none is left. Their votes are kept as history. Keeping them would need a house to record its account
+  (`Houses.UserId`), a holder that can be empty while the account has no character, the directory to leave such a house
+  out, and the account's next new character to take them up.
+- **A house in use when it changes hands stays one house.** The zone manager keeps a house's instance by the house,
+  not by its holder: anyone inside stays, and anyone coming in under the new holder joins them. Inside, everything goes
+  by the house (votes, publishing, settings, names, invites), and a lock lets the new holder's friends stay.
+- The Login server's character delete is the only way a character is deleted (no web API, staff command or script
+  deletes one). A character deleted by hand in the database still takes its houses with it.
 - **Publishing** stays separate from the kind of plot. A published, unlocked ranked plot is **entered**. A locked one
   isn't: it's out of the directory and only the owner's friends can come in. A published personal plot can be visited
   and is listed in the directory, but takes no votes and shows no rating.
@@ -186,7 +208,7 @@ Build-order phases 2 and 3.
   before (`HouseVotes`) are kept as history; nothing writes them.
 - **Who can vote:** the account's age is from its creation date. Its playtime is what all its characters have saved
   at logout, plus the voting character's session in progress. No character votes on its own account's plots, whichever
-  character bought them; sharing houses (task 35) didn't change voting.
+  character holds them; sharing houses (task 35) didn't change voting.
 - **Score:** section 3's formula, with `C` the average of every vote counted this week across the competition. Each
   plot weighs in by its votes, so one account giving 1 star to a few plots nobody else voted for barely moves it. A
   plot with no votes this week shows no rating rather than `C`. Wherever the client showed the old average, it
