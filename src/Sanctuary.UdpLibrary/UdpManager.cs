@@ -542,10 +542,13 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         {
             case CallbackEventType.RoutePacket:
                 {
-                    if (ce.Payload is null)
+                    // Inline, a packet is routed only while its connection is connected (UdpConnection.CallbackRoutePacket).
+                    // Queued, the connection may have gone since: a refused login or a kick in the packet before this one,
+                    // a fault limit. Its handlers must not run for a connection that is no longer there.
+                    if (ce.Payload is null || ce.Source is not { Status: Status.Connected })
                         break;
 
-                    ce.Source?.OnRoutePacket(ce.Payload.GetDataPtr().Slice(0, ce.Payload.GetDataLen()));
+                    ce.Source.OnRoutePacket(ce.Payload.GetDataPtr().Slice(0, ce.Payload.GetDataLen()));
                 }
                 break;
 
@@ -563,17 +566,20 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             case CallbackEventType.CrcReject:
                 {
-                    if (ce.Payload is null)
+                    // as for a packet: nothing for a connection that is no longer there
+                    if (ce.Payload is null || ce.Source is not { Status: Status.Connected })
                         break;
 
                     var data = ce.Payload.GetDataPtr();
 
-                    ce.Source?.OnCrcReject(data.Slice(0, ce.Payload.GetDataLen()));
+                    ce.Source.OnCrcReject(data.Slice(0, ce.Payload.GetDataLen()));
                 }
                 break;
 
             case CallbackEventType.PacketCorrupt:
                 {
+                    // Delivered although its connection has been disconnected since, because it says why: it is queued by
+                    // UdpConnection.CallbackCorruptPacket, which disconnects the connection straight after.
                     if (ce.Payload is null)
                         break;
 

@@ -128,6 +128,7 @@ public sealed class QueuedCallbackTests
 
         manager.Receive(faulty, [1, 1, 1]);
         manager.Receive(healthy, [2, 2, 2]);
+        manager.Receive(faulty, [3, 3, 3]);
 
         // without the guard this throws out of GiveTime, which on the Gateway is the server's only loop
         manager.GiveTime(50, giveConnectionsTime: false);
@@ -136,11 +137,32 @@ public sealed class QueuedCallbackTests
         Assert.AreEqual(Status.Disconnected, faulty.Status);
         Assert.AreEqual(DisconnectReason.CorruptPacket, faulty.DisconnectReason);
         Assert.AreEqual(1, faulty.TerminatedCallbacks);
+        Assert.HasCount(1, faulty.Packets, "nothing after the packet that threw");
         Assert.AreEqual(Status.Connected, healthy.Status);
         CollectionAssert.AreEqual(new byte[] { 2, 2, 2 }, healthy.Packets.Single());
         manager.GetStats(out var stats);
         Assert.AreEqual(1, stats.ConnectionFaults);
         Assert.AreEqual(0, stats.EventListCount);
+    }
+
+    [TestMethod]
+    public void QueuedPackets_AreNotDelivered_OnceTheirConnectionHasDisconnected()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        using var manager = new CallbackManager(services, true);
+        var connection = manager.CreateConnection();
+        manager.Receive(connection, [1, 2, 3]);
+        manager.Receive(connection, [4, 5]);
+
+        // a kick, say, after the packets were read and before they were handled
+        connection.Disconnect();
+        manager.GiveTime(50, giveConnectionsTime: false);
+
+        Assert.HasCount(0, connection.Packets);
+        Assert.AreEqual(1, connection.TerminatedCallbacks);
+        manager.GetStats(out var stats);
+        Assert.AreEqual(0, stats.EventListCount);
+        Assert.AreEqual(0, stats.EventListBytes);
     }
 
     private sealed class CallbackManager : UdpManager<CallbackConnection>

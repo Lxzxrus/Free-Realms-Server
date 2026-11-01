@@ -138,6 +138,9 @@ internal sealed class FakeBehaviour
     public bool ReportFaults;
 
     public bool ThrowOnTerminated;
+
+    /// <summary>Runs for every packet this manager's connections handle, after it is recorded.</summary>
+    public Action<FakeConnection, byte[]>? OnPacket;
 }
 
 internal sealed class FakeManager : UdpManager<FakeConnection>, IGiveTime
@@ -247,7 +250,11 @@ internal sealed class FakeConnection : UdpConnection
             return;
         }
 
-        Received.Add(data.ToArray());
+        var packet = data.ToArray();
+
+        Received.Add(packet);
+
+        _manager.Behaviour.OnPacket?.Invoke(this, packet);
     }
 
     public override void OnTerminated()

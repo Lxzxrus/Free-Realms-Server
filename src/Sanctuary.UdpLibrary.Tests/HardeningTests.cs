@@ -378,6 +378,39 @@ public class HardeningTests
         Assert.AreEqual(0, server.Stats.ConnectionFaults, "reported faults never reach the exception guard");
     }
 
+    // ---- Queued callbacks, as on the Gateway ----
+
+    // a packet whose handler disconnects its connection, as the Gateway's login handler does when it refuses a ticket
+    private const byte DisconnectMe = 0xDC;
+
+    [TestMethod]
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void NoPacketIsHandledAfterItsConnectionDisconnects(bool queued)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.EventQueuing = queued);
+
+        server.Behaviour.OnPacket = (connection, packet) =>
+        {
+            if (packet[0] == DisconnectMe)
+                connection.Disconnect();
+        };
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // one datagram grouping two packets (00 03): queued, the second waits in the queue before the first is handled
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(0, 3, 2, DisconnectMe, 1, 2, FakeBehaviour.Throw, 2));
+        network.Pump(3, server);
+
+        CollectionAssert.AreEqual(new byte[] { DisconnectMe, 1 }, serverA.Received.Single());
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.Application, serverA.DisconnectReason);
+        Assert.IsTrue(serverA.Terminated);
+        Assert.AreEqual(0, server.Stats.ConnectionFaults, "the second packet, which throws, never reached its handler");
+    }
+
     // ---- Task 10: a connection that falls behind is disconnected instead of queueing without bound ----
 
     [TestMethod]
