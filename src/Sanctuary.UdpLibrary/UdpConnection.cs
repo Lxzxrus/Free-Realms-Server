@@ -142,6 +142,9 @@ public class UdpConnection : PriorityQueueMember
     // packets waiting in the manager's event queue for OnRoutePacket (see UdpParams.MaxQueuedPacketsPerConnection)
     internal int QueuedPackets;
 
+    // packets that failed their CRC check, waiting in the manager's event queue for OnCrcReject (see UdpManager.MaxQueuedCrcRejects)
+    internal int QueuedCrcRejects;
+
     private delegate int CryptFunction(Span<byte> destData, Span<byte> sourceData);
 
     private readonly byte[][] _tempDecryptBuffer;

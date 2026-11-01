@@ -34,12 +34,16 @@ A connect request over a connection limit is ignored, so the client times out as
 limits disconnect. Every one of them logs a warning saying which limit and why; refused connects are logged once a
 minute with a count, since a refused client retries every second.
 
-Two more things changed with no setting:
+Three more things changed with no setting:
 
 - An exception while processing one connection's packets (in the UDP library or a handler) drops that connection and
   logs the error, with the packet's first bytes. It never stops the server.
 - The Gateway's disconnect line says the most reliable data that was waiting for that player at once, for tuning
   `ReliableOverflowBytes` and `ReliableBacklogBytes`.
+- A packet that fails its CRC check never disconnects, and doesn't count towards `MaxQueuedPacketsPerConnection`:
+  anyone who knows a player's address can send one, so it proves nothing about who sent it. It's thrown away and
+  reported to the server, which logs the first and then at most one a minute per connection, with how many there have
+  been. On the Gateway, at most 8 of a connection's wait to be reported; the rest aren't.
 
 ## Replies to forged addresses
 

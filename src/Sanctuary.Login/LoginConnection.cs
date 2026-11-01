@@ -116,9 +116,25 @@ public class LoginConnection : LoginServerConnection
 #endif
     }
 
+    // Anyone who knows this connection's address can send it packets that fail their CRC check, as fast as they like, so
+    // a line for each would let them fill the disk: the first is logged, then one a minute at most, with the count so far.
+    private const int CrcRejectLogInterval = 60000;
+
+    // when OnCrcReject last logged (Environment.TickCount64), 0 = never
+    private long _crcRejectLoggedAt;
+
     public override void OnCrcReject(Span<byte> data)
     {
-        _logger.LogError("[CrcReject] UserId: {userid}, Data: {data}", UserId, PacketLog.Hex(data));
+        var now = Environment.TickCount64;
+
+        if (_crcRejectLoggedAt != 0 && now - _crcRejectLoggedAt < CrcRejectLogInterval)
+            return;
+
+        _crcRejectLoggedAt = now;
+
+        GetStats(out var stats);
+
+        _logger.LogError("[CrcReject] UserId: {userid}, Data: {data} ({count} from this connection so far, logged once a minute at most)", UserId, PacketLog.Hex(data), stats.CrcRejectedPackets);
     }
 
     public override void OnPacketCorrupt(Span<byte> data, UdpCorruptionReason reason)
