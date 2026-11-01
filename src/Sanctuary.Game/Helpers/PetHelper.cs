@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
@@ -282,16 +283,28 @@ public static class PetHelper
     }
 
     public static bool TryOpenTreasureChest(Player player, PetTreasureChest chest, IRewardManager rewardManager,
-        IResourceManager resourceManager, IDbContextFactory<DatabaseContext> dbContextFactory, out RewardDropDefinition? itemDrop)
+        IResourceManager resourceManager, IDbContextFactory<DatabaseContext> dbContextFactory, ILogger logger, out RewardDropDefinition? itemDrop)
     {
         itemDrop = null;
 
         if (!InteractionMenuHelper.CanInteract(chest, player) || !chest.IsOwner(player) || !chest.TryOpen())
             return false;
 
-        // Evergrove: the treasure rest is saved before the chest pays anything, so no restart can forget it.
-        using (var dbContext = dbContextFactory.CreateDbContext())
+        // Evergrove: the treasure rest is saved before the chest pays anything, so no restart can forget it. If it can't
+        // be saved, the chest pays nothing and closes again rather than staying opened, unpaid and never removed: the
+        // player may open it again, and it goes when its time is up like any other.
+        try
+        {
+            using var dbContext = dbContextFactory.CreateDbContext();
             SaveTreasureFoundAt(dbContext, GuidHelper.GetPlayerId(player.Guid), chest.PetId, chest.FoundAt);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Failed to save the treasure rest of pet {petId} of character {characterId}.",
+                chest.PetId, GuidHelper.GetPlayerId(player.Guid));
+            chest.Close();
+            return false;
+        }
 
         EntityHelper.SetBaseAnimation(player, chest, TreasureChestOpenStandAnimationId);
         EntityHelper.SetAnimation(player, chest, TreasureChestOpenAnimationId);
