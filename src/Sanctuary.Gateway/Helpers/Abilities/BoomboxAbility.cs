@@ -21,8 +21,8 @@ public sealed class BoomboxAbility(AbilityServices services) : ConsumableAbility
         if (!_resourceManager.Consumables.Boomboxes.TryGetValue(itemDefinition.Id, out var definition))
             return SendFailure(player);
 
-        // Evergrove: a few boomboxes per character and a zone's worth in all (BoomboxHelper.MaxBoomboxesPerCharacter).
-        if (!BoomboxHelper.CanPlace(player.Zone, player.Guid))
+        // Evergrove: a few boomboxes per account and a zone's worth in all (BoomboxHelper.MaxBoomboxesPerAccount).
+        if (!BoomboxHelper.CanPlace(player))
             return SendFailure(player);
 
         SpawnBoomboxNpc(player, itemDefinition, definition);
@@ -88,7 +88,7 @@ public sealed class BoomboxAbility(AbilityServices services) : ConsumableAbility
         }
 
         BoomboxHelper.StartDanceLoop(player.Zone, boomboxNpc, spawnPosition, definition, songTagId, effectId, transformModelId, itemDefinition.NameId,
-            ownerGuid: player.Guid);
+            owner: player);
     }
 
 }
