@@ -44,8 +44,7 @@ public static class FlashMinigameHandler
     private static ILogger _logger = null!;
     private static ILogger _gameLogger = null!;
     private static IResourceManager _resourceManager = null!;
-    private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
-    private static IQuestManager _questManager = null!;
+    private static MinigameSettlement _settlement = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -54,8 +53,8 @@ public static class FlashMinigameHandler
         _gameLogger = loggerFactory.CreateLogger(nameof(MatchThreeGame));
 
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
-        _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
-        _questManager = serviceProvider.GetRequiredService<IQuestManager>();
+        _settlement = MinigameSettlement.Create(_resourceManager, serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>(),
+            serviceProvider.GetRequiredService<IQuestManager>(), _logger);
     }
 
     /// <summary>Opens the start screen for a known Flash minigame. False if the activity isn't one.</summary>
@@ -229,7 +228,8 @@ public static class FlashMinigameHandler
     /// own game decides the win (<see cref="FlashMinigameSession.SettleMatchThreeWin"/>), never a message from the
     /// Flash, so a forged, repeated or replayed "game over" pays nothing more. A win quicker than its levels can be
     /// played pays nothing either, and is logged as a warning. A paid win is the one a quest step that is this game
-    /// counts (<see cref="ActivityWonEvent"/>), so a win refused as too fast never passes a step.
+    /// counts (<see cref="ActivityWonEvent"/>), so a win refused as too fast never passes a step. Settling, paying and
+    /// telling the quests are <see cref="MinigameSettlement.SettleMatchThree"/>'s, which the tests run too.
     /// </summary>
     private static void Settle(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game)
     {
@@ -243,27 +243,23 @@ public static class FlashMinigameHandler
                 player.Guid, game.Result, game.Name, game.Level?.Number, game.TotalScore);
         }
 
-        var payout = session.SettleMatchThreeWin(out var reward);
+        var settled = _settlement.SettleMatchThree(session, player);
 
-        if (payout == MatchThreePayout.TooFast)
+        if (settled.Payout == MatchThreePayout.TooFast)
         {
             _logger.LogWarning("Minigame: {player} won {game} in {seconds:0.0} s, under the {minimum} s its levels take to play; " +
                 "nothing paid.", player.Guid, game.Name, game.SecondsToWin, game.MinSecondsToWin);
             return;
         }
 
-        if (payout != MatchThreePayout.Pay)
+        if (settled.Payout != MatchThreePayout.Pay)
             return;
 
-        using var dbContext = _dbContextFactory.CreateDbContext();
-
-        var paid = reward.Pay(_resourceManager, dbContext, _logger, player);
+        var (reward, paid) = (settled.Reward, settled.Paid);
 
         _logger.LogInformation("Minigame: {player} won {game} in {seconds:0.0} s: paid {coins} coins and {stars} stars on job " +
             "{profileId}.", player.Guid, game.Name, game.SecondsToWin, paid.Coins ? reward.Coins : 0,
             paid.Stars ? reward.Experience : 0, reward.ProfileId);
-
-        _questManager.OnEvent(player, new ActivityWonEvent(session.Definition.ActivityId));
     }
 
     /// <summary>The client ended the session (the minigame frame's close button).</summary>
