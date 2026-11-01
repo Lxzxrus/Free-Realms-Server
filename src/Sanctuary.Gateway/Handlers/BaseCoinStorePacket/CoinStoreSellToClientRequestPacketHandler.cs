@@ -136,6 +136,10 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
+        // An item sold in several colours has its stack limit in each, as upstream's store counts it. The client counts
+        // every colour together, so a real request is within it either way.
+        var hasTintGroup = coinStoreItem.TintGroupId != 0;
+
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var dbQuery = dbContext.Characters
@@ -144,6 +148,7 @@ public static class CoinStoreSellToClientRequestPacketHandler
             {
                 Character = x,
                 Item = x.Items.SingleOrDefault(i => i.Definition == clientItemDefinition.Id && i.Tint == tint),
+                OwnedCount = x.Items.Where(i => i.Definition == clientItemDefinition.Id && (!hasTintGroup || i.Tint == tint)).Sum(i => (long?)i.Count) ?? 0,
                 NextId = x.Items.Select(i => (int?)i.Id).Max() ?? 0
             })
             .SingleOrDefault();
@@ -151,6 +156,17 @@ public static class CoinStoreSellToClientRequestPacketHandler
         if (dbQuery is null)
         {
             coinStoreTransactionCompletePacket.Result = 8;
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
+
+        // A stack limit counts what the character already owns. It held for one request only, so a limited item (the
+        // free Domo Hat, say) could be bought one request at a time without end.
+        if (!StorePurchase.IsWithinStackLimit(clientItemDefinition, dbQuery.OwnedCount, packet.Quantity))
+        {
+            coinStoreTransactionCompletePacket.Result = 4; // Invalid quantity
 
             connection.SendTunneled(coinStoreTransactionCompletePacket);
 

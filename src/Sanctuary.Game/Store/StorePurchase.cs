@@ -44,6 +44,15 @@ public static class StorePurchase
         quantity > 0 && quantity <= (item.MaxStackSize > 0 ? item.MaxStackSize : MaxQuantity);
 
     /// <summary>
+    /// Whether a character that owns <paramref name="ownedCount"/> of <paramref name="item"/> may buy
+    /// <paramref name="quantity"/> more: never past its stack limit in all, when it has one. The client turns its Buy
+    /// button off at the limit and its quantity picker stops at what is left (FreeRealms.exe 0xc70fe0 and 0xbdac10, which
+    /// count every colour), so a real request is never refused.
+    /// </summary>
+    public static bool IsWithinStackLimit(ClientItemDefinition item, long ownedCount, long quantity) =>
+        item.MaxStackSize <= 0 || ownedCount + quantity <= item.MaxStackSize;
+
+    /// <summary>
     /// Whether the coin store sells <paramref name="item"/> in <paramref name="tint"/>: a colour of its tint group, which
     /// is what the colour picker sends, the item's own tint, which the store sends when there is no colour to pick, or 0,
     /// which the client sends for an item that isn't tintable.
