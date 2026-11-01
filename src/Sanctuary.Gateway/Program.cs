@@ -137,9 +137,10 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton(serviceProvider => new Lazy<IJobManager>(() => serviceProvider.GetRequiredService<IJobManager>()));
 
     // The NPC who offers a quest step's game opens it through the Games menu's own code, here in the Gateway. The quest
-    // manager takes it lazily too, so building the quest manager doesn't build the Gateway's server along with it.
+    // manager takes the launcher as it is, not lazily, so the container builds it with the quest manager as the Gateway
+    // starts (its zones and packet handlers take the quest manager): a registration missing here stops the Gateway then,
+    // not at a player's click.
     serviceCollection.AddSingleton<IActivityLauncher, ActivityLauncher>();
-    serviceCollection.AddSingleton(serviceProvider => new Lazy<IActivityLauncher>(() => serviceProvider.GetRequiredService<IActivityLauncher>()));
 
     serviceCollection.AddSingleton<IHouseManager, HouseManager>();
     serviceCollection.AddSingleton<HouseInvites>();

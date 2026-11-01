@@ -95,7 +95,7 @@ public sealed class QuestWorld : IDisposable
         // the job manager lazily.
         JobManager jobs = null!;
         Quests = new QuestManager(Resources, null!, database, new Lazy<IJobManager>(() => questJobs ?? jobs),
-            new Lazy<IActivityLauncher>(() => new Launcher(Launched)), Logged);
+            new Launcher(Launched), Logged);
         Jobs = jobs = new JobManager(Resources, database, null!, Quests, NullLogger<JobManager>.Instance);
 
         // The pet tests' connection that never connects, so the packets a step or a turn-in sends go nowhere.

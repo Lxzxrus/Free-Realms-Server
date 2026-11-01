@@ -40,12 +40,13 @@ public sealed class QuestManager : IQuestManager
     private readonly Lazy<IJobManager> _jobManager;
 
     // Evergrove: the NPC who offers a play step's game opens it the way the Games menu does, through the Gateway, which
-    // serves the games. Taken lazily too: building the quest manager doesn't build the Gateway's server (and open its
-    // port) along with it.
-    private readonly Lazy<IActivityLauncher> _activityLauncher;
+    // serves the games (Sanctuary.Gateway.ActivityLauncher). Taken as it is, not lazily as the job manager is: nothing it
+    // needs takes the quest manager, so the Gateway builds it with the quest manager as it starts, and a wiring mistake
+    // stops the Gateway there rather than at a player's click.
+    private readonly IActivityLauncher _activityLauncher;
 
     public QuestManager(IResourceManager resourceManager, IRewardManager rewardManager, IDbContextFactory<DatabaseContext> dbContextFactory,
-        Lazy<IJobManager> jobManager, Lazy<IActivityLauncher> activityLauncher, ILogger<QuestManager> logger)
+        Lazy<IJobManager> jobManager, IActivityLauncher activityLauncher, ILogger<QuestManager> logger)
     {
         _resourceManager = resourceManager;
         _rewardManager = rewardManager;
@@ -214,7 +215,7 @@ public sealed class QuestManager : IQuestManager
             || quest.Goals[goalIndex] is not PlayActivityGoal playGoal)
             return;
 
-        if (!_activityLauncher.Value.TryLaunch(player, playGoal.ActivityId))
+        if (!_activityLauncher.TryLaunch(player, playGoal.ActivityId))
         {
             _logger.LogWarning("Quest {questId}'s step {goalId} couldn't open activity {activityId} for character {characterId}: " +
                 "it isn't one the Games menu opens.", quest.QuestId, playGoal.NameId, playGoal.ActivityId, player.CharacterId);
