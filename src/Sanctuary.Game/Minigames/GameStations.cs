@@ -9,6 +9,7 @@ using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Interactions;
 using Sanctuary.Game.Resources;
+using Sanctuary.Packet.Common;
 
 namespace Sanctuary.Game.Minigames;
 
@@ -95,7 +96,89 @@ public static class GameStations
         if (TryGet(npc.DefinitionId, out _))
             npc.QuestInteractRange = WalkInRange;
     }
+
+    /// <summary>
+    /// What each kind of station wears, keyed by its games' icon (their ImageSetId): the badge and hover cursor the retail
+    /// capture shows on its own objects of that kind in Npcs.json. A badge's image (IconState) is a NotificationImages.txt
+    /// row, the kind's icon in a bubble, flagged for the minimap; the cursor is a Cursors.txt row.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<int, GameStationBadge> Badges = new Dictionary<int, GameStationBadge>
+    {
+        // Cooking, as on the Lakeshore and Snowhill tables (33482, 33636).
+        [7546] = new(IconId: 35, IconState: 58, ReferenceId: 0, CursorId: 15),
+
+        // Harvesting, as on the Queensfields tools (33213).
+        [7555] = new(IconId: 36, IconState: 61, ReferenceId: -1, CursorId: 18),
+
+        // Forging, as on the Lakeshore anvil (33481).
+        [7552] = new(IconId: 47, IconState: 60, ReferenceId: 0, CursorId: 22),
+
+        // Mail, as on the plaza's postboxes (33389): an envelope (row 11), not the mail-sorting bubble (row 62).
+        [7558] = new(IconId: 22, IconState: 11, ReferenceId: -1, CursorId: 17),
+
+        // Fishing, as on Frostbitten Banks (33620).
+        [21061] = new(IconId: 151, IconState: 236, ReferenceId: -1, CursorId: 17)
+    };
+
+    /// <summary>
+    /// Shows on an NPC just spawned (BaseZone.TryCreateNpc, after its Npcs.json badges) whether it opens a game. A station
+    /// the server can open a game at wears its kind's badge (<see cref="Badges"/>), unless it has one with that image
+    /// already, and its kind's cursor, unless it has one. A station with nothing to open wears no minigame badge
+    /// (NotificationType 6) and no cursor until its game is wired, rather than the capture's, which advertise a game that
+    /// doesn't open. Any other NPC is left as it is. It is decided at spawn: a game wired by a reload shows after a restart.
+    /// </summary>
+    public static void ShowWhatItOpens(Npc npc, ClientActivityDefinitionCollection activities, Func<int, bool> isPlayable)
+    {
+        if (!TryGet(npc.DefinitionId, out var station))
+            return;
+
+        var game = station.ActivityIds
+            .Where(isPlayable)
+            .Select(activityId => activities.TryGetValue(activityId, out var activity) ? activity : null)
+            .FirstOrDefault(activity => activity is not null);
+
+        if (game is null)
+        {
+            npc.Notifications.RemoveAll(notification => notification.NotificationType == PointOfInterestNotificationType.Local);
+            npc.HasCursor = null;
+            npc.CursorId = 0;
+            return;
+        }
+
+        if (!Badges.TryGetValue(game.ImageSetId, out var badge))
+            return;
+
+        if (!npc.Notifications.Any(notification => notification.IconState == badge.IconState))
+        {
+            npc.Notifications.Add(new NotificationInfo
+            {
+                Guid = npc.Guid,
+                NotificationType = PointOfInterestNotificationType.Local,
+                IconId = badge.IconId,
+                IconState = badge.IconState,
+                NameId = npc.NameId,
+                ReferenceId = badge.ReferenceId,
+                Enabled = true
+            });
+        }
+
+        if (!InteractionMenuHelper.HasOwnCursor(npc))
+        {
+            npc.HasCursor = true;
+            npc.CursorId = badge.CursorId;
+        }
+    }
 }
+
+/// <summary>
+/// How a kind of station shows that it opens a game (<see cref="GameStations.Badges"/>): a badge, a minimap point of
+/// interest (NotificationType 6, PointOfInterestNotificationType.Local), and a hover cursor.
+/// </summary>
+/// <param name="IconId">As the capture has it: what it means is unknown.</param>
+/// <param name="IconState">The badge's image, a NotificationImages.txt row.</param>
+/// <param name="ReferenceId">As the capture has it.</param>
+/// <param name="CursorId">The hover cursor, a Cursors.txt row.</param>
+public readonly record struct GameStationBadge(int IconId, int IconState, int ReferenceId, byte CursorId);
 
 /// <summary>
 /// The buttons a click on a world object shows, and what each does: the object's quest buttons, then one for each of its
