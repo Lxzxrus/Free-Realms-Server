@@ -82,26 +82,28 @@ public class GatewayConnection : UdpConnection
         if (Player is null)
             return;
 
-        _serviceProvider.GetRequiredService<ITradeManager>().OnDisconnected(Player);
-
-        SendFriendOffline();
-
-        SendGuildMemberOffline();
-
-        _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
-
-        // A save that throws (the database out of reach for a moment) is logged, and the player still leaves their zone
-        // below. Before, they stayed in it as a ghost that nothing removed.
+        // Whatever throws here (the save, with the database out of reach for a moment) is logged, and the player still
+        // leaves their zone. Before, a throw skipped Player.Dispose, so they stayed in it as a ghost that nothing removed.
         try
         {
+            _serviceProvider.GetRequiredService<ITradeManager>().OnDisconnected(Player);
+
+            SendFriendOffline();
+
+            SendGuildMemberOffline();
+
+            _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
+
             SavePlayerToDatabase();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "{connection} failed to save character {characterId} at logout.", this, GuidHelper.GetPlayerId(Player.Guid));
+            _logger.LogError(ex, "{connection} failed while logging out character {characterId}.", this, GuidHelper.GetPlayerId(Player.Guid));
         }
-
-        Player.Dispose();
+        finally
+        {
+            Player.Dispose();
+        }
     }
 
     public override void OnRoutePacket(Span<byte> data)
