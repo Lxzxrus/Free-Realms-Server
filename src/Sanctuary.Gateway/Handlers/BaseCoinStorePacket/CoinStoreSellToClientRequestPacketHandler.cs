@@ -10,6 +10,7 @@ using Sanctuary.Core.IO;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
+using Sanctuary.Game.Store;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -72,6 +73,17 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
+        // No more than the client's quantity picker allows. A free item could otherwise be had by the billion in one
+        // request.
+        if (!StorePurchase.IsQuantityAllowed(clientItemDefinition, packet.Quantity))
+        {
+            coinStoreTransactionCompletePacket.Result = 4; // Invalid quantity
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
+
         var cost = connection.Player.MembershipStatus == 0
             ? clientItemDefinition.Cost
             : clientItemDefinition.GetMemberPurchasePrice();
@@ -86,7 +98,7 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
-        if (!_resourceManager.CoinStoreItems.ContainsKey(clientItemDefinition.Id))
+        if (!_resourceManager.CoinStoreItems.TryGetValue(clientItemDefinition.Id, out var coinStoreItem))
         {
             coinStoreTransactionCompletePacket.Result = 8;
 
@@ -113,6 +125,22 @@ public static class CoinStoreSellToClientRequestPacketHandler
                 ? packet.ItemRecord.Tint
                 : clientItemDefinition.Icon.TintId;
 
+        // Each colour of an item is an inventory row of its own, so an item comes only in a colour the store offers it in.
+        // A made-up tint was a new row on every request, free or for a few coins, and every login loads them all. The
+        // colour picker sends no other tint, whatever the price.
+        if (!StorePurchase.IsOfferedTint(clientItemDefinition, coinStoreItem.TintGroupId, tint))
+        {
+            coinStoreTransactionCompletePacket.Result = 3; // Invalid item
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
+
+        // An item sold in several colours has its stack limit in each, as upstream's store counts it. The client counts
+        // every colour together, so a real request is within it either way.
+        var hasTintGroup = coinStoreItem.TintGroupId != 0;
+
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var dbQuery = dbContext.Characters
@@ -121,6 +149,7 @@ public static class CoinStoreSellToClientRequestPacketHandler
             {
                 Character = x,
                 Item = x.Items.SingleOrDefault(i => i.Definition == clientItemDefinition.Id && i.Tint == tint),
+                OwnedCount = x.Items.Where(i => i.Definition == clientItemDefinition.Id && (!hasTintGroup || i.Tint == tint)).Sum(i => (long?)i.Count) ?? 0,
                 NextId = x.Items.Select(i => (int?)i.Id).Max() ?? 0
             })
             .SingleOrDefault();
@@ -128,6 +157,17 @@ public static class CoinStoreSellToClientRequestPacketHandler
         if (dbQuery is null)
         {
             coinStoreTransactionCompletePacket.Result = 8;
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
+
+        // A stack limit counts what the character already owns. It held for one request only, so a limited item (the
+        // free Domo Hat, say) could be bought one request at a time without end.
+        if (!StorePurchase.IsWithinStackLimit(clientItemDefinition, dbQuery.OwnedCount, packet.Quantity))
+        {
+            coinStoreTransactionCompletePacket.Result = 4; // Invalid quantity
 
             connection.SendTunneled(coinStoreTransactionCompletePacket);
 
