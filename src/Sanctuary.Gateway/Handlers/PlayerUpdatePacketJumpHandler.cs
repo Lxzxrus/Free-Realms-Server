@@ -30,6 +30,10 @@ public static class PlayerUpdatePacketJumpHandler
 
         // _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PlayerUpdatePacketJump), packet);
 
+        // Evergrove: a height past Positions.HeightLimit is held at the limit, as in a position update: a player who has
+        // fallen through the world is no fault.
+        packet.Position = Positions.ClampHeight(packet.Position);
+
         // Evergrove: a jump moves and turns the player too, so it is held to the same standard as
         // PlayerUpdatePacketUpdatePosition: a finite position in the world (pets and NPCs act on it, and far outside the
         // world a pet following its owner could freeze the zone's tick inside the navmesh) and a rotation within

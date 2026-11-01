@@ -20,8 +20,8 @@ public static class Positions
     /// How far above or below its zone's origin a real client's point can be, with a wide margin: FabledRealms' terrain
     /// lies between about -260 and +410 and its lowest collision mesh reaches about -1,970, while the house lots and
     /// fishing holes stay within a few hundred units of 0. The margin is for a player who falls through the world: they
-    /// may fall a long way, and must still be able to press the stuck button. Past this a height is no real one, and
-    /// not every finite float can be saved: MariaDB refuses float.MaxValue.
+    /// may fall a long way, and must still be able to press the stuck button. A client's height past this is held at it
+    /// (<see cref="ClampHeight"/>), as not every finite float can be saved: MariaDB refuses float.MaxValue.
     /// </summary>
     public const float HeightLimit = 10_000_000f;
 
@@ -52,6 +52,20 @@ public static class Positions
     /// </summary>
     public static bool IsInWorld(Vector4 position) =>
         MathF.Abs(position.X) <= WorldLimit && MathF.Abs(position.Z) <= WorldLimit && MathF.Abs(position.Y) <= HeightLimit;
+
+    /// <summary>
+    /// The position with a finite height past <see cref="HeightLimit"/> brought back to the limit, and any other as it
+    /// is: NaN and infinities are left for <see cref="IsInWorld"/> to refuse. A player who falls through the world keeps
+    /// falling, and their client keeps sending where they are. Counted as faults, those positions disconnected them
+    /// within a second, and as the last one inside the limit had been saved, again soon after every login.
+    /// </summary>
+    public static Vector4 ClampHeight(Vector4 position)
+    {
+        if (float.IsFinite(position.Y))
+            position.Y = Math.Clamp(position.Y, -HeightLimit, HeightLimit);
+
+        return position;
+    }
 
     /// <summary>Whether every component of the rotation is within <see cref="RotationLimit"/>; false for any NaN.</summary>
     public static bool IsWithinRotationLimit(Quaternion rotation) =>

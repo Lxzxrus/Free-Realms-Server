@@ -70,6 +70,32 @@ public sealed class PositionsTests
     }
 
     [TestMethod]
+    public void HeightsPastTheLimit_AreHeldAtIt()
+    {
+        // A player who has fallen through the world and kept falling: held at the limit, so in the world (no fault) and
+        // saved as that.
+        var fallen = Positions.ClampHeight(new Vector4(-1904.883f, -3f * Positions.HeightLimit, 412.6024f, 1f));
+
+        Assert.AreEqual(new Vector4(-1904.883f, -Positions.HeightLimit, 412.6024f, 1f), fallen);
+        Assert.IsTrue(Positions.IsInWorld(fallen));
+        Assert.AreEqual(Positions.HeightLimit, Positions.ClampHeight(new Vector4(0f, float.MaxValue, 0f, 1f)).Y);
+
+        // A height within the limit is left as it is, and nothing but the height is ever changed: far out across the
+        // ground is still outside the world.
+        var spawn = new Vector4(-1904.883f, -39.7098f, 412.6024f, 1f);
+        var farOut = Positions.ClampHeight(new Vector4(1e20f, -1e20f, 5f, 7f));
+
+        Assert.AreEqual(spawn, Positions.ClampHeight(spawn));
+        Assert.AreEqual(new Vector4(1e20f, -Positions.HeightLimit, 5f, 7f), farOut);
+        Assert.IsFalse(Positions.IsInWorld(farOut));
+
+        // NaN and infinities are no height a fall reaches: they are left for IsInWorld to refuse.
+        Assert.IsTrue(float.IsNaN(Positions.ClampHeight(new Vector4(0f, float.NaN, 0f, 1f)).Y));
+        Assert.AreEqual(float.NegativeInfinity, Positions.ClampHeight(new Vector4(0f, float.NegativeInfinity, 0f, 1f)).Y);
+        Assert.IsFalse(Positions.IsInWorld(Positions.ClampHeight(new Vector4(0f, float.PositiveInfinity, 0f, 1f))));
+    }
+
+    [TestMethod]
     public void RotationsBeyondAnyRealOne_AreNotWithinTheLimit()
     {
         // FabledRealms' spawn heading, a heading made from an angle, a unit quaternion and no rotation at all.
