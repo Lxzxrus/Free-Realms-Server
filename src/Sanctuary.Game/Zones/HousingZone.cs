@@ -24,7 +24,9 @@ public sealed class HousingZone : BaseZone
 
     /// <summary>
     /// The account that owns the house. Every character on it may do what the owner can. <see cref="BaseZone.OwnerId"/>
-    /// is the character who bought the house, which with the zone definition identifies the house.
+    /// is the character that held the house when it was loaded. Evergrove: that can change while it's loaded (a deleted
+    /// character's houses move to another character on the account), so the zone manager keeps the instance by
+    /// <see cref="HouseId"/>, and code in the house asks who holds it now (<see cref="HouseOwnership.FindHolder"/>).
     /// </summary>
     public ulong OwnerUserId { get; }
     public HousingZoneDefinition HousingDefinition { get; }

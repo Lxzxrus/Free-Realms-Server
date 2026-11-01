@@ -1026,13 +1026,14 @@ public sealed class HousingZoneRuntime : IDisposable
 
     private DbHouse? LoadHouse(DatabaseContext dbContext)
     {
+        // Evergrove: by the house, whichever character holds it now. That can change while it's loaded (HouseHandover);
+        // the zone manager keeps the instance by the house, so it's still this one.
         return dbContext.Houses
             .AsNoTracking()
             .Include(house => house.Character)
             .Include(house => house.Fixtures)
             .FirstOrDefault(house =>
                 house.Id == _zone.HouseId &&
-                house.CharacterId == _zone.OwnerId &&
                 house.ZoneDefinitionId == _zone.DefinitionId);
     }
 

@@ -6,10 +6,12 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Database.Sqlite;
 using Sanctuary.Game.Housing;
+using Sanctuary.Packet.Common;
 
 namespace Sanctuary.Game.Tests;
 
@@ -400,6 +402,52 @@ public sealed class HouseHandoverTests
         Assert.IsTrue(moved.IsLocked);
     }
 
+    /// <summary>
+    /// A house loaded when it changes hands stays one instance. The zone manager keys a house's instance by the house,
+    /// and looking it up under the new holder finds the same house on the same account, so whoever comes in joins the
+    /// instance loaded for the deleted character. Code in the house asks who holds it now.
+    /// </summary>
+    [TestMethod]
+    public void AMovedHouse_IsTheSameHouseUnderItsNewHolder()
+    {
+        AddHouses(House(100, Gone, Seaside));
+
+        using (var dbContext = CreateDbContext())
+        {
+            Assert.AreEqual((100UL, Builder), HouseOwnership.FindHeld(dbContext, Gone, Seaside));
+            Assert.AreEqual(Gone, HouseOwnership.FindHolder(dbContext, 100));
+        }
+
+        Delete(Gone);
+
+        using (var dbContext = CreateDbContext())
+        {
+            Assert.AreEqual((100UL, Builder), HouseOwnership.FindHeld(dbContext, Eldest, Seaside));
+            Assert.IsNull(HouseOwnership.FindHeld(dbContext, Gone, Seaside));
+            Assert.IsNull(HouseOwnership.FindHeld(dbContext, Younger, Seaside), "Only its holder finds it by lot.");
+            Assert.AreEqual(Eldest, HouseOwnership.FindHolder(dbContext, 100));
+            Assert.IsNull(HouseOwnership.FindHolder(dbContext, 999));
+        }
+    }
+
+    /// <summary>
+    /// A lock lets the friends of the character holding the house stay, so after a move, the new holder's. The deleted
+    /// character's friends are nobody's now. Every character on the account may stay, as before.
+    /// </summary>
+    [TestMethod]
+    public void AfterAMove_ALockLetsTheNewHoldersFriendsStay()
+    {
+        AddHouses(House(100, Gone, Seaside));
+        Delete(Gone);
+
+        using var dbContext = CreateDbContext();
+        var holder = HouseOwnership.FindHolder(dbContext, 100)!.Value;
+
+        Assert.IsTrue(HouseAccess.MayBeInLockedHouse(Neighbour, [Friend(Eldest)], Builder, holder));
+        Assert.IsFalse(HouseAccess.MayBeInLockedHouse(Neighbour, [Friend(Gone)], Builder, holder));
+        Assert.IsTrue(HouseAccess.MayBeInLockedHouse(Builder, [], Builder, holder));
+    }
+
     [TestMethod]
     public void ACharacterWithNoHouses_MovesNothing()
     {
@@ -411,6 +459,8 @@ public sealed class HouseHandoverTests
         Assert.AreEqual(0, handover.Unmoved.Count);
         Assert.AreEqual(Eldest, HolderOf(110));
     }
+
+    private static FriendData Friend(ulong characterId) => new() { Guid = GuidHelper.GetPlayerGuid(characterId) };
 
     private static string[] Describe(DbHouse house)
     {

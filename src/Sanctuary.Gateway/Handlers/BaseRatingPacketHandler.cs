@@ -290,7 +290,7 @@ public static class BaseRatingPacketHandler
     {
         votedHouseId = null;
 
-        if (!TryGetActiveHouseKey(connection, out var houseId, out var ownerId, out var zoneDefinitionId))
+        if (!TryGetActiveHouseKey(connection, out var houseId, out var zoneDefinitionId))
         {
             ChatHelper.SendSystemMessage(connection.Player, "Stand in a ranked plot to vote for it.");
             return null;
@@ -314,7 +314,6 @@ public static class BaseRatingPacketHandler
 
                 if (!dbContext.Houses.Any(house =>
                         house.Id == houseId &&
-                        house.CharacterId == ownerId &&
                         house.ZoneDefinitionId == zoneDefinitionId))
                 {
                     return new PlotVoteOutcome(PlotVoteResult.NotFound);
@@ -438,12 +437,10 @@ public static class BaseRatingPacketHandler
         if (TryGetActiveHouseKey(
             connection,
             out var activeHouseId,
-            out var activeOwnerId,
             out var activeZoneDefinitionId))
         {
             var current = query.SingleOrDefault(house =>
                 house.Id == activeHouseId &&
-                house.CharacterId == activeOwnerId &&
                 house.ZoneDefinitionId == activeZoneDefinitionId);
             if (current is not null)
                 return current;
@@ -481,10 +478,8 @@ public static class BaseRatingPacketHandler
         if (TryGetActiveHouseKey(
                 connection,
                 out var activeHouseId,
-                out var activeOwnerId,
                 out var activeZoneDefinitionId) &&
             activeHouseId == house.Id &&
-            activeOwnerId == house.CharacterId &&
             activeZoneDefinitionId == house.ZoneDefinitionId)
         {
             return true;
@@ -501,14 +496,13 @@ public static class BaseRatingPacketHandler
     /// <summary>The house the player is standing in, if their account owns it.</summary>
     private static DbHouse? FindCurrentOwnedHouse(DatabaseContext dbContext, GatewayConnection connection)
     {
-        if (!TryGetActiveHouseKey(connection, out var houseId, out var ownerId, out var zoneDefinitionId))
+        if (!TryGetActiveHouseKey(connection, out var houseId, out var zoneDefinitionId))
             return null;
 
         return HouseOwnership.OwnedByAccountOf(dbContext, GuidHelper.GetPlayerId(connection.Player.Guid))
             .Include(house => house.Character)
             .SingleOrDefault(house =>
                 house.Id == houseId &&
-                house.CharacterId == ownerId &&
                 house.ZoneDefinitionId == zoneDefinitionId);
     }
 
@@ -526,10 +520,8 @@ public static class BaseRatingPacketHandler
             var isActiveHouse = TryGetActiveHouseKey(
                     connection,
                     out var activeHouseId,
-                    out var ownerId,
                     out var zoneDefinitionId) &&
                 activeHouseId == house.Id &&
-                ownerId == house.CharacterId &&
                 zoneDefinitionId == house.ZoneDefinitionId;
 
             var standing = LoadStandings(dbContext).For(house.Id);
@@ -657,25 +649,25 @@ public static class BaseRatingPacketHandler
         }
     }
 
+    /// <summary>
+    /// The house the player is standing in. Evergrove: by the house, not by the character holding it, which can change
+    /// while the house is loaded (<see cref="HouseHandover"/>).
+    /// </summary>
     private static bool TryGetActiveHouseKey(
         GatewayConnection connection,
         out ulong houseId,
-        out ulong ownerId,
         out int zoneDefinitionId)
     {
         houseId = 0;
-        ownerId = 0;
         zoneDefinitionId = 0;
 
         if (connection.Player.Zone is not HousingZone housingZone ||
-            housingZone.OwnerId is not ulong activeOwnerId ||
             !IsSupportedZoneDefinition(housingZone.DefinitionId))
         {
             return false;
         }
 
         houseId = housingZone.HouseId;
-        ownerId = activeOwnerId;
         zoneDefinitionId = housingZone.DefinitionId;
         return true;
     }

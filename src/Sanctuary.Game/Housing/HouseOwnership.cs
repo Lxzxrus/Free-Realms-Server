@@ -22,4 +22,34 @@ public static class HouseOwnership
 
         return dbContext.Houses.Where(house => userIds.Contains(house.Character.UserId));
     }
+
+    /// <summary>
+    /// The house a character holds on a lot, with the account that owns it, or <c>null</c>. A character holds one house
+    /// of each lot at most (the unique index on <c>Houses</c>).
+    /// </summary>
+    public static (ulong HouseId, ulong UserId)? FindHeld(
+        DatabaseContext dbContext,
+        ulong characterId,
+        int zoneDefinitionId)
+    {
+        var house = dbContext.Houses
+            .Where(candidate => candidate.CharacterId == characterId && candidate.ZoneDefinitionId == zoneDefinitionId)
+            .Select(candidate => new { candidate.Id, candidate.Character.UserId })
+            .SingleOrDefault();
+
+        return house is null ? null : (house.Id, house.UserId);
+    }
+
+    /// <summary>
+    /// Evergrove: the character holding a house now, or <c>null</c> if there's no such house. It can change while the
+    /// house is loaded (<see cref="HouseHandover"/>), so code in a house asks, rather than going by whom it was loaded
+    /// for.
+    /// </summary>
+    public static ulong? FindHolder(DatabaseContext dbContext, ulong houseId)
+    {
+        return dbContext.Houses
+            .Where(house => house.Id == houseId)
+            .Select(house => (ulong?)house.CharacterId)
+            .FirstOrDefault();
+    }
 }
