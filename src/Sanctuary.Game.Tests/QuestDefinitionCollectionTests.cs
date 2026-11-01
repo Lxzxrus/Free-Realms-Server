@@ -233,7 +233,7 @@ public sealed class QuestDefinitionCollectionTests
     /// A step won by playing a game (<see cref="PlayActivityGoal"/>) is credited only by a win the server reports, from a
     /// match-three game or a Cooking recipe. A step naming any other activity (a fishing hole, a game that isn't built)
     /// could never be finished; the server only warns about it. Every one names the NPC who offers its game, or it would
-    /// have no target and no Take Me There.
+    /// have no target and no Take Me There, and none is a quest's last step, which a talk step takes for the hand-in.
     /// </summary>
     [TestMethod]
     public void ShippedPlayGoals_NameAGameWhoseWinsTheServerReports()
@@ -250,9 +250,10 @@ public sealed class QuestDefinitionCollectionTests
 
         var problems = playGoals
             .Where(play => PlayableActivities.WinsOf(play.Goal.ActivityId, mimic) == ActivityWins.NotReported
-                || play.Goal.RequiredCount < 1 || play.Goal.NpcId == 0)
+                || play.Goal.RequiredCount < 1 || play.Goal.NpcId == 0 || ReferenceEquals(play.Goal, play.Quest.Goals[^1]))
             .Select(play => $"Quest {play.Quest.QuestId}, goal {play.Goal.NameId}: activity {play.Goal.ActivityId}, " +
-                $"{play.Goal.RequiredCount} wins, offered by NPC {play.Goal.NpcId}")
+                $"{play.Goal.RequiredCount} wins, offered by NPC {play.Goal.NpcId}, step {play.Quest.Goals.IndexOf(play.Goal) + 1} " +
+                $"of {play.Quest.Goals.Count}")
             .ToList();
 
         Assert.AreEqual(0, problems.Count, string.Join("\n", problems));

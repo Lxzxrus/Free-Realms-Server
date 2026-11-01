@@ -154,9 +154,15 @@ only**: no items, no collection, no job that no trainer gives, nothing scarce (S
 The server warns at startup, and the test `ShippedQuestsWonOnTheClientsReport_RewardOnlyCoinsAndStars`
 fails, about a quest that breaks this.
 
-Fishing and the wheel report no wins, so a step can't be won there. The server warns at startup, and the
-test `ShippedPlayGoals_NameAGameWhoseWinsTheServerReports` fails, when a step names a game whose wins
-aren't reported, or names no NPC to offer it.
+Fishing and the wheel report no wins, so a step can't be won there. A catch doesn't credit a play step
+yet (a later piece adds a catch event from `FishingSession`, the hole being the activity), so **a play step
+can't name a fishing hole**: Reed's Testing the Waters, at Sacred Grove Shallows (activity 563), waits for
+it. The server warns at startup, and the test `ShippedPlayGoals_NameAGameWhoseWinsTheServerReports`
+fails, when a step names a game whose wins aren't reported, names no NPC to offer it, or ends the quest.
+
+**A play step is followed by a talk step for the hand-in**, as the Cafe's steak is handed to Simone. A
+quest that ended on a play step would be handed in the moment the game is won: the reward window would
+open over the game, with no line from anyone, as a game has no conversation. The loader warns about it.
 
 Each win counts once, toward one quest: with two quests on a step for the same game, one win ticks the
 tracked one's, or else the one with the lowest `QuestId` (a pickup two quests want goes the same way). It

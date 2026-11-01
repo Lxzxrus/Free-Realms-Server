@@ -260,6 +260,11 @@ public class QuestDefinitionCollection
                     break;
             }
         }
+
+        // Evergrove: a quest that ends on a play step would be handed in the moment the game is won, its reward window
+        // over the game and no line from anyone, as a game has no conversation. A talk step after it takes the hand-in.
+        if (quest.Goals.Count > 0 && quest.Goals[^1] is PlayActivityGoal)
+            _logger.LogWarning("Quest {id} ends on a play goal in \"{file}\"; winning the game would hand it in, over the game and with nobody's thanks. End it with a talk goal.", quest.QuestId, filePath);
     }
 
     private void EnforceSymmetricExclusions(Index index, string filePath)
