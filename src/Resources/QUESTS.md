@@ -158,9 +158,10 @@ Fishing and the wheel report no wins, so a step can't be won there. The server w
 test `ShippedPlayGoals_NameAGameWhoseWinsTheServerReports` fails, when a step names a game whose wins
 aren't reported, or names no NPC to offer it.
 
-Each win counts once, toward one quest: with two quests on a step for the same game, one win ticks one of
-them. It counts only while the step is open; a game won before is not remembered. A step needing more than
-one win saves each as it counts, so a relog keeps them.
+Each win counts once, toward one quest: with two quests on a step for the same game, one win ticks the
+tracked one's, or else the one with the lowest `QuestId` (a pickup two quests want goes the same way). It
+counts only while the step is open; a game won before is not remembered. A step needing more than one win
+saves each as it counts, so a relog keeps them.
 
 `NpcId` is the NPC who offers the game while the step is open: clicking them opens its start screen the
 way the Games menu does (`IActivityLauncher`, with the menu's checks, such as one game at a time), and the

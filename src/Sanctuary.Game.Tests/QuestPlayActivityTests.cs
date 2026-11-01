@@ -150,6 +150,45 @@ public sealed class QuestPlayActivityTests
     }
 
     /// <summary>
+    /// A win two quests want goes to the one the player tracks, wherever it sits in their quest log: here the one taken
+    /// second, which the log reaches last.
+    /// </summary>
+    [TestMethod]
+    public void AWinTwoQuestsWant_TicksTheTrackedOne()
+    {
+        var first = _world.Accept(Cafe(questId: 1));
+        var second = _world.Accept(Cafe(questId: 2));
+
+        Assert.AreEqual(2, _world.Player.Quests.ActiveQuestId, "Taking a quest tracks it.");
+
+        Win(Steak);
+
+        Assert.AreEqual(1, second.GoalIndex, "The tracked quest's step ticks.");
+        Assert.AreEqual(0, first.GoalIndex);
+    }
+
+    /// <summary>When the tracked quest doesn't want the win, it goes to the others by quest id, not by the log's order.</summary>
+    [TestMethod]
+    public void AWinTheTrackedQuestDoesntWant_GoesToTheLowestQuestId()
+    {
+        var higher = _world.Accept(Cafe(questId: 2));
+        var lower = _world.Accept(Cafe(questId: 1));
+
+        // Taken last, so tracked: a talk with Samantha.
+        _world.Accept(new QuestDefinition
+        {
+            QuestId = 3,
+            TargetNpcId = Samantha,
+            Goals = [new TalkToNpcGoal { NameId = 30, Targets = [new TalkTarget { NpcId = Samantha }] }]
+        });
+
+        Win(Steak);
+
+        Assert.AreEqual(1, lower.GoalIndex);
+        Assert.AreEqual(0, higher.GoalIndex);
+    }
+
+    /// <summary>
     /// No world object starts a game yet, so while the cooking step is open Simone offers the steak herself: one option,
     /// under the game's own title, that opens it the way the Games menu does (the Gateway's launcher, recorded here).
     /// </summary>

@@ -27,6 +27,6 @@ public sealed record PlayerMovedEvent(Vector4 Position, int ZoneDefinitionId) : 
 /// </summary>
 public sealed record ActivityWonEvent(int ActivityId) : QuestEvent
 {
-    // One game won is one win, like one pickup: it counts toward one quest's step, never two.
+    // One game won is one win, like one pickup: it counts toward one quest's step, never two (the tracked quest's first).
     public override bool CreditsOneQuest => true;
 }

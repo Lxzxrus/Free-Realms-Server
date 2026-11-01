@@ -216,7 +216,21 @@ public sealed class QuestManager : IQuestManager
 
     public void OnEvent(Player player, QuestEvent questEvent)
     {
-        foreach (var (quest, progress, goalIndex, goal) in ActiveGoals(player).ToList())
+        var activeGoals = ActiveGoals(player).ToList();
+
+        // Evergrove: an event that credits one quest (a pickup, a game won) goes to the tracked quest when it can take it,
+        // then to the others by quest id, rather than in whatever order the quest log's dictionary holds them.
+        if (questEvent.CreditsOneQuest)
+        {
+            var trackedQuestId = player.Quests.ActiveQuestId;
+
+            activeGoals = activeGoals
+                .OrderBy(active => active.Quest.QuestId != trackedQuestId)
+                .ThenBy(active => active.Quest.QuestId)
+                .ToList();
+        }
+
+        foreach (var (quest, progress, goalIndex, goal) in activeGoals)
         {
             if (!progress.OpenGoals.TryGetValue(goalIndex, out var goalProgress))
                 continue;
