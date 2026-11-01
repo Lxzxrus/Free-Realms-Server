@@ -10,6 +10,7 @@ using Sanctuary.Core.IO;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
+using Sanctuary.Game.Store;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -72,6 +73,17 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
+        // No more than the client's quantity picker allows. A free item could otherwise be had by the billion in one
+        // request.
+        if (!StorePurchase.IsQuantityAllowed(clientItemDefinition, packet.Quantity))
+        {
+            coinStoreTransactionCompletePacket.Result = 4; // Invalid quantity
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
+
         var cost = connection.Player.MembershipStatus == 0
             ? clientItemDefinition.Cost
             : clientItemDefinition.GetMemberPurchasePrice();
@@ -86,7 +98,7 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
-        if (!_resourceManager.CoinStoreItems.ContainsKey(clientItemDefinition.Id))
+        if (!_resourceManager.CoinStoreItems.TryGetValue(clientItemDefinition.Id, out var coinStoreItem))
         {
             coinStoreTransactionCompletePacket.Result = 8;
 
@@ -112,6 +124,17 @@ public static class CoinStoreSellToClientRequestPacketHandler
             : clientItemDefinition.IsTintable
                 ? packet.ItemRecord.Tint
                 : clientItemDefinition.Icon.TintId;
+
+        // Each colour of an item is an inventory row of its own, so a free item comes only in a colour the store offers
+        // it in. A made-up tint was a new free row on every request, and every login loads them all.
+        if (totalCost == 0 && !StorePurchase.IsOfferedTint(clientItemDefinition, coinStoreItem.TintGroupId, tint))
+        {
+            coinStoreTransactionCompletePacket.Result = 3; // Invalid item
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
 
         using var dbContext = _dbContextFactory.CreateDbContext();
 
