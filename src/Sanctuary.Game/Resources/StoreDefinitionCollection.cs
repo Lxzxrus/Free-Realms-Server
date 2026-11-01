@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 using Microsoft.Extensions.Logging;
@@ -14,10 +15,17 @@ public class StoreDefinitionCollection : ObservableConcurrentDictionary<int, Sto
 {
     private readonly ILogger _logger;
 
+    // The items of every tintable bundle, gathered when the bundles load, so a client asking for item definitions
+    // doesn't walk all of every store's bundles for each id it names.
+    private volatile IReadOnlySet<int> _tintableBundleItemIds = new HashSet<int>();
+
     public StoreDefinitionCollection(ILogger logger)
     {
         _logger = logger;
     }
+
+    /// <summary>Whether a tintable bundle, one the buyer picks a colour for, holds <paramref name="marketingItemId"/>.</summary>
+    public bool IsInTintableBundle(int marketingItemId) => _tintableBundleItemIds.Contains(marketingItemId);
 
     public bool Load(string filePath)
     {
@@ -99,6 +107,13 @@ public class StoreDefinitionCollection : ObservableConcurrentDictionary<int, Sto
 
                 storeDefinition.Bundles.Add(entry.Id, entry);
             }
+
+            _tintableBundleItemIds = Values
+                .SelectMany(storeDefinition => storeDefinition.Bundles.Values)
+                .Where(appStoreBundleDefinition => appStoreBundleDefinition.IsTintable)
+                .SelectMany(appStoreBundleDefinition => appStoreBundleDefinition.Entries)
+                .Select(entry => entry.MarketingItemId)
+                .ToHashSet();
         }
         catch (Exception ex)
         {

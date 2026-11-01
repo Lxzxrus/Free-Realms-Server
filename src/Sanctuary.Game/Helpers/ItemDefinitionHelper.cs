@@ -46,7 +46,8 @@ public static class ItemDefinitionHelper
         player.SendTunneled(playerUpdatePacketItemDefinitionRequest);
     }
 
+    // The stores gather their tintable bundles' items when they load; walking every bundle here was a full scan for each
+    // id a client named.
     private static bool HasTintChoice(IResourceManager resourceManager, ClientItemDefinition clientItemDefinition) =>
-        resourceManager.Stores.Values.Any(storeDefinition => storeDefinition.Bundles.Values.Any(appStoreBundleDefinition =>
-            appStoreBundleDefinition.IsTintable && appStoreBundleDefinition.Entries.Any(entry => entry.MarketingItemId == clientItemDefinition.Id)));
+        resourceManager.Stores.IsInTintableBundle(clientItemDefinition.Id);
 }
