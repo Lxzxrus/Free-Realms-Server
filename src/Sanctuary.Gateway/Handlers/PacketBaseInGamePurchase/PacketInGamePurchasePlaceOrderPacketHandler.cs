@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -471,88 +469,16 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
         }
 
         var characterId = GuidHelper.GetPlayerId(connection.Player.Guid);
-        var stationCash = 0;
-        var result = 2;
 
-        using var strategyContext = _dbContextFactory.CreateDbContext();
-        var strategy = strategyContext.Database.CreateExecutionStrategy();
+        // Evergrove: the order adds the house the one way a house is added (HouseGrants): refused for a lot the account
+        // already has, and paid for in the same transaction.
+        var added = HouseGrants.Add(_dbContextFactory, _logger, characterId, housingZoneDefinition.Id, totalCost, out var stationCash);
 
-        try
+        if (added != HouseGrantResult.Added)
         {
-            strategy.ExecuteInTransaction(
-                () =>
-                {
-                    strategyContext.ChangeTracker.Clear();
-
-                    // Houses belong to the account, so a lot any of its characters has is already this character's.
-                    if (HouseOwnership.OwnedByAccountOf(strategyContext, characterId).Any(house =>
-                            house.ZoneDefinitionId == housingZoneDefinition.Id))
-                    {
-                        result = 2;
-                        return;
-                    }
-
-                    // A free lot changes no balance, so only check the character is there.
-                    var updated = totalCost == 0
-                        ? strategyContext.Characters.Count(character => character.Id == characterId)
-                        : strategyContext.Characters
-                            .Where(character =>
-                                character.Id == characterId &&
-                                character.StationCash >= totalCost)
-                            .ExecuteUpdate(setters => setters.SetProperty(
-                                character => character.StationCash,
-                                character => character.StationCash - totalCost));
-
-                    if (updated != 1)
-                    {
-                        result = strategyContext.Characters.Any(character => character.Id == characterId) ? 5 : 2;
-                        return;
-                    }
-
-                    strategyContext.Houses.Add(new DbHouse
-                    {
-                        CharacterId = characterId,
-                        ZoneDefinitionId = housingZoneDefinition.Id
-                    });
-
-                    if (strategyContext.SaveChanges() <= 0)
-                    {
-                        result = 2;
-                        return;
-                    }
-
-                    result = 1;
-                },
-                () =>
-                {
-                    if (result != 1)
-                        return false;
-
-                    using var verificationContext = _dbContextFactory.CreateDbContext();
-                    return verificationContext.Houses.AsNoTracking().Any(house =>
-                        house.CharacterId == characterId &&
-                        house.ZoneDefinitionId == housingZoneDefinition.Id);
-                },
-                IsolationLevel.Serializable);
-
-            if (result == 1)
-            {
-                using var resultContext = _dbContextFactory.CreateDbContext();
-                stationCash = resultContext.Characters
-                    .Where(character => character.Id == characterId)
-                    .Select(character => character.StationCash)
-                    .Single();
-            }
-        }
-        catch (Exception exception) when (exception is DbUpdateException or RetryLimitExceededException)
-        {
-            _logger.LogWarning(exception, "Unable to purchase house {ZoneDefinitionId} for character {CharacterId}.", housingZoneDefinition.Id, characterId);
-            result = 2;
-        }
-
-        if (result != 1)
-        {
-            response.Result = (InGamePurchaseOrderResult)result;
+            response.Result = added == HouseGrantResult.NotEnoughStationCash
+                ? InGamePurchaseOrderResult.BalanceNotEnough
+                : InGamePurchaseOrderResult.OrderFailure;
             connection.SendTunneled(response);
 
             // Most often refused because the lot is already owned; resend the list so "My Houses" shows it.
