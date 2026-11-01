@@ -86,17 +86,28 @@ public class GatewayConnection : UdpConnection
         if (Player is null)
             return;
 
-        _serviceProvider.GetRequiredService<ITradeManager>().OnDisconnected(Player);
+        // Whatever throws here (the save, with the database out of reach for a moment) is logged, and the player still
+        // leaves their zone. Before, a throw skipped Player.Dispose, so they stayed in it as a ghost that nothing removed.
+        try
+        {
+            _serviceProvider.GetRequiredService<ITradeManager>().OnDisconnected(Player);
 
-        SendFriendOffline();
+            SendFriendOffline();
 
-        SendGuildMemberOffline();
+            SendGuildMemberOffline();
 
-        _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
+            _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
 
-        SavePlayerOnce();
-
-        Player.Dispose();
+            SavePlayerOnce();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "{connection} failed while logging out character {characterId}.", this, GuidHelper.GetPlayerId(Player.Guid));
+        }
+        finally
+        {
+            Player.Dispose();
+        }
     }
 
     /// <summary>
