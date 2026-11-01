@@ -131,7 +131,7 @@ public sealed class HouseManager : IHouseManager
         return EnterHouse(player, house);
     }
 
-    public EnterHouseResult EnterHouse(Player player, ulong houseGuid)
+    public EnterHouseResult EnterHouse(Player player, ulong houseGuid, Action? beforeTeleport = null)
     {
         ulong houseId;
 
@@ -150,7 +150,7 @@ public sealed class HouseManager : IHouseManager
             .AsNoTracking()
             .SingleOrDefault(entry => entry.Id == houseId);
 
-        return EnterHouse(player, house);
+        return EnterHouse(player, house, beforeTeleport);
     }
 
     public EnterHouseResult VisitHouse(Player player, int zoneDefinitionId, string ownerName)
@@ -283,7 +283,7 @@ public sealed class HouseManager : IHouseManager
         return true;
     }
 
-    private EnterHouseResult EnterHouse(Player player, DbHouse? house)
+    private EnterHouseResult EnterHouse(Player player, DbHouse? house, Action? beforeTeleport = null)
     {
         if (house is null || !IsAvailableHouse(house.ZoneDefinitionId))
             return EnterHouseResult.HouseNotFound;
@@ -302,6 +302,11 @@ public sealed class HouseManager : IHouseManager
         {
             return EnterHouseResult.ZoneUnavailable;
         }
+
+        // Evergrove: what goes with going in, such as the Housing door's quest step, happens once every check has passed,
+        // so a refused entry does nothing, and before the move, so its packets reach the client ahead of the zone change.
+        // If the move itself then fails, which is rare, it has happened all the same.
+        beforeTeleport?.Invoke();
 
         // The zone manager creates the house instance, if needed, while it moves the player in.
         if (!player.TeleportToZone(

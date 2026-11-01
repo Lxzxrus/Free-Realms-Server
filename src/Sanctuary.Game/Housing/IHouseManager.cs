@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using Sanctuary.Database.Entities;
@@ -59,7 +60,13 @@ public interface IHouseManager
 
     /// <summary>Enters the player's account's house on that lot, preferring the player's own if there are two.</summary>
     EnterHouseResult EnterOwnedHouse(Player player, int zoneDefinitionId);
-    EnterHouseResult EnterHouse(Player player, ulong houseGuid);
+
+    /// <summary>
+    /// Enters the house. Evergrove: <paramref name="beforeTeleport"/> runs once the entry has passed every check, just
+    /// before the player is moved, so a refused entry never runs it; the Housing door completes its quest step there.
+    /// </summary>
+    EnterHouseResult EnterHouse(Player player, ulong houseGuid, Action? beforeTeleport = null);
+
     EnterHouseResult VisitHouse(Player player, int zoneDefinitionId, string ownerName);
 
     bool LeaveHouse(Player player);

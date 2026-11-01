@@ -274,6 +274,40 @@ public sealed class QuestManager : IQuestManager
         }
     }
 
+    // Evergrove: a talk step at an NPC the player goes through, such as a Housing door, is completed as they go, just
+    // before the move into the house (IHouseManager.EnterHouse's beforeTeleport). The door never shows the quest's own
+    // button, which would complete the step without going in. Nobody is there to say a line, so none plays. The quest's
+    // last step is left alone: completing it could hand the quest in, and its reward window can't survive the zone change
+    // that follows. OnEvent(NpcTalkedEvent) would hand it in, so this doesn't go through it.
+    public void AdvanceTalkStepsAt(Player player, Npc npc)
+    {
+        foreach (var progress in player.Quests.InProgress.OrderBy(progress => progress.QuestId))
+        {
+            if (!_resourceManager.Quests.TryGet(progress.QuestId, out var quest))
+                continue;
+
+            var goalIndex = TalkGoalHere(quest, progress, npc);
+
+            if (goalIndex < 0)
+                continue;
+
+            if (goalIndex >= quest.StepStartOf(quest.Goals.Count - 1))
+            {
+                _logger.LogWarning("Quest {questId}'s step {goalId} at npc {npcId} wasn't completed for character {characterId}: " +
+                    "it's in the quest's last step, and the hand-in can't follow the player through.",
+                    quest.QuestId, quest.Goals[goalIndex].NameId, npc.DefinitionId, player.CharacterId);
+                continue;
+            }
+
+            var result = quest.Goals[goalIndex].Progress(quest, new NpcTalkedEvent(npc), progress.ProgressFor(goalIndex));
+
+            if (result == QuestGoalResult.Completed)
+                CompleteGoal(player, quest, progress, goalIndex, npc, playDialogue: false);
+            else if (result == QuestGoalResult.Progressed)
+                ApplyProgress(player, quest, progress, goalIndex, result, npc);
+        }
+    }
+
     private void ApplyProgress(Player player, QuestDefinition quest, QuestProgress progress, int goalIndex, QuestGoalResult result, Npc? npc = null)
     {
         if (result == QuestGoalResult.Completed)

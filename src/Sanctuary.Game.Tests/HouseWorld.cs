@@ -1,7 +1,14 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Numerics;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -11,14 +18,20 @@ using Sanctuary.Core.Helpers;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Housing;
+using Sanctuary.Game.Resources.Definitions.Zones;
+using Sanctuary.Game.Zones;
+using Sanctuary.Packet;
+using Sanctuary.UdpLibrary;
+using Sanctuary.UdpLibrary.Abstractions;
 
 namespace Sanctuary.Game.Tests;
 
 /// <summary>
 /// The quest world (<see cref="QuestWorld"/>) with the shipped lots loaded and a real <see cref="HouseManager"/> on its
 /// database: what the starter house, the Housing door and going into a house touch. Its player is
-/// <see cref="QuestWorld.CharacterId"/>, on <see cref="Account"/>, with no house. The house manager has no zone manager,
-/// so nothing here moves a player into a house.
+/// <see cref="QuestWorld.CharacterId"/>, on <see cref="Account"/>, with no house, in a zone that is no world, so nothing
+/// moves them into a house. A player made by <see cref="PlayerInTheWorld"/> stands in <see cref="World"/> instead, and a
+/// move into a house takes them into a stand-in of it (<see cref="Moves"/>).
 /// </summary>
 public sealed class HouseWorld : IDisposable
 {
@@ -38,12 +51,29 @@ public sealed class HouseWorld : IDisposable
 
         Houses = new HouseManager(Quests.Resources, null!, Quests.DbContextFactory, new HouseInvites(), Logged,
             Microsoft.Extensions.Options.Options.Create(Options));
+
+        World = StandIn<WorldZone>(new WorldZoneDefinition { Id = 1, Name = "FabledRealms" });
     }
 
     public QuestWorld Quests { get; }
 
     /// <summary>The quest world's player, on <see cref="Account"/>.</summary>
     public Player Player => Quests.Player;
+
+    /// <summary>
+    /// The world, with no NPCs but those a test adds (<see cref="AddNpc"/>): enough of it for the quests and a move into
+    /// a house. No zone can be built in a test, so it's an unstarted one, as <see cref="ZoneTeleportsTests"/> uses.
+    /// </summary>
+    public WorldZone World { get; }
+
+    /// <summary>Each move into another zone the zone manager was asked for, in order: the zone and its owner.</summary>
+    public List<(int ZoneDefinitionId, ulong? OwnerId)> Moves { get; } = [];
+
+    /// <summary>Runs as each move starts, before the player leaves where they are: what a test checks at that moment.</summary>
+    public Action? OnMove { get; set; }
+
+    /// <summary>Whether the zone manager fails every move, as when a house instance can't be made.</summary>
+    public bool MovesFail { get; set; }
 
     public ulong Account { get; }
 
@@ -145,7 +175,119 @@ public sealed class HouseWorld : IDisposable
             UserId = userId
         };
 
+    /// <summary>
+    /// A player online on the character, standing in <see cref="World"/> at its origin, whom a move takes into a stand-in
+    /// of the zone (<see cref="Moves"/>). What they are sent goes nowhere.
+    /// </summary>
+    public Player PlayerInTheWorld(ulong characterId, ulong userId)
+    {
+        // The pet tests' connection that never connects, as the quest world's player has.
+        var connection = new UdpConnection(DispatchProxy.Create<IUdpManager, PetTreasureSaveTests.NoNetwork>(),
+            new SocketAddress(AddressFamily.InterNetwork), timeout: 0);
+
+        return new Player(null!, connection, Quests.Resources, new MovingZoneManager(this), new NoTrades())
+        {
+            Guid = GuidHelper.GetPlayerGuid(characterId),
+            CharacterId = characterId,
+            UserId = userId,
+            Zone = World
+        };
+    }
+
+    /// <summary>An NPC of that <c>Npcs.json</c> id standing in <see cref="World"/>, with the GUID its fixed spawn gets.</summary>
+    public Npc AddNpc(int definitionId, Vector4 position)
+    {
+        var npc = new Npc(World)
+        {
+            Guid = GuidHelper.GetNpcGuid((ulong)definitionId, GuidHelper.OpenWorldInstanceId),
+            DefinitionId = definitionId
+        };
+
+        npc.UpdatePosition(position, Quaternion.Identity);
+        NpcsOf(World)[npc.Guid] = npc;
+
+        return npc;
+    }
+
     public void Dispose() => Quests.Dispose();
+
+    /// <summary>
+    /// An unstarted zone of that definition, with no NPCs: what a move and the quests ask of a zone (its definition and its
+    /// NPCs) works, and nothing else does.
+    /// </summary>
+    private static TZone StandIn<TZone>(BaseZoneDefinition definition, ulong? ownerId = null) where TZone : BaseZone
+    {
+        var zone = (TZone)RuntimeHelpers.GetUninitializedObject(typeof(TZone));
+
+        typeof(BaseZone).GetField("_zoneDefinition", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(zone, definition);
+        typeof(BaseZone).GetField("_npcs", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(zone, new ConcurrentDictionary<ulong, Npc>());
+        typeof(BaseZone).GetProperty(nameof(BaseZone.OwnerId))!.SetValue(zone, ownerId);
+
+        return zone;
+    }
+
+    private static ConcurrentDictionary<ulong, Npc> NpcsOf(BaseZone zone) =>
+        (ConcurrentDictionary<ulong, Npc>)typeof(BaseZone).GetField("_npcs", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(zone)!;
+
+    /// <summary>
+    /// Moves a player into a stand-in of the zone they're sent to, as the Gateway's zone manager moves them into a new
+    /// instance, and records it (<see cref="Moves"/>). Nothing else is asked of it here.
+    /// </summary>
+    private sealed class MovingZoneManager(HouseWorld world) : IZoneManager
+    {
+        public int StartingZoneDefinitionId => world.World.DefinitionId;
+
+        public WorldZone StartingZone => world.World;
+
+        public IEnumerable<IZone> Zones => throw new NotSupportedException();
+
+        public bool Load() => throw new NotSupportedException();
+
+        public bool TryGetPlayer(ulong guid, [MaybeNullWhen(false)] out Player player) => throw new NotSupportedException();
+
+        public bool TryGetPlayer(string name, [MaybeNullWhen(false)] out Player player) => throw new NotSupportedException();
+
+        public bool TryMovePlayerToZone(int zoneDefinitionId, ulong? ownerId, Player player, Vector4 position, Quaternion rotation,
+            out IZone zone)
+        {
+            world.OnMove?.Invoke();
+            world.Moves.Add((zoneDefinitionId, ownerId));
+
+            if (world.MovesFail || !world.Quests.Resources.Zones.TryGetValue(zoneDefinitionId, out var definition))
+            {
+                zone = null!;
+                return false;
+            }
+
+            zone = StandIn<HousingZone>(definition, ownerId);
+            player.Zone = zone;
+            player.UpdatePosition(position, rotation);
+
+            return true;
+        }
+
+        public bool TryRemoveZoneInstance(IZone zone) => throw new NotSupportedException();
+
+        public void EvictIfEmpty(IZone zone) => throw new NotSupportedException();
+    }
+
+    /// <summary>Trades with nobody: a player moving into a house has no trade to cancel.</summary>
+    private sealed class NoTrades : ITradeManager
+    {
+        public bool CanTrade(Player requester, Player target) => false;
+
+        public void RequestTrade(Player requester, Player target) => throw new NotSupportedException();
+
+        public void HandleClientCommand(Player player, TradeCommand command) => throw new NotSupportedException();
+
+        public void OnZoning(Player player)
+        {
+        }
+
+        public void OnDisconnected(Player player)
+        {
+        }
+    }
 
     private static string FindSourceDirectory(params string[] relativePath)
     {
