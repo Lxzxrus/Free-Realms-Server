@@ -523,6 +523,10 @@ public class GatewayConnection : UdpConnection
         dbCharacter.ChatBubbleBackgroundColor = Player.ChatBubbleBackgroundColor;
         dbCharacter.ChatBubbleSize = Player.ChatBubbleSize;
 
+        // The quest the player tracks. Picking one in the quest helper changes it in memory only (one packet per
+        // click); accepting a quest writes it at once.
+        dbCharacter.ActiveQuestId = Player.ActiveQuestId != 0 ? Player.ActiveQuestId : null;
+
         // SaveChanges returns the rows changed. Zero means nothing changed since the last save (a quick relog, or
         // logging out inside a house), not a failure; a real failure throws.
         if (dbContext.SaveChanges() == 0)

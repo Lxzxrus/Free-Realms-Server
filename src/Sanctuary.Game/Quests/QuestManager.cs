@@ -232,18 +232,6 @@ public sealed class QuestManager : IQuestManager
     private void PersistCollectCount(Player player, int questId, int count)
         => UpdateCharacterQuest(player, questId, q => q.GoalCount = count);
 
-    private void PersistActiveQuest(Player player, int questId)
-    {
-        using var db = _dbContextFactory.CreateDbContext();
-
-        var dbCharacter = db.Characters.FirstOrDefault(c => c.Id == player.CharacterId);
-        if (dbCharacter is null)
-            return;
-
-        dbCharacter.ActiveQuestId = questId != 0 ? questId : null;
-        db.SaveChanges();
-    }
-
     public void AcceptQuest(Player player, int questId)
     {
         if (!_resourceManager.Quests.TryGet(questId, out var quest) || !quest.IsOfferableFor(player.Quests))
@@ -366,12 +354,9 @@ public sealed class QuestManager : IQuestManager
 
         if (player.Quests.TryGetValue(questId, out var completed) && !completed)
         {
-            // The client also re-selects the quest it already tracks: only a change is written.
-            if (player.ActiveQuestId != questId)
-            {
-                player.ActiveQuestId = questId;
-                PersistActiveQuest(player, questId);
-            }
+            // Not written to the database here: the client sends one of these per click in the quest helper. The
+            // tracked quest is saved when a quest is accepted and with the character at logout.
+            player.ActiveQuestId = questId;
 
             int done = player.QuestGoalProgress.TryGetValue(questId, out var progress) ? progress : 0;
             var goals = quest.Goals;

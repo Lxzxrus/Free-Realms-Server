@@ -78,8 +78,8 @@ public sealed class Player : ClientPcData, IEntity
 
     /// <summary>
     /// The earliest time (<see cref="Environment.TickCount64"/>) the next request of each kind is answered. Each one
-    /// costs the server far more than the client: the zone's whole welcome (<see cref="ReadyZone"/>), a path search, a
-    /// database write. Repeats sooner are dropped.
+    /// costs the server far more than the client: the zone's whole welcome (<see cref="ReadyZone"/>), a path search.
+    /// Repeats sooner are dropped.
     /// </summary>
     public long NextClientIsReadyAt { get; set; }
 
@@ -88,9 +88,6 @@ public sealed class Player : ClientPcData, IEntity
 
     /// <inheritdoc cref="NextClientIsReadyAt"/>
     public long NextTakeMeThereAt { get; set; }
-
-    /// <inheritdoc cref="NextClientIsReadyAt"/>
-    public long NextSelectQuestAt { get; set; }
 
     public DateTime LastQuestAcceptedAt { get; set; }
 
