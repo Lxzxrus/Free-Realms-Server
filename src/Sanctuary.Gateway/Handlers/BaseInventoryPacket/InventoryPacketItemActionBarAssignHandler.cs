@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game;
+using Sanctuary.Game.Entities;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -34,6 +35,11 @@ public static class InventoryPacketItemActionBarAssignHandler
         }
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(InventoryPacketItemActionBarAssign), packet);
+
+        // A real client only names one of the bar's four slots. Any other slot number would add an entry the client never
+        // shows, and, for an item on cooldown, a scheduled re-enable packet that every zone tick walks until it is sent.
+        if (!Player.IsItemActionBarSlot(packet.Slot))
+            return true;
 
         var clientUpdatePacketUpdateActionBarSlot = new ClientUpdatePacketUpdateActionBarSlot
         {

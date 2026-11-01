@@ -172,6 +172,14 @@ public sealed class Player : ClientPcData, IEntity
 
     public int TimezoneOffset { get; set; }
 
+    /// <summary>
+    /// How many slots the item action bar (id 2) has. The client's has four, 0 to 3 (game dock buttons 5 to 8, and the
+    /// four its consumables screen lists), and the server makes those four at login.
+    /// </summary>
+    public const int ItemActionBarSlotCount = 4;
+
+    public static bool IsItemActionBarSlot(int slot) => slot is >= 0 and < ItemActionBarSlotCount;
+
     public Dictionary<int, Dictionary<int, int>> ActionBarItemGuids { get; set; } = new();
 
     public int TemporaryAppearance { get; private set; }

@@ -12,6 +12,7 @@ using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Store;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -80,6 +81,17 @@ public static class CoinStoreSellToClientRequestPacketHandler
             return true;
         }
 
+        // No more than the client's quantity picker allows. A free item could otherwise be had by the billion in one
+        // request, and a pet is a database row per unit.
+        if (!StorePurchase.IsQuantityAllowed(clientItemDefinition, coinStoreSellToClientRequestPacket.Quantity))
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidQuantity;
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
+
         var cost = connection.Player.MembershipStatus == 0
             ? clientItemDefinition.Cost
             : clientItemDefinition.GetMemberPurchasePrice();
@@ -129,6 +141,17 @@ public static class CoinStoreSellToClientRequestPacketHandler
 
         if (clientItemDefinition.Type == ItemDefinitionHelper.PetItemType)
             return BuyPet(connection, coinStoreSellToClientRequestPacket, coinStoreTransactionCompletePacket, clientItemDefinition, tint, hasTintGroup, totalCost);
+
+        // Evergrove: each colour of an item is an inventory row of its own, so a free item comes only in a colour the store
+        // offers it in. A made-up tint was a new free row on every request, and every login loads them all.
+        if (totalCost == 0 && !StorePurchase.IsOfferedTint(clientItemDefinition, coinStoreItem?.TintGroupId ?? NoTintGroupId, tint))
+        {
+            coinStoreTransactionCompletePacket.Result = CoinStoreTransactionResult.InvalidItem;
+
+            connection.SendTunneled(coinStoreTransactionCompletePacket);
+
+            return true;
+        }
 
         using var dbContext = _dbContextFactory.CreateDbContext();
 

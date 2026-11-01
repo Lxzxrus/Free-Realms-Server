@@ -392,10 +392,8 @@ public class GatewayConnection : UdpConnection
 
         clientActionBar.Id = 2; // ItemActionBar
 
-        clientActionBar.Slots.Add(0, new ActionBarSlot() { IsEmpty = true });
-        clientActionBar.Slots.Add(1, new ActionBarSlot() { IsEmpty = true });
-        clientActionBar.Slots.Add(2, new ActionBarSlot() { IsEmpty = true });
-        clientActionBar.Slots.Add(3, new ActionBarSlot() { IsEmpty = true });
+        for (var slot = 0; slot < Player.ItemActionBarSlotCount; slot++)
+            clientActionBar.Slots.Add(slot, new ActionBarSlot() { IsEmpty = true });
 
         Player.ActionBars.Add(clientActionBar.Id, clientActionBar);
         // End - Store on DB
