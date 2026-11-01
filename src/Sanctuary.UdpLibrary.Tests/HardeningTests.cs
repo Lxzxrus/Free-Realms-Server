@@ -599,6 +599,115 @@ public class HardeningTests
         Assert.AreEqual(Status.Connected, serverA.Status);
     }
 
+    // ---- Packets from a player's address: only one that passes its CRC check counts as the player's ----
+
+    [TestMethod]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.KeepAlive }, false, DisplayName = "a bare keep-alive")]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.KeepAlive }, true, DisplayName = "a keep-alive with a wrong CRC")]
+    [DataRow(new byte[] { 1, 2, 3 }, true, DisplayName = "a packet with a wrong CRC")]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.RequestRemap, 0, 0, 0, 1, 0, 0, 0, 2 }, false, DisplayName = "a remap request")]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.Connect, 0, 0, 0, 3, 0, 0, 0x30, 0x39, 0, 0, 2, 0, (byte)'F', (byte)'a', (byte)'k', (byte)'e', 0, 0, 0 },
+        false, DisplayName = "a connect request with another code")]
+    public void PacketsAnyoneCouldSendDontKeepAConnectionAlive(byte[] packet, bool wrongCrc)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        var forged = packet;
+
+        if (wrongCrc)
+        {
+            forged = a.Craft(packet);
+            forged[^1] ^= 0xFF;
+        }
+
+        // the player's client has crashed (it never gets time again), and someone sends the packet from its address every 10 s
+        for (var i = 0; i < 6; i++)
+        {
+            network.Pump(500, server);
+            network.Deliver(client.EndPoint, server.EndPoint, forged);
+            network.Pump(500, server);
+
+            if (i < 2)
+                Assert.AreEqual(Status.Connected, serverA.Status, "nor does the packet disconnect it");
+        }
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.Timeout, serverA.DisconnectReason, "NoDataTimeout, 30 s after the client's last packet");
+    }
+
+    [TestMethod]
+    public void RealKeepAlivesKeepAQuietConnectionAliveAndItTimesOutAfterTheLast()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+
+        // a keep-alive after 10 s without sending anything, as the Gateway's link to Login has
+        var clientParams = FakeManager.ClientParams();
+        clientParams.KeepAliveDelay = 10000;
+
+        var client = FakeManager.Create(network, "10.0.0.2", clientParams);
+        var a = client.EstablishConnection(ServerIp, server.EndPoint.Port);
+        Assert.IsNotNull(a);
+        network.Pump(5, server, client);
+
+        var serverA = server.Accepted.Single();
+        var before = network.Sent.Count;
+
+        // three minutes with nothing to say
+        network.Pump(1800, 100, server, client);
+
+        var fromClient = network.Sent.Skip(before).Where(x => x.From.Equals(client.EndPoint)).Select(x => x.Data).ToList();
+
+        Assert.IsTrue(fromClient.Count >= 17, $"{fromClient.Count} keep-alives");
+        Assert.IsTrue(fromClient.All(x => x[0] == 0 && x[1] == (byte)UdpPacketType.KeepAlive), "nothing but keep-alives");
+        Assert.AreEqual(Status.Connected, serverA.Status);
+        Assert.AreEqual(Status.Connected, a.Status);
+        Assert.AreEqual(0, server.Stats.CrcRejectedPackets, "each passed its CRC check");
+
+        // the client goes just after its next keep-alive, and the server drops it NoDataTimeout (30 s) after that one
+        before = network.Sent.Count;
+
+        while (!network.Sent.Skip(before).Any(x => x.From.Equals(client.EndPoint)))
+            network.Pump(1, 100, server, client);
+
+        network.Pump(290, 100, server);
+        Assert.AreEqual(Status.Connected, serverA.Status, "29 s after its last keep-alive");
+
+        network.Pump(20, 100, server);
+        Assert.AreEqual(Status.Disconnected, serverA.Status, "31 s after it");
+        Assert.AreEqual(DisconnectReason.Timeout, serverA.DisconnectReason);
+    }
+
+    [TestMethod]
+    public void ClientTimeoutCountsFromTheConfirm()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var client = FakeManager.Create(network, "10.0.0.2", FakeManager.ClientParams());
+        var a = client.EstablishConnection(ServerIp, server.EndPoint.Port);
+        Assert.IsNotNull(a);
+
+        // the server is busy for 20 s, so the client's connect requests (one a second) wait in its socket
+        network.Pump(200, 100, client);
+        Assert.AreEqual(Status.Negotiating, a.Status);
+
+        // then it answers them, and says nothing more
+        network.Pump(1, 100, server);
+        network.Pump(1, 100, client);
+        Assert.AreEqual(Status.Connected, a.Status);
+
+        // the confirm has no CRC, but the client's NoDataTimeout (90 s) still counts from it, not from the first request
+        network.Pump(850, 100, client);
+        Assert.AreEqual(Status.Connected, a.Status, "85 s after the confirm");
+
+        network.Pump(100, 100, client);
+        Assert.AreEqual(Status.Disconnected, a.Status, "95 s after it");
+        Assert.AreEqual(DisconnectReason.Timeout, a.DisconnectReason);
+    }
+
     // ---- Task 10: a connection that falls behind is disconnected instead of queueing without bound ----
 
     [TestMethod]
