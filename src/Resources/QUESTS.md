@@ -83,7 +83,7 @@ done. Each goal becomes its own tracker row.
 | `TalkToNpc` | 0 | player interacts with the NPC in `Targets` (or the quest's `TargetNpcId` when it names none) |
 | `ReachLocation` | 1 | player gets within `ReachRadius` (default 12) of `ReachPosition`, checked on every position update (2D, X/Z only; give Y the ground height all the same, as Take Me There finds its path from it) |
 | `Collect` | 2 | player gathers `RequiredCount` pickups of the node type `CollectNodeType` |
-| `PlayActivity` | 3 | player wins the game `ActivityId` (a Games menu entry) `RequiredCount` times, one if left out, as the server's own game decides it; the NPC `NpcId` offers the game while the step is open |
+| `PlayActivity` | 3 | player wins the game `ActivityId` (a Games menu entry) `RequiredCount` times, one if left out; the NPC `NpcId` offers the game while the step is open |
 
 That's the full set - this branch has no combat system, so there's no Kill/hunt or
 battle-instance-encounter goal type. Don't add one without also building what would drive it.
@@ -137,14 +137,26 @@ Cooking Simone's Spiralmint Steak in the Cobblestone Village Cafe (quest 9103):
 { "Type": 3, "NameId": 21837, "DescriptionId": 94534, "ActivityId": 450, "NpcId": 2069 }
 ```
 
-`ActivityId` is a Games menu entry, a `ClientActivityDefinitions.json` id. Only a win the server's own
-game decided counts: a Cooking recipe in `Mimic.json` when `MimicHandler` pays the win, or a match-three
-game (`FlashMinigames.Definitions`: Mining Practice 1113, Queensfields Harvesting 410, Sanctuary Mail
-Sorting 414, Forging: Quick Shot Bow 420) when `FlashMinigameHandler` pays it. A win refused as too fast,
-or anything the client sends on its own, never counts. Fishing and the wheel report no wins, so a step
-can't be won there. The server warns at startup, and the test
-`ShippedPlayGoals_NameAGameWhoseWinsTheServerReports` fails, when a step names a game whose wins aren't
-reported.
+`ActivityId` is a Games menu entry, a `ClientActivityDefinitions.json` id. Only a win the server paid
+counts, and who decides it depends on the game (`PlayableActivities.WinsOf`):
+
+- A match-three game (`FlashMinigames.Definitions`: Mining Practice 1113, Queensfields Harvesting 410,
+  Sanctuary Mail Sorting 414, Forging: Quick Shot Bow 420) is played on the server's own board, which
+  decides the win. A win quicker than the levels can be played is refused, and messages from the client
+  can't win the game.
+- A Cooking recipe in `Mimic.json` is played by the client's Flash, round by round, and the win is the
+  client's report. The server accepts it when it is plausible (the recipe sent first, every round
+  reported, at least `MinSecondsPerPhase` a round) and refuses it otherwise, but it can't see the play: a
+  modified client can report a win it never played.
+
+**So a quest with a step on a game whose wins the client reports (Cooking) rewards coins and stars
+only**: no items, no collection, no job that no trainer gives, nothing scarce (Station Cash, housing).
+The server warns at startup, and the test `ShippedQuestsWonOnTheClientsReport_RewardOnlyCoinsAndStars`
+fails, about a quest that breaks this.
+
+Fishing and the wheel report no wins, so a step can't be won there. The server warns at startup, and the
+test `ShippedPlayGoals_NameAGameWhoseWinsTheServerReports` fails, when a step names a game whose wins
+aren't reported, or names no NPC to offer it.
 
 Each win counts once, toward one quest: with two quests on a step for the same game, one win ticks one of
 them. It counts only while the step is open; a game won before is not remembered. A step needing more than
@@ -294,6 +306,7 @@ goal's `NameId` has to change, add a migration for both providers that moves the
 4. Wire `PrerequisiteQuestId`/`NextQuestId` if it's part of a chain, `ExcludesQuestIds` if it's
    mutually exclusive with another quest.
 5. If it has a `Collect` goal, add its node type, pool and spawn points (see Collect example). A
-   `PlayActivity` goal needs a game whose wins the server reports (see PlayActivity example).
+   `PlayActivity` goal needs a game whose wins the server reports, and an NPC to offer it; on Cooking,
+   the quest rewards coins and stars only (see PlayActivity example).
 6. Build, spawn any test NPCs with `/npc spawn`, and walk through accept -> goals -> turn-in
    in-client.

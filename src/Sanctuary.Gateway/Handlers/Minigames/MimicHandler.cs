@@ -17,8 +17,11 @@ namespace Sanctuary.Gateway.Handlers;
 /// <summary>
 /// The Mimic minigames (Cooking): which Games menu entries are recipes in <c>Resources/Mimic.json</c>, the server's
 /// side of each game (<see cref="MimicGame"/>), and the reward for a win (<see cref="MinigameReward.Pay"/>, as the
-/// match-three games pay), which a quest step that is the game counts too (<see cref="ActivityWonEvent"/>).
-/// <see cref="FlashMinigameHandler"/> opens, starts and closes them like any Flash minigame. See docs/research/mimic.md.
+/// match-three games pay), which a quest step that is the game counts too (<see cref="ActivityWonEvent"/>). The Flash
+/// plays every round itself, so a win is the client's report, paid when it is plausible: the recipe sent first, every
+/// round reported, at least <see cref="MimicGameDefinition.MinSecondsPerPhase"/> a round. A modified client can still
+/// report one without playing (<see cref="ActivityWins.ReportedByClient"/>). <see cref="FlashMinigameHandler"/> opens,
+/// starts and closes them like any Flash minigame. See docs/research/mimic.md.
 /// </summary>
 [PacketHandler]
 public static class MimicHandler
@@ -81,7 +84,8 @@ public static class MimicHandler
 
     /// <summary>
     /// Logs a game's result once and pays a win, which is also the win a quest step that is this game counts
-    /// (<see cref="ActivityWonEvent"/>): the server's own game decided it, and the session settles each game once.
+    /// (<see cref="ActivityWonEvent"/>): the Flash's report, accepted as plausible, and settled once per game. A win the
+    /// server refused pays nothing and passes no step.
     /// </summary>
     private static void Settle(GatewayConnection connection, FlashMinigameSession session, MimicGame game)
     {

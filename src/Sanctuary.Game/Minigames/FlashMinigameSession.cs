@@ -68,10 +68,11 @@ public sealed class FlashMinigameSession
     public MimicResult SettledMimicResult { get; private set; }
 
     /// <summary>
-    /// Settles the Mimic game's result, the first time the server's own game has one (<see cref="MimicGame.Result"/>):
-    /// that result, for the caller to log and, for a win, to pay. A win the server refused is
-    /// <see cref="MimicResult.Refused"/>, never a win. <see cref="MimicResult.None"/> before then and every time after,
-    /// however often the Flash repeats its end messages, so each game is settled once.
+    /// Settles the Mimic game's result, the first time it has one (<see cref="MimicGame.Result"/>): that result, for the
+    /// caller to log and, for a win, to pay. The result is the Flash's own report, which the server takes as a win only
+    /// when it is plausible; one it refused is <see cref="MimicResult.Refused"/>, never a win.
+    /// <see cref="MimicResult.None"/> before then and every time after, however often the Flash repeats its end messages,
+    /// so each game is settled once.
     /// </summary>
     public MimicResult SettleMimicResult()
     {

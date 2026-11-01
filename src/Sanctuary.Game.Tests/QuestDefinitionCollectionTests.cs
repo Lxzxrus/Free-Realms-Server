@@ -231,7 +231,7 @@ public sealed class QuestDefinitionCollectionTests
 
     /// <summary>
     /// A step won by playing a game (<see cref="PlayActivityGoal"/>) is credited only by a win the server reports, from a
-    /// Cooking recipe or a match-three game. A step naming any other activity (a fishing hole, a game that isn't built)
+    /// match-three game or a Cooking recipe. A step naming any other activity (a fishing hole, a game that isn't built)
     /// could never be finished; the server only warns about it. Every one names the NPC who offers its game, or it would
     /// have no target and no Take Me There.
     /// </summary>
@@ -249,9 +249,36 @@ public sealed class QuestDefinitionCollectionTests
         Assert.IsTrue(playGoals.Count > 0, "The Cobblestone Village Cafe's steak is a play step.");
 
         var problems = playGoals
-            .Where(play => !PlayableActivities.ReportsWins(play.Goal.ActivityId, mimic) || play.Goal.RequiredCount < 1 || play.Goal.NpcId == 0)
+            .Where(play => PlayableActivities.WinsOf(play.Goal.ActivityId, mimic) == ActivityWins.NotReported
+                || play.Goal.RequiredCount < 1 || play.Goal.NpcId == 0)
             .Select(play => $"Quest {play.Quest.QuestId}, goal {play.Goal.NameId}: activity {play.Goal.ActivityId}, " +
                 $"{play.Goal.RequiredCount} wins, offered by NPC {play.Goal.NpcId}")
+            .ToList();
+
+        Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// A Cooking win is the client's report, which a modified client can make without playing, so a quest with a step on
+    /// a game whose wins the client reports gives coins and stars only, as the server warns at startup.
+    /// </summary>
+    [TestMethod]
+    public void ShippedQuestsWonOnTheClientsReport_RewardOnlyCoinsAndStars()
+    {
+        var resources = Path.GetDirectoryName(FindShippedQuests())!;
+
+        Assert.IsTrue(MimicDefinitions.TryLoad(Path.Combine(resources, "Mimic.json"), NullLogger.Instance, out var mimic));
+
+        var wonOnTheClientsReport = LoadQuests(FindShippedQuests()).Quests.Values
+            .Where(quest => quest.Goals.OfType<PlayActivityGoal>()
+                .Any(goal => PlayableActivities.WinsOf(goal.ActivityId, mimic) == ActivityWins.ReportedByClient))
+            .ToList();
+
+        Assert.IsTrue(wonOnTheClientsReport.Any(quest => quest.QuestId == 9103), "The Cafe's steak is cooked.");
+
+        var problems = wonOnTheClientsReport
+            .Where(quest => quest.RewardsBeyondCoinsAndStars().Any())
+            .Select(quest => $"Quest {quest.QuestId}: {string.Join("; ", quest.RewardsBeyondCoinsAndStars())}")
             .ToList();
 
         Assert.AreEqual(0, problems.Count, string.Join("\n", problems));

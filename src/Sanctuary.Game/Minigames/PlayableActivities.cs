@@ -4,6 +4,24 @@ using Sanctuary.Game.Resources.Definitions.Zones;
 
 namespace Sanctuary.Game.Minigames;
 
+/// <summary>Who decides a game's wins, which a quest step won by playing it counts (<see cref="Quests.ActivityWonEvent"/>).</summary>
+public enum ActivityWins
+{
+    /// <summary>Nobody: no win is reported, as for fishing, the wheel or an activity the server doesn't serve.</summary>
+    NotReported,
+
+    /// <summary>The server: a match-three game is played on the server's own board, which decides the win.</summary>
+    DecidedByServer,
+
+    /// <summary>
+    /// The client: Cooking's Flash plays every round by itself and reports the result, and the server accepts a win
+    /// when it is plausible (<see cref="Mimic.MimicGame"/>: the recipe sent first, every round reported, at least
+    /// <see cref="Mimic.MimicGameDefinition.MinSecondsPerPhase"/> a round). A modified client can report one without
+    /// playing, so a step won there may lead to coins and stars, never to anything scarce.
+    /// </summary>
+    ReportedByClient
+}
+
 /// <summary>
 /// The activities the server can open. The client's Games menu lists every activity the server sends, and
 /// ClientActivityDefinitions.json holds all 417 of the client's, so most menu entries did nothing when clicked. A new
@@ -22,10 +40,12 @@ public static class PlayableActivities
         || activityId == DailyWheel.ActivityId && dailyWheel.Enabled;
 
     /// <summary>
-    /// Whether the server tells quests when the player wins the activity (<see cref="Quests.ActivityWonEvent"/>), so a
-    /// quest step can be won there: a match-three game or a Cooking recipe, whose wins the server's own game decides.
-    /// Fishing and the wheel have no win to report.
+    /// Who decides the activity's wins, which the server tells quests of (<see cref="Quests.ActivityWonEvent"/>): the
+    /// server for a match-three game, the client for a Cooking recipe. Fishing and the wheel have no win to report, so no
+    /// quest step can be won there.
     /// </summary>
-    public static bool ReportsWins(int activityId, MimicDefinitions mimic) =>
-        FlashMinigames.Definitions.ContainsKey(activityId) || mimic.TryFindActivity(activityId, out _, out _);
+    public static ActivityWins WinsOf(int activityId, MimicDefinitions mimic) =>
+        FlashMinigames.Definitions.ContainsKey(activityId) ? ActivityWins.DecidedByServer
+        : mimic.TryFindActivity(activityId, out _, out _) ? ActivityWins.ReportedByClient
+        : ActivityWins.NotReported;
 }

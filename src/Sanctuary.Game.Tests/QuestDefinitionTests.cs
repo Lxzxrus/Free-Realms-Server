@@ -87,6 +87,21 @@ public sealed class QuestDefinitionTests
         Assert.AreEqual(0, plain.TeachesProfileId, "A quest teaches no job unless it says.");
     }
 
+    /// <summary>
+    /// What a quest gives besides coins and stars, which a quest won on the client's report (Cooking) mustn't: items, a
+    /// collection, or a job no trainer gives. A job a trainer gives for a click (Chef) isn't scarce.
+    /// </summary>
+    [TestMethod]
+    public void RewardsBeyondCoinsAndStars_AreItemsACollectionAndAJobNoTrainerGives()
+    {
+        Assert.AreEqual(0, new QuestDefinition { RewardCoins = 20, RewardExperience = 50, TeachesProfileId = 45 }
+            .RewardsBeyondCoinsAndStars().Count());
+
+        Assert.AreEqual(1, new QuestDefinition { RewardItems = [2733] }.RewardsBeyondCoinsAndStars().Count());
+        Assert.AreEqual(1, new QuestDefinition { RewardCollectionId = 313 }.RewardsBeyondCoinsAndStars().Count());
+        Assert.AreEqual(1, new QuestDefinition { TeachesProfileId = 4 }.RewardsBeyondCoinsAndStars().Count(), "Postman has no trainer.");
+    }
+
     [TestMethod]
     public void Load_RejectsAnUnknownGoalType()
     {

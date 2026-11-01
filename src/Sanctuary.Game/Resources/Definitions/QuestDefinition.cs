@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
 
@@ -72,6 +73,21 @@ public sealed class QuestDefinition
                 _ => TargetNpcId
             }
             : TargetNpcId;
+
+    // Evergrove: what the turn-in gives besides coins and stars, for the rule that a quest with a step whose wins the
+    // client reports (Cooking, PlayableActivities.WinsOf) gives only those: its items, its collection, and a job no
+    // trainer gives. A job a trainer gives for a click isn't scarce. Described for the startup warning.
+    public IEnumerable<string> RewardsBeyondCoinsAndStars()
+    {
+        if (RewardItems.Count > 0)
+            yield return $"items {string.Join(", ", RewardItems)}";
+
+        if (RewardCollectionId != 0)
+            yield return $"collection {RewardCollectionId}";
+
+        if (TeachesProfileId != 0 && !JobTrainers.All.Any(trainer => trainer.ProfileId == TeachesProfileId))
+            yield return $"job {TeachesProfileId}, which no trainer gives";
+    }
 
     public IEnumerable<int> StateNpcIds()
         => Goals.SelectMany(goal => goal.HideNpcIdsWhenDone.Concat(goal.NpcEffectsUntilDone.Select(effect => effect.NpcId))).Distinct();

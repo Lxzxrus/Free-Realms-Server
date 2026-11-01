@@ -430,11 +430,19 @@ public class ResourceManager : IResourceManager, IDisposable
                         quest.QuestId, collectGoal.CollectNodeType);
             }
 
-            foreach (var playGoal in quest.Goals.OfType<PlayActivityGoal>())
+            foreach (var playGoal in quest.Goals.OfType<PlayActivityGoal>().Where(goal => goal.ActivityId > 0))
             {
-                if (playGoal.ActivityId > 0 && !PlayableActivities.ReportsWins(playGoal.ActivityId, Mimic))
+                var wins = PlayableActivities.WinsOf(playGoal.ActivityId, Mimic);
+
+                if (wins == ActivityWins.NotReported)
                     _logger.LogWarning("Play goal on quest {id} names activity {activity}, whose wins the server doesn't report; it can never be credited.",
                         quest.QuestId, playGoal.ActivityId);
+
+                // Evergrove: a Cooking win is the client's report, which a modified client can make without playing: the
+                // step may lead to coins and stars, never to anything scarce.
+                if (wins == ActivityWins.ReportedByClient && quest.RewardsBeyondCoinsAndStars().ToList() is { Count: > 0 } scarce)
+                    _logger.LogWarning("Quest {id} is won by activity {activity}, whose wins the client reports, but rewards more than coins and stars " +
+                        "({rewards}); a modified client could take them without playing.", quest.QuestId, playGoal.ActivityId, string.Join("; ", scarce));
             }
 
             if (quest.TeachesProfileId != 0 && !Profiles.ContainsKey(quest.TeachesProfileId))
