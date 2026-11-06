@@ -131,8 +131,8 @@ public static class ActivityPacketJoinActivityRequestHandler
     /// <summary>
     /// Evergrove: opens one of the games the server serves, as choosing it in the Games menu does: the wheel, a Flash
     /// minigame (match three, Cooking) or a fishing hole, each with its own checks. A Flash minigame is
-    /// <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the player has one they started or the wheel open, and
-    /// <see cref="ActivityLaunchResult.InsideAHouse"/> inside a house;
+    /// <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the player has one they started or the wheel open; it and
+    /// a fishing hole are <see cref="ActivityLaunchResult.InsideAHouse"/> inside a house (ActivityLaunchChecks);
     /// <see cref="ActivityLaunchResult.NotAGamesMenuGame"/> for any other activity. The NPC who offers a quest step's game
     /// and a world object that opens games open them through here too (<see cref="ActivityLauncher"/>).
     /// </summary>
@@ -150,6 +150,11 @@ public static class ActivityPacketJoinActivityRequestHandler
 
         if (FishingHandler.IsFishingHole(activity.Id))
         {
+            // Evergrove: inside a house a hole's start screen doesn't show either (ActivityLaunchChecks).
+            var opens = ActivityLaunchChecks.FishingHole(connection.Player);
+            if (opens != ActivityLaunchResult.Opened)
+                return opens;
+
             FishingHandler.Join(connection, activity);
             return ActivityLaunchResult.Opened;
         }

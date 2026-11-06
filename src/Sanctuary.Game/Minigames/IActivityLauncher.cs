@@ -24,8 +24,8 @@ public enum ActivityLaunchResult
     AnotherGameOpen,
 
     /// <summary>
-    /// A Flash minigame picked inside a house, where the client shows no minigame start screen: nothing was opened, as a
-    /// session opened there could never be started or closed.
+    /// A Flash minigame or a fishing hole picked inside a house, where the client shows no minigame start screen: nothing
+    /// was opened, as a Flash session opened there could never be started or closed (<see cref="ActivityLaunchChecks"/>).
     /// </summary>
     InsideAHouse
 }

@@ -11,7 +11,8 @@ namespace Sanctuary.Game.Tests;
 /// <summary>
 /// Whether a Flash minigame the player picked opens, from where they are and what they have open
 /// (<see cref="ActivityLaunchChecks.FlashMinigame"/>, which FlashMinigameHandler.Open follows): one game at a time, a
-/// start screen never started giving way, and none inside a house.
+/// start screen never started giving way, and none inside a house; and whether a fishing hole does
+/// (<see cref="ActivityLaunchChecks.FishingHole"/>, which the Games menu follows).
 /// </summary>
 [TestClass]
 public sealed class ActivityLaunchChecksTests
@@ -90,5 +91,19 @@ public sealed class ActivityLaunchChecksTests
     {
         Assert.AreEqual(ActivityLaunchResult.InsideAHouse, ActivityLaunchChecks.FlashMinigame(PlayerIn<HousingZone>(open), out var givesWay));
         Assert.IsNull(givesWay);
+    }
+
+    /// <summary>
+    /// A fishing hole's start screen doesn't show inside a house either (docs/design/evergrove-housing.md, section 10);
+    /// outside, it opens whatever else is open, as before: a hole opens no session that could block another game.
+    /// </summary>
+    [TestMethod]
+    [DataRow(Open.Nothing)]
+    [DataRow(Open.StartedGame)]
+    [DataRow(Open.Wheel)]
+    public void AFishingHole_OpensOutsideAHouseOnly(Open open)
+    {
+        Assert.AreEqual(ActivityLaunchResult.InsideAHouse, ActivityLaunchChecks.FishingHole(PlayerIn<HousingZone>(open)));
+        Assert.AreEqual(ActivityLaunchResult.Opened, ActivityLaunchChecks.FishingHole(PlayerIn<WorldZone>(open)));
     }
 }

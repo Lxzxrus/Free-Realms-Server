@@ -5,8 +5,8 @@ namespace Sanctuary.Game.Minigames;
 
 /// <summary>
 /// Evergrove: whether a game the player picked can open, from where they are and what they have open, decided here so it
-/// is tested; the Gateway's openers (FlashMinigameHandler.Open, behind the Games menu, a quest's NPC and the world
-/// objects) send what it decides. One game at a time, and none inside a house.
+/// is tested; the Gateway's openers (FlashMinigameHandler.Open and the Games menu's for a fishing hole, behind the Games
+/// menu, a quest's NPC and the world objects) send what it decides. One game at a time, and none inside a house.
 /// </summary>
 public static class ActivityLaunchChecks
 {
@@ -38,4 +38,13 @@ public static class ActivityLaunchChecks
             ? ActivityLaunchResult.AnotherGameOpen
             : ActivityLaunchResult.Opened;
     }
+
+    /// <summary>
+    /// Whether a fishing hole's start screen opens for <paramref name="player"/>: <see cref="ActivityLaunchResult.InsideAHouse"/>
+    /// inside a house, where no minigame start screen shows, as for a Flash minigame (docs/design/evergrove-housing.md,
+    /// section 10); otherwise <see cref="ActivityLaunchResult.Opened"/>. A hole opens no session that could block another
+    /// game, so nothing else is checked.
+    /// </summary>
+    public static ActivityLaunchResult FishingHole(Player player) =>
+        player.Zone is HousingZone ? ActivityLaunchResult.InsideAHouse : ActivityLaunchResult.Opened;
 }
