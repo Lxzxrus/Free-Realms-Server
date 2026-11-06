@@ -233,6 +233,34 @@ public sealed class GameStationMenuTests
     }
 
     /// <summary>
+    /// The round menu holds 24 buttons. Were all 28 Cooking recipes served, as a Mimic.json edit can do on the live server,
+    /// a table would show its quest's buttons, then the recipes in order until the menu is full.
+    /// </summary>
+    [TestMethod]
+    public void ATableServingEveryRecipe_FillsTheRoundMenu_AndNoMore()
+    {
+        var everyRecipe = new GameStationMenu(_world.Resources.ClientActivityDefinitions, _ => true, _world.Launcher, _logged);
+        var table = Spawn(Table);
+
+        // 24 is radial_menu.gfx's maxButtonCount, not GameStationMenu.MaxButtons: the client's limit is pinned here.
+        CollectionAssert.AreEqual(Enumerable.Range(450, 24).ToArray(),
+            everyRecipe.OptionsAt(table, []).Select(option => option.ActivityId).ToArray());
+
+        var questButtons = Enumerable.Range(1, 3)
+            .Select(id => new NpcInteractionOption { IconId = ContextIcons.QuestTurnIn, ButtonTextId = id, Invoke = _ => { } })
+            .ToList();
+
+        var options = everyRecipe.OptionsAt(table, questButtons);
+
+        CollectionAssert.AreEqual(questButtons, options.Take(3).ToList());
+        CollectionAssert.AreEqual(Enumerable.Range(450, 21).ToArray(), options.Skip(3).Select(option => option.ActivityId).ToArray());
+
+        var fullMenu = Enumerable.Repeat(questButtons[0], 24).ToList();
+
+        Assert.AreSame(fullMenu, everyRecipe.OptionsAt(table, fullMenu), "No room left: the quest's buttons, as they are.");
+    }
+
+    /// <summary>
     /// With the real quest manager: a cooking step whose game a table offers (PlayActivityGoal.NpcId) puts the steak first
     /// on the table's menu, under the quest's icon and opened for the quest; the other recipes follow, the steak not among
     /// them.

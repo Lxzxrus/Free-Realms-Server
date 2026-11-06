@@ -192,9 +192,16 @@ public sealed class GameStationMenu(ClientActivityDefinitionCollection activitie
     IActivityLauncher launcher, ILogger logger)
 {
     /// <summary>
+    /// The most buttons the round menu holds (radial_menu.gfx's maxButtonCount). The served recipes fit on a table today,
+    /// but serving most of the 28 Cooking recipes would not.
+    /// </summary>
+    public const int MaxButtons = 24;
+
+    /// <summary>
     /// The buttons a click on <paramref name="npc"/> shows: <paramref name="questOptions"/> first, as they are, then a
     /// button for each game of its station that the server can open and no quest button already opens (a quest's game at
-    /// the object shows once, as the quest's). The button reads the game's name in the Games menu (its NameId, which names
+    /// the object shows once, as the quest's), as many as the round menu has room for (<see cref="MaxButtons"/>): the
+    /// others are still on the Games menu. The button reads the game's name in the Games menu (its NameId, which names
     /// the recipe) under the game's icon (its ImageSetId). An NPC that isn't a station, or one whose games aren't wired
     /// yet, keeps its quest buttons alone.
     /// </summary>
@@ -208,6 +215,9 @@ public sealed class GameStationMenu(ClientActivityDefinitionCollection activitie
 
         foreach (var activityId in station.ActivityIds)
         {
+            if ((options?.Count ?? questOptions.Count) >= MaxButtons)
+                break;
+
             if (!isPlayable(activityId) || !activities.TryGetValue(activityId, out var activity)
                 || questOptions.Any(option => option.ActivityId == activityId))
                 continue;
