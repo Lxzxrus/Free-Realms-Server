@@ -673,13 +673,6 @@ public abstract class BaseZone : IZone, IDisposable
         if (_resourceManager.Stores.TryGetValue(1, out var mainStore))
         {
             var packetInGamePurchaseStoreBundles = new PacketInGamePurchaseStoreBundles();
-            var availableHouseBundleIds = _resourceManager.Zones.Values
-                .OfType<HousingZoneDefinition>()
-                .Select(definition => definition.StoreBundleId)
-                .ToHashSet();
-
-            // Evergrove: every account is given the starter house (the Apartment), so while it is, it isn't offered.
-            var starterHouseBundleId = StarterHouse.BundleLeftOffTheShelf(_housingOptions, _resourceManager.Zones);
 
             packetInGamePurchaseStoreBundles.StoreId = mainStore.Id;
 
@@ -688,29 +681,11 @@ public abstract class BaseZone : IZone, IDisposable
             packetInGamePurchaseStoreBundles.Store.DescriptionId = mainStore.DescriptionId;
             packetInGamePurchaseStoreBundles.Store.Image = mainStore.Image;
 
-            foreach (var storeBundle in mainStore.Bundles.Values)
-            {
-                var containsHouseItem = storeBundle.Entries.Any(entry =>
-                    _resourceManager.ClientItemDefinitions.TryGetValue(entry.MarketingItemId, out var definition) &&
-                    definition.Type == 16);
-
-                if (containsHouseItem && !availableHouseBundleIds.Contains(storeBundle.Id))
-                    continue;
-
-                if (storeBundle.Id == starterHouseBundleId)
-                    continue;
-
-                var valid = storeBundle.Entries.All(x => _resourceManager.ClientItemDefinitions.ContainsKey(x.MarketingItemId));
-
-                if (!valid)
-                    continue;
-
-                var sentBundle = containsHouseItem && _housingOptions.FreeLots
-                    ? storeBundle.AsFree()
-                    : storeBundle;
-
-                packetInGamePurchaseStoreBundles.Store.Bundles.Add(storeBundle.Id, sentBundle);
-            }
+            // Evergrove: the bundles whose items the server knows; of the lots, only those it serves, free while lots are,
+            // and not the starter house every account is given (MarketplaceShelf, where the tests check it).
+            foreach (var storeBundle in MarketplaceShelf.Offered(mainStore, _resourceManager.ClientItemDefinitions,
+                         _resourceManager.Zones, _housingOptions))
+                packetInGamePurchaseStoreBundles.Store.Bundles.Add(storeBundle.Id, storeBundle);
 
             player.SendTunneled(packetInGamePurchaseStoreBundles);
 
