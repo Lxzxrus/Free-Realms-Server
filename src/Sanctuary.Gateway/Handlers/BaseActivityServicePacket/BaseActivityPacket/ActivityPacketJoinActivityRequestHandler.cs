@@ -42,8 +42,8 @@ public static class ActivityPacketJoinActivityRequestHandler
 
         var opened = Open(connection, clientActivityDefinition);
 
-        // Evergrove: the Games menu is on the dock inside a house too, where no minigame can show; say so rather than
-        // nothing, in the words a quest's NPC and a world object use (ActivityLaunches).
+        // Evergrove: the Games menu is on the dock inside a house too, where no game opens (ActivityLaunchChecks); say so
+        // rather than nothing, in the words a quest's NPC and a world object use (ActivityLaunches).
         if (opened == ActivityLaunchResult.InsideAHouse && ActivityLaunches.Explain(opened) is { } line)
             ChatHelper.SendSystemMessage(connection.Player, line);
 
@@ -150,7 +150,8 @@ public static class ActivityPacketJoinActivityRequestHandler
 
         if (FishingHandler.IsFishingHole(activity.Id))
         {
-            // Evergrove: inside a house a hole's start screen doesn't show either (ActivityLaunchChecks).
+            // Evergrove: refused inside a house too, though whether a hole's start screen would show there is unverified
+            // (ActivityLaunchChecks).
             var opens = ActivityLaunchChecks.FishingHole(connection.Player);
             if (opens != ActivityLaunchResult.Opened)
                 return opens;

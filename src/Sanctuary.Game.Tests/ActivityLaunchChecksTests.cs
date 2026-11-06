@@ -94,8 +94,9 @@ public sealed class ActivityLaunchChecksTests
     }
 
     /// <summary>
-    /// A fishing hole's start screen doesn't show inside a house either (docs/design/evergrove-housing.md, section 10);
-    /// outside, it opens whatever else is open, as before: a hole opens no session that could block another game.
+    /// A fishing hole is refused inside a house too, until someone who played the original says whether fishing worked
+    /// there (docs/design/evergrove-housing.md, section 10, unverified); outside, it opens whatever else is open, as
+    /// before: a hole opens no session that could block another game.
     /// </summary>
     [TestMethod]
     [DataRow(Open.Nothing)]

@@ -40,9 +40,11 @@ public static class ActivityLaunchChecks
 
     /// <summary>
     /// Whether a fishing hole's start screen opens for <paramref name="player"/>: <see cref="ActivityLaunchResult.InsideAHouse"/>
-    /// inside a house, where no minigame start screen shows, as for a Flash minigame (docs/design/evergrove-housing.md,
-    /// section 10); otherwise <see cref="ActivityLaunchResult.Opened"/>. A hole opens no session that could block another
-    /// game, so nothing else is checked.
+    /// inside a house, as for a Flash minigame; otherwise <see cref="ActivityLaunchResult.Opened"/>. A hole opens no
+    /// session that could block another game, so nothing else is checked. Unverified: a hole's start screen is sent
+    /// differently from a Flash minigame's (FishingHandler.Join), and nobody has checked whether it shows in a house. It is
+    /// refused there until someone who played the original says whether fishing worked from inside a house
+    /// (docs/design/evergrove-housing.md, section 10); if it did, this check goes.
     /// </summary>
     public static ActivityLaunchResult FishingHole(Player player) =>
         player.Zone is HousingZone ? ActivityLaunchResult.InsideAHouse : ActivityLaunchResult.Opened;
