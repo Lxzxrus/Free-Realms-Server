@@ -13,10 +13,9 @@ public static class ActivityLaunchChecks
     /// <summary>
     /// Whether a Flash minigame (match three, Cooking) opens for <paramref name="player"/>:
     /// <see cref="ActivityLaunchResult.InsideAHouse"/> inside a house, whatever they have open: the client shows no
-    /// minigame start screen there, so a session opened there could never be started or closed, and every game after it
-    /// would be refused as another one open until a relog. <see cref="ActivityLaunchResult.AnotherGameOpen"/> while they
-    /// have a Flash minigame they started, or the wheel, open. Otherwise <see cref="ActivityLaunchResult.Opened"/>: it
-    /// opens.
+    /// minigame start screen there, so nothing would show and the player wouldn't know why.
+    /// <see cref="ActivityLaunchResult.AnotherGameOpen"/> while they have a Flash minigame they started, or the wheel,
+    /// open. Otherwise <see cref="ActivityLaunchResult.Opened"/>: it opens.
     /// </summary>
     /// <param name="givesWay">
     /// The player's Flash minigame that was never started, if they have one outside a house: the opener closes it, whether

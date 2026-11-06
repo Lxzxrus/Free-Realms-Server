@@ -20,12 +20,16 @@ public enum ActivityLaunchResult
     /// </summary>
     NotAGamesMenuGame,
 
-    /// <summary>The player has another Flash minigame or the wheel open: one game at a time, so nothing was sent.</summary>
+    /// <summary>
+    /// The player has a Flash minigame they started, or the wheel, open: one game at a time, so the game wasn't opened. A
+    /// start screen left open before Go may have been closed all the same, as it gives way to the next game picked
+    /// (<see cref="ActivityLaunchChecks"/>).
+    /// </summary>
     AnotherGameOpen,
 
     /// <summary>
-    /// A Flash minigame or a fishing hole picked inside a house, where the client shows no minigame start screen: nothing
-    /// was opened, as a Flash session opened there could never be started or closed (<see cref="ActivityLaunchChecks"/>).
+    /// A Flash minigame or a fishing hole picked inside a house: nothing was opened (<see cref="ActivityLaunchChecks"/>,
+    /// which has the reasons).
     /// </summary>
     InsideAHouse
 }

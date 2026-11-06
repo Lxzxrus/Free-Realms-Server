@@ -235,9 +235,9 @@ featured winner, reports) is not built.
 ## 10. As built: games inside a house
 
 - **No game with a start screen opens inside a house**: neither a Flash minigame (match three, Cooking) nor a fishing
-  hole. The client shows no minigame start screen there, and a Flash game's session opened in a house could never be
-  started or closed, so every game after it was refused until a relog. The Games menu is on the dock inside a house
-  too: a pick there opens nothing, and the chat says "Games can't be played inside a house. Step outside to play."
-  (`ActivityLaunchChecks`). The daily wheel, switched off for now, isn't checked.
+  hole. The client shows no minigame start screen in a house, so a game opened there would show nothing and the player
+  wouldn't know why. The Games menu is on the dock inside a house too: a pick there opens nothing, and the chat says
+  "Games can't be played inside a house. Step outside to play." (`ActivityLaunchChecks`). The daily wheel, switched
+  off for now, isn't checked.
 - Nothing in a house offers a game itself. The objects that open games (cooking tables, postboxes, anvils, a farm's
   tools, a fishing spot) and the quest NPCs who offer a step's game are in Fabled Realms.
