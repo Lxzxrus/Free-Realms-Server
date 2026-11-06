@@ -2,6 +2,7 @@ using System.Linq;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Interactions;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Resources.Definitions;
@@ -14,7 +15,8 @@ namespace Sanctuary.Game.Tests;
 /// <see cref="Zones.BaseZone.TrySpawnNpc"/>, which readies a station (<see cref="GameStations.SetUp"/>), and
 /// <see cref="Zones.WorldZone.GetInteractionOptions"/>, which puts its games after its quest buttons
 /// (<see cref="GameStationMenu.OptionsAt"/>). <see cref="GameStationMenuTests"/> tests the buttons and the click on a
-/// stand-in zone; this tests that the real zone makes them, so a merge that drops one of those calls fails here.
+/// stand-in zone; this tests that the real zone makes them, so a merge that drops one of those calls fails here. A
+/// Housing door, which opens no game, gets no buttons from the zone at all.
 /// </summary>
 [TestClass]
 public sealed class GameStationSpawnTests
@@ -23,6 +25,10 @@ public sealed class GameStationSpawnTests
     private const int LakeshoreTable = 33482;  // the capture gives it the cooking cursor (15)
     private const int LakesfieldTools = 33484; // Lakeshore Fields, whose game (570) isn't wired
     private const int Simone = 2069;
+    private const int Samantha = 2045;
+
+    private const int BackForMore = 3290;
+    private const int Housing = 9100;
 
     private const int Steak = 450;
     private const int CookingIcon = 7546;
@@ -134,6 +140,34 @@ public sealed class GameStationSpawnTests
 
         Assert.AreEqual((ContextIcons.QuestTurnIn, Steak), (option.IconId, option.ActivityId), "The quest's steak.");
         Assert.AreEqual(0, simone.QuestInteractRange);
+    }
+
+    /// <summary>
+    /// The Housing door (<see cref="HouseDoors"/>) as the zone spawns it, while Housing's (9100) door step is open: it's no
+    /// station, so it keeps its own cursor and gets no station's walk-in, and the zone gives it no buttons at all, neither
+    /// the step's nor a game's, though it shows the step's "?". The Gateway hands a door's click to the door
+    /// (<see cref="HouseDoorService"/>) before the zone is asked; a button would complete the step without going in.
+    /// </summary>
+    [TestMethod]
+    public void TheHousingDoor_AsTheZoneSpawnsIt_OffersNoButtons_WhileItsStepIsOpen()
+    {
+        _world.Player.Quests.AddCompleted(BackForMore);
+        var progress = _world.Accept(QuestWorld.Shipped(Housing));
+
+        // Indexed as the quest loader indexes it: given and taken in by Samantha, the door's step and hers its goals.
+        var quests = _world.Resources.Quests;
+        quests.ByGiver.GetOrAdd(Samantha, _ => []).Add(Housing);
+
+        foreach (var npcId in new[] { Samantha, HouseDoors.CobblestoneVillage })
+            quests.ByTarget.GetOrAdd(npcId, _ => []).Add(Housing);
+
+        var door = _zone.Spawn(HouseDoors.CobblestoneVillage);
+
+        Assert.AreEqual((true, (byte)17, 0), (door.HasCursor, door.CursorId, door.QuestInteractRange),
+            "Its own cursor (Npcs.json), and no station's walk-in.");
+        Assert.AreEqual(0, Options(door).Length, "Neither the step's button nor a game.");
+        Assert.IsNotNull(_zone.Zone.GetQuestBadge(_world.Player, door), "The step's \"?\".");
+        Assert.AreEqual(0, progress.GoalIndex, "The step waits for the player to go in.");
     }
 
     /// <summary>
