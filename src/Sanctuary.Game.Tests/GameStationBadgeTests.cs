@@ -246,4 +246,31 @@ public sealed class GameStationBadgeTests
 
         Assert.AreEqual((definition.HasCursor, definition.CursorId), (npc.HasCursor, npc.CursorId));
     }
+
+    /// <summary>
+    /// The zone shows it on what it spawns (BaseZone.TrySpawnNpc, after the Npcs.json badges), not only the tests above:
+    /// Sanctuary's table gains the cooking bubble and cursor, the Lakesfield tools lose the capture's, Simone stays bare.
+    /// </summary>
+    [TestMethod]
+    public void AsTheZoneSpawnsThem_ObjectsWearWhatTheyOpen()
+    {
+        using var world = new QuestWorld();
+        using var zone = new QuestWorldZone(world);
+
+        var table = zone.Spawn(2417);
+        var cooking = GameStations.Badges[CookingIcon];
+
+        Assert.AreEqual((Local, cooking.IconState), (table.Notifications.Single().NotificationType, table.Notifications.Single().IconState));
+        Assert.AreEqual((true, cooking.CursorId), (table.HasCursor, table.CursorId));
+
+        var tools = zone.Spawn(33484);
+
+        Assert.IsFalse(tools.Notifications.Any(notification => notification.NotificationType == Local), "The capture's bubble is off.");
+        Assert.IsFalse(InteractionMenuHelper.HasOwnCursor(tools));
+
+        var simone = zone.Spawn(2069);
+
+        Assert.AreEqual(0, simone.Notifications.Count);
+        Assert.IsFalse(InteractionMenuHelper.HasOwnCursor(simone));
+    }
 }
