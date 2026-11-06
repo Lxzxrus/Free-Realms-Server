@@ -201,7 +201,9 @@ Build-order phases 2 and 3.
   not by its holder: anyone inside stays, and anyone coming in under the new holder joins them. Inside, everything goes
   by the house (votes, publishing, settings, names, invites), and a lock lets the new holder's friends stay.
 - The Login server's character delete is the only way a character is deleted (no web API, staff command or script
-  deletes one). A character deleted by hand in the database still takes its houses with it.
+  deletes one). A character deleted by hand in the database still takes its houses with it. The delete refuses a
+  character that's in the world, playing on another client, as logging in refuses one twice: otherwise it would play
+  on as a character that no longer exists.
 - **Phase 4 keeps its records by account.** A house's holder can change, so the competition's results, the 4-week wait
   after a win, the Hall of Fame and the prize for an entry go by the plot's account, as `PlotVotes.OwnerUserId` does,
   never by `Houses.CharacterId`. Kept by the holder, they could be dodged: a winner would delete the character holding

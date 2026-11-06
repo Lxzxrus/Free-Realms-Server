@@ -20,6 +20,7 @@ namespace Sanctuary.Login.Handlers;
 public static class CharacterDeleteRequestHandler
 {
     private static ILogger _logger = null!;
+    private static GatewayServer _gatewayServer = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
@@ -27,6 +28,7 @@ public static class CharacterDeleteRequestHandler
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
         _logger = loggerFactory.CreateLogger(nameof(CharacterDeleteRequestHandler));
 
+        _gatewayServer = serviceProvider.GetRequiredService<GatewayServer>();
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
     }
 
@@ -57,6 +59,20 @@ public static class CharacterDeleteRequestHandler
 
         if (character is null)
         {
+            characterDeleteReply.Status = 2;
+
+            connection.Send(characterDeleteReply);
+
+            return true;
+        }
+
+        // Evergrove: a character in the world, playing on another client, can't be deleted, just as it can't log in
+        // twice (CharacterLoginRequestHandler). It would play on as a character that no longer exists, and its logout
+        // save would find nothing to save to.
+        if (_gatewayServer.Gateways.Any(gateway => gateway.OnlineCharacters.Contains(character.Id)))
+        {
+            _logger.LogInformation("Refused to delete character {CharacterId}: it's in the world.", character.Id);
+
             characterDeleteReply.Status = 2;
 
             connection.Send(characterDeleteReply);
