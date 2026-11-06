@@ -283,8 +283,11 @@ featured winner, reports) is not built.
   the house, and a refused entry ticks nothing. It pays 10 coins and 50 stars, once per character, like any quest.
 
 The setting is in the Gateway's `Housing` section (`gateway.json`, documented in `gateway.local.example.json`), read at
-startup.
+startup. The Gateway's startup line names the starter house, or says it's off, and it warns there about a setting that
+leaves new players without a house: an id that names no lot the server serves, or the grant off while lots aren't free.
+The Housing quest's door step needs a house to go into, so **turn the grant off only while `Housing:FreeLots` is on**:
+otherwise a new player can't finish it, nor the quests after it.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `Housing:StarterHouseZoneId` | 1024 | The lot every account is given, by its zone id (1024 is the Apartment). 0 turns the grant off and puts the lot back on the shelf; so does an id that isn't a lot the server serves, which is logged |
+| `Housing:StarterHouseZoneId` | 1024 | The lot every account is given, by its zone id (1024 is the Apartment). 0 turns the grant off and puts the lot back on the shelf; so does an id that isn't a lot the server serves |

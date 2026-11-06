@@ -34,7 +34,10 @@ public sealed class HousingOptions
     /// section 10). The first world login of each session gives one to an account none of whose characters has one, on
     /// the character logging in, free whatever <see cref="FreeLots"/> says (<see cref="IHouseManager.EnsureStarterHouse"/>),
     /// and the Marketplace doesn't offer that lot (<see cref="StarterHouse.BundleLeftOffTheShelf"/>). 0 turns this off,
-    /// and so does an id that isn't a housing lot the server serves, which is logged once.
+    /// and so does an id that isn't a housing lot the server serves, which the Gateway warns about as it starts.
+    /// Samantha's Housing quest (9100) sends every new player into their house, so turn this off only while
+    /// <see cref="FreeLots"/> is on: otherwise a new player has no house, and can't finish that quest or any after it. The
+    /// Gateway warns about that too (<see cref="StarterHouse.Problems"/>).
     /// </summary>
     public int StarterHouseZoneId { get; set; } = 1024;
 }

@@ -41,6 +41,10 @@ public static class HouseDoors
 
     public static bool IsDoor(int npcId) => Ids.Contains(npcId);
 
+    /// <summary>Whether a step of the quest is at a Housing door, so it can only be done by a player with a house to go into.</summary>
+    public static bool SendsThroughADoor(QuestDefinition quest) =>
+        quest.Goals.OfType<TalkToNpcGoal>().Any(goal => goal.AllTalkTargetNpcIds().Any(IsDoor));
+
     /// <summary>
     /// The houses in the order the door offers them: the account's ranked plot first, then the most recently visited,
     /// at most <see cref="MenuLimit"/>. A visit is anyone's entry (<see cref="DbHouse.LastVisited"/>), and a house nobody

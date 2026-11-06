@@ -193,6 +193,11 @@ public sealed class StarterHouseTests
         Assert.AreEqual(StarterHouseResult.AlreadyOwned, Login(Alt, _world.Account), "It's given once.");
     }
 
+    /// <summary>
+    /// The grant off, or set to no lot the server serves, gives nothing. A setting that names no lot is warned about as the
+    /// Gateway starts (<see cref="TheGatewaysStartup_NamesTheStarterHouse_AndWarnsOfASettingThatNamesNoLot"/>), so the
+    /// logins say nothing more about it.
+    /// </summary>
     [TestMethod]
     [DataRow(0, DisplayName = "0, off")]
     [DataRow(1, DisplayName = "1, the world zone")]
@@ -205,9 +210,58 @@ public sealed class StarterHouseTests
         Assert.AreEqual(StarterHouseResult.Off, Login());
 
         Assert.AreEqual(0, _world.HousesOf(_world.Account).Count);
+        Assert.AreEqual(0, _world.Logged.Entries.Count(entry => entry.Level >= LogLevel.Warning), "Said at startup, not at a login.");
+    }
 
-        var warnings = _world.Logged.Entries.Count(entry => entry.Level == LogLevel.Warning);
-        Assert.AreEqual(zoneId == 0 ? 0 : 1, warnings, "A setting that names no lot is logged, once; 0 is simply off.");
+    /// <summary>
+    /// The Gateway's startup line names the starter house, or says it's off, and a setting that names no lot the server
+    /// serves (a typo, say) is warned about there, before anyone logs in, rather than going unseen. 0 is simply off.
+    /// </summary>
+    [TestMethod]
+    public void TheGatewaysStartup_NamesTheStarterHouse_AndWarnsOfASettingThatNamesNoLot()
+    {
+        var zones = _world.Quests.Resources.Zones;
+        var noQuests = new QuestDefinitionCollection(NullLogger.Instance);
+
+        Assert.AreEqual("Apartment (zone 1024)", StarterHouse.Describe(new HousingOptions(), zones));
+        Assert.AreEqual(0, StarterHouse.Problems(new HousingOptions(), zones, noQuests).Count());
+
+        var off = new HousingOptions { StarterHouseZoneId = 0 };
+        Assert.AreEqual("off", StarterHouse.Describe(off, zones));
+        Assert.AreEqual(0, StarterHouse.Problems(off, zones, noQuests).Count(), "0 is simply off.");
+
+        foreach (var namesNoLot in new[] { 1, 1240, 424242 })
+        {
+            var options = new HousingOptions { StarterHouseZoneId = namesNoLot };
+
+            Assert.AreEqual("off", StarterHouse.Describe(options, zones));
+            StringAssert.Contains(StarterHouse.Problems(options, zones, noQuests).Single(), $"is {namesNoLot}, which isn't a housing lot");
+        }
+    }
+
+    /// <summary>
+    /// Samantha's Housing quest (9100) sends every new player through the Housing door into their house. With no grant and
+    /// lots not free, a new player has none, so the Gateway warns as it starts, naming the quest. With either on, or with
+    /// no quest at a door, it doesn't.
+    /// </summary>
+    [TestMethod]
+    public void WithNoGrantAndLotsNotFree_TheGatewayWarnsThatTheHousingQuestCantBeFinished()
+    {
+        var zones = _world.Quests.Resources.Zones;
+        var shipped = new QuestDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(shipped.Load(FindSourceFile("Resources", "Quests.json")));
+
+        var stranded = StarterHouse.Problems(new HousingOptions { StarterHouseZoneId = 0, FreeLots = false }, zones, shipped).Single();
+        StringAssert.Contains(stranded, "quest 9100 can't be finished");
+
+        Assert.AreEqual(0, StarterHouse.Problems(new HousingOptions { StarterHouseZoneId = 0 }, zones, shipped).Count(), "Lots are free.");
+        Assert.AreEqual(0, StarterHouse.Problems(new HousingOptions { FreeLots = false }, zones, shipped).Count(), "Every account gets one.");
+        Assert.AreEqual(2, StarterHouse.Problems(new HousingOptions { StarterHouseZoneId = 1240, FreeLots = false }, zones, shipped).Count(),
+            "A setting that names no lot, with lots not free: both.");
+
+        var noQuests = new QuestDefinitionCollection(NullLogger.Instance);
+        Assert.AreEqual(0, StarterHouse.Problems(new HousingOptions { StarterHouseZoneId = 0, FreeLots = false }, zones, noQuests).Count(),
+            "No quest needs a house.");
     }
 
     [TestMethod]

@@ -57,7 +57,9 @@
     // The lot every account owns free, by its zone id: 1024 is the Apartment. The first login of each session gives
     // one to an account none of whose characters has one, whatever FreeLots says, and the Marketplace doesn't offer
     // that lot. 0 turns this off and puts the lot back in the Marketplace. An id that isn't a housing lot the server
-    // serves turns it off too, with a warning in the log.
+    // serves turns it off too, with a warning in the log at startup. Samantha's Housing quest (9100) sends every new
+    // player into their house, so turn this off only while FreeLots is true: otherwise a new player has no house and
+    // can't finish that quest or any after it, which the log also warns about at startup.
     // "StarterHouseZoneId": 1024,
   },
 
