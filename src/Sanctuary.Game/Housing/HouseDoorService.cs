@@ -23,6 +23,9 @@ public enum HouseDoorResult
     /// <summary>The player was too far to go in, so the client walks them up to the door and clicks it again.</summary>
     WalkingUp,
 
+    /// <summary>The door answered the player's last click too recently (<see cref="HouseDoors.MinUseIntervalMs"/>): nothing happened.</summary>
+    TooSoon,
+
     /// <summary>The account has no house to go into (no starter house is given, or giving it failed). The player was told.</summary>
     NoHouse,
 
@@ -62,11 +65,15 @@ public sealed class HouseDoorService
 
     /// <summary>
     /// The player clicked the door. From further than <see cref="HouseDoors.WalkInRange"/> the client walks them up to it
-    /// first. An account without its starter house is given it here, as at login, in case that failed, and
-    /// <paramref name="sendHouseList"/> tells the client, as My Houses doesn't ask. Then one house is gone into straight
-    /// away, and several are offered on the door's menu (<see cref="HouseDoors.Order"/>).
+    /// first. A click within <see cref="HouseDoors.MinUseIntervalMs"/> of the last one answered does nothing. An account
+    /// without its starter house is given it here, as at login, in case that failed, and <paramref name="sendHouseList"/>
+    /// tells the client, as My Houses doesn't ask. Then one house is gone into straight away, and several are offered on
+    /// the door's menu (<see cref="HouseDoors.Order"/>).
     /// </summary>
-    /// <param name="now"><see cref="Environment.TickCount64"/>, for the limit on moves to another zone (<see cref="ZoneTeleports"/>).</param>
+    /// <param name="now">
+    /// <see cref="Environment.TickCount64"/>, for the limit on the door's clicks and on moves to another zone
+    /// (<see cref="ZoneTeleports"/>).
+    /// </param>
     public HouseDoorResult Use(Player player, Npc door, Action sendHouseList, long now)
     {
         if (!InteractionMenuHelper.CanInteract(door, player))
@@ -82,6 +89,13 @@ public sealed class HouseDoorService
 
             return HouseDoorResult.WalkingUp;
         }
+
+        // What follows reads the account's houses from the database, on the main loop, so a click too soon after the
+        // last one answered does nothing (a walk-up sends only the packet above).
+        if (now < player.NextHouseDoorAt)
+            return HouseDoorResult.TooSoon;
+
+        player.NextHouseDoorAt = now + HouseDoors.MinUseIntervalMs;
 
         if (_houseManager.EnsureStarterHouse(player) == StarterHouseResult.Granted)
             sendHouseList();

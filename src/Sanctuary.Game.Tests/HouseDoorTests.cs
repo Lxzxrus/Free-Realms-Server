@@ -361,8 +361,9 @@ public sealed class HouseDoorTests
     }
 
     /// <summary>
-    /// Clicking fast makes one move. Once the player has gone in, the door isn't in their zone any more. And while a move
-    /// waits its turn (the player came out of a house moments ago, <see cref="ZoneTeleports"/>), another click replaces it.
+    /// Clicking fast makes one move. Once the player has gone in, the door isn't in their zone any more. A click too soon
+    /// after the last one answered does nothing (<see cref="HouseDoors.MinUseIntervalMs"/>). And while a move waits its turn
+    /// (the player came out of a house moments ago, <see cref="ZoneTeleports"/>), a later click replaces it.
     /// </summary>
     [TestMethod]
     public void ClicksInQuickSuccession_MakeOneMove()
@@ -376,13 +377,43 @@ public sealed class HouseDoorTests
         Player.Zone = _door.Zone;
         Player.NextZoneTeleportAt = 10_000;
 
-        Click(now: 9_000);
-        Click(now: 9_100);
+        Assert.AreEqual(HouseDoorResult.GoingIn, Click(now: 9_000));
+        Assert.AreEqual(HouseDoorResult.TooSoon, Click(now: 9_100));
+        Assert.AreEqual(HouseDoorResult.GoingIn, Click(now: 9_600));
         Assert.AreEqual(1, _houses.Entered.Count, "Too soon after the last move: it waits.");
 
         ZoneTeleports.Tick(Player, 10_000);
         ZoneTeleports.Tick(Player, 20_000);
         Assert.AreEqual(2, _houses.Entered.Count, "One more move, made when its turn came.");
+    }
+
+    /// <summary>
+    /// A modified client can click as fast as it sends, and each click the door answers reads the account's houses, so one
+    /// within <see cref="HouseDoors.MinUseIntervalMs"/> of the last answered does nothing: nothing read, given or gone
+    /// into, and no menu. The click that starts a walk-up reads nothing and starts no wait, so the one that ends it, at the
+    /// doorstep, is answered.
+    /// </summary>
+    [TestMethod]
+    public void AClickTooSoonAfterTheLastAnswered_DoesNothing()
+    {
+        _houses.Owned.AddRange([House(1, HouseWorld.Apartment), House(2, HouseWorld.Seaside)]);
+
+        Assert.AreEqual(HouseDoorResult.Menu, Click(now: 1_000));
+        Player.OpenInteractionMenu = null;
+
+        Assert.AreEqual(HouseDoorResult.TooSoon, Click(now: 1_000 + HouseDoors.MinUseIntervalMs - 1));
+        Assert.AreEqual((1, 1), (_houses.StarterAsked, _houses.HousesRead), "Nothing was read for it.");
+        Assert.IsNull(Player.OpenInteractionMenu, "No menu.");
+
+        Assert.AreEqual(HouseDoorResult.Menu, Click(now: 1_000 + HouseDoors.MinUseIntervalMs));
+        Assert.AreEqual((2, 2), (_houses.StarterAsked, _houses.HousesRead));
+
+        _door.UpdatePosition(new Vector4(30, 0, 0, 1), Quaternion.Identity);
+        Assert.AreEqual(HouseDoorResult.WalkingUp, Click(now: 5_000));
+
+        _door.UpdatePosition(new Vector4(5, 0, 0, 1), Quaternion.Identity);
+        Assert.AreEqual(HouseDoorResult.Menu, Click(now: 5_100), "At the doorstep, the walk-up's own click is answered.");
+        Assert.AreEqual((3, 3), (_houses.StarterAsked, _houses.HousesRead));
     }
 
     /// <summary>
@@ -455,7 +486,14 @@ public sealed class HouseDoorTests
         /// <summary>The house ids each entry asked for, in order.</summary>
         public List<ulong> Entered { get; } = [];
 
-        public IReadOnlyList<DbHouse> GetOwnedHouses(ulong characterId) => Owned.ToList();
+        /// <summary>How often the account's houses were read.</summary>
+        public int HousesRead { get; private set; }
+
+        public IReadOnlyList<DbHouse> GetOwnedHouses(ulong characterId)
+        {
+            HousesRead++;
+            return Owned.ToList();
+        }
 
         public StarterHouseResult EnsureStarterHouse(Player player)
         {

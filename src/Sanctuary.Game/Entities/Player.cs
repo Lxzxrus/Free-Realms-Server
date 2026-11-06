@@ -156,6 +156,12 @@ public sealed class Player : ClientPcData, IEntity
     public long NextQuestPickupAt { get; set; }
 
     /// <summary>
+    /// Evergrove: when a Housing door next answers the player's click (<see cref="Housing.HouseDoors.MinUseIntervalMs"/>):
+    /// each answer reads the account's houses from the database.
+    /// </summary>
+    public long NextHouseDoorAt { get; set; }
+
+    /// <summary>
     /// The move to another zone that came too soon and waits for its turn (<see cref="ZoneTeleports"/>), or
     /// <c>null</c>.
     /// </summary>

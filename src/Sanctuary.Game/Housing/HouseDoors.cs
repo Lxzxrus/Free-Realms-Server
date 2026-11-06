@@ -30,11 +30,21 @@ public static class HouseDoors
     /// <summary>The most houses the door's menu offers. My Houses lists them all.</summary>
     public const int MenuLimit = 6;
 
+    /// <summary>
+    /// How soon, in milliseconds, a door answers the same player's next click. Each answer reads the account's houses
+    /// from the database on the main loop every player waits on, and a modified client can click as fast as it sends, so
+    /// a click sooner does nothing. A person's double click is one click. A click from too far, which only walks the
+    /// player up, isn't counted, so the one that ends the walk at the doorstep is answered. A pick from the door's menu
+    /// needs a new click: the menu is gone once picked from.
+    /// </summary>
+    public const int MinUseIntervalMs = 500;
+
     public static bool IsDoor(int npcId) => Ids.Contains(npcId);
 
     /// <summary>
     /// The houses in the order the door offers them: the account's ranked plot first, then the most recently visited,
-    /// at most <see cref="MenuLimit"/>.
+    /// at most <see cref="MenuLimit"/>. A visit is anyone's entry (<see cref="DbHouse.LastVisited"/>), and a house nobody
+    /// has entered counts from when it was made, so a lot just bought comes before one entered a minute ago.
     /// </summary>
     public static List<DbHouse> Order(IEnumerable<DbHouse> houses) =>
         houses
