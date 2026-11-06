@@ -1,29 +1,40 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 
 using Sanctuary.Core.IO;
 
 namespace Sanctuary.Packet;
 
 /// <summary>
-/// A metrics event from the client's Lua UI. The client's own name for opcode 142 (see
+/// The client's Lua UI metrics: opcode 142, the client's own name for it (see
 /// <c>PacketReaderExtensions.ReadTunneledPacketName</c>), and pure telemetry: the client expects no reply.
 /// </summary>
 /// <remarks>
-/// Every event starts with two ints and the event's name. What follows the name depends on the event, so it is kept
-/// as raw bytes. The house directory sends <c>HousingRating_BrowserShown</c> every 30 seconds while it is open
-/// (2026-10-12 playtest), starting <c>8E 00 07 00 00 00 71 1D 82 3E 1A 00 00 00</c>. The "Take Me There" event that
-/// <see cref="TakeMeThereRequestPacket"/> reads is another of these events.
+/// A list of (hash, name, value) counters, read as upstream OSFR reads it (PR #165). The client's
+/// <c>Ui.IncrementClientLuaMetric(name)</c> only counts up a named counter and marks it changed; the changed counters
+/// are sent later, together (the house directory's <c>HousingRating_BrowserShown</c> arrived every 30 seconds in the
+/// 2026-10-12 playtest, starting <c>8E 00 07 00 00 00 71 1D 82 3E 1A 00 00 00</c>: seven counters, then the first
+/// one's hash and name).
 /// </remarks>
 public class PacketClientLuaMetrics : IDeserializable<PacketClientLuaMetrics>
 {
     public const short OpCode = 142;
 
-    public int Unknown1;
-    public int Unknown2;
-    public string Name = string.Empty;
+    public class Metric : IDeserializableType
+    {
+        public uint Hash;
+        public string Name = string.Empty;
+        public int Value;
 
-    /// <summary>The bytes after <see cref="Name"/>, whose layout depends on the event.</summary>
-    public byte[] Data = [];
+        public bool TryRead(ref PacketReader reader)
+        {
+            return reader.TryRead(out Hash)
+                && reader.TryRead(out Name)
+                && reader.TryRead(out Value);
+        }
+    }
+
+    public List<Metric> Metrics = new();
 
     public static bool TryDeserialize(ReadOnlySpan<byte> data, out PacketClientLuaMetrics value)
     {
@@ -34,17 +45,9 @@ public class PacketClientLuaMetrics : IDeserializable<PacketClientLuaMetrics>
         if (!reader.TryRead(out short opCode) || opCode != OpCode)
             return false;
 
-        if (!reader.TryRead(out value.Unknown1))
+        if (!reader.TryReadList(out value.Metrics))
             return false;
 
-        if (!reader.TryRead(out value.Unknown2))
-            return false;
-
-        if (!reader.TryRead(out value.Name))
-            return false;
-
-        value.Data = reader.RemainingSpan.ToArray();
-
-        return true;
+        return reader.RemainingLength == 0;
     }
 }

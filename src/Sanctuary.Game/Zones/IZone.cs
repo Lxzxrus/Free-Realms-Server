@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Interactions;
+using Sanctuary.Packet.Common;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Scripting;
 using Sanctuary.UdpLibrary;
@@ -44,6 +46,7 @@ public interface IZone : IScriptableZone, IDisposable
     bool TryGetEntity(ulong guid, [MaybeNullWhen(false)] out IEntity entity);
 
     bool TryAddMount(Mount mount);
+    bool TryAddNpc<TNpc>(Func<IZone, ulong, TNpc> createNpc, [MaybeNullWhen(false)] out TNpc npc) where TNpc : Npc;
     bool TryAddPlayer(Player player);
 
     bool TryCreateNpc([MaybeNullWhen(false)] out Npc npc);
@@ -72,10 +75,41 @@ public interface IZone : IScriptableZone, IDisposable
 
     #region Zone System
 
+    bool HasEnvironmentData { get; }
+    bool IsOutOfBounds(ZoneTile zoneTile);
+    bool IsOutOfBounds(Vector4 position);
     ZoneTile GetTileFromPosition(Vector4 position);
     void UpdateEntityZoneTile(IEntity entity, ZoneTile from, ZoneTile to);
 
     #endregion
 
     Pathfinder<MapNode>? Pathfinder { get; }
+
+    bool HasGroundData { get; }
+
+    bool TryGetGroundHeight(float x, float z, float fromY, float maxDrop, out float height);
+
+    bool IsWalkable(Vector3 start, Vector3 goal, float maxStepUp, float maxStepDown, out float goalHeight);
+
+    bool TryGetWalkableGoal(Vector3 start, Vector3 goal, float maxStepUp, float maxStepDown, out Vector3 walkableGoal);
+
+    Vector3 GetGroundPosition(Vector3 position, float maxStepUp, float maxDrop);
+
+    bool HasNavMesh { get; }
+
+    bool TryFindNavMeshPath(Vector3 start, Vector3 goal, Queue<Vector3> waypoints);
+
+    bool TryFindClientNavMeshPath(Vector3 start, Vector3 goal, Queue<Vector3> waypoints);
+
+    bool TryFindRoute(Vector3 start, Vector3 goal, Queue<Vector3> waypoints);
+
+    IReadOnlyList<NpcInteractionOption> GetInteractionOptions(Player player, Npc npc);
+
+    NotificationInfo? GetQuestBadge(Player player, Npc npc);
+
+    bool IsHiddenByQuest(Player player, Npc npc);
+
+    int GetQuestEffectId(Player player, Npc npc);
+
+    bool TryFindReachableRoute(Vector3 start, Vector3 goal, Queue<Vector3> waypoints, bool followRoads);
 }

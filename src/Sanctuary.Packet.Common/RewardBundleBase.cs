@@ -25,6 +25,8 @@ public sealed class RewardBundleBase : ISerializableType
     public int NameId;
     public List<RewardBundleEntryBase> Entries { get; } = [];
 
+    public int DescriptionId;
+
     public void Serialize(PacketWriter writer)
     {
         writer.Write(Success);
@@ -45,5 +47,7 @@ public sealed class RewardBundleBase : ISerializableType
 
         foreach (var entry in Entries)
             entry.Serialize(writer, Success);
+
+        writer.Write(DescriptionId);
     }
 }

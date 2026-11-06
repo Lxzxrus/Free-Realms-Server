@@ -58,6 +58,13 @@ public sealed class PlayerUdpOptions
 
     public int FaultWindow { get; set; } = 60000;
 
+    /// <summary>
+    /// Packets one connection may have waiting for their handlers. Only the Gateway queues them (it runs its handlers after
+    /// the UDP library's locks are released). A real client sends a few packets a second and the queue is delivered many
+    /// times a second, so this only catches a client sending them faster than the server can handle them.
+    /// </summary>
+    public int MaxQueuedPacketsPerConnection { get; set; } = 512;
+
     public void ApplyTo(UdpParams udpParams)
     {
         udpParams.IncomingBufferSize = IncomingBufferSize;
@@ -76,5 +83,6 @@ public sealed class PlayerUdpOptions
         udpParams.ReliableBacklogBytes = ReliableBacklogBytes;
         udpParams.FaultLimit = FaultLimit;
         udpParams.FaultWindow = FaultWindow;
+        udpParams.MaxQueuedPacketsPerConnection = MaxQueuedPacketsPerConnection;
     }
 }

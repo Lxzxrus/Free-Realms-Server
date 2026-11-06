@@ -58,10 +58,10 @@ public sealed class ExplorationCollectionTests
     };
 
     // Entries no coin stands for (docs/research/exploration-collections.md): all eight Sacred Grove Elite (that hub
-    // isn't in our world), and one of each Sunstone Valley collection (eight entries, seven coins): The Great Rift and
-    // Glimmerdeep Pass Overlook.
+    // isn't in our world). Sunstone Valley's eighth coins, The Great Rift and Glimmerdeep Pass Overlook, stand where
+    // upstream OSFR's npcs 36196 and 36199 do (merged 2026-10-28).
     private static readonly int[] EntriesWithoutACoin =
-        [2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177, 90008, 90016];
+        [2170, 2171, 2172, 2173, 2174, 2175, 2176, 2177];
 
     private static string FindSourcePath(params string[] relativePath)
     {
@@ -231,7 +231,7 @@ public sealed class ExplorationCollectionTests
                 $"Coin {spawn.Id} in {region} ticks collection {match.Definition.Id}, which belongs to {expected.Region}.");
         }
 
-        Assert.AreEqual(124, seen.Count, "The number of coins with an entry changed.");
+        Assert.AreEqual(126, seen.Count, "The number of coins with an entry changed.");
     }
 
     [TestMethod]

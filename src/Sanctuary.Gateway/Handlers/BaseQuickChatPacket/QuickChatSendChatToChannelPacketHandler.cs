@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 using Sanctuary.Packet.Common.Chat;
@@ -34,7 +35,8 @@ public static class QuickChatSendChatToChannelPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(QuickChatSendChatToChannelPacket), packet);
 
-        if (connection.Player.IsMuted())
+        if (!ChatLimits.IsClientChannel(packet.Channel) || connection.Player.IsMuted()
+            || !ChatLimits.TryUseAllowance(connection.Player))
             return true;
 
         packet.Guid = connection.Player.Guid;
@@ -62,22 +64,46 @@ public static class QuickChatSendChatToChannelPacketHandler
                 }
                 break;
 
+            case ChatChannel.WorldArea:
+                {
+                    packet.AreaNameId = connection.Player.ChatAreaNameId;
+
+                    connection.Player.SendTunneled(packet);
+
+                    if (packet.AreaNameId == 0)
+                        break;
+
+                    foreach (var zonePlayer in connection.Player.Zone.Players)
+                    {
+                        if (zonePlayer.Guid == connection.Player.Guid || zonePlayer.ChatAreaNameId != packet.AreaNameId)
+                            continue;
+
+                        if (!zonePlayer.IsChatChannelOn(packet.Channel))
+                            continue;
+
+                        if (zonePlayer.Ignores.Any(x => x.Guid == connection.Player.Guid))
+                            continue;
+
+                        zonePlayer.SendTunneled(packet);
+                    }
+                }
+                break;
+
             case ChatChannel.WorldTrade:
             case ChatChannel.WorldLfg:
-            case ChatChannel.WorldArea:
             case ChatChannel.WorldMembersOnly:
                 {
                     connection.Player.SendTunneled(packet);
 
-                    foreach (var visiblePlayer in connection.Player.VisiblePlayers)
+                    foreach (var zonePlayer in connection.Player.Zone.Players)
                     {
-                        if (visiblePlayer.Value.ChatChannelStatus.TryGetValue(packet.Channel, out var channelStatus) && !channelStatus)
+                        if (zonePlayer.Guid == connection.Player.Guid || !zonePlayer.IsChatChannelOn(packet.Channel))
                             continue;
 
-                        if (visiblePlayer.Value.Ignores.Any(x => x.Guid == connection.Player.Guid))
+                        if (zonePlayer.Ignores.Any(x => x.Guid == connection.Player.Guid))
                             continue;
 
-                        visiblePlayer.Value.SendTunneled(packet);
+                        zonePlayer.SendTunneled(packet);
                     }
                 }
                 break;

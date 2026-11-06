@@ -72,16 +72,30 @@ public sealed class ExplorationCoinTests
 
     /// <summary>
     /// 2014 coins whose place belongs to the other kind's collection, so they sit in that kind's pool: the elite coin
-    /// npc 4435 stands at Perry's Lookout, a Snowhill Rare place (Ariel, 2026-10-21).
+    /// npc 4435 stands at Perry's Lookout, a Snowhill Rare place (Ariel, 2026-10-21). Upstream OSFR's Npcs.json
+    /// (merged 2026-10-28) renames npc 4438 a Rare coin; Evergrove's playtested data keeps it in Snowhill Elite
+    /// (entry 2016).
     /// </summary>
-    private static readonly Dictionary<int, string> MovedPools = new() { [4435] = "snowhill-exploration-coins-rare" };
+    private static readonly Dictionary<int, string> MovedPools = new()
+    {
+        [4435] = "snowhill-exploration-coins-rare",
+        [4438] = "snowhill-exploration-coins-elite"
+    };
+
+    /// <summary>
+    /// A coin npc only upstream OSFR's Npcs.json has (merged 2026-10-28): 34011, a second Snowhill Elite npc at Melted
+    /// Corner, where Evergrove's hand-placed coin 4494 already stands.
+    /// </summary>
+    private static readonly HashSet<int> UpstreamOnlyCoinNpcIds = [34011];
 
     private static NpcDefinition[] CoinNpcDefinitions()
     {
         var npcs = new NpcDefinitionCollection(NullLogger.Instance);
         Assert.IsTrue(npcs.Load(FindSourcePath("Resources", "Npcs.json")));
 
-        var coins = npcs.Values.Where(npc => npc.Name is not null && Kinds.ContainsKey(npc.Name)).ToArray();
+        var coins = npcs.Values
+            .Where(npc => npc.Name is not null && Kinds.ContainsKey(npc.Name) && !UpstreamOnlyCoinNpcIds.Contains(npc.Id))
+            .ToArray();
         Assert.IsTrue(coins.Length > 0, "Npcs.json has no exploration coins.");
 
         return coins;
@@ -162,13 +176,14 @@ public sealed class ExplorationCoinTests
             var (nodeType, poolKey) = KindOf(coin);
 
             Assert.IsTrue(types.TryGetValue(nodeType, out var type), $"No node type {nodeType}.");
-            Assert.IsFalse(type.HasDrop, $"{nodeType} drops an item; a coin ticks a collection entry instead.");
+            // Drop tables live on pools since upstream OSFR #151.
             Assert.AreEqual(coin.NameId, type.NameId, $"{nodeType} doesn't use {coin.Name}'s name.");
             Assert.AreEqual(coin.ModelId, type.ModelId, $"{nodeType} doesn't use {coin.Name}'s model.");
             Assert.IsTrue(models.ContainsKey(type.ModelId));
 
             Assert.IsTrue(pools.TryGetValue(poolKey, out var pool), $"No pool {poolKey}.");
             Assert.AreEqual(nodeType, pool.NodeType);
+            Assert.IsFalse(pool.HasDrop, $"{poolKey} drops an item; a coin ticks a collection entry instead.");
             Assert.AreEqual(1, pool.ZoneDefinitionId);
         }
     }

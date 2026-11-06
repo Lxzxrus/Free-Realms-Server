@@ -23,6 +23,8 @@ public static class CheckNamePacketHandler
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
     private static IResourceManager _resourceManager = null!;
 
+    private const ulong NoGuildId = 0;
+
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
@@ -160,7 +162,7 @@ public static class CheckNamePacketHandler
 
         using var dbContext = _dbContextFactory.CreateDbContext();
 
-        var currentGuildGuid = connection.Player.GuildData?.Guid ?? 0;
+        var currentGuildGuid = connection.Player.GuildData?.Guid ?? GuidHelper.GetGuildGuid(NoGuildId);
 
         if (GuildHelper.IsNameTaken(dbContext, currentGuildGuid, guildName))
             return CheckNameResponse.Taken;

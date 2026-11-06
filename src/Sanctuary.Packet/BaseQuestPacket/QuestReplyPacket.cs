@@ -6,12 +6,12 @@ namespace Sanctuary.Packet;
 
 public class QuestReplyPacket : BaseQuestPacket, IDeserializable<QuestReplyPacket>
 {
-    public const int SubOpCode = 2;
+    public new const int OpCode = 2;
 
     public int QuestId;
     public bool Accepted;
 
-    public QuestReplyPacket() : base(SubOpCode)
+    public QuestReplyPacket() : base(OpCode)
     {
     }
 
@@ -30,6 +30,6 @@ public class QuestReplyPacket : BaseQuestPacket, IDeserializable<QuestReplyPacke
         if (!reader.TryRead(out value.Accepted))
             return false;
 
-        return true;
+        return reader.RemainingLength == 0;
     }
 }

@@ -13,6 +13,8 @@ namespace Sanctuary.Gateway.Handlers;
 [PacketHandler]
 public static class TakeMeThereRequestPacketHandler
 {
+    private const int MinRequestIntervalMs = 250;
+
     private static ILogger _logger = null!;
     private static IQuestManager _questManager = null!;
 
@@ -24,8 +26,10 @@ public static class TakeMeThereRequestPacketHandler
     }
 
     /// <summary>
-    /// Reached through <see cref="PacketClientLuaMetricsHandler"/>, which reads the request: it is one of the
-    /// client's Lua metrics events, and every other event shares its opcode.
+    /// Reached through <see cref="PacketClientLuaMetricsHandler"/>, which finds the request in the client's Lua
+    /// metrics report. The stock client's button itself is answered by <see cref="ClientPathRequestPacketHandler"/>:
+    /// this reply (type 1) only reaches the client's breadcrumb trail, which drops it unless it is waiting for or
+    /// showing a path of its own.
     /// </summary>
     public static bool HandlePacket(GatewayConnection connection, TakeMeThereRequestPacket request)
     {
@@ -33,12 +37,19 @@ public static class TakeMeThereRequestPacketHandler
 
         var player = connection.Player;
 
+        // A path search per request: no faster than the client's own path requests are answered (upstream's 250 ms).
+        if (Environment.TickCount64 < player.NextTakeMeThereAt)
+            return true;
+
+        player.NextTakeMeThereAt = Environment.TickCount64 + MinRequestIntervalMs;
+
         if (!_questManager.TryGetActiveObjectiveTarget(player, out var goalPosition))
             return true;
 
-        var reply = new ClientPathReplyPacket { RequestId = request.RequestId };
+        // Upstream OSFR's names for the reply's fields (Type was our ResultType, 1; Id our RequestId; Points our Path).
+        var reply = new ClientPathReplyPacket { Type = 1, Id = request.RequestId };
 
-        reply.Path.Add(player.Position);
+        reply.Points.Add(player.Position);
 
         var pathfinder = player.Zone.Pathfinder;
         if (pathfinder is not null)
@@ -46,10 +57,10 @@ public static class TakeMeThereRequestPacketHandler
             var start = new Vector3(player.Position.X, player.Position.Y, player.Position.Z);
 
             foreach (var node in pathfinder.FindPath(start, goalPosition))
-                reply.Path.Add(new Vector4(node.Position.X, node.Position.Y, node.Position.Z, 1f));
+                reply.Points.Add(new Vector4(node.Position.X, node.Position.Y, node.Position.Z, 1f));
         }
 
-        reply.Path.Add(new Vector4(goalPosition.X, goalPosition.Y, goalPosition.Z, 1f));
+        reply.Points.Add(new Vector4(goalPosition.X, goalPosition.Y, goalPosition.Z, 1f));
 
         player.SendTunneled(reply);
 

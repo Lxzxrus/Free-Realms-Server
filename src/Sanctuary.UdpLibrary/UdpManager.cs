@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 
 using Collections.Pooled;
 
@@ -69,6 +70,8 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     private readonly ReplyLimiter _replyLimiter;
 
     private readonly IUdpDriver _driver;
+
+    private readonly List<UdpConnection> _dueConnections = [];
 
     protected UdpClockStamp LastEmptySocketBufferStamp;
 
@@ -324,19 +327,14 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         return UdpMisc.ClockDiff(start, CachedClock);
     }
 
+    // the longest one GiveTime delivers queued events for, before the connections get their time
+    private const int MaxDeliveryTime = 100;
+
     public bool GiveTime(int maxPollingTime = 500, bool giveConnectionsTime = true)
     {
         lock (_giveTimeGuard)
         {
             Clock();
-
-            if (Params.EventQueuing && EventList.Count > 0)
-            {
-                // if we have events queued and we are not in queuing mode, we must deliver those events
-                // before we can actually do a give time (this should only happen when the queuing mode is changed on the fly)
-                DeliverEvents(maxPollingTime);
-                return true;
-            }
 
             lock (_statsGuard)
             {
@@ -403,6 +401,15 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                 }
             }
 
+            if (Params.EventQueuing && EventList.Count > 0)
+            {
+                // Deliver application callbacks outside ProcessRawPacket/GiveTime's connection locks. For a slice of time,
+                // then on to the connections: returning here instead left the socket unread and every connection without
+                // its acks, resends and timeouts until a whole backlog was delivered, so one client's burst stalled everyone.
+                DeliverEvents(Math.Min(maxPollingTime, MaxDeliveryTime));
+                found = true;
+            }
+
             if (giveConnectionsTime)
             {
                 if (PriorityQueue is not null)
@@ -438,9 +445,19 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                         if (top is null)
                             break;
 
-                        GiveConnectionTimeGuarded(top);
+                        if (Params.ParallelConnectionGiveTime)
+                            _dueConnections.Add(top);
+                        else
+                            GiveConnectionTimeGuarded(top);
 
                         processed++;
+                    }
+
+                    if (_dueConnections.Count > 0)
+                    {
+                        // Evergrove's fault isolation (F4) holds in parallel too: one connection's exception drops it alone.
+                        Parallel.ForEach(_dueConnections, GiveConnectionTimeGuarded);
+                        _dueConnections.Clear();
                     }
 
                     lock (_statsGuard)
@@ -478,65 +495,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
             if (ce is null)
                 break;
 
-            switch (ce.EventType)
-            {
-                case CallbackEventType.RoutePacket:
-                    {
-                        if (ce.Payload is null)
-                            break;
-
-                        ce.Source?.OnRoutePacket(ce.Payload.GetDataPtr());
-                    }
-                    break;
-
-                case CallbackEventType.ConnectComplete:
-                    {
-                        ce.Source?.OnConnectComplete();
-                    }
-                    break;
-
-                case CallbackEventType.Terminated:
-                    {
-                        ce.Source?.OnTerminated();
-                    }
-                    break;
-
-                case CallbackEventType.CrcReject:
-                    {
-                        if (ce.Payload is null)
-                            break;
-
-                        var data = ce.Payload.GetDataPtr();
-
-                        ce.Source?.OnCrcReject(data.Slice(0, ce.Payload.GetDataLen()));
-                    }
-                    break;
-
-                case CallbackEventType.PacketCorrupt:
-                    {
-                        if (ce.Payload is null)
-                            break;
-
-                        var data = ce.Payload.GetDataPtr();
-
-                        ce.Source?.OnPacketCorrupt(data.Slice(0, ce.Payload.GetDataLen()), ce.Reason);
-                    }
-                    break;
-
-                case CallbackEventType.ConnectRequest:
-                    {
-                        if (ce.Source is null)
-                            break;
-
-                        if (!OnConnectRequest(ce.Source))
-                            ce.Source.InternalDisconnect(0, DisconnectReason.ConnectionRefused);
-
-                    }
-                    break;
-
-                default:
-                    break;
-            }
+            DeliverEventGuarded(ce);
 
             if (ClockElapsed(start) >= maxProcessingTime)
             {
@@ -547,6 +506,117 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
                 break;
             }
+        }
+    }
+
+    /// <summary>
+    /// Delivers one queued event. As for a packet whose callbacks run inline (<see cref="ProcessRawPacketGuarded"/>), an
+    /// exception from the application's callback must never reach the caller of <see cref="GiveTime"/>: the connection it
+    /// belongs to is dropped instead, and the events after it are still delivered.
+    /// </summary>
+    private void DeliverEventGuarded(CallbackEvent ce)
+    {
+        try
+        {
+            DeliverEvent(ce);
+        }
+        catch (Exception ex)
+        {
+            if (ce.Source is null)
+            {
+                Logger.LogError(ex, "An exception escaped while delivering a queued {event} event.", ce.EventType);
+                return;
+            }
+
+            var activity = $"delivering a queued {ce.EventType} event";
+
+            if (ce.Payload is not null)
+            {
+                var data = ce.Payload.GetDataPtr().Slice(0, ce.Payload.GetDataLen());
+
+                activity += $" (a {data.Length} byte packet: {Convert.ToHexString(data.Slice(0, Math.Min(data.Length, 32)))}{(data.Length > 32 ? "..." : "")})";
+            }
+
+            DropFaultedConnection(ce.Source, ce.Source.SocketAddress, ex, activity);
+        }
+    }
+
+    private void DeliverEvent(CallbackEvent ce)
+    {
+        switch (ce.EventType)
+        {
+            case CallbackEventType.RoutePacket:
+                {
+                    if (ce.Source is null)
+                        break;
+
+                    Interlocked.Decrement(ref ce.Source.QueuedPackets);
+
+                    // Inline, a packet is routed only while its connection is connected (UdpConnection.CallbackRoutePacket).
+                    // Queued, the connection may have gone since: a refused login or a kick in the packet before this one,
+                    // a fault limit. Its handlers must not run for a connection that is no longer there.
+                    if (ce.Payload is null || ce.Source.Status != Status.Connected)
+                        break;
+
+                    ce.Source.OnRoutePacket(ce.Payload.GetDataPtr().Slice(0, ce.Payload.GetDataLen()));
+                }
+                break;
+
+            case CallbackEventType.ConnectComplete:
+                {
+                    ce.Source?.OnConnectComplete();
+                }
+                break;
+
+            case CallbackEventType.Terminated:
+                {
+                    ce.Source?.OnTerminated();
+                }
+                break;
+
+            case CallbackEventType.CrcReject:
+                {
+                    if (ce.Source is null)
+                        break;
+
+                    Interlocked.Decrement(ref ce.Source.QueuedCrcRejects);
+
+                    // as for a packet: nothing for a connection that is no longer there
+                    if (ce.Payload is null || ce.Source.Status != Status.Connected)
+                        break;
+
+                    var data = ce.Payload.GetDataPtr();
+
+                    ce.Source.OnCrcReject(data.Slice(0, ce.Payload.GetDataLen()));
+                }
+                break;
+
+            case CallbackEventType.PacketCorrupt:
+                {
+                    // Delivered although its connection has been disconnected since, because it says why: it is queued by
+                    // UdpConnection.CallbackCorruptPacket, which disconnects the connection straight after.
+                    if (ce.Payload is null)
+                        break;
+
+                    var data = ce.Payload.GetDataPtr();
+
+                    ce.Source?.OnPacketCorrupt(data.Slice(0, ce.Payload.GetDataLen()), ce.Reason);
+                }
+                break;
+
+            case CallbackEventType.ConnectRequest:
+                {
+                    if (ce.Source is null)
+                        break;
+
+                    if (!OnConnectRequest(ce.Source))
+                        ce.Source.InternalDisconnect(0, DisconnectReason.ConnectionRefused);
+
+                }
+                break;
+
+            default:
+                break;
         }
     }
 
@@ -915,10 +985,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
     public void ActualSend(ReadOnlySpan<byte> data, int dataLen, SocketAddress socketAddress)
     {
-        LastSendTime = CachedClock;
+        Interlocked.Exchange(ref LastSendTime, CachedClock);
 
-        ManagerStats.BytesSent += dataLen;
-        ManagerStats.PacketsSent++;
+        Interlocked.Add(ref ManagerStats.BytesSent, dataLen);
+        Interlocked.Increment(ref ManagerStats.PacketsSent);
 
         // TODO: Simulation
 
@@ -943,6 +1013,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     {
         lock (_connectionGuard)
         {
+            // a disconnected connection has been taken out of the queue for good (RemoveConnection), but can still try to
+            // schedule itself: the reliable packet whose handler disconnected it is acknowledged afterwards, for one.  Put
+            // back, nothing would take it out again, and it would hold its slot and its memory for as long as the server runs
+            if (con.Status == Status.Disconnected)
+                return;
+
             // do not ever let anybody schedule themselves for processing time sooner then mMinimumScheduledStamp
             // otherwise, they could end up getting processing time multiple times in a single UdpManager::GiveTime iteration
             // of the priority queue, which under odd circumstances could result in an infinite loop
@@ -983,6 +1059,24 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     {
         if (Params.EventQueuing)
         {
+            // Queued, the handlers run when the queue is delivered, so a connection sending packets faster than they run
+            // would queue them without limit, and every other connection's packets would wait behind its own.
+            if (Params.MaxQueuedPacketsPerConnection > 0 && con.QueuedPackets >= Params.MaxQueuedPacketsPerConnection)
+            {
+                lock (_statsGuard)
+                {
+                    ManagerStats.QueueLimitDisconnects++;
+                }
+
+                Logger.LogWarning("Disconnecting {connection}: it sent packets faster than their handlers run, and {count} were waiting, the most allowed.",
+                    con, con.QueuedPackets);
+
+                con.InternalDisconnect(0, DisconnectReason.CorruptPacket);
+                return;
+            }
+
+            Interlocked.Increment(ref con.QueuedPackets);
+
             var ce = AvailableEventBorrow();
             var packet = CreatePacket(data, data.Length);
             ce.SetEventData(CallbackEventType.RoutePacket, con, packet);
@@ -994,10 +1088,22 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         }
     }
 
+    // The most packets that failed their CRC check one connection may have waiting for OnCrcReject while events are queued.
+    // Such a packet proves nothing about who sent it: anyone who knows a player's address can send them, as fast as they
+    // like.  So they never disconnect the connection, nor count towards its MaxQueuedPacketsPerConnection, or they could
+    // have the player dropped; and since the event only tells the application, the ones over this are dropped instead of
+    // queued (CrcRejectedPackets still counts them).
+    internal const int MaxQueuedCrcRejects = 8;
+
     public void CallbackCrcReject(UdpConnection con, Span<byte> data)
     {
         if (Params.EventQueuing)
         {
+            if (con.QueuedCrcRejects >= MaxQueuedCrcRejects)
+                return;
+
+            Interlocked.Increment(ref con.QueuedCrcRejects);
+
             var ce = AvailableEventBorrow();
             var packet = CreatePacket(data, data.Length);
             ce.SetEventData(CallbackEventType.CrcReject, con, packet);
@@ -1135,10 +1241,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         {
             var ce = EventList.First?.Value;
 
-            if (ce is not null && ce.Payload is not null)
+            if (ce is not null)
             {
                 EventList.RemoveFirst();
-                EventListBytes -= ce.Payload.GetDataLen();
+                EventListBytes -= ce.Payload?.GetDataLen() ?? 0;
             }
 
             return ce;

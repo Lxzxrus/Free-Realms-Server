@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 
 using Lua;
 
+using Sanctuary.Core.Helpers;
+
 namespace Sanctuary.Scripting;
 
 internal sealed class ZoneUserData(IScriptableZone zone) : ILuaUserData
@@ -25,8 +27,16 @@ internal sealed class ZoneUserData(IScriptableZone zone) : ILuaUserData
         var y = context.GetArgument<float>(3);
         var z = context.GetArgument<float>(4);
         var heading = context.GetArgument<float>(5);
+        var pitch = 0f;
+        var roll = 0f;
 
-        if (!self._zone.TrySpawnNpc(npcId, null, x, y, z, heading, out var npc))
+        if (context.ArgumentCount > 7)
+        {
+            pitch = context.GetArgument<float>(6);
+            roll = context.GetArgument<float>(7);
+        }
+
+        if (!self._zone.TrySpawnNpc(npcId, null, x, y, z, heading, pitch, roll, out var npc))
         {
             return new ValueTask<int>(context.Return(LuaValue.Nil));
         }
@@ -38,18 +48,26 @@ internal sealed class ZoneUserData(IScriptableZone zone) : ILuaUserData
         return new ValueTask<int>(context.Return(handle));
     });
 
-    private static readonly LuaFunction SpawnNpcWithGuidFunction = new("spawnNpcWithGuid", static (context, cancellationToken) =>
+    private static readonly LuaFunction SpawnFixedNpcFunction = new("spawnFixedNpc", static (context, cancellationToken) =>
     {
         var self = context.GetArgument<ZoneUserData>(0);
 
         var npcId = context.GetArgument<int>(1);
-        var npcGuid = context.GetArgument<ulong>(2);
-        var x = context.GetArgument<float>(3);
-        var y = context.GetArgument<float>(4);
-        var z = context.GetArgument<float>(5);
-        var heading = context.GetArgument<float>(6);
+        var npcGuid = GuidHelper.GetNpcGuid((ulong)npcId, GuidHelper.OpenWorldInstanceId);
+        var x = context.GetArgument<float>(2);
+        var y = context.GetArgument<float>(3);
+        var z = context.GetArgument<float>(4);
+        var heading = context.GetArgument<float>(5);
+        var pitch = 0f;
+        var roll = 0f;
 
-        if (!self._zone.TrySpawnNpc(npcId, npcGuid, x, y, z, heading, out var npc))
+        if (context.ArgumentCount > 7)
+        {
+            pitch = context.GetArgument<float>(6);
+            roll = context.GetArgument<float>(7);
+        }
+
+        if (!self._zone.TrySpawnNpc(npcId, npcGuid, x, y, z, heading, pitch, roll, out var npc))
         {
             return new ValueTask<int>(context.Return(LuaValue.Nil));
         }
@@ -59,6 +77,48 @@ internal sealed class ZoneUserData(IScriptableZone zone) : ILuaUserData
         var handle = new LuaValue(userData);
 
         return new ValueTask<int>(context.Return(handle));
+    });
+
+    private static readonly LuaFunction SetClientAreaEnabledFunction = new("setClientAreaEnabled", static (context, cancellationToken) =>
+    {
+        var self = context.GetArgument<ZoneUserData>(0);
+        var areaId = context.GetArgument<int>(1);
+        var enabled = context.GetArgument<bool>(2);
+
+        self._zone.SetClientAreaEnabled(areaId, enabled);
+
+        return new ValueTask<int>(context.Return());
+    });
+
+    private static readonly LuaFunction BroadcastFunction = new("broadcast", static (context, cancellationToken) =>
+    {
+        var self = context.GetArgument<ZoneUserData>(0);
+        var message = context.GetArgument<string>(1);
+
+        self._zone.Broadcast(message);
+
+        return new ValueTask<int>(context.Return());
+    });
+
+    private static readonly LuaFunction BroadcastNearFunction = new("broadcastNear", static (context, cancellationToken) =>
+    {
+        var self = context.GetArgument<ZoneUserData>(0);
+        var message = context.GetArgument<string>(1);
+        var x = context.GetArgument<float>(2);
+        var z = context.GetArgument<float>(3);
+        var radius = context.GetArgument<float>(4);
+
+        self._zone.BroadcastNear(message, x, z, radius);
+
+        return new ValueTask<int>(context.Return());
+    });
+
+    private static readonly LuaFunction IsSeasonActiveFunction = new("isSeasonActive", static (context, cancellationToken) =>
+    {
+        var self = context.GetArgument<ZoneUserData>(0);
+        var seasonName = context.GetArgument<string>(1);
+
+        return new ValueTask<int>(context.Return(self._zone.IsSeasonActive(seasonName)));
     });
 
     private static readonly LuaTable SharedMetatable = BuildMetatable();
@@ -78,7 +138,11 @@ internal sealed class ZoneUserData(IScriptableZone zone) : ILuaUserData
                 "id" => new LuaValue(self._zone.Id),
                 "name" => new LuaValue(self._zone.Name),
                 "spawnNpc" => SpawnNpcFunction,
-                "spawnNpcWithGuid" => SpawnNpcWithGuidFunction,
+                "spawnFixedNpc" => SpawnFixedNpcFunction,
+                "setClientAreaEnabled" => SetClientAreaEnabledFunction,
+                "broadcast" => BroadcastFunction,
+                "broadcastNear" => BroadcastNearFunction,
+                "isSeasonActive" => IsSeasonActiveFunction,
                 _ => LuaValue.Nil
             };
 

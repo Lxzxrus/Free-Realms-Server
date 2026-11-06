@@ -5,28 +5,14 @@ namespace Sanctuary.Packet;
 
 public class QuestAddPacket : BaseQuestPacket, ISerializablePacket
 {
-    public const int SubOpCode = 3;
+    public new const int OpCode = 3;
 
-    public int QuestId;
-    public int TitleId;
-    public int DescriptionId;
-    public int HelperTextId;
-    public bool MembersOnly;
-    public long TimeStarted;
-    public int ProfileId;
-    public float CompletedPercentage;
-    public int IconId;
-    public bool SystemQuest;
+    public ClientQuest Quest { get; set; } = new();
 
-    public bool SuppressStartBanner;
+    // Shows the quest in the tracker (QuestHandler:PopulateHelper).
+    public bool ShowInTracker;
 
-    public bool IncludeObjective;
-    public int ObjectiveId;
-    public int ObjectiveNameId;
-    public int ObjectiveDescriptionId;
-    public int ObjectiveField2;
-
-    public QuestAddPacket() : base(SubOpCode)
+    public QuestAddPacket() : base(OpCode)
     {
     }
 
@@ -36,55 +22,10 @@ public class QuestAddPacket : BaseQuestPacket, ISerializablePacket
 
         Write(writer);
 
-        writer.Write(QuestId);
-        writer.Write(TitleId);
-        writer.Write(DescriptionId);
-        writer.Write(HelperTextId);
-        writer.Write(MembersOnly);
-        writer.Write(TimeStarted);
-        writer.Write(ProfileId);
-        writer.Write(SuppressStartBanner);
-        writer.Write(CompletedPercentage);
+        Quest.Serialize(writer);
 
-        WriteEmptyRewardBundle(writer);
-
-        if (IncludeObjective)
-        {
-            writer.Write(1);
-
-            writer.Write(ObjectiveId);
-
-            writer.Write(ObjectiveNameId);
-            writer.Write(ObjectiveDescriptionId);
-            writer.Write(ObjectiveField2);
-            writer.Write(false);
-
-            WriteEmptyRewardBundle(writer);
-
-            writer.Write(0); writer.Write(0); writer.Write(0); writer.Write(0); writer.Write(false); writer.Write(0);
-        }
-        else
-        {
-            writer.Write(0);
-        }
-
-        writer.Write(IconId);
-        writer.Write(SystemQuest);
-        writer.Write(false);
-        writer.Write(false);
+        writer.Write(ShowInTracker);
 
         return writer.Buffer;
-    }
-
-    private static void WriteEmptyRewardBundle(PacketWriter writer)
-    {
-        new RewardBundleBase
-        {
-            Success = false,
-            Unknown3 = 0,
-            Multiplier = 0f
-        }.Serialize(writer);
-
-        writer.Write(0);
     }
 }

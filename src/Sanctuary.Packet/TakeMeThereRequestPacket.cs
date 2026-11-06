@@ -1,48 +1,39 @@
-using System;
-
-using Sanctuary.Core.IO;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Sanctuary.Packet;
 
-// Fires when the client's "Take Me There" quest-tracker button is clicked. Wire shape confirmed
-// against real captured traffic; Unknown1 and Unknown2 are constant across every capture, but
-// their meaning is not verified (not a CRC32/FNV1a of the action name).
-//
-// Opcode 142 is not this packet's own: it is PacketClientLuaMetrics, which every Lua UI metrics
-// event uses (the house directory sends "HousingRating_BrowserShown" on it every 30 seconds).
-// Which event name Take Me There sends is not recorded, so it is recognised by its shape: a name
-// followed by exactly one int. PacketClientLuaMetricsHandler tries this read first and drops
-// every event of any other shape.
-public class TakeMeThereRequestPacket : IDeserializable<TakeMeThereRequestPacket>
+/// <summary>
+/// The "TakeMeThere" counter in a <see cref="PacketClientLuaMetrics"/> report. The quest tracker's Take Me There button
+/// runs <c>Ui.IncrementClientLuaMetric("TakeMeThere")</c>, then <c>Ui.TakeMeToObjective</c>, which walks the player
+/// along the path a <see cref="ClientPathRequestPacket"/> asks for: that request is what makes the button work. This
+/// counter arrives later, with the next metrics report.
+/// </summary>
+/// <remarks>
+/// Before Evergrove read opcode 142 as upstream OSFR's list of counters (PR #165), this was read as a packet of its
+/// own, recognised by its shape: a report holding one counter. Its first two ints were the report's count and the
+/// counter's hash.
+/// </remarks>
+public class TakeMeThereRequestPacket
 {
-    public const short OpCode = PacketClientLuaMetrics.OpCode;
+    public const string MetricName = "TakeMeThere";
 
-    public int Unknown1;
-    public int Unknown2;
-    public string ActionName = string.Empty;
+    public string ActionName = MetricName;
+
+    /// <summary>The counter's value: how many presses the report counts. Sent back as the reply's id.</summary>
     public int RequestId;
 
-    public static bool TryDeserialize(ReadOnlySpan<byte> data, out TakeMeThereRequestPacket value)
+    /// <summary>
+    /// Finds the Take Me There counter in a report. Only a report holding that counter alone counts, as before the
+    /// list was read: the shape Evergrove has answered since task 27, now also checked by name.
+    /// </summary>
+    public static bool TryFrom(PacketClientLuaMetrics metrics, [MaybeNullWhen(false)] out TakeMeThereRequestPacket value)
     {
-        value = new TakeMeThereRequestPacket();
+        value = null;
 
-        var reader = new PacketReader(data);
-
-        if (!reader.TryRead(out short opCode) || opCode != OpCode)
+        if (metrics.Metrics is not [{ Name: MetricName } metric])
             return false;
 
-        if (!reader.TryRead(out value.Unknown1))
-            return false;
-
-        if (!reader.TryRead(out value.Unknown2))
-            return false;
-
-        if (!reader.TryRead(out value.ActionName))
-            return false;
-
-        if (!reader.TryRead(out value.RequestId))
-            return false;
-
-        return reader.RemainingLength == 0;
+        value = new TakeMeThereRequestPacket { ActionName = metric.Name, RequestId = metric.Value };
+        return true;
     }
 }

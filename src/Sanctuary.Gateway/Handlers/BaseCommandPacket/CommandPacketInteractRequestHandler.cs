@@ -28,9 +28,12 @@ namespace Sanctuary.Gateway.Handlers;
 [PacketHandler]
 public static class CommandPacketInteractRequestHandler
 {
+    private const int MinQuestPickupIntervalMs = 500;
+
     private static ILogger _logger = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
     private static IResourceManager _resourceManager = null!;
+    private static IRewardManager _rewardManager = null!;
     private static IQuestManager _questManager = null!;
     private static IJobManager _jobManager = null!;
 
@@ -40,6 +43,7 @@ public static class CommandPacketInteractRequestHandler
         _logger = loggerFactory.CreateLogger(nameof(CommandPacketInteractRequestHandler));
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _rewardManager = serviceProvider.GetRequiredService<IRewardManager>();
         _questManager = serviceProvider.GetRequiredService<IQuestManager>();
         _jobManager = serviceProvider.GetRequiredService<IJobManager>();
     }
@@ -60,33 +64,36 @@ public static class CommandPacketInteractRequestHandler
         if (entity is CollectionNode collectionNode)
             return HandleCollectionNode(connection, collectionNode);
 
-
-        if (entity is Npc npc && (_questManager.IsQuestNpc(npc.Guid) || JobTrainers.IsTrainer(npc.Guid)))
+        // Upstream OSFR: a pet's treasure chest pays its owner. (A chest item that is a collection entry ticks the
+        // collection on the next login, not at once: Evergrove's collection updates are not wired to it yet.)
+        if (entity is PetTreasureChest petTreasureChest)
         {
-            // The same reach as picking from an npc's menu (CommandPacketInteractionSelectHandler).
-            if (!Positions.IsWithinRange(connection.Player.Position, npc.Position, npc.InteractRange))
-                return true;
+            if (PetHelper.TryOpenTreasureChest(connection.Player, petTreasureChest, _rewardManager, _resourceManager, _dbContextFactory,
+                    _logger, out var itemDrop) && itemDrop is not null)
+                _rewardManager.TryGrantReward(connection.Player, itemDrop, petTreasureChest.Guid);
 
-            connection.Player.LastInteractNpcGuid = npc.Guid;
-            connection.Player.LastInteractAt = DateTime.UtcNow;
+            return true;
+        }
 
+        // Evergrove: a job trainer always shows a menu, even with a single job to teach, so taking a job is picked
+        // and never done by the click alone. Quest NPCs go through upstream's own interaction (Npc.OnInteract).
+        if (entity is Npc npc && JobTrainers.IsTrainer(npc.DefinitionId))
+        {
             var trainerOptions = _jobManager.GetTrainerOptions(connection.Player, npc);
 
-            if (trainerOptions.Count == 0)
+            if (trainerOptions.Count > 0)
             {
-                if (_questManager.IsQuestNpc(npc.Guid))
-                    _questManager.OnNpcInteract(connection.Player, npc);
-                else
-                    entity.OnInteract(connection.Player);
+                if (!InteractionMenuHelper.CanInteract(npc, connection.Player))
+                    return true;
 
+                connection.Player.LastInteractNpcGuid = npc.Guid;
+                connection.Player.LastInteractAt = DateTime.UtcNow;
+
+                var options = connection.Player.Zone.GetInteractionOptions(connection.Player, npc).ToList();
+                options.AddRange(trainerOptions);
+                connection.Player.SendInteractionMenu(npc, options, npc.InteractionList?.Interactions ?? npc.Interactions);
                 return true;
             }
-
-            // Taking a job is always picked from the menu, never done by the click alone.
-            var options = _questManager.GetInteractionOptions(connection.Player, npc);
-            options.AddRange(trainerOptions);
-            connection.Player.SendInteractionMenu(npc, options);
-            return true;
         }
 
         entity.OnInteract(connection.Player);
@@ -96,16 +103,33 @@ public static class CommandPacketInteractRequestHandler
     private static bool HandleCollectionNode(GatewayConnection connection, CollectionNode node)
     {
         // "Too far away" is written as "not within range", so a NaN position, which compares false with
-        // everything, is out of range rather than in it.
+        // everything, is out of range rather than in it. Out of range, the player is walked in (upstream OSFR).
         if (!Positions.IsWithinRange(connection.Player.Position, node.Position, node.InteractRange))
+        {
+            if (Positions.IsFinite(connection.Player.Position))
+            {
+                connection.SendTunneled(new CommandPacketMoveAndInteract
+                {
+                    Position = node.Position,
+                    Guid = node.Guid
+                });
+            }
+
             return true;
+        }
 
         if (node.SpawnDefinition.HasCollectionEntry)
             return HandleCollectionEntryNode(connection, node);
 
-        // A pickup with nothing to give exists only for a quest's Collect step (homework, buckets, firewood): it can
-        // be taken only while a quest needs it, or it disappears for 30 seconds for nothing.
-        if (!node.TypeDefinition.HasDrop && !_questManager.NeedsCollectionNode(connection.Player, node.TypeDefinition.Key))
+        // A quest pickup (homework, tools, firewood) is player-specific (upstream OSFR #166): each player sees and takes
+        // their own while one of their quests needs it.
+        if (node.PoolDefinition.PlayerSpecific)
+            return HandlePlayerCollectionNode(connection, node);
+
+        // A shared pickup with nothing to give exists only for a quest's Collect step: it can be taken only while a
+        // quest needs it, or it disappears for 30 seconds for nothing. Drop tables live on pools since upstream OSFR
+        // #151. (Every shipped quest pickup is player-specific now; this keeps a shared one from being emptied.)
+        if (!node.PoolDefinition.HasDrop && !_questManager.NeedsCollectionNode(connection.Player, node.TypeDefinition.Key))
         {
             ChatHelper.SendSystemMessage(connection.Player, "You don't need this right now.");
             return true;
@@ -114,15 +138,52 @@ public static class CommandPacketInteractRequestHandler
         if (!node.TryReserve())
             return true;
 
-        if (!node.TypeDefinition.HasDrop)
+        if (!node.PoolDefinition.HasDrop)
         {
             // A node that exists for a quest's Collect goal (homework, ore): nothing to give, so just gather it.
             node.CompleteCollection();
-            _questManager.OnCollectionNodeGathered(connection.Player, node);
+            _questManager.OnEvent(connection.Player, new NodeGatheredEvent(node));
             return true;
         }
 
         return HandleItemDropNode(connection, node);
+    }
+
+    /// <summary>
+    /// A player-specific quest pickup (upstream OSFR #166): only while one of the player's quests can take it. Picking
+    /// it up hides it for this player, ticks its quest collection entry when it has one, and credits the quest.
+    /// </summary>
+    private static bool HandlePlayerCollectionNode(GatewayConnection connection, CollectionNode node)
+    {
+        var player = connection.Player;
+
+        if (!_questManager.CanGatherQuestNode(player, node))
+        {
+            ChatHelper.SendSystemMessage(player, "You don't need this right now.");
+            return true;
+        }
+
+        // Evergrove: every pickup is saved to the database, and abandoning and retaking the quest brings the pickups
+        // back, so a modified client could pick them up as fast as it sends. A pickup that comes too soon changes
+        // nothing and leaves the node where it is; a person clicking stays well under two a second.
+        var now = Environment.TickCount64;
+
+        if (now < player.NextQuestPickupAt)
+            return true;
+
+        player.NextQuestPickupAt = now + MinQuestPickupIntervalMs;
+
+        player.OnRemoveVisibleNpcGracefully(node, animate: true);
+
+        // Upstream records the entry in its own collection table; Evergrove's live tables are
+        // CharacterCollectionEntries and CharacterCompletedCollections, so the coins' path below records it.
+        var entryId = node.TypeDefinition.CollectionEntryId;
+
+        if (entryId != 0 && !player.CollectedCollectionEntries.Contains(entryId))
+            TryRecordCollectionEntry(connection, node, entryId);
+
+        _questManager.OnEvent(player, new NodeGatheredEvent(node));
+        return true;
     }
 
     /// <summary>
@@ -132,13 +193,46 @@ public static class CommandPacketInteractRequestHandler
     private static bool HandleCollectionEntryNode(GatewayConnection connection, CollectionNode node)
     {
         var player = connection.Player;
-        var entryId = node.SpawnDefinition.CollectionEntryId;
+
+        var result = TryRecordCollectionEntry(connection, node, node.SpawnDefinition.CollectionEntryId, onRecorded: () =>
+        {
+            node.HideFromCollector(player);
+
+            _questManager.OnEvent(player, new NodeGatheredEvent(node));
+        });
+
+        // Already stored for this character (a relog raced the click, or two clicks landed together): the in-memory
+        // set is right either way; just stop showing the coin.
+        if (result == EntryResult.AlreadyStored)
+            node.HideFromCollector(player);
+
+        return result != EntryResult.Failed;
+    }
+
+    private enum EntryResult
+    {
+        Recorded,
+        AlreadyCollected,
+        AlreadyStored,
+        UnknownEntry,
+        Failed
+    }
+
+    /// <summary>
+    /// Saves a directly collected entry for the player and tells the client, with the collection's reward when the
+    /// entry finishes it (paid once, <see cref="CollectionCompletion"/>). <paramref name="onRecorded"/> runs once the
+    /// entry is saved, before the client hears of it.
+    /// </summary>
+    private static EntryResult TryRecordCollectionEntry(GatewayConnection connection, CollectionNode node, int entryId,
+        Action? onRecorded = null)
+    {
+        var player = connection.Player;
 
         if (!_resourceManager.Collections.TryGetEntry(entryId, out var match))
         {
             _logger.LogWarning("Collection node {nodeId} ({type}) names unknown collection entry {entryId}.",
                 node.SpawnDefinition.Id, node.TypeDefinition.Key, entryId);
-            return true;
+            return EntryResult.UnknownEntry;
         }
 
         var definition = match.Definition;
@@ -147,7 +241,7 @@ public static class CommandPacketInteractRequestHandler
         // The set is the live one on the player, so adding here also claims the entry against a second click
         // before the database answers.
         if (!player.CollectedCollectionEntries.TryAdd(entryId))
-            return true;
+            return EntryResult.AlreadyCollected;
 
         var grantedRewards = new List<GrantedItem>();
         var completed = false;
@@ -163,7 +257,7 @@ public static class CommandPacketInteractRequestHandler
             if (dbCharacter is null)
             {
                 player.CollectedCollectionEntries.TryRemove(entryId);
-                return true;
+                return EntryResult.AlreadyCollected;
             }
 
             dbCharacter.CollectionEntries.Add(new DbCharacterCollectionEntry { EntryId = entryId });
@@ -181,26 +275,23 @@ public static class CommandPacketInteractRequestHandler
         catch (DbUpdateException ex)
         {
             // Already stored for this character (a relog raced the click, or two clicks landed together). The
-            // in-memory set is right either way; just stop showing the coin.
+            // in-memory set is right either way.
             _logger.LogDebug(ex, "Collection entry {entryId} was already stored for character {characterId}.",
                 entryId, player.CharacterId);
-            node.HideFromCollector(player);
-            return true;
+            return EntryResult.AlreadyStored;
         }
         catch (Exception ex)
         {
             player.CollectedCollectionEntries.TryRemove(entryId);
             _logger.LogError(ex, "Failed to collect node {nodeId} ({type}) for entry {entryId}.",
                 node.SpawnDefinition.Id, node.TypeDefinition.Key, entryId);
-            return false;
+            return EntryResult.Failed;
         }
 
         foreach (var granted in grantedRewards)
             SendItemToClient(connection, granted);
 
-        node.HideFromCollector(player);
-
-        _questManager.OnCollectionNodeGathered(player, node);
+        onRecorded?.Invoke();
 
         // The client has every collection since login (SendSelfToClient), so this only ticks the entry.
         SendCollectionEntryUpdate(connection, definition, match.Entry, match.Index);
@@ -211,7 +302,7 @@ public static class CommandPacketInteractRequestHandler
             SendCollectionCompleted(connection, definition, grantedRewards, node.Guid);
         }
 
-        return true;
+        return EntryResult.Recorded;
     }
 
     private static bool HandleItemDropNode(GatewayConnection connection, CollectionNode node)
@@ -222,7 +313,7 @@ public static class CommandPacketInteractRequestHandler
 
         try
         {
-            var drop = node.TypeDefinition.Table.SelectRandom();
+            var drop = node.PoolDefinition.Table.SelectRandom();
             var itemDefinitionId = drop.ItemDefinitionId;
 
             if (!_resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var itemDefinition))
@@ -278,7 +369,7 @@ public static class CommandPacketInteractRequestHandler
             node.CompleteCollection();
             nodeCompleted = true;
 
-            _questManager.OnCollectionNodeGathered(player, node);
+            _questManager.OnEvent(player, new NodeGatheredEvent(node));
 
             if (hasEntry && !collectionEntryWasCollected)
             {
@@ -458,6 +549,9 @@ public static class CommandPacketInteractRequestHandler
     private static void SendCollectionCompleted(GatewayConnection connection, CollectionDefinition definition,
         IReadOnlyList<GrantedItem> grantedRewards, ulong sourceGuid)
     {
+        if (!definition.ShowsCompletionWindow)
+            return;
+
         var packet = new RewardBundlePacket();
         var bundle = packet.RewardBundle;
 
@@ -492,10 +586,8 @@ public static class CommandPacketInteractRequestHandler
     {
         var notificationId = Environment.TickCount & int.MaxValue;
 
-        var packet = new RewardBundlePacket
-        {
-            Unknown8 = itemDefinition.DescriptionId
-        };
+        var packet = new RewardBundlePacket();
+        packet.RewardBundle.DescriptionId = itemDefinition.DescriptionId;
         packet.RewardBundle.SourceGuid = node.Guid ^ (uint)notificationId;
         packet.RewardBundle.PlayerGuid = connection.Player.Guid;
         packet.RewardBundle.IconId = itemDefinition.Icon.Id;

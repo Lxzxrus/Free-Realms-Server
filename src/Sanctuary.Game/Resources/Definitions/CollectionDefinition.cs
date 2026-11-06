@@ -15,6 +15,9 @@ public sealed class CollectionDefinition
     public const int CurrencyIconId = 3901;
     public const int CurrencyNameId = 2416;
 
+    // Upstream OSFR #166's quest collections: one per quest whose pickups are collection items. They pay nothing.
+    public const int QuestCategoryId = 9;
+
     public int Id { get; set; }
     public int NameId { get; set; }
     public int CategoryId { get; set; }
@@ -38,6 +41,13 @@ public sealed class CollectionDefinition
     public List<int> RewardItemIdsFor(int gender) => gender == 2 && RewardItemIdsGirls.Count > 0 ? RewardItemIdsGirls : RewardItemIds;
 
     public List<CollectionEntryDefinition> Entries { get; set; } = [];
+
+    /// <summary>
+    /// Evergrove: whether finishing it opens the reward window. A quest collection pays nothing, so its window would
+    /// open empty, on the very first pickup when it has one entry; the tick in the collections window and the quest's
+    /// own progress are what the player sees.
+    /// </summary>
+    public bool ShowsCompletionWindow => CategoryId != QuestCategoryId;
 
     public bool IsStarted(CollectionProgress progress)
     {

@@ -102,14 +102,11 @@ public class MiniGameInfo : ISerializableType
         writer.Write(MembersOnly);
 
         // Every reward bundle on the wire is followed by one int (quest offer and end packets, reward packets,
-        // collections). EDITz's own bundle class wrote it as its last field, and his Mining Practice start screen
-        // parsed, so it is written here after each of ours.
+        // collections). RewardBundleBase now writes it itself as DescriptionId (upstream OSFR 4516059), so the
+        // explicit zero each of these used to be followed by is gone; the bytes are unchanged.
         RewardBundleBase.Serialize(writer);
-        writer.Write(0);
         RewardBundleBase_Member.Serialize(writer);
-        writer.Write(0);
         RewardBundleBase_Preview.Serialize(writer);
-        writer.Write(0);
 
         // TODO: Objectives
         writer.Write(0);

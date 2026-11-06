@@ -67,7 +67,10 @@ public sealed class JobManager : IJobManager
 
         // A trainer with nothing left to teach this character loses its marker.
         foreach (var trainer in JobTrainers.All.Where(trainer => trainer.ProfileId == profileId))
-            _questManager.RefreshQuestNotification(player, trainer.NpcGuid);
+        {
+            foreach (var npc in player.VisibleNpcs.Values.Where(npc => npc.DefinitionId == trainer.NpcId))
+                _questManager.RefreshQuestNotification(player, npc.Guid);
+        }
 
         _logger.LogInformation("Character {characterId} got job {profileId}.", player.CharacterId, profileId);
 
@@ -85,7 +88,7 @@ public sealed class JobManager : IJobManager
     {
         var options = new List<NpcInteractionOption>();
 
-        foreach (var profileId in JobTrainers.JobsTaughtBy(npc.Guid))
+        foreach (var profileId in JobTrainers.JobsTaughtBy(npc.DefinitionId))
         {
             if (player.Profiles.Any(profile => profile.Id == profileId))
                 continue;
