@@ -160,6 +160,9 @@ Each phase becomes cloud tasks once the one before it has been playtested.
   move to another character on the account, or the deletion could be refused while the account has other characters.
   Every account now has an Apartment, held by one of its characters (section 10), so this comes up more often: while
   it stands, deleting that character loses the Apartment's build, and the next login brings a new, empty Apartment.
+- Which character holds an account's granted Apartment: the one logging in when it's given (as built, section 10), or
+  the account's oldest, so that on an older account it sits with the character the player has had longest. The holder
+  is who visitors see as the owner, and whose friends may come in while it's locked.
 
 ## 8. As built: plots, shared houses and weekly voting (tasks 32 and 35)
 
@@ -257,6 +260,12 @@ featured winner, reports) is not built.
 - **When.** At the first world login of each session, on the character logging in, before the house list goes out:
   My Houses lists the Apartment from the first minute, without a relog. A grant that fails (the database out of reach
   for a moment) never stops the login; the next login tries again, and so does the Housing door.
+- **Who holds it.** The character it's given on: on a new account its first character, on an older one whichever of
+  its characters is the first to log in once the server gives Apartments. As with any house (section 8), that
+  character is the one visitors see as the owner: the directory shows its name, `!house visit apartment <name>` and
+  "Go to House" find the Apartment under it, and its friends are the ones who may come in while the Apartment is
+  locked. Every character on the account still enters, builds in and manages it. The player can't choose or change
+  the holder, so an older account's Apartment may sit with a character it seldom plays (section 7).
 - **What is saved.** One `Houses` row with every default: a personal plot, unpublished, unlocked, not members-only, no
   name (it shows as "Apartment"). Nothing else: no deed item, no fixtures, no coins or Station Cash, even with
   `Housing:FreeLots` off. It goes through the same serializable transaction as a Marketplace order (`HouseGrants`),
