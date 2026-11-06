@@ -1,14 +1,18 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Extensions;
 using Sanctuary.Core.IO;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Interactions;
 using Sanctuary.Game.Quests;
+using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -17,14 +21,58 @@ namespace Sanctuary.Game.Zones;
 
 public sealed class WorldZone : BaseZone
 {
+    private readonly WorldZoneDefinition _zoneDefinition;
     private readonly IQuestManager _questManager;
 
-    private readonly WorldZoneDefinition _zoneDefinition;
+    private readonly object _clientAreasLock = new();
+    private readonly HashSet<SeasonalClientAreaDefinition> _activeSeasonalClientAreas = [];
+    private readonly HashSet<int> _scriptEnabledClientAreaIds = [];
+
+    private readonly Dictionary<(int Longitude, int Latitude), ZoneAreaDefinition> _tileZoneAreas = [];
+    private readonly List<ZoneAreaDefinition> _shapeZoneAreas = [];
+    private readonly Dictionary<int, List<ZoneAreaDefinition>> _environmentZoneAreas = [];
+
+    private const int ClientAreaRefreshSeconds = 3;
+    private int _secondsSinceClientAreaRefresh;
 
     public WorldZone(WorldZoneDefinition zoneDefinition, IServiceProvider serviceProvider)
         : base(zoneDefinition, serviceProvider)
     {
         _zoneDefinition = zoneDefinition;
+
+        foreach (var areaDefinition in _zoneDefinition.AreaDefinitions)
+        {
+            if (areaDefinition.Tiles.Count > 0)
+            {
+                foreach (var tile in areaDefinition.Tiles)
+                    _tileZoneAreas[(tile[0], tile[1])] = areaDefinition;
+
+                continue;
+            }
+
+            if (areaDefinition.EnvironmentIds.Count == 0)
+            {
+                _shapeZoneAreas.Add(areaDefinition);
+                continue;
+            }
+
+            foreach (var environmentId in areaDefinition.EnvironmentIds)
+            {
+                if (!_environmentZoneAreas.TryGetValue(environmentId, out var environmentZoneAreas))
+                {
+                    environmentZoneAreas = [];
+                    _environmentZoneAreas[environmentId] = environmentZoneAreas;
+                }
+
+                environmentZoneAreas.Add(areaDefinition);
+            }
+        }
+
+        foreach (var seasonalClientArea in _zoneDefinition.SeasonalClientAreas)
+        {
+            if (seasonalClientArea.IsActive(DateTime.Now))
+                _activeSeasonalClientAreas.Add(seasonalClientArea);
+        }
 
         _questManager = serviceProvider.GetRequiredService<IQuestManager>();
     }
@@ -34,31 +82,134 @@ public sealed class WorldZone : BaseZone
         base.OnClientIsReady(player);
 
         SendPointOfInterests(player);
-        SendAdventurersJournalInfo(player);
-
-        if (player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.WelcomeInfo))
-            SendWelcomeInfo(player);
+        player.SendTunneled(CreateAdventurersJournalInfo());
 
         SendShopData(player);
 
+        // Upstream OSFR also sends its "Hot New Items!" Marketplace announcement here. Evergrove doesn't: PR #118 took
+        // store ads out of the welcome window, and this is one more (AnnouncementBasePacketHandler answers with none).
+
         _questManager.RestoreJournal(player);
+
+        // After the quests: the welcome window's "Hero's Journal Quest" box shows the journal's current quest, which
+        // the client works out from the quests just sent (AdventurersJournal).
+        if (player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.WelcomeInfo))
+            SendWelcomeInfo(player);
 
         foreach (var npc in Npcs)
         {
-            if (!_questManager.IsQuestNpc(npc.Guid))
+            if (!_questManager.IsQuestNpc(npc.DefinitionId))
                 continue;
 
-            if (_resourceManager.Quests.TryGetNpcCursorId(npc.Guid, out var cursorId))
+            if (_resourceManager.Quests.TryGetNpcCursorId(npc.DefinitionId, out var cursorId))
                 npc.CursorId = cursorId;
 
-            if (_resourceManager.Quests.TryGetNpcInteractRange(npc.Guid, out var interactRange))
-                npc.InteractRange = interactRange;
+            if (_resourceManager.Quests.TryGetNpcInteractRange(npc.DefinitionId, out var interactRange))
+                npc.QuestInteractRange = interactRange;
 
             _questManager.RefreshQuestNotification(player, npc.Guid);
         }
 
-        if (player.Quests.Count == 0 && player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.NewPlayerHint))
+        if (player.Quests.All.Count == 0 && player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.NewPlayerHint))
             ChatHelper.SendSystemMessage(player, NewPlayerHint);
+    }
+
+    public override IReadOnlyList<NpcInteractionOption> GetInteractionOptions(Player player, Npc npc)
+        => _questManager.IsQuestNpc(npc.DefinitionId) ? _questManager.GetInteractionOptions(player, npc) : [];
+
+    public override NotificationInfo? GetQuestBadge(Player player, Npc npc)
+        => _questManager.IsQuestNpc(npc.DefinitionId) ? _questManager.GetQuestBadge(player, npc) : null;
+
+    public override bool IsHiddenByQuest(Player player, Npc npc) => _questManager.IsHiddenByQuest(player, npc);
+
+    public override int GetQuestEffectId(Player player, Npc npc) => _questManager.GetQuestEffectId(player, npc);
+
+    public override void OnClientFinishedLoading(Player player)
+    {
+        base.OnClientFinishedLoading(player);
+
+        SendEnabledClientAreas(player);
+
+        player.UpdatePointOfInterest(GetNearestZoneArea(player.Position));
+    }
+
+    protected override void UpdateEverySecond()
+    {
+        base.UpdateEverySecond();
+
+        var now = DateTime.Now;
+
+        lock (_clientAreasLock)
+        {
+            foreach (var seasonalClientArea in _zoneDefinition.SeasonalClientAreas)
+            {
+                var isActive = seasonalClientArea.IsActive(now);
+
+                if (isActive == _activeSeasonalClientAreas.Contains(seasonalClientArea))
+                    continue;
+
+                if (isActive)
+                    _activeSeasonalClientAreas.Add(seasonalClientArea);
+                else
+                    _activeSeasonalClientAreas.Remove(seasonalClientArea);
+
+                Logger.LogInformation("Seasonal client areas {name} {state}", seasonalClientArea.Name, isActive ? "enabled" : "disabled");
+
+                if (!isActive)
+                {
+                    foreach (var player in Players)
+                        SendClientAreas(player, seasonalClientArea.AreaIds, false);
+                }
+            }
+        }
+
+        if (++_secondsSinceClientAreaRefresh < ClientAreaRefreshSeconds)
+            return;
+
+        _secondsSinceClientAreaRefresh = 0;
+
+        foreach (var player in Players)
+            SendEnabledClientAreas(player);
+    }
+
+    public override bool IsSeasonActive(string seasonName)
+    {
+        var now = DateTime.Now;
+
+        return _zoneDefinition.SeasonalClientAreas.Any(x => x.Name == seasonName && x.IsActive(now));
+    }
+
+    public override void SetClientAreaEnabled(int areaId, bool enabled)
+    {
+        lock (_clientAreasLock)
+        {
+            var changed = enabled ? _scriptEnabledClientAreaIds.Add(areaId) : _scriptEnabledClientAreaIds.Remove(areaId);
+
+            if (!changed)
+                return;
+        }
+
+        foreach (var player in Players)
+            SendClientAreas(player, [areaId], enabled);
+    }
+
+    private void SendEnabledClientAreas(Player player)
+    {
+        SendClientAreas(player, _zoneDefinition.EnabledClientAreaIds, true);
+
+        lock (_clientAreasLock)
+        {
+            foreach (var seasonalClientArea in _activeSeasonalClientAreas)
+                SendClientAreas(player, seasonalClientArea.AreaIds, true);
+
+            SendClientAreas(player, [.. _scriptEnabledClientAreaIds], true);
+        }
+    }
+
+    private static void SendClientAreas(Player player, List<int> areaIds, bool enabled)
+    {
+        foreach (var areaId in areaIds)
+            player.SendTunneled(new PacketSetClientArea { AreaId = areaId, Enabled = enabled });
     }
 
     /// <summary>
@@ -69,32 +220,62 @@ public sealed class WorldZone : BaseZone
         "Welcome to Free Realms Evergrove! To get started, talk to Samantha in Cobblestone Village: look for the ! on your minimap. " +
         "After that, your quest helper shows where to go next, and its Take Me There button runs you there. Type !help for chat commands.";
 
-    public int GetZoneAreaId(Vector4 position)
+    public ZoneAreaDefinition? GetZoneArea(Vector4 position)
     {
-        foreach (var areaDefinition in _zoneDefinition.AreaDefinitions)
+        return GetZoneArea(position, GetTileFromPosition(position));
+    }
+
+    public ZoneAreaDefinition? GetZoneArea(Vector4 position, ZoneTile zoneTile)
+    {
+        if (_tileZoneAreas.TryGetValue((zoneTile.Longitude, zoneTile.Latitude), out var tileZoneArea))
+            return tileZoneArea;
+
+        foreach (var areaDefinition in _shapeZoneAreas)
         {
-            if (areaDefinition.Shape == "Circle")
+            var isInArea = areaDefinition.Shape switch
             {
-                var circle = new Vector3(areaDefinition.X1, 0, areaDefinition.Z1);
+                ZoneAreaShape.Circle => position.IsInCircle(new Vector3(areaDefinition.X1, 0, areaDefinition.Z1), areaDefinition.Radius),
+                ZoneAreaShape.Rectangle => position.IsInRectangle(new Vector3(areaDefinition.X1, 0, areaDefinition.Z1),
+                    new Vector3(areaDefinition.X2, 0, areaDefinition.Z2)),
+                ZoneAreaShape.Polygon => position.IsInPolygon(areaDefinition.Points),
+                _ => throw new NotImplementedException(nameof(areaDefinition.Shape))
+            };
 
-                if (position.IsInCircle(circle, areaDefinition.Radius))
-                    return areaDefinition.Id;
-            }
-            else if (areaDefinition.Shape == "Rectangle")
-            {
-                var p1 = new Vector3(areaDefinition.X1, 0, areaDefinition.Z1);
-                var p2 = new Vector3(areaDefinition.X2, 0, areaDefinition.Z2);
-
-                if (position.IsInRectangle(p1, p2))
-                    return areaDefinition.Id;
-            }
-            else
-            {
-                throw new NotImplementedException(nameof(areaDefinition.Shape));
-            }
+            if (isInArea)
+                return areaDefinition;
         }
 
-        return 0;
+        if (!_environmentZoneAreas.TryGetValue(zoneTile.EnvironmentId, out var environmentZoneAreas))
+            return null;
+
+        return environmentZoneAreas.FirstOrDefault(x => x.IsInEnvironmentXRange(position.X));
+    }
+
+    public ZoneAreaDefinition? GetNearestZoneArea(Vector4 position)
+    {
+        var zoneArea = GetZoneArea(position);
+
+        if (zoneArea is not null)
+            return zoneArea;
+
+        ZoneAreaDefinition? nearestZoneArea = null;
+        var nearestDistance = float.MaxValue;
+
+        foreach (var areaDefinition in _zoneDefinition.AreaDefinitions)
+        {
+            if (!_resourceManager.PointOfInterests.TryGetValue(areaDefinition.PointOfInterestId, out var pointOfInterest))
+                continue;
+
+            var distance = pointOfInterest.Position.ToVector3().DistanceSquaredXZ(position.ToVector3());
+
+            if (distance >= nearestDistance)
+                continue;
+
+            nearestDistance = distance;
+            nearestZoneArea = areaDefinition;
+        }
+
+        return nearestZoneArea;
     }
 
     private void SendPointOfInterests(Player player)
@@ -116,12 +297,20 @@ public sealed class WorldZone : BaseZone
         player.SendTunneled(packetPointOfInterestDefinitionReply);
     }
 
-    private void SendAdventurersJournalInfo(Player player)
+    /// <summary>
+    /// The Adventurer's Journal: its regions (the book's tabs), their hubs, and each hub's quests. Region 1, Cobblestone
+    /// Village, holds Evergrove's own story (<see cref="AdventurersJournal"/>). The live game's 2013 story (hubs
+    /// Briarwood Caverns and Farnum Farmstead, quests 2513-2566) isn't on this server, and with its hubs first the
+    /// client's current quest was always one it had never been sent, so the welcome window said there were no quests.
+    /// Regions 2-4 still list that story's later hubs. The client only moves the journal to a region holding a quest
+    /// the player has taken or finished, so they never become current; Evergrove's stories replace them when written.
+    /// </summary>
+    internal static AdventurersJournalInfoPacket CreateAdventurersJournalInfo()
     {
         // DO NOT REMOVE even if it's not fully implemented. This packet is needed
         // due to an Area Definition called "Newbiezone" in FabledRealmsAreas.xml.
 
-        var adventurersJournal = new AdventurersJournalInfoPacket();
+        var adventurersJournalInfoPacket = new AdventurersJournalInfoPacket();
 
         AdventurersJournalRegionDefinition[] regions =
         [
@@ -133,7 +322,9 @@ public sealed class WorldZone : BaseZone
                 TabImageId = 35449,
                 ChapterMapImageId = 0,
                 GeometryId = 244,
-                CompletedStringId = 5101408
+
+                // 5101408 ("The Hooligans leader, Mac, has been defeated...") ends the 2013 story, not Evergrove's.
+                CompletedStringId = 0
             },
             new()
             {
@@ -167,46 +358,22 @@ public sealed class WorldZone : BaseZone
             }
         ];
 
-        adventurersJournal.Regions = regions.ToDictionary(x => x.Id);
+        adventurersJournalInfoPacket.Regions = regions.ToDictionary(x => x.Id);
 
         AdventurersJournalHubDefinition[] hubs =
         [
             new()
             {
-                Id = 1,
+                Id = AdventurersJournal.CobblestoneVillageHubId,
                 RegionId = 1,
                 DisplayOrder = 1,
-                NameId = 442216,
-                ActiveImageSetId = 19,
-                ImageSetId = 44308,
-                CompletedImageSetId = 44310,
-                CompletedDescriptionId = 5100071,
-                MapX = 0,
-                MapY = 0
-            },
-            new()
-            {
-                Id = 2,
-                RegionId = 1,
-                DisplayOrder = 2,
-                NameId = 18735,
-                ActiveImageSetId = 19,
-                ImageSetId = 44308,
-                CompletedImageSetId = 44311,
-                CompletedDescriptionId = 5100072,
-                MapX = 0,
-                MapY = 0
-            },
-            new()
-            {
-                Id = 3,
-                RegionId = 1,
-                DisplayOrder = 3,
                 NameId = 5100069,
                 ActiveImageSetId = 19,
                 ImageSetId = 44308,
                 CompletedImageSetId = 44309,
-                CompletedDescriptionId = 5100073,
+
+                // 5100073 ends the 2013 story ("...Cobblestone Village has been freed!"), not Evergrove's.
+                CompletedDescriptionId = 0,
                 MapX = 0,
                 MapY = 0
             },
@@ -303,88 +470,11 @@ public sealed class WorldZone : BaseZone
             }
         ];
 
-        adventurersJournal.Hubs = hubs.ToDictionary(x => x.Id);
+        adventurersJournalInfoPacket.Hubs = hubs.ToDictionary(x => x.Id);
 
         AdventurersJournalHubQuestDefinition[] hubQuests =
         [
-            new()
-            {
-                HubId = 1,
-                Id = 2514,
-                Unknown = 2
-            },
-            new()
-            {
-                HubId = 1,
-                Id = 2513,
-                Unknown = 1
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2521,
-                Unknown = 2
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2526,
-                Unknown = 7
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2522,
-                Unknown = 3
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2523,
-                Unknown = 4
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2524,
-                Unknown = 5
-            },
-            new()
-            {
-                HubId = 2,
-                Id = 2525,
-                Unknown = 6
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2529,
-                Unknown = 3
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2528,
-                Unknown = 2
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2527,
-                Unknown = 1
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2566,
-                Unknown = 5
-            },
-            new()
-            {
-                HubId = 3,
-                Id = 2530,
-                Unknown = 4
-            },
+            .. AdventurersJournal.HubQuests(),
             new()
             {
                 HubId = 4,
@@ -657,7 +747,7 @@ public sealed class WorldZone : BaseZone
             }
         ];
 
-        adventurersJournal.HubQuests = hubQuests.ToDictionary(x => x.Id);
+        adventurersJournalInfoPacket.HubQuests = hubQuests.ToDictionary(x => x.Id);
 
         AdventurersJournalStickerDefinition[] stickers =
         [
@@ -687,21 +777,20 @@ public sealed class WorldZone : BaseZone
             }
         ];
 
-        adventurersJournal.Stickers = stickers.ToDictionary(x => x.Id);
+        adventurersJournalInfoPacket.Stickers = stickers.ToDictionary(x => x.Id);
 
-        player.SendTunneled(adventurersJournal);
+        return adventurersJournalInfoPacket;
     }
 
     /// <summary>
     /// The welcome window: two tips a new player can use, in the client's own words. The live game's three slots
-    /// advertised the Station Cash store, which Evergrove doesn't sell from, and its claim codes were never answered
-    /// (docs/research/ui-server-gaps.md), so neither is sent.
+    /// advertised 2014's Station Cash store (pirate clothes, tigers, pegasi), and its claim codes were never answered
+    /// (docs/research/ui-server-gaps.md), so neither is sent. Upstream's helper fills in the time since the last login
+    /// and the Station Cash balance.
     /// </summary>
     private void SendWelcomeInfo(Player player)
     {
-        var packetLoadWelcomeScreen = new PacketLoadWelcomeScreen();
-
-        packetLoadWelcomeScreen.Contents.AddRange(
+        ContentInfo[] tips =
         [
             new ContentInfo
             {
@@ -715,8 +804,9 @@ public sealed class WorldZone : BaseZone
                 NameId = 414802,
                 DescriptionId = 415430,
             }
-        ]);
+        ];
 
-        player.SendTunneled(packetLoadWelcomeScreen);
+        player.SendTunneled(WelcomeScreenHelper.GetWelcomeScreenPacket(player.SecondsSinceLastLogin, player.StationCash,
+            tips, claimCodes: []));
     }
 }

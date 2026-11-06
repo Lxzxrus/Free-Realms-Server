@@ -34,7 +34,9 @@ public sealed class CipherCCM : ICipher
 
     public bool Decrypt(Span<byte> data, out int finalLength)
     {
-        if (_aesCcm is null)
+        // Data too short to hold a tag and a nonce is refused: slicing them out of it below would throw. A real client never
+        // sends any, but anyone whose connection has a cipher can.
+        if (_aesCcm is null || data.Length < TagLength + NonceLength)
         {
             finalLength = 0;
             return false;
@@ -98,16 +100,17 @@ public sealed class CipherCCM : ICipher
 
         try
         {
-            _aesCcm.Encrypt(nonce, sourceData, encryptedData, tag);
+            _aesCcm.Encrypt(nonce, sourceData, encryptedData.AsSpan(0, sourceData.Length), tag);
+            writer.Write(encryptedData.AsSpan(0, sourceData.Length));
         }
         catch
         {
             return false;
         }
-
-        writer.Write(encryptedData);
-
-        ArrayPool<byte>.Shared.Return(encryptedData);
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(encryptedData);
+        }
 
         writer.Write(tag);
         writer.Write(nonce);

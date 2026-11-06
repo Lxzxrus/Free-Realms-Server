@@ -35,7 +35,9 @@ public class TeleportCommand : IChatCommand
         // until the player next moved, who they could see and the position saved on logout were where they had left.
         var rotation = invoker.Rotation;
 
-        invoker.UpdatePosition(position, rotation, false);
+        invoker.UpdatePosition(position, rotation);
+
+        invoker.UpdatePointOfInterest();
 
         var clientUpdatePacketUpdateLocation = new ClientUpdatePacketUpdateLocation
         {

@@ -16,23 +16,18 @@ using Sanctuary.Core.Helpers;
 
 namespace Sanctuary.Login;
 
-public class LoginConnection : UdpConnection
+public class LoginConnection : LoginServerConnection
 {
     private readonly ILogger _logger;
 
     private ICipher _cipher;
     private bool _useEncryption = true; // Hardcoded in the client.
 
-    private LoginServerOptions _options;
-
     public ulong UserId { get; set; }
 
-    public LoginConnection(ILogger<LoginConnection> logger, IOptionsMonitor<LoginServerOptions> options, LoginServer loginServer, SocketAddress socketAddress, int connectCode) : base(loginServer, socketAddress, connectCode)
+    public LoginConnection(ILogger<LoginConnection> logger, IOptionsMonitor<LoginServerOptions> options, LoginServer loginServer, SocketAddress socketAddress, int connectCode) : base(options, loginServer, socketAddress, connectCode)
     {
         _logger = logger;
-
-        _options = options.CurrentValue;
-        options.OnChange(o => _options = o);
 
         _cipher = new CipherRC4();
 
@@ -43,6 +38,8 @@ public class LoginConnection : UdpConnection
 
     public override void OnTerminated()
     {
+        base.OnTerminated();
+
         var reason = DisconnectReason == DisconnectReason.OtherSideTerminated
             ? OtherSideDisconnectReason
             : DisconnectReason;
@@ -119,9 +116,25 @@ public class LoginConnection : UdpConnection
 #endif
     }
 
+    // Anyone who knows this connection's address can send it packets that fail their CRC check, as fast as they like, so
+    // a line for each would let them fill the disk: the first is logged, then one a minute at most, with the count so far.
+    private const int CrcRejectLogInterval = 60000;
+
+    // when OnCrcReject last logged (Environment.TickCount64), 0 = never
+    private long _crcRejectLoggedAt;
+
     public override void OnCrcReject(Span<byte> data)
     {
-        _logger.LogError("[CrcReject] UserId: {userid}, Data: {data}", UserId, PacketLog.Hex(data));
+        var now = Environment.TickCount64;
+
+        if (_crcRejectLoggedAt != 0 && now - _crcRejectLoggedAt < CrcRejectLogInterval)
+            return;
+
+        _crcRejectLoggedAt = now;
+
+        GetStats(out var stats);
+
+        _logger.LogError("[CrcReject] UserId: {userid}, Data: {data} ({count} from this connection so far, logged once a minute at most)", UserId, PacketLog.Hex(data), stats.CrcRejectedPackets);
     }
 
     public override void OnPacketCorrupt(Span<byte> data, UdpCorruptionReason reason)
@@ -197,7 +210,7 @@ public class LoginConnection : UdpConnection
 
     protected override int DecryptUserSupplied(Span<byte> destData, Span<byte> sourceData)
     {
-        if (!_options.UseCompression)
+        if (!Options.UseCompression)
             return base.DecryptUserSupplied(destData, sourceData);
 
         // every compressed packet starts with a flag byte; without one it's corrupt
@@ -218,7 +231,7 @@ public class LoginConnection : UdpConnection
 
     protected override int EncryptUserSupplied(Span<byte> destData, Span<byte> sourceData)
     {
-        if (!_options.UseCompression)
+        if (!Options.UseCompression)
             return base.EncryptUserSupplied(destData, sourceData);
 
         if (sourceData.Length >= 24)

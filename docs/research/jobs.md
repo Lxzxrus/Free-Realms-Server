@@ -59,7 +59,7 @@ checked.
 | Job (profile) | Trainer (wiki) | Where (wiki) | First quest (wiki) | Our npc | Taught |
 |---|---|---|---|---|---|
 | Fisherman (137) | Reed Stillwater, "next to the fishing boat"; the quest starts from the Sports Club message board | Stillwater Crossing | "Testing the Waters": catch a Flutterfish at Sacred Grove Shallows | 2968 | Yes |
-| Miner (14) | Therin, "east side of the first cavern" | Singing Crystal Mines, Snowhill | "Miner: So, You Want To Be A Miner?" | 1201, 1202 (same spot), 1697, 3602; which one is in the mine is a guess, so all four teach it | Yes |
+| Miner (14) | Therin, "east side of the first cavern" | Singing Crystal Mines, Snowhill | "Miner: So, You Want To Be A Miner?" | 1201, 1697, 3602 (OSFR dropped 1202, a copy of 1201 on the same spot, in October 2026); which one is in the mine is a guess, so all three teach it | Yes |
 | Brawler (43) | Harold (Fandom) or Merigold (Allakhazam); Carlos Brazenfist; Caitlyn Gravefog | Highroad Junction; Cobblestone Village; Stillwater Crossing | "Hewey's Escape!", "Bringing Back Brazenfist", "Graveyard Grumble" | Harold 2910, Caitlyn Gravefog 2943 (Carlos isn't in our npcs; Merigold 2912 left out while the sources disagree) | Yes |
 | Archer (35) | Lugabow | Greenwood Camp | "Path of the Archer" | 3467 | Yes |
 | Wizard (12) | Fizzlesticks | Robgoblin Camp | "Wizard: How to be a Wizard" (from 2013 it also needed Medic 20; not applied) | 1327 | Yes |

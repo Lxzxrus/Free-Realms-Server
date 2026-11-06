@@ -1,10 +1,12 @@
-using System;
+﻿using System;
+using System.Linq;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
@@ -38,6 +40,9 @@ public static class PacketWorldTeleportRequestHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PacketWorldTeleportRequest), packet);
 
+        if (!connection.Player.Friends.Any(friend => friend.Guid == packet.Guid))
+            return true;
+
         if (!_zoneManager.TryGetPlayer(packet.Guid, out var player) || !player.Visible)
             return true;
 
@@ -46,24 +51,41 @@ public static class PacketWorldTeleportRequestHandler
 
         if (!ReferenceEquals(connection.Player.Zone, player.Zone))
         {
-            if (player.Zone is HousingZone housingZone)
+            // A move to another zone: one that comes too soon after the last waits for its turn (ZoneTeleports).
+            var self = connection.Player;
+            var zone = player.Zone;
+
+            if (zone is HousingZone housingZone)
             {
-                _houseManager.EnterHouse(
-                    connection.Player,
-                    GuidHelper.GetHouseGuid(housingZone.HouseId));
+                var houseGuid = GuidHelper.GetHouseGuid(housingZone.HouseId);
+
+                ZoneTeleports.Request(self, Environment.TickCount64, () =>
+                {
+                    if (_houseManager.EnterHouse(self, houseGuid) != EnterHouseResult.Success)
+                        ChatHelper.SendSystemMessage(self, "That house could not be entered.");
+                });
+
                 return true;
             }
 
-            if (player.Zone is not WorldZone ||
-                !connection.Player.TeleportToZone(player.Zone, position, rotation))
+            if (zone is not WorldZone)
             {
+                ChatHelper.SendSystemMessage(self, "You can't join that player where they are.");
                 return true;
             }
+
+            ZoneTeleports.Request(self, Environment.TickCount64, () =>
+            {
+                if (!self.TeleportToZone(zone, position, rotation))
+                    ChatHelper.SendSystemMessage(self, "The teleport failed. Please try again.");
+            });
 
             return true;
         }
 
-        connection.Player.UpdatePosition(position, rotation, updateZoneArea: false);
+        connection.Player.UpdatePosition(position, rotation);
+
+        connection.Player.UpdatePointOfInterest();
 
         var clientUpdatePacketUpdateLocation = new ClientUpdatePacketUpdateLocation
         {

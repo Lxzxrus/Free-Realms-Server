@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Numerics;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -48,14 +49,24 @@ public static class PacketZoneTeleportRequestHandler
         var position = pointOfInterest.SpawnPosition;
         var rotation = new Quaternion(rotationZ, 0f, rotationX, 0f);
 
-        // Every point of interest is in the starting zone, so from a house or a fishing hole this is a zone change.
+        // Every point of interest is in the starting zone, so from a house or a fishing hole this is a zone change. One
+        // that comes too soon after the last waits for its turn (ZoneTeleports).
         if (connection.Player.Zone != _zoneManager.StartingZone)
         {
-            connection.Player.TeleportToZone(_zoneManager.StartingZone, position, rotation);
+            var player = connection.Player;
+
+            ZoneTeleports.Request(player, Environment.TickCount64, () =>
+            {
+                if (!player.TeleportToZone(_zoneManager.StartingZone, position, rotation))
+                    ChatHelper.SendSystemMessage(player, "The teleport failed. Please try again.");
+            });
+
             return true;
         }
 
-        connection.Player.UpdatePosition(position, rotation, updateZoneArea: false);
+        connection.Player.UpdatePosition(position, rotation);
+
+        connection.Player.UpdatePointOfInterest();
 
         var clientUpdatePacketUpdateLocation = new ClientUpdatePacketUpdateLocation
         {

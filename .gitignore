@@ -7,6 +7,11 @@
 .client.download/
 client/
 
+# Zone geometry converted from the client by upstream OSFR (navmesh and terrain, about 60 MB). Not kept in this
+# repository: tools/deploy/fetch-zone-geometry.sh downloads it at a pinned commit and checks its hashes.
+/src/Resources/NavMeshes/
+/src/Resources/Terrain/
+
 # Sqlite DBs
 *.db*
 

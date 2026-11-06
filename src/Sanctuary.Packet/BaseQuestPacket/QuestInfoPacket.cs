@@ -7,25 +7,30 @@ namespace Sanctuary.Packet;
 
 public class QuestInfoPacket : BaseQuestPacket, ISerializablePacket
 {
-    public const int SubOpCode = 1;
+    public new const int OpCode = 1;
 
     public int QuestId;
-    public int TitleId;
+    public int NpcDialogId;
+    public int NpcAnimationId;
+    public int NameId;
     public int DescriptionId;
-    public int HelperTextId;
-    public int IconId;
-    public int Unknown6;
-    public bool Unknown7;
+    public int Unused;
+    public bool MembersOnly;
 
     public ulong NpcGuid;
 
-    public int Unknown10;
+    // Dialog camera distance from the NPC's head; the client clamps it to 2-20.
+    public float CameraDistance;
+
+    // Never read by the client.
     public bool Unknown11;
-    public bool Unknown12;
+
+    // Hides the Decline button.
+    public bool AcceptOnly;
 
     public RewardBundleBase RewardBundle { get; } = new();
 
-    public QuestInfoPacket() : base(SubOpCode)
+    public QuestInfoPacket() : base(OpCode)
     {
     }
 
@@ -36,20 +41,19 @@ public class QuestInfoPacket : BaseQuestPacket, ISerializablePacket
         Write(writer);
 
         writer.Write(QuestId);
-        writer.Write(TitleId);
+        writer.Write(NpcDialogId);
+        writer.Write(NpcAnimationId);
+        writer.Write(NameId);
         writer.Write(DescriptionId);
-        writer.Write(HelperTextId);
-        writer.Write(IconId);
-        writer.Write(Unknown6);
-        writer.Write(Unknown7);
+        writer.Write(Unused);
+        writer.Write(MembersOnly);
 
         RewardBundle.Serialize(writer);
-        writer.Write(0);
 
         writer.Write(NpcGuid);
-        writer.Write(Unknown10);
+        writer.Write(CameraDistance);
         writer.Write(Unknown11);
-        writer.Write(Unknown12);
+        writer.Write(AcceptOnly);
 
         return writer.Buffer;
     }

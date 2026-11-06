@@ -44,11 +44,16 @@ public class HardeningTests
 
     // ---- F4: an exception while processing one connection drops that connection, never the host ----
 
+    // The F4 and F10 tests run twice: with the application's callbacks inline, as the Login server has them, and queued, as
+    // the Gateway has them (GatewayServer sets EventQueuing).
+
     [TestMethod]
-    public void HandlerExceptionDropsOnlyThatConnection()
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void HandlerExceptionDropsOnlyThatConnection(bool queued)
     {
         var network = new FakeNetwork();
-        var server = Server(network);
+        var server = Server(network, p => p.EventQueuing = queued);
         var (clientA, a) = Client(network, server, "10.0.0.2");
         var (clientB, b) = Client(network, server, "10.0.0.3");
 
@@ -80,10 +85,12 @@ public class HardeningTests
     }
 
     [TestMethod]
-    public void ExceptionFromDisconnectCallbackDoesNotEscape()
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void ExceptionFromDisconnectCallbackDoesNotEscape(bool queued)
     {
         var network = new FakeNetwork();
-        var server = Server(network);
+        var server = Server(network, p => p.EventQueuing = queued);
         server.Behaviour.ThrowOnTerminated = true;
 
         var (_, _) = Client(network, server, "10.0.0.2");
@@ -329,7 +336,9 @@ public class HardeningTests
     // ---- F10: a connection that throws repeatedly is disconnected ----
 
     [TestMethod]
-    public void RepeatedHandlerFaultsDisconnect()
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void RepeatedHandlerFaultsDisconnect(bool queued)
     {
         var network = new FakeNetwork();
         var server = Server(network, p =>
@@ -337,6 +346,7 @@ public class HardeningTests
             p.FaultLimit = 3;
             p.FaultWindow = 60000;
             p.NoDataTimeout = 0;
+            p.EventQueuing = queued;
         });
 
         server.Behaviour.ReportFaults = true;
@@ -366,6 +376,382 @@ public class HardeningTests
         Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
         Assert.AreEqual(1, server.Stats.FaultLimitDisconnects);
         Assert.AreEqual(0, server.Stats.ConnectionFaults, "reported faults never reach the exception guard");
+    }
+
+    // ---- Queued callbacks, as on the Gateway ----
+
+    // a packet whose handler disconnects its connection, as the Gateway's login handler does when it refuses a ticket
+    private const byte DisconnectMe = 0xDC;
+
+    [TestMethod]
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void NoPacketIsHandledAfterItsConnectionDisconnects(bool queued)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.EventQueuing = queued);
+
+        server.Behaviour.OnPacket = (connection, packet) =>
+        {
+            if (packet[0] == DisconnectMe)
+                connection.Disconnect();
+        };
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // one datagram grouping two packets (00 03): queued, the second waits in the queue before the first is handled
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(0, 3, 2, DisconnectMe, 1, 2, FakeBehaviour.Throw, 2));
+        network.Pump(3, server);
+
+        CollectionAssert.AreEqual(new byte[] { DisconnectMe, 1 }, serverA.Received.Single());
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.Application, serverA.DisconnectReason);
+        Assert.IsTrue(serverA.Terminated);
+        Assert.AreEqual(0, server.Stats.ConnectionFaults, "the second packet, which throws, never reached its handler");
+        Assert.AreEqual(0, serverA.QueuedPackets);
+    }
+
+    [TestMethod]
+    public void ConnectionOverTheQueuedPacketLimitIsDisconnected()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.EventQueuing = true;
+            p.MaxQueuedPacketsPerConnection = 4;
+        });
+
+        var (clientA, a) = Client(network, server, "10.0.0.2");
+        var (clientB, b) = Client(network, server, "10.0.0.3");
+        var serverA = server.Accepted[0];
+        var serverB = server.Accepted[1];
+
+        // all read in one poll, before any is handled: five from A, one over the limit, and four from B
+        for (byte i = 1; i <= 5; i++)
+        {
+            network.Deliver(clientA.EndPoint, server.EndPoint, a.Craft(i));
+
+            if (i <= 4)
+                network.Deliver(clientB.EndPoint, server.EndPoint, b.Craft(i));
+        }
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+        Assert.IsEmpty(serverA.Received, "what it had queued went with it");
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        Assert.HasCount(4, serverB.Received);
+
+        // the limit is on packets waiting, not packets sent: B's queue emptied as it was delivered
+        for (byte i = 5; i <= 8; i++)
+            network.Deliver(clientB.EndPoint, server.EndPoint, b.Craft(i));
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        Assert.HasCount(8, serverB.Received);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+    }
+
+    [TestMethod]
+    public void ConnectionOverTheQueuedPacketLimitOnAReliablePacketLeavesThePriorityQueue()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.EventQueuing = true;
+            p.MaxQueuedPacketsPerConnection = 4;
+        });
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // four unreliable packets fill the queue, then a reliable one (00 09, id 0) goes over: its acknowledgement is sent
+        // after the connection has been disconnected for it, and taken out of the priority queue
+        for (byte i = 1; i <= 4; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(i));
+
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(0, 9, 0, 0, 5));
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+        Assert.AreEqual(-1, serverA.PriorityQueuePosition, "the acknowledgement didn't put it back");
+
+        // a connection in the queue is given time at least every 10 minutes, and puts itself back each time
+        network.Pump(130, 10000, server);
+
+        Assert.AreEqual(-1, serverA.PriorityQueuePosition);
+        Assert.AreEqual(0, server.Stats.ConnectionCount);
+    }
+
+    [TestMethod]
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void ConnectionDroppedForACorruptPacketInsideAReliableOneLeavesThePriorityQueue(bool queued)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.EventQueuing = queued);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // a reliable packet (00 09, id 0) carrying a multi-packet (00 03) whose piece claims 9 bytes when 1 is left
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(0, 9, 0, 0, 0, 3, 9, 1));
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+        Assert.AreEqual(-1, serverA.PriorityQueuePosition);
+    }
+
+    [TestMethod]
+    [DataRow(false, DisplayName = "callbacks inline")]
+    [DataRow(true, DisplayName = "callbacks queued, as on the Gateway")]
+    public void PacketsFailingTheirCrcCheckNeverDisconnectAndOnlySoManyAreQueued(bool queued)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.EventQueuing = queued;
+            p.MaxQueuedPacketsPerConnection = 4;
+        });
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        var badCrc = a.Craft(1, 2, 3);
+        badCrc[^1] ^= 0xFF;
+
+        // all read in one poll, before any is handled: 50 that fail their CRC check from the player's address (anyone can
+        // send them, with a forged sender address), well over both limits, then three of the player's own
+        for (var i = 0; i < 50; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, badCrc);
+
+        for (byte i = 1; i <= 3; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(i));
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Connected, serverA.Status, "they prove nothing about who sent them");
+        Assert.AreEqual(0, server.Stats.QueueLimitDisconnects, "and don't count towards the player's packets");
+        Assert.HasCount(3, serverA.Received);
+        Assert.AreEqual(50, server.Stats.CrcRejectedPackets);
+
+        // queued, those over the limit are dropped; inline there is no queue to fill
+        var told = queued ? FakeManager.MaxQueuedCrcRejects : 50;
+
+        Assert.AreEqual(told, serverA.CrcRejects);
+        Assert.AreEqual(0, serverA.QueuedCrcRejects);
+
+        // the limit is on those waiting, not those sent
+        network.Deliver(client.EndPoint, server.EndPoint, badCrc);
+        network.Pump(1, server);
+
+        Assert.AreEqual(told + 1, serverA.CrcRejects);
+        Assert.AreEqual(Status.Connected, serverA.Status);
+    }
+
+    [TestMethod]
+    public void SocketAndConnectionsGetTimeWhileABacklogOfEventsDrains()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.EventQueuing = true);
+
+        // each of these takes 60 ms to handle, so two use up one GiveTime's time for delivering events
+        const byte Slow = 0x51;
+
+        server.Behaviour.OnPacket = (_, packet) =>
+        {
+            if (packet[0] == Slow)
+                network.Now += 60;
+        };
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        for (byte i = 0; i < 10; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(Slow, i));
+
+        server.GiveTime();
+
+        Assert.HasCount(2, serverA.Received);
+        Assert.AreEqual(8, server.Stats.EventListCount);
+
+        // events are still waiting, and the next GiveTime reads the socket and gives the connection its time anyway
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(7));
+
+        var serviced = server.Stats.PriorityQueueProcessed;
+
+        server.GiveTime();
+
+        Assert.IsEmpty(server.Driver.Inbox, "the socket was read");
+        Assert.IsTrue(server.Stats.PriorityQueueProcessed > serviced, "the connection got its time");
+        Assert.HasCount(4, serverA.Received);
+
+        network.Pump(10, server, client);
+
+        Assert.HasCount(11, serverA.Received, "and the backlog drained");
+        CollectionAssert.AreEqual(new byte[] { 7 }, serverA.Received[^1], "in order");
+        Assert.AreEqual(Status.Connected, serverA.Status);
+    }
+
+    // ---- Packets from a player's address: only one that passes its CRC check counts as the player's ----
+
+    [TestMethod]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.KeepAlive }, false, DisplayName = "a bare keep-alive")]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.KeepAlive }, true, DisplayName = "a keep-alive with a wrong CRC")]
+    [DataRow(new byte[] { 1, 2, 3 }, true, DisplayName = "a packet with a wrong CRC")]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.UnreachableConnection }, false, DisplayName = "an unreachable packet")]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.RequestRemap, 0, 0, 0, 1, 0, 0, 0, 2 }, false, DisplayName = "a remap request")]
+    [DataRow(new byte[] { 0, (byte)UdpPacketType.Connect, 0, 0, 0, 3, 0, 0, 0x30, 0x39, 0, 0, 2, 0, (byte)'F', (byte)'a', (byte)'k', (byte)'e', 0, 0, 0 },
+        false, DisplayName = "a connect request with another code")]
+    public void PacketsAnyoneCouldSendDontKeepAConnectionAlive(byte[] packet, bool wrongCrc)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        var forged = packet;
+
+        if (wrongCrc)
+        {
+            forged = a.Craft(packet);
+            forged[^1] ^= 0xFF;
+        }
+
+        // the player's client has crashed (it never gets time again), and someone sends the packet from its address every 10 s
+        for (var i = 0; i < 6; i++)
+        {
+            network.Pump(500, server);
+            network.Deliver(client.EndPoint, server.EndPoint, forged);
+            network.Pump(500, server);
+
+            if (i < 2)
+                Assert.AreEqual(Status.Connected, serverA.Status, "nor does the packet disconnect it");
+        }
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.Timeout, serverA.DisconnectReason, "NoDataTimeout, 30 s after the client's last packet");
+    }
+
+    [TestMethod]
+    public void RealKeepAlivesKeepAQuietConnectionAliveAndItTimesOutAfterTheLast()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+
+        // a keep-alive after 10 s without sending anything, as the Gateway's link to Login has
+        var clientParams = FakeManager.ClientParams();
+        clientParams.KeepAliveDelay = 10000;
+
+        var client = FakeManager.Create(network, "10.0.0.2", clientParams);
+        var a = client.EstablishConnection(ServerIp, server.EndPoint.Port);
+        Assert.IsNotNull(a);
+        network.Pump(5, server, client);
+
+        var serverA = server.Accepted.Single();
+        var before = network.Sent.Count;
+
+        // three minutes with nothing to say
+        network.Pump(1800, 100, server, client);
+
+        var fromClient = network.Sent.Skip(before).Where(x => x.From.Equals(client.EndPoint)).Select(x => x.Data).ToList();
+
+        Assert.IsTrue(fromClient.Count >= 17, $"{fromClient.Count} keep-alives");
+        Assert.IsTrue(fromClient.All(x => x[0] == 0 && x[1] == (byte)UdpPacketType.KeepAlive), "nothing but keep-alives");
+        Assert.AreEqual(Status.Connected, serverA.Status);
+        Assert.AreEqual(Status.Connected, a.Status);
+        Assert.AreEqual(0, server.Stats.CrcRejectedPackets, "each passed its CRC check");
+
+        // the client goes just after its next keep-alive, and the server drops it NoDataTimeout (30 s) after that one
+        before = network.Sent.Count;
+
+        while (!network.Sent.Skip(before).Any(x => x.From.Equals(client.EndPoint)))
+            network.Pump(1, 100, server, client);
+
+        network.Pump(290, 100, server);
+        Assert.AreEqual(Status.Connected, serverA.Status, "29 s after its last keep-alive");
+
+        network.Pump(20, 100, server);
+        Assert.AreEqual(Status.Disconnected, serverA.Status, "31 s after it");
+        Assert.AreEqual(DisconnectReason.Timeout, serverA.DisconnectReason);
+    }
+
+    [TestMethod]
+    public void UnreachablePacketsFromAPlayersAddressDontDisconnectIt()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        byte[] unreachable = [0, (byte)UdpPacketType.UnreachableConnection];
+
+        // the player says nothing for 12 s, and someone sends unreachable packets from its address 6 s apart: the second
+        // used to disconnect it, coming more than 5 s (MaximumTimeAllowedForPortRemapping) after the first
+        network.Deliver(client.EndPoint, server.EndPoint, unreachable);
+        network.Pump(600, server, client);
+        network.Deliver(client.EndPoint, server.EndPoint, unreachable);
+        network.Pump(600, server, client);
+
+        Assert.AreEqual(Status.Connected, serverA.Status);
+
+        a.Send(UdpChannel.Reliable1, [5]);
+        network.Pump(10, server, client);
+
+        CollectionAssert.AreEqual(new byte[] { 5 }, serverA.Received.Single());
+    }
+
+    [TestMethod]
+    public void ClientStillGivesUpOnAServerThatAnswersUnreachable()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+
+        byte[] unreachable = [0, (byte)UdpPacketType.UnreachableConnection];
+
+        // the server no longer knows the connection (it restarted) and answers everything with unreachable: the side that
+        // opened the connection asks for a remap for 5 s, then gives up
+        network.Deliver(server.EndPoint, client.EndPoint, unreachable);
+        network.Pump(600, client);
+        network.Deliver(server.EndPoint, client.EndPoint, unreachable);
+        network.Pump(1, client);
+
+        Assert.AreEqual(Status.Disconnected, a.Status);
+        Assert.AreEqual(DisconnectReason.UnreachableConnection, a.DisconnectReason);
+    }
+
+    [TestMethod]
+    public void ClientTimeoutCountsFromTheConfirm()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var client = FakeManager.Create(network, "10.0.0.2", FakeManager.ClientParams());
+        var a = client.EstablishConnection(ServerIp, server.EndPoint.Port);
+        Assert.IsNotNull(a);
+
+        // the server is busy for 20 s, so the client's connect requests (one a second) wait in its socket
+        network.Pump(200, 100, client);
+        Assert.AreEqual(Status.Negotiating, a.Status);
+
+        // then it answers them, and says nothing more
+        network.Pump(1, 100, server);
+        network.Pump(1, 100, client);
+        Assert.AreEqual(Status.Connected, a.Status);
+
+        // the confirm has no CRC, but the client's NoDataTimeout (90 s) still counts from it, not from the first request
+        network.Pump(850, 100, client);
+        Assert.AreEqual(Status.Connected, a.Status, "85 s after the confirm");
+
+        network.Pump(100, 100, client);
+        Assert.AreEqual(Status.Disconnected, a.Status, "95 s after it");
+        Assert.AreEqual(DisconnectReason.Timeout, a.DisconnectReason);
     }
 
     // ---- Task 10: a connection that falls behind is disconnected instead of queueing without bound ----
@@ -451,6 +837,7 @@ public class HardeningTests
         Assert.IsTrue(udpParams.ReliableOverflowBytes > 4400 * 1024, "above the 4.2 MiB a zone entry queues");
         Assert.IsTrue(udpParams.ReliableBacklogTimeout > 0);
         Assert.IsTrue(udpParams.FaultLimit > 0);
+        Assert.IsTrue(udpParams.MaxQueuedPacketsPerConnection > 0);
     }
 }
 
