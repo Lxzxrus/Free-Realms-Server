@@ -168,10 +168,120 @@ public sealed class QuestGoalTests
         var talk = new TalkToNpcGoal { Targets = [new TalkTarget { NpcId = 600 }] };
         var collect = new CollectGoal { CollectNodeType = "tin-ore", RequiredCount = 1 };
         var reach = new ReachLocationGoal { ReachPosition = new Vector3(1f, 0f, 1f) };
+        var play = new PlayActivityGoal { ActivityId = 450 };
 
         Assert.AreEqual(QuestGoalResult.None, talk.Progress(Quest, Gather("tin-ore"), talk.CreateProgress()));
         Assert.AreEqual(QuestGoalResult.None, collect.Progress(Quest, Talk(600), collect.CreateProgress()));
         Assert.AreEqual(QuestGoalResult.None, reach.Progress(Quest, Talk(500), reach.CreateProgress()));
+
+        foreach (var goal in new QuestGoal[] { talk, collect, reach })
+            Assert.AreEqual(QuestGoalResult.None, goal.Progress(Quest, Win(450), goal.CreateProgress()), goal.GetType().Name);
+
+        Assert.AreEqual(QuestGoalResult.None, play.Progress(Quest, Talk(600), play.CreateProgress()));
+        Assert.AreEqual(QuestGoalResult.None, play.Progress(Quest, Gather("tin-ore"), play.CreateProgress()));
+        Assert.AreEqual(QuestGoalResult.None, play.Progress(Quest, Move(1f, 1f), play.CreateProgress()));
+    }
+
+    [TestMethod]
+    public void PlayGoal_NeedsOneWinOfItsGameByDefault()
+    {
+        var goal = new PlayActivityGoal { ActivityId = 450 };
+        var progress = goal.CreateProgress();
+
+        Assert.AreEqual(1, goal.RequiredCount);
+        Assert.AreEqual(QuestGoalResult.None, goal.Progress(Quest, Win(460), progress), "Another recipe's win.");
+        Assert.AreEqual(0, progress.Count);
+        Assert.AreEqual(QuestGoalResult.Completed, goal.Progress(Quest, Win(450), progress));
+    }
+
+    [TestMethod]
+    public void PlayGoal_CountsEachWinOnceUntilTheRequiredCount()
+    {
+        var goal = new PlayActivityGoal { ActivityId = 410, RequiredCount = 3 };
+        var progress = goal.CreateProgress();
+
+        Assert.AreEqual(QuestGoalResult.Progressed, goal.Progress(Quest, Win(410), progress));
+        Assert.AreEqual(QuestGoalResult.Progressed, goal.Progress(Quest, Win(410), progress));
+        Assert.AreEqual(2, progress.Count);
+        Assert.AreEqual(QuestGoalResult.Completed, goal.Progress(Quest, Win(410), progress));
+    }
+
+    [TestMethod]
+    public void PlayGoal_WithoutAGameOrACount_IsNeverCredited()
+    {
+        var noGame = new PlayActivityGoal();
+        var noCount = new PlayActivityGoal { ActivityId = 450, RequiredCount = 0 };
+
+        Assert.AreEqual(QuestGoalResult.None, noGame.Progress(Quest, Win(0), noGame.CreateProgress()));
+        Assert.AreEqual(QuestGoalResult.None, noCount.Progress(Quest, Win(450), noCount.CreateProgress()));
+    }
+
+    [TestMethod]
+    public void PlayGoal_KeepsItsWinsOverARelog()
+    {
+        var goal = new PlayActivityGoal { ActivityId = 414, RequiredCount = 3 };
+        var progress = goal.CreateProgress();
+        goal.Progress(Quest, Win(414), progress);
+        goal.Progress(Quest, Win(414), progress);
+
+        var loaded = goal.CreateProgress();
+        foreach (var (targetId, count) in progress.Save())
+            loaded.Load(targetId, count);
+
+        Assert.AreEqual(2, loaded.Count);
+        Assert.AreEqual(QuestGoalResult.Completed, goal.Progress(Quest, Win(414), loaded));
+    }
+
+    [TestMethod]
+    public void PlayGoal_TheNpcWhoOffersTheGame_WaitsOnIt()
+    {
+        var quest = new QuestDefinition
+        {
+            QuestId = 3,
+            TargetNpcId = 500,
+            Goals =
+            [
+                new PlayActivityGoal { ActivityId = 450, NpcId = 2069 },
+                new TalkToNpcGoal { Targets = [new TalkTarget { NpcId = 500 }] }
+            ]
+        };
+        var progress = new QuestProgress(3);
+        progress.StartStep(quest, 0);
+
+        Assert.IsTrue(quest.IsWaitingOn(progress, Npc(2069)), "The \"?\" a talk step's NPC shows.");
+        Assert.AreEqual(2069, quest.GoalTargetNpcId(0), "And the step's target.");
+        Assert.IsFalse(quest.IsWaitingOn(progress, Npc(500)), "The turn-in NPC's \"?\" waits until the game is won.");
+
+        progress.FinishGoal(quest, 0);
+
+        Assert.IsFalse(quest.IsWaitingOn(progress, Npc(2069)));
+        Assert.IsTrue(quest.IsWaitingOn(progress, Npc(500)));
+    }
+
+    [TestMethod]
+    public void PlayGoal_NamingNoNpc_NoNpcWaitsOnIt()
+    {
+        var quest = new QuestDefinition
+        {
+            QuestId = 3,
+            TargetNpcId = 500,
+            Goals = [new PlayActivityGoal { ActivityId = 450 }, new TalkToNpcGoal { Targets = [new TalkTarget { NpcId = 500 }] }]
+        };
+        var progress = new QuestProgress(3);
+        progress.StartStep(quest, 0);
+
+        Assert.IsFalse(quest.IsWaitingOn(progress, Npc(500)), "The turn-in NPC's \"?\" waits until the game is won.");
+        Assert.IsFalse(quest.IsWaitingOn(progress, Npc(0)));
+
+        progress.FinishGoal(quest, 0);
+
+        Assert.IsTrue(quest.IsWaitingOn(progress, Npc(500)));
+    }
+
+    [TestMethod]
+    public void AWin_CreditsOneQuest()
+    {
+        Assert.IsTrue(Win(450).CreditsOneQuest, "One game won is one win, like one pickup.");
     }
 
     [TestMethod]
@@ -240,6 +350,8 @@ public sealed class QuestGoalTests
 
     private static PlayerMovedEvent Move(float x, float z, int zoneDefinitionId = ReachLocationGoal.FabledRealmsZoneDefinitionId)
         => new(new Vector4(x, 0f, z, 1f), zoneDefinitionId);
+
+    private static ActivityWonEvent Win(int activityId) => new(activityId);
 
     private static CollectionNode PlayerNode(string nodeType, int spawnId) => new(null!,
         new CollectionNodeTypeDefinition { Key = nodeType, Name = nodeType },

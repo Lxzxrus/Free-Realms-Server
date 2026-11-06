@@ -9,6 +9,7 @@ using Sanctuary.Database;
 using Sanctuary.Game;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.Mimic;
+using Sanctuary.Game.Quests;
 using Sanctuary.Packet.Common.Attributes;
 
 namespace Sanctuary.Gateway.Handlers;
@@ -16,8 +17,11 @@ namespace Sanctuary.Gateway.Handlers;
 /// <summary>
 /// The Mimic minigames (Cooking): which Games menu entries are recipes in <c>Resources/Mimic.json</c>, the server's
 /// side of each game (<see cref="MimicGame"/>), and the reward for a win (<see cref="MinigameReward.Pay"/>, as the
-/// match-three games pay). <see cref="FlashMinigameHandler"/> opens, starts and closes them like any Flash minigame.
-/// See docs/research/mimic.md.
+/// match-three games pay), which a quest step that is the game counts too (<see cref="ActivityWonEvent"/>). The Flash
+/// plays every round itself, so a win is the client's report, paid when it is plausible: the recipe sent first, every
+/// round reported, at least <see cref="MimicGameDefinition.MinSecondsPerPhase"/> a round. A modified client can still
+/// report one without playing (<see cref="ActivityWins.ReportedByClient"/>). <see cref="FlashMinigameHandler"/> opens,
+/// starts and closes them like any Flash minigame. See docs/research/mimic.md.
 /// </summary>
 [PacketHandler]
 public static class MimicHandler
@@ -25,7 +29,7 @@ public static class MimicHandler
     private static ILogger _logger = null!;
     private static ILogger _gameLogger = null!;
     private static IResourceManager _resourceManager = null!;
-    private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
+    private static MinigameSettlement _settlement = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -34,7 +38,8 @@ public static class MimicHandler
         _gameLogger = loggerFactory.CreateLogger(nameof(MimicGame));
 
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
-        _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
+        _settlement = MinigameSettlement.Create(_resourceManager, serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>(),
+            serviceProvider.GetRequiredService<IQuestManager>(), _logger);
     }
 
     /// <summary>The Flash minigame an activity opens, if it's a Mimic recipe.</summary>
@@ -72,21 +77,23 @@ public static class MimicHandler
         if (session.Mimic is not { } game)
             return;
 
-        game.Handle(message);
-        Settle(connection, session, game);
+        Log(connection, game, _settlement.HandleMimic(session, connection.Player, message));
     }
 
-    /// <summary>Logs a game's result once and pays a win.</summary>
-    private static void Settle(GatewayConnection connection, FlashMinigameSession session, MimicGame game)
+    /// <summary>
+    /// Logs a game's result once, as settling it found it. A win is paid, and is also the win a quest step that is this
+    /// game counts (<see cref="ActivityWonEvent"/>): the Flash's report, accepted as plausible, settled once per game. A
+    /// win the server refused pays nothing and passes no step. Handing each message to the game, settling, paying and
+    /// telling the quests are <see cref="MinigameSettlement.HandleMimic"/>'s, which the tests run too.
+    /// </summary>
+    private static void Log(GatewayConnection connection, MimicGame game, MimicResult result)
     {
-        if (game.Result == MimicResult.None || session.SettledMimicResult != MimicResult.None)
-            return;
-
-        session.SettledMimicResult = game.Result;
-
         var player = connection.Player;
 
-        if (game.Result == MimicResult.Refused)
+        if (result == MimicResult.None)
+            return;
+
+        if (result == MimicResult.Refused)
         {
             _logger.LogWarning("Minigame: {player} reported a win of {recipe} with {score} points that was refused: {reason}.",
                 player.Guid, game.Recipe.Name, game.Score, game.RefusedBecause);
@@ -94,13 +101,6 @@ public static class MimicHandler
         }
 
         _logger.LogInformation("Minigame: {player} {result} {recipe} with {score} points ({seconds} s by the client's clock).",
-            player.Guid, game.Result, game.Recipe.Name, game.Score, game.ReportedSeconds);
-
-        if (game.Result != MimicResult.Won)
-            return;
-
-        using var dbContext = _dbContextFactory.CreateDbContext();
-
-        game.Reward.Pay(_resourceManager, dbContext, _logger, player);
+            player.Guid, result, game.Recipe.Name, game.Score, game.ReportedSeconds);
     }
 }

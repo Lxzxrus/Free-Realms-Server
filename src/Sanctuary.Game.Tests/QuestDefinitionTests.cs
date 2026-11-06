@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -48,6 +49,92 @@ public sealed class QuestDefinitionTests
 
         CollectionAssert.Contains(quests.ByTarget[500], 1);
         CollectionAssert.Contains(quests.ByTarget[600], 1);
+    }
+
+    [TestMethod]
+    public void Load_ReadsAPlayGoal_WithOneWinUnlessItAsksForMore()
+    {
+        var quests = LoadQuests("""
+            [
+              {
+                "QuestId": 1,
+                "TargetNpcId": 500,
+                "TeachesProfileId": 45,
+                "RewardProfileId": 45,
+                "Goals": [
+                  { "Type": 3, "NameId": 10, "ActivityId": 450, "NpcId": 2069 },
+                  { "NameId": 11, "ActivityId": 410, "RequiredCount": 3, "Type": 3 },
+                  { "Type": 0, "NameId": 12 }
+                ]
+              },
+              { "QuestId": 2, "TargetNpcId": 500, "Goals": [ { "Type": 0, "NameId": 20 } ] }
+            ]
+            """);
+
+        Assert.IsTrue(quests.TryGet(1, out var quest));
+
+        var steak = (PlayActivityGoal)quest.Goals[0];
+        Assert.AreEqual(450, steak.ActivityId);
+        Assert.AreEqual(1, steak.RequiredCount, "One win when the quest doesn't say.");
+        Assert.AreEqual(2069, steak.NpcId);
+        CollectionAssert.Contains(quests.ByTarget[2069], 1, "The NPC who offers the game is a quest NPC, clicked for it.");
+
+        var harvest = (PlayActivityGoal)quest.Goals[1];
+        Assert.AreEqual(410, harvest.ActivityId);
+        Assert.AreEqual(3, harvest.RequiredCount);
+        Assert.AreEqual(0, harvest.NpcId, "No NPC offers the game unless the step says.");
+
+        Assert.AreEqual(45, quest.TeachesProfileId);
+        Assert.AreEqual(45, quest.RewardProfileId);
+        Assert.IsTrue(quests.TryGet(2, out var plain));
+        Assert.AreEqual(0, plain.TeachesProfileId, "A quest teaches no job unless it says.");
+        Assert.AreEqual(0, plain.RewardProfileId, "Its stars go to the job worn unless it says.");
+    }
+
+    /// <summary>
+    /// A play step names the NPC who offers its game, or it has no target, and a talk step of its own after it takes the
+    /// hand-in, or the game's win could hand the quest in over the game: a quest is handed in when the last of its last
+    /// step's goals is done, so a game in that step, last or beside the hand-in talk (WithPrevious), is warned about. A
+    /// game beside another goal in an earlier step is fine. The loader loads the quests all the same.
+    /// </summary>
+    [TestMethod]
+    public void Load_WarnsAboutAPlayGoalNoNpcOffers_AndOneInAQuestsLastStep()
+    {
+        var logger = new QuestWorld.RecordingLogger();
+        var quests = new QuestDefinitionCollection(logger);
+
+        Assert.IsTrue(quests.Load(WriteTemp("""
+            [
+              { "QuestId": 1, "TargetNpcId": 500, "Goals": [ { "Type": 3, "NameId": 10, "ActivityId": 450, "NpcId": 2069 }, { "Type": 0, "NameId": 11 } ] },
+              { "QuestId": 2, "TargetNpcId": 500, "Goals": [ { "Type": 3, "NameId": 20, "ActivityId": 450 }, { "Type": 0, "NameId": 21 } ] },
+              { "QuestId": 3, "TargetNpcId": 500, "Goals": [ { "Type": 0, "NameId": 30 }, { "Type": 3, "NameId": 31, "ActivityId": 450, "NpcId": 2069 } ] },
+              { "QuestId": 4, "TargetNpcId": 500, "Goals": [ { "Type": 3, "NameId": 40, "ActivityId": 450, "NpcId": 2069 }, { "Type": 0, "NameId": 41, "WithPrevious": true } ] },
+              { "QuestId": 5, "TargetNpcId": 500, "Goals": [ { "Type": 3, "NameId": 50, "ActivityId": 450, "NpcId": 2069 }, { "Type": 0, "NameId": 51, "WithPrevious": true }, { "Type": 0, "NameId": 52 } ] }
+            ]
+            """)));
+
+        var warnings = logger.Entries.Where(entry => entry.Level == LogLevel.Warning).Select(entry => entry.Message).ToList();
+
+        Assert.AreEqual(3, warnings.Count, string.Join(" | ", warnings));
+        Assert.IsTrue(warnings.Any(warning => warning.StartsWith("Play goal on quest 2 has no NpcId")), string.Join(" | ", warnings));
+        Assert.IsTrue(warnings.Any(warning => warning.StartsWith("Quest 3's last step has a play goal")), string.Join(" | ", warnings));
+        Assert.IsTrue(warnings.Any(warning => warning.StartsWith("Quest 4's last step has a play goal")), string.Join(" | ", warnings));
+        Assert.AreEqual(5, quests.Quests.Count);
+    }
+
+    /// <summary>
+    /// What a quest gives besides coins and stars, which a quest won on the client's report (Cooking) mustn't: items, a
+    /// collection, or a job no trainer gives. A job a trainer gives for a click (Chef) isn't scarce.
+    /// </summary>
+    [TestMethod]
+    public void RewardsBeyondCoinsAndStars_AreItemsACollectionAndAJobNoTrainerGives()
+    {
+        Assert.AreEqual(0, new QuestDefinition { RewardCoins = 20, RewardExperience = 50, TeachesProfileId = 45 }
+            .RewardsBeyondCoinsAndStars().Count());
+
+        Assert.AreEqual(1, new QuestDefinition { RewardItems = [2733] }.RewardsBeyondCoinsAndStars().Count());
+        Assert.AreEqual(1, new QuestDefinition { RewardCollectionId = 313 }.RewardsBeyondCoinsAndStars().Count());
+        Assert.AreEqual(1, new QuestDefinition { TeachesProfileId = 4 }.RewardsBeyondCoinsAndStars().Count(), "Postman has no trainer.");
     }
 
     [TestMethod]

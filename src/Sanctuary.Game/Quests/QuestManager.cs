@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -14,6 +14,7 @@ using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Interactions;
 using Sanctuary.Game.Jobs;
+using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
 using Sanctuary.Game.Resources.Definitions.Rewards;
@@ -34,16 +35,30 @@ public sealed class QuestManager : IQuestManager
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
     private readonly ILogger<QuestManager> _logger;
 
-    public QuestManager(IResourceManager resourceManager, IRewardManager rewardManager, IDbContextFactory<DatabaseContext> dbContextFactory, ILogger<QuestManager> logger)
+    // Evergrove: a quest that teaches a job grants it through the job manager, which refreshes trainer badges through
+    // this quest manager, so it is taken lazily: neither has to be built before the other.
+    private readonly Lazy<IJobManager> _jobManager;
+
+    // Evergrove: the NPC who offers a play step's game opens it the way the Games menu does, through the Gateway, which
+    // serves the games (Sanctuary.Gateway.ActivityLauncher). Taken as it is, not lazily as the job manager is: nothing it
+    // needs takes the quest manager, so the Gateway builds it with the quest manager as it starts, and a wiring mistake
+    // stops the Gateway there rather than at a player's click.
+    private readonly IActivityLauncher _activityLauncher;
+
+    public QuestManager(IResourceManager resourceManager, IRewardManager rewardManager, IDbContextFactory<DatabaseContext> dbContextFactory,
+        Lazy<IJobManager> jobManager, IActivityLauncher activityLauncher, ILogger<QuestManager> logger)
     {
         _resourceManager = resourceManager;
         _rewardManager = rewardManager;
         _dbContextFactory = dbContextFactory;
+        _jobManager = jobManager;
+        _activityLauncher = activityLauncher;
         _logger = logger;
     }
 
     // Evergrove: job trainers (Sanctuary.Game.Jobs.JobTrainers) carry the "available" badge until they have nothing
-    // left to teach, so they go through the same badge refresh as quest NPCs.
+    // left to teach, so they go through the same badge refresh as quest NPCs. An NPC who offers a play step's game is in
+    // ByTarget, as a talk step's NPC is.
     public bool IsQuestNpc(int npcId)
         => _resourceManager.Quests.ByGiver.ContainsKey(npcId) || _resourceManager.Quests.ByTarget.ContainsKey(npcId)
             || JobTrainers.IsTrainer(npcId);
@@ -77,10 +92,24 @@ public sealed class QuestManager : IQuestManager
             if (!quests.TryGet(progress.QuestId, out var activeQuest))
                 continue;
 
-            if (!AdvancesHere(activeQuest, progress, npc) && !TurnsInHere(activeQuest, progress, npc))
-                continue;
-
             var quest = activeQuest;
+
+            // Evergrove: while a step won by playing a game is open, the NPC it names offers the game.
+            foreach (var goalIndex in progress.OpenGoals.Keys.Order())
+            {
+                if (quest.Goals[goalIndex] is not PlayActivityGoal playGoal || !playGoal.IsOfferedBy(npc.DefinitionId))
+                    continue;
+
+                options.Add(new NpcInteractionOption
+                {
+                    IconId = ContextIcons.QuestTurnIn,
+                    ButtonTextId = GameButtonTextId(playGoal),
+                    Invoke = interactingPlayer => OpenStepGame(interactingPlayer, quest, goalIndex)
+                });
+            }
+
+            if (!AdvancesHere(quest, progress, npc) && !TurnsInHere(quest, progress, npc))
+                continue;
 
             options.Add(new NpcInteractionOption
             {
@@ -163,9 +192,72 @@ public sealed class QuestManager : IQuestManager
             QuestDialogue.Begin(player, goal.ConversationFor(npc.DefinitionId), npc.Guid);
     }
 
+    // Evergrove: the game's name as the Games menu lists it (its ClientActivityDefinitions.json NameId, which names the
+    // recipe), so two games at one NPC never share a button; else the title of its start screen (DisplayNameId, which
+    // every Cooking recipe shares); else the step's own row.
+    private int GameButtonTextId(PlayActivityGoal goal)
+    {
+        if (!_resourceManager.ClientActivityDefinitions.TryGetValue(goal.ActivityId, out var activity))
+            return goal.NameId;
+
+        if (activity.NameId != 0)
+            return activity.NameId;
+
+        return activity.DisplayNameId != 0 ? activity.DisplayNameId : goal.NameId;
+    }
+
+    // Evergrove: what the player is told when the NPC's game doesn't open because another is open, so a click never does
+    // nothing without a word.
+    private const string FinishYourGameFirst = "Finish or close the game you have open first.";
+
+    // Evergrove: opens a play step's game for the player who picked it from the NPC's menu, if the step is still open (the
+    // game may have been won from the Games menu since the menu was shown). It opens as the Games menu opens it, with the
+    // same checks, such as one game at a time; the win then counts like any other. What stopped it is logged as what it
+    // is: the player's other game, a player who has left, or a step naming a game the Games menu doesn't open.
+    private void OpenStepGame(Player player, QuestDefinition quest, int goalIndex)
+    {
+        if (!player.Quests.TryGetInProgress(quest.QuestId, out var progress) || !progress.OpenGoals.ContainsKey(goalIndex)
+            || quest.Goals[goalIndex] is not PlayActivityGoal playGoal)
+            return;
+
+        switch (_activityLauncher.Launch(player, playGoal.ActivityId))
+        {
+            case ActivityLaunchResult.AnotherGameOpen:
+                ChatHelper.SendSystemMessage(player, FinishYourGameFirst);
+
+                _logger.LogDebug("Quest {questId}'s step {goalId} didn't open activity {activityId} for character {characterId}: " +
+                    "another game is open.", quest.QuestId, playGoal.NameId, playGoal.ActivityId, player.CharacterId);
+                break;
+
+            case ActivityLaunchResult.NotConnected:
+                _logger.LogInformation("Quest {questId}'s step {goalId} didn't open activity {activityId} for character {characterId}: " +
+                    "they are no longer connected.", quest.QuestId, playGoal.NameId, playGoal.ActivityId, player.CharacterId);
+                break;
+
+            case ActivityLaunchResult.NotAGamesMenuGame:
+                _logger.LogWarning("Quest {questId}'s step {goalId} couldn't open activity {activityId} for character {characterId}: " +
+                    "it isn't a game the Games menu opens.", quest.QuestId, playGoal.NameId, playGoal.ActivityId, player.CharacterId);
+                break;
+        }
+    }
+
     public void OnEvent(Player player, QuestEvent questEvent)
     {
-        foreach (var (quest, progress, goalIndex, goal) in ActiveGoals(player).ToList())
+        var activeGoals = ActiveGoals(player).ToList();
+
+        // Evergrove: an event that credits one quest (a pickup, a game won) goes to the tracked quest when it can take it,
+        // then to the others by quest id, rather than in whatever order the quest log's dictionary holds them.
+        if (questEvent.CreditsOneQuest)
+        {
+            var trackedQuestId = player.Quests.ActiveQuestId;
+
+            activeGoals = activeGoals
+                .OrderBy(active => active.Quest.QuestId != trackedQuestId)
+                .ThenBy(active => active.Quest.QuestId)
+                .ToList();
+        }
+
+        foreach (var (quest, progress, goalIndex, goal) in activeGoals)
         {
             if (!progress.OpenGoals.TryGetValue(goalIndex, out var goalProgress))
                 continue;
@@ -358,6 +450,8 @@ public sealed class QuestManager : IQuestManager
 
         SendJournalQuestStates(player);
 
+        TeachJob(player, quest);
+
         GrantReward(player, quest);
 
         RefreshQuestNotifications(player, quest);
@@ -523,6 +617,9 @@ public sealed class QuestManager : IQuestManager
 
         foreach (var goal in quest.Goals.OfType<TalkToNpcGoal>())
             npcIds.UnionWith(goal.AllTalkTargetNpcIds());
+
+        // Evergrove: the NPC who offers a play step's game shows the "?" while the step is open.
+        npcIds.UnionWith(quest.Goals.OfType<PlayActivityGoal>().Select(goal => goal.NpcId));
 
         npcIds.UnionWith(quest.StateNpcIds());
 
@@ -1115,9 +1212,10 @@ public sealed class QuestManager : IQuestManager
     /// <summary>
     /// The objective marker for a goal, which the client's Take Me There button and map pin follow, or null when it points
     /// at nothing. The marker packet, the Take Me There counter and the tracker all take it from here. When there is
-    /// none, <paramref name="clear"/> says whether the last marker comes down (a hidden objective, a reach step in
-    /// another zone, a Collect step with nothing left to take here: the client shows Take Me There only while there is
-    /// a target) or stays as it is (an NPC that isn't in this zone), as upstream does.
+    /// none, <paramref name="clear"/> says whether the last marker comes down (a hidden objective, a step won by playing
+    /// a game that no NPC offers, a reach step in another zone, a Collect step with nothing left to take here: the client
+    /// shows Take Me There only while there is a target) or stays as it is (an NPC that isn't in this zone), as upstream
+    /// does.
     /// </summary>
     internal ObjectiveTarget? ObjectiveTargetFor(Player player, QuestDefinition quest, int goalIndex, out bool clear)
     {
@@ -1127,6 +1225,12 @@ public sealed class QuestManager : IQuestManager
         clear = true;
 
         if (quest.HideObjectiveTarget)
+            return null;
+
+        // A step won by playing a game points at the NPC who offers the game (PlayActivityGoal.NpcId), as a talk step
+        // points at its NPC. One that no NPC offers is played from the Games menu alone: there is nothing to point at, and
+        // the last step's marker comes down rather than send the player back to its NPC.
+        if (goal is PlayActivityGoal { NpcId: 0 })
             return null;
 
         if (goal is ReachLocationGoal reachGoal && reachGoal.ReachPosition != Vector3.Zero)
@@ -1220,9 +1324,42 @@ public sealed class QuestManager : IQuestManager
         return true;
     }
 
+    // Evergrove: a quest that teaches a job (TeachesProfileId) gives it at the turn-in through the trainer's own grant,
+    // JobManager.Grant: saved, its kit sent, and the player switched into it with the job swirl. It comes before the
+    // rewards, so the quest's stars can go to the new job (RewardProfileId). A player who has the job already keeps the
+    // job they have on.
+    private void TeachJob(Player player, QuestDefinition quest)
+    {
+        var profileId = quest.TeachesProfileId;
+
+        if (profileId == 0 || player.Profiles.Any(profile => profile.Id == profileId))
+            return;
+
+        JobGrantResult result;
+
+        // The quest is saved as done already, so whatever the grant throws (the database out of reach for a moment) is
+        // logged, and the rewards are paid all the same: the job can still be had from its trainer.
+        try
+        {
+            result = _jobManager.Value.Grant(player, profileId);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Quest {questId} teaches job {profileId}, but giving it to character {characterId} failed; " +
+                "the rewards are paid all the same.", quest.QuestId, profileId, player.CharacterId);
+            return;
+        }
+
+        if (result != JobGrantResult.Granted)
+        {
+            _logger.LogWarning("Quest {questId} teaches job {profileId}, but character {characterId} wasn't given it: {result}.",
+                quest.QuestId, profileId, player.CharacterId, result);
+        }
+    }
+
     // Evergrove: the reward payout is Evergrove's from before the merge, verified in game: coins saved without a toast
-    // of their own, the stars paid to the active job (task 31; upstream's version only shows them), and each reward
-    // item fitted to the player's gender in its own tint, with the non-bundled item toast.
+    // of their own, the stars paid to a job (task 31; upstream's version only shows them), and each reward item fitted to
+    // the player's gender in its own tint, with the non-bundled item toast.
     private void GrantReward(Player player, QuestDefinition quest)
     {
         var coins = quest.RewardCoins;
@@ -1244,13 +1381,17 @@ public sealed class QuestManager : IQuestManager
             player.SendTunneled(new ClientUpdatePacketCoinCount { Coins = newTotal });
         }
 
-        // The stars go to the job the player has on. The celebration below shows them, so no toast of their own.
+        // The stars go to the quest's job (RewardProfileId) when the character has it, whichever job they wear, else to
+        // the job they have on. The celebration below shows them, so no toast of their own.
         var experience = quest.RewardExperience;
         if (experience > 0)
         {
+            var profileId = quest.RewardProfileId != 0 && player.Profiles.Any(profile => profile.Id == quest.RewardProfileId)
+                ? quest.RewardProfileId
+                : player.ActiveProfileId;
+
             using var db = _dbContextFactory.CreateDbContext();
-            RewardHelper.TryGrantExperience(_resourceManager, db, _logger, player, player.ActiveProfileId, experience,
-                showReward: false);
+            RewardHelper.TryGrantExperience(_resourceManager, db, _logger, player, profileId, experience, showReward: false);
         }
 
         var grantedCollection = quest.RewardCollectionId != 0 &&

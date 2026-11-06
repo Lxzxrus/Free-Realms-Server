@@ -14,8 +14,8 @@ using them, not a substitute.
 
 ## Before you start
 
-`GiverNpcId`, `TargetNpcId` and each talk goal's `Targets[].NpcId` name an NPC by its `Npcs.json` id,
-and that NPC must be spawned by a zone script: `zone:spawnFixedNpc(id, x, y, z, heading)` in
+`GiverNpcId`, `TargetNpcId`, each talk goal's `Targets[].NpcId` and a play goal's `NpcId` name an NPC by
+its `Npcs.json` id, and that NPC must be spawned by a zone script: `zone:spawnFixedNpc(id, x, y, z, heading)` in
 `src/Scripts/Zone/FabledRealms.lua`. The server derives the NPC's GUID from that id (upstream OSFR #164),
 so never write a GUID into quest data.
 
@@ -74,6 +74,10 @@ done. Each goal becomes its own tracker row.
   `NameId` of a goal live characters may be on needs a migration (see "Database").
 - `DialogueId` on the **final** goal becomes the turn-in speech bubble; an earlier talk goal's
   `DialogueId` is what its NPC says as that step is ticked off.
+- `"WithPrevious": true` opens a goal together with the one before it, as one step: the step's goals
+  can be done in any order, and the next step opens once all of them are. One Man's Trash (624) has
+  four pickups in one step, then the talk. The quest is handed in when the last goal of its last step
+  is done, whichever that is.
 - `Type` defaults to `0` (TalkToNpc) if omitted.
 
 ## Goal types
@@ -83,6 +87,7 @@ done. Each goal becomes its own tracker row.
 | `TalkToNpc` | 0 | player interacts with the NPC in `Targets` (or the quest's `TargetNpcId` when it names none) |
 | `ReachLocation` | 1 | player gets within `ReachRadius` (default 12) of `ReachPosition`, checked on every position update (2D, X/Z only; give Y the ground height all the same, as Take Me There finds its path from it) |
 | `Collect` | 2 | player gathers `RequiredCount` pickups of the node type `CollectNodeType` |
+| `PlayActivity` | 3 | player wins the game `ActivityId` (a Games menu entry) `RequiredCount` times, one if left out; the NPC `NpcId` offers the game while the step is open |
 
 That's the full set - this branch has no combat system, so there's no Kill/hunt or
 battle-instance-encounter goal type. Don't add one without also building what would drive it.
@@ -127,6 +132,62 @@ one up: Hasti's homework ticks collection 313.
 `RequiredCount` must be at least `1`, and the test
 `ShippedCollectGoals_HaveEnoughPickupsOutAtOnce` fails when a goal needs more pickups than its
 pools put out at once, or names a type that doesn't exist.
+
+### PlayActivity example
+
+Cooking Simone's Spiralmint Steak in the Cobblestone Village Cafe (quest 9103):
+
+```json
+{ "Type": 3, "NameId": 21837, "DescriptionId": 94534, "ActivityId": 450, "NpcId": 2069 }
+```
+
+`ActivityId` is a Games menu entry, a `ClientActivityDefinitions.json` id. Only a win the server paid
+counts, and who decides it depends on the game (`PlayableActivities.WinsOf`):
+
+- A match-three game (`FlashMinigames.Definitions`: Mining Practice 1113, Queensfields Harvesting 410,
+  Sanctuary Mail Sorting 414, Forging: Quick Shot Bow 420) is played on the server's own board, which
+  decides the win. A win quicker than the levels can be played is refused, and messages from the client
+  can't win the game.
+- A Cooking recipe in `Mimic.json` is played by the client's Flash, round by round, and the win is the
+  client's report. The server accepts it when it is plausible (the recipe sent first, every round
+  reported, at least `MinSecondsPerPhase` a round) and refuses it otherwise, but it can't see the play: a
+  modified client can report a win it never played.
+
+**So a quest with a step on a game whose wins the client reports (Cooking) rewards coins and stars
+only**: no items, no collection, no job that no trainer gives, nothing scarce (Station Cash, housing).
+The server warns at startup, and the test `ShippedQuestsWonOnTheClientsReport_RewardOnlyCoinsAndStars`
+fails, about a quest that breaks this.
+
+Fishing and the wheel report no wins, so a step can't be won there. A catch doesn't credit a play step
+yet (a later piece adds a catch event from `FishingSession`, the hole being the activity), so **a play step
+can't name a fishing hole**: Reed's Testing the Waters, at Sacred Grove Shallows (activity 563), waits for
+it. The server warns at startup, and the test `ShippedPlayGoals_NameAGameWhoseWinsTheServerReports`
+fails, when a step names a game whose wins aren't reported, names no NPC to offer it, or is in the
+quest's last step.
+
+**A play step is followed by a talk step for the hand-in**, as the Cafe's steak is handed to Simone, and
+**the hand-in talk is a step of its own, never `WithPrevious`**. A quest is handed in when the last goal
+of its last step is done, so a game in that step would hand the quest in the moment it is won: last of
+all, or beside the hand-in talk once the player had talked first. The reward window would open over the
+game, with no line from anyone, as a game has no conversation. The loader warns about a play goal
+anywhere in a quest's last step.
+
+Each win counts once, toward one quest: with two quests on a step for the same game, one win ticks the
+tracked one's, or else the one with the lowest `QuestId` (a pickup two quests want goes the same way). It
+counts only while the step is open; a game won before is not remembered. A step needing more than one win
+saves each as it counts, so a relog keeps them.
+
+`NpcId` is the NPC who offers the game while the step is open: clicking them opens its start screen the
+way the Games menu does (`IActivityLauncher`, with the menu's checks: with another game or the wheel
+open, nothing opens and the chat tells the player to finish or close it first), and the step's marker,
+Take Me There and "?" point at them, as a talk step's do. With nothing else on their menu
+the game opens at the click; beside other options (a trainer's job, another quest's game) it is one more
+button, the game's name as the Games menu lists it (the activity's `NameId`, such as 386024 for the
+steak), so two recipes at one NPC are two different buttons. No world object, such as a cooking table,
+starts a game yet, so **a play step names the NPC who offers its game**: without one it has no target,
+and the loader warns. The game can still be won from the Games menu. The step's text should name the
+game, not a table to click: the Cafe's step uses 21837, not 94528, which sends you to Simone's cooking
+table.
 
 ### Counted talk
 
@@ -194,12 +255,24 @@ they can be restored.
 ## Rewards
 
 - `RewardCoins`, `RewardExperience` - plain ints, granted on completion.
+- `RewardProfileId` - the job (a `Profiles.json` id; 45 is Chef) the stars go to when the character
+  has it, whichever job they wear, so the Cobblestone chef quests (9102 to 9105) fill the Chef bar. A
+  character without that job gets them on the job they have on, and `0` (the default) always pays the job
+  worn at the turn-in. The server warns at startup about a job `Profiles.json` doesn't have, and the test
+  `ShippedQuests_PayTheirStarsToJobsTheServerHas` fails on one. (Collections have a field of the same name.)
 - `RewardItems` - a list of item definition ids added to the player's bags. These **are**
   validated against the item definitions at grant time; an unknown id won't grant (check the
   server log if a reward item silently doesn't show up).
 - `RewardCollectionId` - a quest collection (`Collections.json`) shown with the rewards on the offer
   and the turn-in (upstream OSFR #166). Its entries are ticked by the quest's pickups, not by the
   turn-in.
+- `TeachesProfileId` - a job (a `Profiles.json` id; 45 is Chef) the turn-in teaches before the
+  rewards, the way the job's trainer gives it (`IJobManager.Grant`): saved with its starter kit, and the
+  player switched into it, so the quest's stars can go to the new job (give it the same
+  `RewardProfileId`). A player who has the job already is taught nothing and keeps the job they have on.
+  Chef: Assistant Needed (9102) teaches Chef. The server warns at startup about a job `Profiles.json`
+  doesn't have, and the test `ShippedQuests_TeachOnlyJobsATrainerCouldGive` fails on one, or on a staff
+  job.
 
 ## Badges
 
@@ -208,7 +281,8 @@ icon) control the world badge shown above the giver/target's head. You'll rarely
 these - the defaults match every existing quest.
 
 The giver shows the "!" while the quest is on offer. Once it's accepted, only the NPC the current step needs shows
-the "?" (for a counted talk, each NPC not yet talked to), and each step's NPC is refreshed as the steps go by.
+the "?" (for a counted talk, each NPC not yet talked to; for a play step, the NPC who offers its game), and each
+step's NPC is refreshed as the steps go by.
 
 ## Text ids
 
@@ -241,10 +315,10 @@ Tumbolina" row is gone, and 71001, from another quest, reads the same.
 
 Adding a quest needs no migration. `CharacterQuests` stores each character's quests by `QuestId`, with
 `CurrentGoalId` the `NameId` of the goal they are on, and `CharacterQuestProgress` stores progress
-per goal `NameId` (the NPCs talked to, the pickups gathered). So changing a live quest's goals matters:
-a character on a goal whose `NameId` is gone restarts the quest at login. When a goal's `NameId` has to
-change, add a migration for both providers that moves the rows, as `ReconcileUpstreamQuestGoals` does
-for Hasti's Homework Heist (46489 to 74443).
+per goal `NameId` (the NPCs talked to, the pickups gathered, the games won). So changing a live
+quest's goals matters: a character on a goal whose `NameId` is gone restarts the quest at login. When a
+goal's `NameId` has to change, add a migration for both providers that moves the rows, as
+`ReconcileUpstreamQuestGoals` does for Hasti's Homework Heist (46489 to 74443).
 
 ## Checklist
 
@@ -253,6 +327,9 @@ for Hasti's Homework Heist (46489 to 74443).
 3. Write the entry with its `Goals`, one per step.
 4. Wire `PrerequisiteQuestId`/`NextQuestId` if it's part of a chain, `ExcludesQuestIds` if it's
    mutually exclusive with another quest.
-5. If it has a `Collect` goal, add its node type, pool and spawn points (see Collect example).
+5. If it has a `Collect` goal, add its node type, pool and spawn points (see Collect example). A
+   `PlayActivity` goal needs a game whose wins the server reports, an NPC to offer it, and a hand-in
+   talk step of its own after it; on Cooking, the quest rewards coins and stars only (see PlayActivity
+   example).
 6. Build, spawn any test NPCs with `/npc spawn`, and walk through accept -> goals -> turn-in
    in-client.

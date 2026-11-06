@@ -8,8 +8,12 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Game.Entities;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
+using Sanctuary.Game.Quests;
+using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Game.Resources.Definitions.QuestGoals;
 
 namespace Sanctuary.Game.Tests;
 
@@ -250,51 +254,69 @@ public sealed class MatchThreeTests
     private static string Chain(IEnumerable<int> positions) => string.Join(',', positions) + ",";
 
     /// <summary>
-    /// The Gateway's side of a game (<c>FlashMinigameHandler</c>): each message from the Flash goes to the game and the
-    /// clock ticks it, and after each the session settles the win, if there is one: whatever reward it hands over is
-    /// paid, and a win too quick to pay is logged. (The Gateway answers <c>FRServer_GameOver</c> itself, by ending the
-    /// session, and pays nothing there.)
+    /// The Gateway's side of a game (<c>FlashMinigameHandler</c>): each message from the Flash and each tick of the clock
+    /// goes through the code the Gateway runs (<see cref="MinigameSettlement.HandleMatchThree"/>,
+    /// <see cref="MinigameSettlement.TickMatchThree"/>), which hands it to the game and settles the win: whatever reward it
+    /// pays is recorded here instead of saved, and the player's quests are told of a paid win; a win too quick to pay is
+    /// logged. The scripted client's moves go to the game directly, so <see cref="PlayLevel"/> settles after each, as the
+    /// next message would. (The Gateway answers <c>FRServer_GameOver</c> itself, by ending the session, and pays nothing
+    /// there.)
     /// </summary>
-    private sealed class Payer(FlashMinigameSession session)
+    private sealed class Payer
     {
-        /// <summary>A session for the game's own Games menu entry, started.</summary>
-        public static Payer For(MatchThreeGame game)
+        private readonly FlashMinigameSession _session;
+        private readonly Player _player;
+        private readonly ToldQuests? _told;
+        private readonly MinigameSettlement _settlement;
+
+        private Payer(FlashMinigameSession session, IQuestManager quests, Player player, ToldQuests? told)
         {
-            var activity = FlashMinigames.Definitions.Values.Single(definition => definition.MatchThreeGame == game.Name);
-            return new(new FlashMinigameSession(1, activity) { Started = true, MatchThree = game });
+            _session = session;
+            _player = player;
+            _told = told;
+            _settlement = new MinigameSettlement(quests, (_, reward) =>
+            {
+                Paid.Add(reward);
+                return (true, true);
+            });
         }
 
-        public FlashMinigameSession Session => session;
+        /// <summary>
+        /// A session for the game's own Games menu entry, started. Its wins are told to the quest world's player, if the
+        /// test has one, else recorded (<see cref="WinsTold"/>).
+        /// </summary>
+        public static Payer For(MatchThreeGame game, QuestWorld? world = null)
+        {
+            var activity = FlashMinigames.Definitions.Values.Single(definition => definition.MatchThreeGame == game.Name);
+            var session = new FlashMinigameSession(1, activity) { Started = true, MatchThree = game };
+
+            if (world is not null)
+                return new(session, world.Quests, world.Player, told: null);
+
+            var (quests, told) = ToldQuests.New();
+            return new(session, quests, new Player(null!, null!, null!, null!, null!), told);
+        }
+
+        public FlashMinigameSession Session => _session;
 
         public List<MinigameReward> Paid { get; } = [];
 
         /// <summary>Wins refused as too quick: each would be one warning in the Gateway's log.</summary>
         public int TooFast { get; private set; }
 
-        public void Send(params string[] message)
-        {
-            session.MatchThree!.Handle(message);
-            Settle();
-        }
+        /// <summary>The wins of this game the player's quests were told of (a test without a quest world).</summary>
+        public int WinsTold => _told!.Wins.Count(activityId => activityId == _session.Definition.ActivityId);
 
-        public void Tick()
-        {
-            session.MatchThree!.Tick();
-            Settle();
-        }
+        public void Send(params string[] message) => Count(_settlement.HandleMatchThree(_session, _player, message));
 
-        public void Settle()
-        {
-            switch (session.SettleMatchThreeWin(out var reward))
-            {
-                case MatchThreePayout.Pay:
-                    Paid.Add(reward);
-                    break;
+        public void Tick() => Count(_settlement.TickMatchThree(_session, _player));
 
-                case MatchThreePayout.TooFast:
-                    TooFast++;
-                    break;
-            }
+        public void Settle() => Count(_settlement.SettleMatchThree(_session, _player));
+
+        private void Count(MatchThreeSettlement settled)
+        {
+            if (settled.Payout == MatchThreePayout.TooFast)
+                TooFast++;
         }
     }
 
@@ -1030,12 +1052,14 @@ public sealed class MatchThreeTests
         Assert.AreEqual(SecondsAtPlayersPace, game.SecondsToWin!.Value, 0.001);
         Assert.AreEqual(1, output.Named("OnGameWonMsg").Count());
         CollectionAssert.AreEqual(new[] { Mining().Reward }, payer.Paid, "The data's amounts, once.");
+        Assert.AreEqual(1, payer.WinsTold, "The player's quests are told of the paid win.");
         Assert.IsTrue(payer.Session.MatchThreeWinSettled);
 
         // Asked again, after every message and tick, it hands over nothing more.
         payer.Tick();
         payer.Settle();
         Assert.AreEqual(1, payer.Paid.Count);
+        Assert.AreEqual(1, payer.WinsTold);
         Assert.AreEqual(0, payer.TooFast);
     }
 
@@ -1058,6 +1082,7 @@ public sealed class MatchThreeTests
         Assert.AreEqual(0, game.SecondsToWin);
         Assert.IsTrue(game.WonTooFast);
         Assert.AreEqual(0, payer.Paid.Count);
+        Assert.AreEqual(0, payer.WinsTold, "Nor are the player's quests told of it.");
         Assert.AreEqual(1, payer.TooFast);
 
         // Settled: repeating the end changes nothing, and the warning isn't logged again.
@@ -1065,7 +1090,54 @@ public sealed class MatchThreeTests
         payer.Send("FRServer_GameOver");
         payer.Tick();
         Assert.AreEqual(0, payer.Paid.Count);
+        Assert.AreEqual(0, payer.WinsTold);
         Assert.AreEqual(1, payer.TooFast);
+    }
+
+    /// <summary>
+    /// A quest step won by playing the game (<see cref="PlayActivityGoal"/>) counts the win the Gateway pays, settled by
+    /// the Gateway's own code (<see cref="MinigameSettlement"/>) and told to the real quest manager: a win too quick to
+    /// pay never passes it, and a paid one counts once, however often the client repeats the end.
+    /// </summary>
+    [TestMethod]
+    public void OnlyAPaidWin_CountsForAQuestStep()
+    {
+        using var world = new QuestWorld();
+        var quest = new QuestDefinition
+        {
+            QuestId = 1,
+            TargetNpcId = 500,
+            Goals =
+            [
+                new PlayActivityGoal { NameId = 10, ActivityId = 1113, RequiredCount = 2 },
+                new TalkToNpcGoal { NameId = 11, Targets = [new TalkTarget { NpcId = 500 }] }
+            ]
+        };
+        var progress = world.Accept(quest);
+
+        // Every move at once, as a bot plays: too quick to pay.
+        var (tooFast, tooFastOutput, _) = Start(QuickMining(), seed: 11);
+        var bot = Payer.For(tooFast, world);
+
+        PlayLevel(tooFast, new ScriptedClient(tooFast, tooFastOutput), bot);
+        bot.Send("OnNextLevelMsg");
+
+        Assert.AreEqual(1, bot.TooFast);
+        Assert.AreEqual(0, progress.ProgressFor(0).Count, "A win too quick to pay doesn't count.");
+
+        // At a player's pace: paid, and counted once.
+        var (game, output, clock) = Start(QuickMining(), seed: 11);
+        var payer = Payer.For(game, world);
+
+        PlayLevel(game, new ScriptedClient(game, output), payer);
+        clock.Now += SecondsAtPlayersPace * 1000;
+        payer.Send("OnNextLevelMsg");
+        payer.Send("OnNextLevelMsg");
+        payer.Send("FRServer_GameOver");
+        payer.Tick();
+
+        Assert.AreEqual(1, payer.Paid.Count);
+        Assert.AreEqual(1, progress.ProgressFor(0).Count, "One paid win, counted once.");
     }
 
     [TestMethod]
@@ -1106,6 +1178,7 @@ public sealed class MatchThreeTests
             Assert.AreEqual(minimum, game.MinSecondsToWin);
             Assert.AreEqual(seconds, game.SecondsToWin!.Value, 0.001);
             Assert.AreEqual(pays ? 1 : 0, payer.Paid.Count, $"Won in {seconds} s, the minimum {minimum} s.");
+            Assert.AreEqual(pays ? 1 : 0, payer.WinsTold, "Only a paid win is told to the player's quests.");
             Assert.AreEqual(pays ? 0 : 1, payer.TooFast);
         }
     }
@@ -1123,6 +1196,7 @@ public sealed class MatchThreeTests
 
         Assert.AreEqual(MatchThreeResult.Lost, lost.Result);
         Assert.AreEqual(0, payer.Paid.Count);
+        Assert.AreEqual(0, payer.WinsTold);
 
         // A board that keeps falling out of step: stopped.
         var (stopped, _, _) = Start(Mining());
@@ -1133,6 +1207,7 @@ public sealed class MatchThreeTests
 
         Assert.AreEqual(MatchThreeResult.Stopped, stopped.Result);
         Assert.AreEqual(0, payer.Paid.Count);
+        Assert.AreEqual(0, payer.WinsTold);
     }
 
     /// <summary>
@@ -1182,6 +1257,7 @@ public sealed class MatchThreeTests
         Assert.AreEqual(MatchThreeResult.Won, game.Result, "Won a second time...");
         Assert.AreEqual(2, output.Named("OnGameWonMsg").Count());
         CollectionAssert.AreEqual(new[] { Mining().Reward }, payer.Paid, "...and paid once.");
+        Assert.AreEqual(1, payer.WinsTold, "...and told to the player's quests once.");
         Assert.AreEqual(0, payer.TooFast);
     }
 }

@@ -85,6 +85,23 @@ public sealed class PlayableActivitiesTests
         Assert.IsTrue(IsPlayable(DailyWheel.ActivityId, new DailyWheel { Enabled = true }));
     }
 
+    /// <summary>
+    /// A quest step can be won at a game whose wins the server reports. Match three is played on the server's board,
+    /// which decides the win; Cooking's Flash plays its rounds itself, so its win is the client's report.
+    /// </summary>
+    [TestMethod]
+    public void Wins_AreDecidedByTheServerForMatchThree_AndReportedByTheClientForCooking()
+    {
+        foreach (var activityId in MatchThree)
+            Assert.AreEqual(ActivityWins.DecidedByServer, PlayableActivities.WinsOf(activityId, _mimic), $"Activity {activityId}");
+
+        foreach (var activityId in Cooking)
+            Assert.AreEqual(ActivityWins.ReportedByClient, PlayableActivities.WinsOf(activityId, _mimic), $"Activity {activityId}");
+
+        foreach (var activityId in FishingHoles.Append(DailyWheel.ActivityId).Append(7))
+            Assert.AreEqual(ActivityWins.NotReported, PlayableActivities.WinsOf(activityId, _mimic), $"Activity {activityId}");
+    }
+
     [TestMethod]
     public void UnbuiltGames_AreNotListed()
     {

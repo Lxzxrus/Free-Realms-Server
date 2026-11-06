@@ -14,6 +14,8 @@ using Sanctuary.Game;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
 using Sanctuary.Game.Minigames.Mimic;
+using Sanctuary.Game.Quests;
+using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -43,7 +45,7 @@ public static class FlashMinigameHandler
     private static ILogger _logger = null!;
     private static ILogger _gameLogger = null!;
     private static IResourceManager _resourceManager = null!;
-    private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
+    private static MinigameSettlement _settlement = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -52,19 +54,40 @@ public static class FlashMinigameHandler
         _gameLogger = loggerFactory.CreateLogger(nameof(MatchThreeGame));
 
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
-        _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
+        _settlement = MinigameSettlement.Create(_resourceManager, serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>(),
+            serviceProvider.GetRequiredService<IQuestManager>(), _logger);
     }
 
-    /// <summary>Opens the start screen for a known Flash minigame. False if the activity isn't one.</summary>
-    public static bool TryOpen(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
+    /// <summary>
+    /// Opens the start screen for a known Flash minigame. <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the
+    /// player has a Flash minigame they started or the wheel open (one at a time; one never started gives way),
+    /// <see cref="ActivityLaunchResult.InsideAHouse"/> inside a house, <see cref="ActivityLaunchResult.NotAGamesMenuGame"/>
+    /// if the activity isn't a Flash minigame the server serves.
+    /// </summary>
+    public static ActivityLaunchResult Open(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
     {
         if (!FlashMinigames.Definitions.TryGetValue(activity.Id, out var definition) && !MimicHandler.TryDefine(activity.Id, out definition))
-            return false;
+            return ActivityLaunchResult.NotAGamesMenuGame;
 
         var player = connection.Player;
 
+        // Evergrove: the client shows no minigame start screen inside a house, so a session opened there could never be
+        // started or closed, and every game after it would be refused as another one open until a relog.
+        if (player.Zone is HousingZone)
+            return ActivityLaunchResult.InsideAHouse;
+
+        // Evergrove: a start screen closed before Go may never tell the server, so a session that never started gives way
+        // to the next game the player opens. It has paid nothing and can't: once it is gone, its Go is refused (TryStart).
+        if (player.FlashMinigame is { Started: false } unstarted)
+        {
+            _logger.LogInformation("Minigame: session {stateId} for {player} never started; it gives way to activity {activity}.",
+                unstarted.StateId, player.Guid, activity.Id);
+
+            Close(connection, unstarted);
+        }
+
         if (player.FlashMinigame is not null || player.WheelSession is not null)
-            return true;
+            return ActivityLaunchResult.AnotherGameOpen;
 
         var session = new FlashMinigameSession(Interlocked.Increment(ref _nextStateId), definition);
         player.FlashMinigame = session;
@@ -129,7 +152,7 @@ public static class FlashMinigameHandler
 
         connection.SendTunneled(new MiniGameInfoPacket(session.StateId, -1, -1) { Info = info });
 
-        return true;
+        return ActivityLaunchResult.Opened;
     }
 
     /// <summary>The player pressed Go: the game starts and the Flash opens.</summary>
@@ -192,10 +215,7 @@ public static class FlashMinigameHandler
         }
 
         if (session.MatchThree is { } game)
-        {
-            game.Handle(message);
-            Settle(connection, session, game);
-        }
+            Log(connection, session, game, _settlement.HandleMatchThree(session, connection.Player, message));
         else if (session.Mimic is not null)
             MimicHandler.Handle(connection, session, message);
         else if (message[0] == "FRServer_Connect")
@@ -210,8 +230,7 @@ public static class FlashMinigameHandler
         if (session.MatchThree is not { } game)
             return;
 
-        game.Tick();
-        Settle(connection, session, game);
+        Log(connection, session, game, _settlement.TickMatchThree(session, connection.Player));
     }
 
     /// <summary>A game that threw: the player's minigame is closed rather than left half-working.</summary>
@@ -222,12 +241,15 @@ public static class FlashMinigameHandler
     }
 
     /// <summary>
-    /// Logs each new result, and pays a won game once, as Cooking pays (<see cref="MinigameReward.Pay"/>). The server's
-    /// own game decides the win (<see cref="FlashMinigameSession.SettleMatchThreeWin"/>), never a message from the
-    /// Flash, so a forged, repeated or replayed "game over" pays nothing more. A win quicker than its levels can be
-    /// played pays nothing either, and is logged as a warning.
+    /// Logs each new result, and what settling it did: a won game paid once, as Cooking pays
+    /// (<see cref="MinigameReward.Pay"/>). The server's own game decides the win
+    /// (<see cref="FlashMinigameSession.SettleMatchThreeWin"/>), never a message from the Flash, so a forged, repeated or
+    /// replayed "game over" pays nothing more. A win quicker than its levels can be played pays nothing either, and is
+    /// logged as a warning. A paid win is the one a quest step that is this game counts (<see cref="ActivityWonEvent"/>),
+    /// so a win refused as too fast never passes a step. Handing each message and tick to the game, settling, paying and
+    /// telling the quests are <see cref="MinigameSettlement"/>'s, which the tests run too.
     /// </summary>
-    private static void Settle(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game)
+    private static void Log(GatewayConnection connection, FlashMinigameSession session, MatchThreeGame game, MatchThreeSettlement settled)
     {
         var player = connection.Player;
 
@@ -239,21 +261,17 @@ public static class FlashMinigameHandler
                 player.Guid, game.Result, game.Name, game.Level?.Number, game.TotalScore);
         }
 
-        var payout = session.SettleMatchThreeWin(out var reward);
-
-        if (payout == MatchThreePayout.TooFast)
+        if (settled.Payout == MatchThreePayout.TooFast)
         {
             _logger.LogWarning("Minigame: {player} won {game} in {seconds:0.0} s, under the {minimum} s its levels take to play; " +
                 "nothing paid.", player.Guid, game.Name, game.SecondsToWin, game.MinSecondsToWin);
             return;
         }
 
-        if (payout != MatchThreePayout.Pay)
+        if (settled.Payout != MatchThreePayout.Pay)
             return;
 
-        using var dbContext = _dbContextFactory.CreateDbContext();
-
-        var paid = reward.Pay(_resourceManager, dbContext, _logger, player);
+        var (reward, paid) = (settled.Reward, settled.Paid);
 
         _logger.LogInformation("Minigame: {player} won {game} in {seconds:0.0} s: paid {coins} coins and {stars} stars on job " +
             "{profileId}.", player.Guid, game.Name, game.SecondsToWin, paid.Coins ? reward.Coins : 0,

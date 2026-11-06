@@ -91,7 +91,7 @@ public sealed class QuestObjectiveTargetTests
         var quest = PackageQuest();
         ((QuestResources)(object)resources).Quests.Quests[quest.QuestId] = quest;
 
-        _questManager = new QuestManager(resources, null!, null!, NullLogger<QuestManager>.Instance);
+        _questManager = new QuestManager(resources, null!, null!, null!, null!, NullLogger<QuestManager>.Instance);
 
         _player = new Player(null!, null!, null!, null!, null!) { Zone = _zone };
         _player.UpdatePosition(new Vector4(0f, 0f, 0f, 1f), Quaternion.Identity);
@@ -211,6 +211,53 @@ public sealed class QuestObjectiveTargetTests
 
         Assert.IsNull(_questManager.ObjectiveTargetFor(_player, PackageQuest(), 1, out var clear));
         Assert.IsFalse(clear, "An NPC step leaves the last marker up, as upstream does.");
+    }
+
+    /// <summary>A cooking step whose game the NPC <paramref name="offeredBy"/> offers (0: nobody), then a hand-in.</summary>
+    private static QuestDefinition GameQuest(int offeredBy) => new()
+    {
+        QuestId = QuestId,
+        TargetNpcId = TurnInNpcId,
+        Goals =
+        [
+            new PlayActivityGoal { NameId = 21837, ActivityId = 450, NpcId = offeredBy },
+            new TalkToNpcGoal { NameId = 94536, Targets = [new TalkTarget { NpcId = TurnInNpcId }] }
+        ]
+    };
+
+    [TestMethod]
+    public void Marker_OnAStepWonByPlayingAGame_IsTheNpcWhoOffersIt()
+    {
+        const int host = 2069;
+
+        // The turn-in NPC stands nearest, but the step points at the NPC who offers its game, as a talk step points.
+        ZoneNpcs.Add(Place(new Npc(_zone) { Guid = _nextGuid++, DefinitionId = host, NameId = 15820 }, 20f));
+
+        var target = _questManager.ObjectiveTargetFor(_player, GameQuest(offeredBy: host), 0, out _);
+
+        Assert.IsNotNull(target);
+        Assert.AreEqual(20f, target.Value.Position.X);
+        Assert.AreEqual(15820, target.Value.NameId);
+        Assert.AreEqual(0.5f, _questManager.ObjectiveTargetFor(_player, GameQuest(offeredBy: host), 1, out _)?.Position.X,
+            "Then the NPC it is handed to.");
+    }
+
+    [TestMethod]
+    public void Marker_OnAStepWonByPlayingAGame_WhoseNpcIsElsewhere_StaysAsItWas()
+    {
+        Assert.IsNull(_questManager.ObjectiveTargetFor(_player, GameQuest(offeredBy: 2069), 0, out var clear));
+        Assert.IsFalse(clear, "As a talk step's: the last marker stays up.");
+    }
+
+    [TestMethod]
+    public void Marker_OnAStepWonByPlayingAGameNobodyOffers_ComesDown()
+    {
+        // The turn-in NPC stands nearest, but the game is played from the Games menu alone: nothing to point at.
+        Assert.IsNull(_questManager.ObjectiveTargetFor(_player, GameQuest(offeredBy: 0), 0, out var clear));
+        Assert.IsTrue(clear, "The last step's marker comes down, so Take Me There doesn't lead back to its NPC.");
+
+        Assert.AreEqual(0.5f, _questManager.ObjectiveTargetFor(_player, GameQuest(offeredBy: 0), 1, out _)?.Position.X,
+            "Then the NPC it is handed to.");
     }
 
     [TestMethod]
