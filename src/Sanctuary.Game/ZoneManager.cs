@@ -182,7 +182,7 @@ public class ZoneManager : IZoneManager
             return false;
         }
 
-        (int, ulong?) key = house is { } held ? (zoneDefinitionId, held.HouseId) : (zoneDefinitionId, ownerId);
+        var key = InstanceKey(zoneDefinitionId, ownerId, house?.HouseId);
 
         zone = _zones.GetOrAdd(key, _ => CreateZoneInstance(zoneDefinition, ownerId, house));
 
@@ -237,13 +237,17 @@ public class ZoneManager : IZoneManager
 
     /// <summary>
     /// The key a zone instance is kept under: its definition and its owner. Evergrove: a house's is its lot and the
-    /// house itself, not the character holding it, which can change while the house is loaded: a deleted character's
-    /// houses move to another character on the account (<see cref="HouseHandover"/>). So whoever comes in under the new
-    /// holder joins the instance already loaded, rather than loading a second copy of the house beside it.
+    /// house itself (<paramref name="houseId"/>), not the character holding it, which can change while the house is
+    /// loaded: a deleted character's houses move to another character on the account (<see cref="HouseHandover"/>). So
+    /// whoever comes in under the new holder joins the instance already loaded, rather than loading a second copy of
+    /// the house beside it. Finding an instance and removing it both use this, so the two can't disagree.
     /// </summary>
-    private static (int, ulong?) InstanceKey(IZone zone) => zone is HousingZone house
-        ? (house.DefinitionId, house.HouseId)
-        : (zone.DefinitionId, zone.OwnerId);
+    /// <param name="houseId">The house, for a housing zone; <c>null</c> for any other zone.</param>
+    internal static (int, ulong?) InstanceKey(int definitionId, ulong? ownerId, ulong? houseId) =>
+        houseId is ulong house ? (definitionId, house) : (definitionId, ownerId);
+
+    private static (int, ulong?) InstanceKey(IZone zone) =>
+        InstanceKey(zone.DefinitionId, zone.OwnerId, (zone as HousingZone)?.HouseId);
 
     public void EvictIfEmpty(IZone zone)
     {
