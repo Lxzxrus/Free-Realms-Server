@@ -57,7 +57,7 @@ public static class StarterHouse
     /// A zone id that names no housing lot the server serves turns the grant off (a typo would, with nothing said until
     /// someone looked). And with no grant while <see cref="HousingOptions.FreeLots"/> is off, a new player has no house
     /// unless they can pay for a lot, so a quest that sends players through a Housing door can't be finished, nor any
-    /// quest after it in its chain.
+    /// quest after it in its chain. The Gateway logs each after "Housing: ", so none starts with it.
     /// </summary>
     public static IEnumerable<string> Problems(HousingOptions options, ZoneDefinitionCollection zones, QuestDefinitionCollection quests)
     {
@@ -66,7 +66,7 @@ public static class StarterHouse
 
         if (options.StarterHouseZoneId != 0)
         {
-            yield return $"Housing:StarterHouseZoneId is {options.StarterHouseZoneId}, which isn't a housing lot the server " +
+            yield return $"StarterHouseZoneId is {options.StarterHouseZoneId}, which isn't a housing lot the server " +
                 "serves, so no account is given a starter house.";
         }
 

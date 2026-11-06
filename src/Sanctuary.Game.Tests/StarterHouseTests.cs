@@ -215,7 +215,8 @@ public sealed class StarterHouseTests
 
     /// <summary>
     /// The Gateway's startup line names the starter house, or says it's off, and a setting that names no lot the server
-    /// serves (a typo, say) is warned about there, before anyone logs in, rather than going unseen. 0 is simply off.
+    /// serves (a typo, say) is warned about there, before anyone logs in, rather than going unseen. 0 is simply off. The
+    /// Gateway logs each warning after "Housing: ", so none says it again.
     /// </summary>
     [TestMethod]
     public void TheGatewaysStartup_NamesTheStarterHouse_AndWarnsOfASettingThatNamesNoLot()
@@ -235,7 +236,10 @@ public sealed class StarterHouseTests
             var options = new HousingOptions { StarterHouseZoneId = namesNoLot };
 
             Assert.AreEqual("off", StarterHouse.Describe(options, zones));
-            StringAssert.Contains(StarterHouse.Problems(options, zones, noQuests).Single(), $"is {namesNoLot}, which isn't a housing lot");
+
+            var problem = StarterHouse.Problems(options, zones, noQuests).Single();
+            StringAssert.Contains(problem, $"StarterHouseZoneId is {namesNoLot}, which isn't a housing lot");
+            Assert.IsFalse(problem.StartsWith("Housing:"), "The Gateway logs it after \"Housing: \".");
         }
     }
 
@@ -253,6 +257,7 @@ public sealed class StarterHouseTests
 
         var stranded = StarterHouse.Problems(new HousingOptions { StarterHouseZoneId = 0, FreeLots = false }, zones, shipped).Single();
         StringAssert.Contains(stranded, "quest 9100 can't be finished");
+        Assert.IsFalse(stranded.StartsWith("Housing:"), "The Gateway logs it after \"Housing: \".");
 
         Assert.AreEqual(0, StarterHouse.Problems(new HousingOptions { StarterHouseZoneId = 0 }, zones, shipped).Count(), "Lots are free.");
         Assert.AreEqual(0, StarterHouse.Problems(new HousingOptions { FreeLots = false }, zones, shipped).Count(), "Every account gets one.");
