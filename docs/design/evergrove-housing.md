@@ -189,16 +189,25 @@ Build-order phases 2 and 3.
 - **A lot every other character already has** goes with the deleted character, as every house did before. Only an
   account with two copies of a lot from before task 35 meets this. The account keeps one of each lot, and a house on a
   character the player isn't deleting is never touched, even when the copy that goes is the ranked plot. Its votes are
-  kept as history.
+  kept as history. Nothing tells the player, here or in the case below: the delete looks like any other, and only the
+  Login server's log names the houses that went with the character.
 - **The account's last character** takes its houses with it, as before: a house is always held by a character, and
-  none is left. Their votes are kept as history. Keeping them would need a house to record its account
-  (`Houses.UserId`), a holder that can be empty while the account has no character, the directory to leave such a house
-  out, and the account's next new character to take them up.
+  none is left. Their votes are kept as history. So to remake an account's only character and keep its houses, a
+  player creates the new character first, then deletes the old one, and the houses move to the new one. Keeping them
+  through the last character's delete would need a house to record its account (`Houses.UserId`), a holder that can be
+  empty while the account has no character, the directory to leave such a house out, and the account's next new
+  character to take them up.
 - **A house in use when it changes hands stays one house.** The zone manager keeps a house's instance by the house,
   not by its holder: anyone inside stays, and anyone coming in under the new holder joins them. Inside, everything goes
   by the house (votes, publishing, settings, names, invites), and a lock lets the new holder's friends stay.
 - The Login server's character delete is the only way a character is deleted (no web API, staff command or script
   deletes one). A character deleted by hand in the database still takes its houses with it.
+- **Phase 4 keeps its records by account.** A house's holder can change, so the competition's results, the 4-week wait
+  after a win, the Hall of Fame and the prize for an entry go by the plot's account, as `PlotVotes.OwnerUserId` does,
+  never by `Houses.CharacterId`. Kept by the holder, they could be dodged: a winner would delete the character holding
+  the plot, and the same build, now held by another of the account's characters, could take 1st place again the next
+  week. A prize in Station Cash, which belongs to a character (section 4), goes to whichever character holds the plot
+  when it's paid.
 - **Publishing** stays separate from the kind of plot. A published, unlocked ranked plot is **entered**. A locked one
   isn't: it's out of the directory and only the owner's friends can come in. A published personal plot can be visited
   and is listed in the directory, but takes no votes and shows no rating.
