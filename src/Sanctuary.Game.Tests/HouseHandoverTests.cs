@@ -15,9 +15,9 @@ using Sanctuary.Packet.Common;
 namespace Sanctuary.Game.Tests;
 
 /// <summary>
-/// A deleted character's houses move to another character on its account (<see cref="HouseHandover"/>). Characters are
-/// deleted here by the Login server's own delete (<see cref="CharacterDeletion"/>): the move, then the character, in one
-/// transaction, with the database's cascade on <c>Houses.CharacterId</c> taking whatever is left on it.
+/// A deleted character's houses move to another character on its account (<see cref="HouseHandover"/>). Characters
+/// are deleted here by the Login server's own delete (<see cref="CharacterDeletion"/>): the move, then the character,
+/// in one transaction, with the database's cascade on <c>Houses.CharacterId</c> taking whatever is left on it.
 /// </summary>
 [TestClass]
 public sealed class HouseHandoverTests
@@ -174,7 +174,7 @@ public sealed class HouseHandoverTests
         Assert.IsFalse(dbContext.Houses.Any(house => house.CharacterId == Stranger),
             "An older character on another account is never given the houses.");
 
-        // The Gateway finds a house's instance by the character holding it and the lot.
+        // The Gateway finds a house by the character holding it and its lot (HouseOwnership.FindHeld).
         Assert.AreEqual(100UL, dbContext.Houses.Single(house => house.CharacterId == Eldest && house.ZoneDefinitionId == Seaside).Id);
         CollectionAssert.AreEquivalent(
             new ulong[] { 100, 101 },
@@ -471,7 +471,8 @@ public sealed class HouseHandoverTests
             dbContext.Ignores.Add(new DbIgnore { CharacterId = Voter, IgnoreCharacterId = Gone });
             dbContext.SaveChanges();
 
-            foreach (var member in dbContext.Characters.Where(character => character.Id == Gone || character.Id == Stranger))
+            var members = dbContext.Characters.Where(character => character.Id == Gone || character.Id == Stranger);
+            foreach (var member in members)
                 member.GuildMemberId = member.Id;
 
             dbContext.SaveChanges();

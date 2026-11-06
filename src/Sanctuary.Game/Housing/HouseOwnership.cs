@@ -8,8 +8,9 @@ namespace Sanctuary.Game.Housing;
 /// <summary>
 /// Houses belong to their account (<c>docs/design/evergrove-housing.md</c>, section 2): every character on the account
 /// may enter, build in, publish, lock and manage them as the character holding them can. That character,
-/// <see cref="DbHouse.CharacterId"/>, is still who the house is shown as belonging to, and its friends are the house's
-/// friends, so nothing changes for visitors.
+/// <see cref="DbHouse.CharacterId"/>, is who visitors see the house as belonging to, and its friends are the house's
+/// friends. It changes only when that character is deleted and the house moves to another character on the account
+/// (<see cref="HouseHandover"/>).
 /// </summary>
 public static class HouseOwnership
 {
