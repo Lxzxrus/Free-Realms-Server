@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" />
+    <!-- Lifts Pomelo's MySqlConnector to a fixed version: see Directory.Packages.props. -->
+    <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
