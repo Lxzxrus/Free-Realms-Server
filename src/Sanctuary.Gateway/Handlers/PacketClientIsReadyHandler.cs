@@ -24,6 +24,12 @@ public static class PacketClientIsReadyHandler
     {
         _logger.LogTrace("Received {name} packet.", nameof(PacketClientIsReady));
 
+        // The client says it's ready once per zone it loads, so a repeat for the same entry into the zone soon after is
+        // dropped: each answer sends the zone's whole welcome (map points, journal, shop, quests, every quest NPC's
+        // marker) and, out of a house, reads the house list from the database.
+        if (!connection.Player.ClientIsReadyReplies.TryAnswer(connection.Player.ZoneEntry, Environment.TickCount64))
+            return true;
+
         connection.Player.Zone.OnClientIsReady(connection.Player);
 
         // The client never asks for its house list; "My Houses" shows whatever the server last sent. Send it on

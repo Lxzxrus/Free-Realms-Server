@@ -232,18 +232,6 @@ public sealed class QuestManager : IQuestManager
     private void PersistCollectCount(Player player, int questId, int count)
         => UpdateCharacterQuest(player, questId, q => q.GoalCount = count);
 
-    private void PersistActiveQuest(Player player, int questId)
-    {
-        using var db = _dbContextFactory.CreateDbContext();
-
-        var dbCharacter = db.Characters.FirstOrDefault(c => c.Id == player.CharacterId);
-        if (dbCharacter is null)
-            return;
-
-        dbCharacter.ActiveQuestId = questId != 0 ? questId : null;
-        db.SaveChanges();
-    }
-
     public void AcceptQuest(Player player, int questId)
     {
         if (!_resourceManager.Quests.TryGet(questId, out var quest) || !quest.IsOfferableFor(player.Quests))
@@ -273,6 +261,11 @@ public sealed class QuestManager : IQuestManager
         }
 
         SendActiveState(player, quest);
+
+        // A login between two story quests left the finished set out (RestoreJournal); with the next one taken, the
+        // client can have it and show this quest as the journal's current one.
+        if (AdventurersJournal.IsStoryQuest(questId))
+            SendJournalQuestStates(player);
 
         RefreshQuestNotifications(player, quest);
 
@@ -366,8 +359,9 @@ public sealed class QuestManager : IQuestManager
 
         if (player.Quests.TryGetValue(questId, out var completed) && !completed)
         {
+            // Not written to the database here: the client sends one of these per click in the quest helper. The
+            // tracked quest is saved when a quest is accepted and with the character at logout.
             player.ActiveQuestId = questId;
-            PersistActiveQuest(player, questId);
 
             int done = player.QuestGoalProgress.TryGetValue(questId, out var progress) ? progress : 0;
             var goals = quest.Goals;
@@ -394,7 +388,11 @@ public sealed class QuestManager : IQuestManager
             Count = player.Quests.Values.Count(done => done)
         });
 
-        SendJournalQuestStates(player);
+        // The welcome window, sent next, shows the journal's current quest, which the client picks with the finished
+        // set. Between two story quests it would pick the one not taken yet and show it without any text; without the
+        // set it says there are no quests. The set follows once the next one is taken (AcceptQuest, AdventurersJournal).
+        if (!AdventurersJournal.IsBetweenStoryQuests(player.Quests))
+            SendJournalQuestStates(player);
     }
 
     private void SendJournalQuestStates(Player player)
@@ -455,25 +453,33 @@ public sealed class QuestManager : IQuestManager
 
         if (imageId == 0)
         {
-            player.SendTunneled(new PlayerUpdatePacketRemoveNotifications { Guids = { npc.Guid } });
+            player.SendTunneled(new PlayerUpdatePacketRemoveNotifications
+            {
+                Notifications = { new RemoveNotificationInfo { Guid = npc.Guid } }
+            });
             return;
         }
 
         player.SendTunneled(new PlayerUpdatePacketAddNotifications
         {
-            Notifications =
-            {
-                new NotificationInfo
-                {
-                    Guid = npc.Guid,
-                    Combat = false,
-                    ImageId = imageId,
-                    NameId = npc.NameId,
-                    SubTextId = npc.SubTextNameId,
-                }
-            }
+            Notifications = { GetQuestNotification(npc, imageId) }
         });
     }
+
+    /// <summary>
+    /// A quest or trainer marker over an npc. Upstream OSFR's <see cref="NotificationInfo"/> names Evergrove's fields
+    /// differently (the marker image is its IconState, the subtext its ReferenceId); the bytes are the ones Evergrove's
+    /// markers were checked in game with, its last flag (upstream's Enabled) false.
+    /// </summary>
+    public static NotificationInfo GetQuestNotification(Npc npc, int imageId) => new()
+    {
+        Guid = npc.Guid,
+        IsCompact = false,
+        IconState = imageId,
+        NameId = npc.NameId,
+        ReferenceId = npc.SubTextNameId,
+        Enabled = false,
+    };
 
     private void Offer(Player player, QuestDefinition quest)
     {

@@ -138,6 +138,9 @@ internal sealed class FakeBehaviour
     public bool ReportFaults;
 
     public bool ThrowOnTerminated;
+
+    /// <summary>Runs for every packet this manager's connections handle, after it is recorded.</summary>
+    public Action<FakeConnection, byte[]>? OnPacket;
 }
 
 internal sealed class FakeManager : UdpManager<FakeConnection>, IGiveTime
@@ -216,6 +219,9 @@ internal sealed class FakeConnection : UdpConnection
 
     public bool Terminated { get; private set; }
 
+    /// <summary>How many packets that failed their CRC check the application was told about.</summary>
+    public int CrcRejects { get; private set; }
+
     // client side
     public FakeConnection(FakeManager manager, SocketAddress socketAddress, long timeout) : base(manager, socketAddress, timeout)
     {
@@ -247,8 +253,14 @@ internal sealed class FakeConnection : UdpConnection
             return;
         }
 
-        Received.Add(data.ToArray());
+        var packet = data.ToArray();
+
+        Received.Add(packet);
+
+        _manager.Behaviour.OnPacket?.Invoke(this, packet);
     }
+
+    public override void OnCrcReject(Span<byte> data) => CrcRejects++;
 
     public override void OnTerminated()
     {

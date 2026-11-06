@@ -8,7 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Sanctuary.Scripting.Tests;
 
 /// <summary>
-/// Scripts get only base, table, string and math (threat model F11).
+/// Scripts get only base, table, string and math, plus require for Scripts/Shared and os's clock (threat model F11).
 /// </summary>
 [TestClass]
 public class SandboxTests
@@ -41,16 +41,54 @@ public class SandboxTests
     }
 
     [TestMethod]
-    [DataRow("os")]
     [DataRow("io")]
     [DataRow("package")]
     [DataRow("debug")]
-    [DataRow("require")]
     [DataRow("dofile")]
     [DataRow("loadfile")]
+    [DataRow("os.execute")]
+    [DataRow("os.exit")]
+    [DataRow("os.getenv")]
+    [DataRow("os.remove")]
+    [DataRow("os.rename")]
+    [DataRow("os.tmpname")]
     public async Task UnsafeGlobalIsClosed(string name)
     {
-        Assert.IsTrue(await RunAsync(name, $"assert({name} == nil, \"{name} is open\")"), $"{name} is reachable from a script.");
+        Assert.IsTrue(await RunAsync(name.Replace('.', '_'), $"assert({name} == nil, \"{name} is open\")"), $"{name} is reachable from a script.");
+    }
+
+    /// <summary>
+    /// Upstream OSFR's event scripts read the time of day (EventSchedule.lua) and share modules through require.
+    /// </summary>
+    [TestMethod]
+    public async Task ClockAndSharedModulesWork()
+    {
+        Assert.IsTrue(await RunAsync("clock", "assert(type(os.date(\"*t\", os.time()).hour) == \"number\")"));
+        Assert.IsTrue(await RunAsync("shared", "assert(require(\"EventSchedule\").SecondsPerMinute == 60)"));
+    }
+
+    [TestMethod]
+    [DataRow("../Zone/FabledRealms")]
+    [DataRow("..\\\\Zone\\\\FabledRealms")]
+    [DataRow("C:EventSchedule")]
+    [DataRow("NoSuchModule")]
+    public async Task RequireReachesOnlySharedModules(string module)
+    {
+        Assert.IsFalse(await RunAsync("escape", $"require(\"{module}\")"), $"require(\"{module}\") loaded.");
+    }
+
+    [TestMethod]
+    [DataRow("EventSchedule", true)]
+    [DataRow("Greet_On-Approach2", true)]
+    [DataRow("", false)]
+    [DataRow("..", false)]
+    [DataRow("../Zone/FabledRealms", false)]
+    [DataRow("..\\Zone\\FabledRealms", false)]
+    [DataRow("C:EventSchedule", false)]
+    [DataRow("Shared.EventSchedule", false)]
+    public void ModuleName_IsPlain(string module, bool plain)
+    {
+        Assert.AreEqual(plain, ScriptModuleLoader.IsPlainName(module));
     }
 
     [TestMethod]

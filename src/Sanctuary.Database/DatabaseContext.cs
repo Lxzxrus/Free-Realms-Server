@@ -10,6 +10,7 @@ public abstract class DatabaseContext : DbContext
     public DbSet<DbItem> Items => Set<DbItem>();
     public DbSet<DbTitle> Titles => Set<DbTitle>();
     public DbSet<DbMount> Mounts => Set<DbMount>();
+    public DbSet<DbPet> Pets => Set<DbPet>();
     public DbSet<DbGuild> Guilds => Set<DbGuild>();
     public DbSet<DbHouse> Houses => Set<DbHouse>();
     public DbSet<DbHouseFixture> HouseFixtures => Set<DbHouseFixture>();

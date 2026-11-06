@@ -23,6 +23,12 @@ public static class PacketClientFinishedLoadingHandler
     {
         _logger.LogTrace("Received {name} packet.", nameof(PacketClientFinishedLoading));
 
+        // Like "client is ready", sent once per zone the client loads, so a repeat for the same entry into the zone
+        // soon after is dropped: in a house, each answer reads where every fixture is from the database and sends one
+        // packet per fixture.
+        if (!connection.Player.ClientFinishedLoadingReplies.TryAnswer(connection.Player.ZoneEntry, Environment.TickCount64))
+            return true;
+
         connection.Player.Visible = true;
 
         if (connection.Player.Mount is not null)
@@ -37,6 +43,12 @@ public static class PacketClientFinishedLoadingHandler
         }
 
         connection.Player.Zone.OnClientFinishedLoading(connection.Player);
+
+        // Evergrove: on the zone's tick, like every other summon, rather than building the pet from the packet thread
+        // while the zone reads the pet's state.
+        connection.Player.PlayerPet.QueueAction(connection.Player.PlayerPet.RestorePet);
+
+        connection.Player.SendTunneled(connection.Player.GetWeaponFlairOverridePacket());
 
         connection.Player.SendToolbar();
 

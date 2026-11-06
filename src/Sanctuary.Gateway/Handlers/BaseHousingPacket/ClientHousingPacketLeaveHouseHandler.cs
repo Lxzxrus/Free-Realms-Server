@@ -3,6 +3,7 @@ using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Housing;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
@@ -32,7 +33,11 @@ public static class ClientHousingPacketLeaveHouseHandler
 
         _logger.LogTrace("Received {name} packet.", nameof(ClientHousingPacketLeaveHouse));
 
-        _houseManager.LeaveHouse(connection.Player);
+        var player = connection.Player;
+
+        // A move to another zone: one that comes too soon after the last waits for its turn (ZoneTeleports), and the
+        // client waits for it.
+        ZoneTeleports.Request(player, Environment.TickCount64, () => _houseManager.LeaveHouse(player));
         return true;
     }
 }
