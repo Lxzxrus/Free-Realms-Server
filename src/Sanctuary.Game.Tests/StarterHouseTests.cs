@@ -16,7 +16,7 @@ using Sanctuary.Game.Resources.Definitions.Zones;
 namespace Sanctuary.Game.Tests;
 
 /// <summary>
-/// The free Apartment every account owns (<c>docs/design/evergrove-housing.md</c>, section 10), given by
+/// The free Apartment every account owns (<c>docs/design/evergrove-housing.md</c>, section 11), given by
 /// <see cref="HouseManager.EnsureStarterHouse"/> at the session's first world login: once per account, a bare house on
 /// the character logging in, worth nothing.
 /// </summary>

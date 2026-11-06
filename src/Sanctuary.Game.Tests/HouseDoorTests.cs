@@ -28,7 +28,7 @@ namespace Sanctuary.Game.Tests;
 
 /// <summary>
 /// The Housing door (<see cref="HouseDoors"/>, <see cref="HouseDoorService"/>, <c>docs/design/evergrove-housing.md</c>
-/// section 10): what it is in the data, and what a click on it does. The house manager is played by
+/// section 11): what it is in the data, and what a click on it does. The house manager is played by
 /// <see cref="FakeHouses"/>, except where a test says it uses the real one.
 /// </summary>
 [TestClass]

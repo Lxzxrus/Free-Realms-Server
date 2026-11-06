@@ -290,8 +290,9 @@ public sealed class QuestDefinitionCollectionTests
 
     /// <summary>
     /// The Cobblestone Village Cafe (9103): Simone's Spiralmint Steak (activity 450, a Cooking recipe the Games menu
-    /// lists, as PlayableActivitiesTests checks), won once, then handed to Simone. No world object starts a game yet, so
-    /// Simone offers the steak herself, and no row of the quest sends the player to her cooking table.
+    /// lists, as PlayableActivitiesTests checks), won once, then handed to Simone. Simone offers the steak herself, so no
+    /// row of the quest sends the player to her cooking table: any table opens the steak for anyone (Minigames.GameStations),
+    /// but the step's marker and Take Me There point at her.
     /// </summary>
     [TestMethod]
     public void ShippedCafe_IsWonBySimonesSteak_ThenHandedToHer()
@@ -311,7 +312,7 @@ public sealed class QuestDefinitionCollectionTests
         Assert.AreNotEqual(0, cafe.TurnInDialogueId, "Simone says something as it's handed in.");
 
         // Her offer and the step's rows that say to click (or use) her cooking table, from the live quest and its unreleased
-        // first version: they wait for a table that opens the game.
+        // first version: the step is hers, so its text names her.
         int[] sendToTheTable = [94278, 94528, 100259, 100265, 21838];
         int[] shown =
         [

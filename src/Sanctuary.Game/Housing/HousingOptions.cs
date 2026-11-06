@@ -31,7 +31,7 @@ public sealed class HousingOptions
 
     /// <summary>
     /// Evergrove: the lot every account owns free, by its zone id; 1024 is the Apartment (<c>docs/design/evergrove-housing.md</c>,
-    /// section 10). The first world login of each session gives one to an account none of whose characters has one, on
+    /// section 11). The first world login of each session gives one to an account none of whose characters has one, on
     /// the character logging in, free whatever <see cref="FreeLots"/> says (<see cref="IHouseManager.EnsureStarterHouse"/>),
     /// and the Marketplace doesn't offer that lot (<see cref="StarterHouse.BundleLeftOffTheShelf"/>). 0 turns this off,
     /// and so does an id that isn't a housing lot the server serves, which the Gateway warns about as it starts.

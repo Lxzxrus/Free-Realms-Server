@@ -24,7 +24,7 @@ public enum StarterHouseResult
 
 /// <summary>
 /// Evergrove: the free house every account owns, the Apartment unless <see cref="HousingOptions.StarterHouseZoneId"/>
-/// says otherwise (<c>docs/design/evergrove-housing.md</c>, section 10). <see cref="IHouseManager.EnsureStarterHouse"/>
+/// says otherwise (<c>docs/design/evergrove-housing.md</c>, section 11). <see cref="IHouseManager.EnsureStarterHouse"/>
 /// gives it. It's a bare house, worth nothing, so nothing records that an account was given one: owning it is the record.
 /// </summary>
 public static class StarterHouse

@@ -109,7 +109,7 @@ public static class PacketInGamePurchasePlaceOrderPacketHandler
         if (housingZoneDefinition is not null)
         {
             // Evergrove: every account is given the starter house (the Apartment), so while it is, the store doesn't offer
-            // it, and an order for it is refused at no charge (docs/design/evergrove-housing.md, section 10).
+            // it, and an order for it is refused at no charge (docs/design/evergrove-housing.md, section 11).
             if (appStoreBundleDefinition.Id == StarterHouse.BundleLeftOffTheShelf(_housingOptions, _resourceManager.Zones))
                 return SendOrderResult(connection, packetInGamePurchasePlaceOrderResponse, InGamePurchaseOrderResult.OrderFailure);
 

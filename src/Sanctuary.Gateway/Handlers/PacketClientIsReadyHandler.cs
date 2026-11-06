@@ -48,7 +48,7 @@ public static class PacketClientIsReadyHandler
         // its own instance list, and a second one after it may override what the client needs to decorate.
         if (connection.Player.Zone is not Sanctuary.Game.Zones.HousingZone)
         {
-            // Evergrove: every account owns a free Apartment (docs/design/evergrove-housing.md, section 10). The session's
+            // Evergrove: every account owns a free Apartment (docs/design/evergrove-housing.md, section 11). The session's
             // first world login gives one to an account that has none, before the list goes out, so My Houses shows it
             // without a relog. A login always starts in the world.
             if (connection.Player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.StarterHouse))

@@ -38,7 +38,7 @@ public enum HouseDoorResult
 
 /// <summary>
 /// Evergrove: a Housing door (<see cref="HouseDoors"/>) takes whoever clicks it into their account's own house
-/// (<c>docs/design/evergrove-housing.md</c>, section 10). It never shows the door's quest buttons: a quest step at the
+/// (<c>docs/design/evergrove-housing.md</c>, section 11). It never shows the door's quest buttons: a quest step at the
 /// door is completed just before the move into the house (<see cref="IQuestManager.AdvanceTalkStepsAt"/>), so only a
 /// player who really goes in completes it.
 /// </summary>

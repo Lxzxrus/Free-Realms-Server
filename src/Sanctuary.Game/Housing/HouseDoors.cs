@@ -9,7 +9,7 @@ namespace Sanctuary.Game.Housing;
 
 /// <summary>
 /// Evergrove: the Housing doors, NPCs that take whoever clicks them into their account's own house
-/// (<see cref="HouseDoorService"/>, <c>docs/design/evergrove-housing.md</c>, section 10). Doors are matched on
+/// (<see cref="HouseDoorService"/>, <c>docs/design/evergrove-housing.md</c>, section 11). Doors are matched on
 /// <c>Npc.DefinitionId</c>, their <c>Npcs.json</c> id, as job trainers are. Another door needs only its row there, its
 /// <c>spawnFixedNpc</c> in a zone script and its id here.
 /// </summary>

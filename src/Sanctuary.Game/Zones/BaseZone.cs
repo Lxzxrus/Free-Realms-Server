@@ -982,6 +982,13 @@ public abstract class BaseZone : IZone, IDisposable
         foreach (var notification in definition.Notifications)
             npc.Notifications.Add(Sanctuary.Game.Helpers.InteractionMenuHelper.GetNotification(npc.Guid, notification));
 
+        // Evergrove: a world object that opens games walks the player over when clicked from afar, as a quest NPC does.
+        Minigames.GameStations.SetUp(npc);
+
+        // Evergrove: and wears its kind's badge and cursor while it has a game to open, no minigame badge while it hasn't.
+        Minigames.GameStations.ShowWhatItOpens(npc, _resourceManager.ClientActivityDefinitions,
+            activityId => Minigames.PlayableActivities.IsPlayable(_resourceManager, activityId));
+
         if (!TryRegisterEntity(_npcs, npc))
         {
             npc = null;

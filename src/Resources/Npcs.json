@@ -41449,6 +41449,50 @@
     "ModelFileName": "dwarf_f_bikerthug.adr"
   },
   {
+    "Id": 90001,
+    "NameId": 2061,
+    "Name": "Cooking Table",
+    "ModelId": 419,
+    "ModelFileName": "sg_cooking_table_nodes_01.adr"
+  },
+  {
+    "Id": 90002,
+    "NameId": 2061,
+    "Name": "Cooking Table",
+    "ModelId": 419,
+    "ModelFileName": "sg_cooking_table_nodes_01.adr"
+  },
+  {
+    "Id": 90003,
+    "NameId": 2061,
+    "Name": "Cooking Table",
+    "ModelId": 419,
+    "ModelFileName": "sg_cooking_table_nodes_01.adr"
+  },
+  {
+    "Id": 90004,
+    "NameId": 2061,
+    "Name": "Cooking Table",
+    "ModelId": 419,
+    "ModelFileName": "sg_cooking_table_nodes_01.adr",
+    "Scale": 1.27
+  },
+  {
+    "Id": 90005,
+    "NameId": 2061,
+    "Name": "Cooking Table",
+    "ModelId": 419,
+    "ModelFileName": "sg_cooking_table_nodes_01.adr"
+  },
+  {
+    "Id": 90006,
+    "NameId": 2061,
+    "Name": "Cooking Table",
+    "ModelId": 419,
+    "ModelFileName": "sg_cooking_table_nodes_01.adr",
+    "Scale": 1.37
+  },
+  {
     "Id": 90101,
     "NameId": 437413,
     "Name": "Housing",

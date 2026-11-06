@@ -33,7 +33,7 @@ public enum HouseGrantResult
 /// Evergrove: the one way a house is added, whether a Marketplace order buys it (PacketInGamePurchasePlaceOrderPacketHandler)
 /// or the account is given its free starter house (<see cref="IHouseManager.EnsureStarterHouse"/>). Nothing else adds a
 /// house, and only deleting the character who holds one takes it away (<c>docs/design/evergrove-housing.md</c>, sections
-/// 2 and 10).
+/// 2 and 11).
 /// </summary>
 public static class HouseGrants
 {

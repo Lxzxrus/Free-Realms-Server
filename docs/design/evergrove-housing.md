@@ -35,7 +35,7 @@ Numbers marked *(placeholder)* are starting values to tune after real players ar
 - **Every account owns a free Apartment**, its home to start with: a personal plot like any other house. At login,
   an account whose characters own no Apartment gets one on the character logging in, whatever other lots it has. It's
   free whatever `Housing:FreeLots` says, and it's a bare house: no deed item, no fixtures, no coins or Station Cash.
-  Section 10 has the details.
+  Section 11 has the details.
 - **Losing a house never pays, and no way of losing one ever may.** Nothing sells, refunds, trades or abandons a house:
   a house isn't an item, and creative fixtures never become items. So a house is worth nothing but the time its build
   took, and a free Apartment that comes back after its character is deleted is worth nothing either. A way to lose a
@@ -85,7 +85,7 @@ A plot with few votes is pulled towards the overall average, so it needs real su
 - The winner joins the **Hall of Fame**. A winner can't win 1st place again for **4 weeks** *(placeholder)*; their
   plot can still be visited and voted on, and the next plot takes the prize.
 - **Prizes go to accounts, not houses.** A house can be lost and another made: an account whose Apartment goes with a
-  deleted character gets a new one under a new house id (section 10). So phase 4 keys each prize, and the 4-week wait
+  deleted character gets a new one under a new house id (section 11). So phase 4 keys each prize, and the 4-week wait
   after a win, by the plot's account, never by its house, and pays the 25 for an entry only for a build that isn't
   empty.
 - The **featured house** in the client's directory shows last week's winner.
@@ -132,7 +132,7 @@ Station Cash stays the **premium currency**, but it's **earned, never bought**: 
 | Votes | **Per account per week (task 32):** one vote per account per ranked plot per week, changeable, eligibility rules. See section 8 |
 | Rating | **Weekly vote-weighted score (task 32)**, worked out from this week's votes when it's shown. See section 8 |
 | Featured house | Top of the directory sort. Needs: last week's confirmed winner |
-| Houses | One per account per lot type, and no limit on how many lots. **Personal and ranked plots (task 32):** one ranked plot per account. **Shared (task 35):** every character on the account enters, builds in and manages all its houses. See section 8. **A free Apartment for every account**, and the Housing door behind Samantha (first hour, P5). See section 10 |
+| Houses | One per account per lot type, and no limit on how many lots. **Personal and ranked plots (task 32):** one ranked plot per account. **Shared (task 35):** every character on the account enters, builds in and manages all its houses. See section 8. **A free Apartment for every account**, and the Housing door behind Samantha (first hour, P5). See section 11 |
 | Fixtures | **Free (PR #19):** `Housing:CreativeMode` offers all 1,706 placeable fixtures, unlimited; each placed piece records `IsCreative`, so it never returns an item. Wallpapers, floors and lots (`Housing:FreeLots`) are free. Dyeable pieces appear once, in their default colour |
 | Station Cash | A per-character balance with no way to earn it. Needs everything in section 4 |
 | Experience and levels | Not yet. OSFR PR #120 |
@@ -158,9 +158,9 @@ Each phase becomes cloud tasks once the one before it has been playtested.
 - What happens to a build when a plot changes lot type.
 - Deleting the character who bought a house still deletes the house, although it's the account's (section 8). It could
   move to another character on the account, or the deletion could be refused while the account has other characters.
-  Every account now has an Apartment, held by one of its characters (section 10), so this comes up more often: while
+  Every account now has an Apartment, held by one of its characters (section 11), so this comes up more often: while
   it stands, deleting that character loses the Apartment's build, and the next login brings a new, empty Apartment.
-- Which character holds an account's granted Apartment: the one logging in when it's given (as built, section 10), or
+- Which character holds an account's granted Apartment: the one logging in when it's given (as built, section 11), or
   the account's oldest, so that on an older account it sits with the character the player has had longest. The holder
   is who visitors see as the owner, and whose friends may come in while it's locked.
 
@@ -251,7 +251,19 @@ featured winner, reports) is not built.
   So none of a player's characters can vote for their own ranked plot, while anyone else's account can. Staff have no
   special voting rule.
 
-## 10. As built: the starter Apartment and the Housing door (first hour, P5)
+## 10. As built: games inside a house
+
+- **No game with a start screen opens inside a house**: neither a Flash minigame (match three, Cooking) nor, for now, a
+  fishing hole. The client shows no Flash minigame's start screen in a house, so a game opened there would show
+  nothing and the player wouldn't know why. Whether a fishing hole's start screen shows there is **unverified**: it is
+  sent differently (`FishingHandler.Join`), and nobody has checked. Ariel, who played the original, is asked whether
+  fishing worked from inside a house; if it did, holes open there again. The Games menu is on the dock inside a house
+  too: a pick there opens nothing, and the chat says "Games can't be played inside a house. Step outside to play."
+  (`ActivityLaunchChecks`). The daily wheel, switched off for now, isn't checked.
+- Nothing in a house offers a game itself. The objects that open games (cooking tables, postboxes, anvils, a farm's
+  tools, a fishing spot) and the quest NPCs who offer a step's game are in Fabled Realms.
+
+## 11. As built: the starter Apartment and the Housing door (first hour, P5)
 
 - **Who gets one.** Every account none of whose characters owns an Apartment (zone 1024, entry 24 of `Houses.json`),
   including one that owns other lots: in the original everyone had an Apartment, and an account whose only houses are
