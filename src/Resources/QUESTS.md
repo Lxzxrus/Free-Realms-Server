@@ -207,7 +207,7 @@ A target's `DialogueId` (with `ResponseId`) gives that NPC its own line.
 A Housing door (`Housing.HouseDoors`; the one behind Samantha is `90101`) takes whoever clicks it into their
 account's own house. A talk goal whose NPC is a door is completed as the player really goes in, just before the
 move into the house (`IQuestManager.AdvanceTalkStepsAt`), so a click that doesn't take them in completes nothing.
-A door's click never opens the quest's menu, so:
+A door's click never opens the quest's menu, and a door offers no quest buttons however it's reached, so:
 
 - **A door's step is never the quest's last**, not even beside the last talk (`WithPrevious`): the hand-in
   can't follow the player into the house. Bring them back to an NPC for it, as Samantha's Housing (9100) does:

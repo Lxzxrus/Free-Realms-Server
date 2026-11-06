@@ -104,7 +104,7 @@ public sealed class QuestDoorStepTests
 
     /// <summary>
     /// Nobody stands at a door to say a line, and a conversation would be cut off by the zone change, so none plays even
-    /// if the step has one. Clicking an NPC for the same step plays it, so the test would see one.
+    /// if the step has one. The same step at an NPC the player talks to plays it from its button, so the test would see one.
     /// </summary>
     [TestMethod]
     public void NoLinePlays()
@@ -116,12 +116,44 @@ public sealed class QuestDoorStepTests
         Assert.IsNull(_world.Player.QuestConversation.Current);
         Assert.AreEqual(0UL, _world.Player.QuestConversation.TalkingNpcGuid);
 
-        _world.Quests.ResetQuest(_world.Player, 1);
-        _world.Accept(ThroughTheDoor(doorLine: DoorLine));
+        _world.Accept(new QuestDefinition
+        {
+            QuestId = 2,
+            GiverNpcId = Samantha,
+            TargetNpcId = Samantha,
+            Goals = [Talk(DoorStep, Ricky, DoorLine), Talk(BackToSamantha, Samantha)]
+        });
 
-        _world.Quests.GetInteractionOptions(_world.Player, NpcOf(Door)).Single().Invoke(_world.Player);
+        _world.Quests.GetInteractionOptions(_world.Player, NpcOf(Ricky)).Single().Invoke(_world.Player);
 
         Assert.AreEqual(DoorLine, _world.Player.QuestConversation.Current?.TextId, "Clicked, the step's line plays.");
+    }
+
+    /// <summary>
+    /// A door offers no quest buttons, whatever the quest data says: a button for its step would complete the step without
+    /// going in. The Gateway hands a door's click to the door before the quest buttons are asked for, and this holds
+    /// whichever way a click arrives, even for a quest the door would give, as no shipped quest may.
+    /// </summary>
+    [TestMethod]
+    public void ADoor_OffersNoQuestButtons()
+    {
+        var progress = _world.Accept(ThroughTheDoor());
+
+        var givenAtTheDoor = _world.Add(new QuestDefinition
+        {
+            QuestId = 2,
+            GiverNpcId = Door,
+            TargetNpcId = Samantha,
+            Goals = [Talk(BackToSamantha, Samantha)]
+        });
+        _world.Resources.Quests.ByGiver.GetOrAdd(Door, _ => []).Add(givenAtTheDoor.QuestId);
+
+        Assert.AreEqual(0, _world.Quests.GetInteractionOptions(_world.Player, NpcOf(Door)).Count, "No step's button, and no offer.");
+        Assert.AreEqual(0, progress.GoalIndex, "The step waits for the player to go in.");
+
+        // Samantha, given the same quest to offer, offers it.
+        _world.Resources.Quests.ByGiver.GetOrAdd(Samantha, _ => []).Add(givenAtTheDoor.QuestId);
+        Assert.AreEqual(1, _world.Quests.GetInteractionOptions(_world.Player, NpcOf(Samantha)).Count);
     }
 
     /// <summary>
