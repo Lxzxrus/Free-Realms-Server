@@ -178,8 +178,9 @@ counts only while the step is open; a game won before is not remembered. A step 
 saves each as it counts, so a relog keeps them.
 
 `NpcId` is the NPC who offers the game while the step is open: clicking them opens its start screen the
-way the Games menu does (`IActivityLauncher`, with the menu's checks: with another game or the wheel
-open, nothing opens and the chat tells the player to finish or close it first), and the step's marker,
+way the Games menu does (`IActivityLauncher`, with the menu's checks: with a game the player has started
+or the wheel open, nothing opens and the chat tells them to finish or close it first, while a start
+screen left open before Go gives way to the new one), and the step's marker,
 Take Me There and "?" point at them, as a talk step's do. With nothing else on their menu
 the game opens at the click; beside other options (a trainer's job, another quest's game) it is one more
 button, the game's name as the Games menu lists it (the activity's `NameId`, such as 386024 for the
