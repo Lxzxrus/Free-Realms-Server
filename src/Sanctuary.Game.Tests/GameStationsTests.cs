@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Core.Helpers;
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.Mimic;
@@ -197,7 +198,8 @@ public sealed class GameStationsTests
     /// <summary>
     /// Evergrove's own tables are copies of Sanctuary's (2417), each defined and spawned once under an id no upstream NPC
     /// uses: Npcs.json's loader keeps the first of two rows with one id, and a second spawn of an id is refused, its GUID
-    /// being taken. Each GUID is a fixed one, below the counters zones hand out to the NPCs they make.
+    /// being taken. Each GUID is a fixed one, below the counters zones hand out to the NPCs they make. Evergrove's only
+    /// other NPCs up there are its Housing doors (<see cref="HouseDoors"/>), which <see cref="HouseDoorTests"/> checks.
     /// </summary>
     [TestMethod]
     public void EvergrovesOwnTables_CollideWithNothing()
@@ -206,7 +208,8 @@ public sealed class GameStationsTests
         var definedIds = npcsFile.RootElement.EnumerateArray().Select(npc => npc.GetProperty("Id").GetInt32()).ToList();
         var sanctuarysTable = _npcs[2417];
 
-        Assert.IsTrue(definedIds.Except(EvergrovesTables).All(id => id < EvergrovesTables.Min()), "An upstream NPC has an id in Evergrove's range.");
+        Assert.IsTrue(definedIds.Except(EvergrovesTables).Except(HouseDoors.Ids).All(id => id < EvergrovesTables.Min()),
+            "An upstream NPC has an id in Evergrove's range.");
 
         foreach (var npcId in EvergrovesTables)
         {

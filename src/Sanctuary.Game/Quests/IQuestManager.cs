@@ -15,6 +15,13 @@ public interface IQuestManager
 
     void OnEvent(Player player, QuestEvent questEvent);
 
+    /// <summary>
+    /// Evergrove: completes each quest's open talk step at the NPC, without a line, for an NPC the player goes through
+    /// rather than talks to, such as a Housing door, just before the move. A step in a quest's last step is left open and
+    /// logged: completing it could hand the quest in, and the hand-in can't follow the player through.
+    /// </summary>
+    void AdvanceTalkStepsAt(Player player, Npc npc);
+
     bool CanGatherQuestNode(Player player, CollectionNode node);
 
     void AcceptQuest(Player player, int questId);

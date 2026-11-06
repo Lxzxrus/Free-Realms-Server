@@ -144,6 +144,7 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
 
     serviceCollection.AddSingleton<IHouseManager, HouseManager>();
     serviceCollection.AddSingleton<HouseInvites>();
+    serviceCollection.AddSingleton<HouseDoorService>();
     serviceCollection.AddSingleton<HousingCreativeCatalog>();
     serviceCollection.AddSingleton<TradeOptions>();
     serviceCollection.AddSingleton<ITradeCommitter, TradeCommitter>();

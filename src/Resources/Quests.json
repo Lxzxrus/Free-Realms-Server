@@ -2614,7 +2614,7 @@
     "RewardExperience": 70,
     "RewardItems": [],
     "PrerequisiteQuestId": 1801,
-    "NextQuestId": 9101,
+    "NextQuestId": 9100,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
     "Goals": [
@@ -2623,6 +2623,48 @@
         "NameId": 100150,
         "DescriptionId": 94264,
         "DialogueId": 94265,
+        "Targets": [
+          {
+            "NpcId": 2045
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Housing",
+    "QuestId": 9100,
+    "TitleId": 437413,
+    "DescriptionId": 436644,
+    "GiverDialogueId": 436644,
+    "ObjectiveDescriptionId": 437741,
+    "IconId": 43278,
+    "GiverNpcId": 2045,
+    "TargetNpcId": 2045,
+    "RewardCoins": 10,
+    "RewardExperience": 50,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3290,
+    "NextQuestId": 9101,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Evergrove's first hour (P5): Samantha sends you through the Housing door behind her (Npcs.json 90101) into your own house, the free Apartment every account owns, and back to her. Her offer is the 2012 housing booth's pitch for housing (436644), which ends by pointing at the door beside whoever says it; the objective (437741) and the door step's rows (437426, 437367) are from the same tour. The door step is completed as the player really goes in, just before the move into the house (Housing.HouseDoorService), so it says nothing, and it can't be the last step, as the hand-in can't follow the player in: the quest ends back with Samantha (94363, 46177), whose welcome back (78487) is the turn-in line.",
+    "Goals": [
+      {
+        "Type": 0,
+        "NameId": 437426,
+        "DescriptionId": 437367,
+        "Targets": [
+          {
+            "NpcId": 90101
+          }
+        ]
+      },
+      {
+        "Type": 0,
+        "NameId": 94363,
+        "DescriptionId": 46177,
+        "DialogueId": 78487,
         "Targets": [
           {
             "NpcId": 2045
@@ -2644,7 +2686,7 @@
     "RewardCoins": 25,
     "RewardExperience": 60,
     "RewardItems": [],
-    "PrerequisiteQuestId": 3290,
+    "PrerequisiteQuestId": 9100,
     "NextQuestId": 9102,
     "NotificationAvailable": 2,
     "NotificationActive": 6,

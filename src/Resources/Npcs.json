@@ -41491,5 +41491,16 @@
     "ModelId": 419,
     "ModelFileName": "sg_cooking_table_nodes_01.adr",
     "Scale": 1.37
+  },
+  {
+    "Id": 90101,
+    "NameId": 437413,
+    "Name": "Housing",
+    "ModelId": 846,
+    "ModelFileName": "sg_exit_door_01.adr",
+    "Scale": 1.2,
+    "HasCursor": true,
+    "CursorId": 17,
+    "Comment": "Evergrove's first hour (P5): the Housing door behind Samantha in Cobblestone Village (Housing.HouseDoors). A click takes the player into their account's own house. The model is the original's floating exit door, at the size Exit (34061) has. For the Cobblestone wood-frame house door instead, make ModelId 4089 and ModelFileName hsg_singledoor_3x3.adr, add TextureAlias cobblestone-woodframe, and drop Scale."
   }
 ]

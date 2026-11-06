@@ -8,6 +8,7 @@ using System.Text.Json;
 
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
 
@@ -141,6 +142,11 @@ public class QuestDefinitionCollection
                     index.ByTarget.GetOrAdd(entry.TargetNpcId, _ => []).Add(entry.QuestId);
 
                 IndexGoals(index, entry, filePath);
+
+                // Evergrove: a Housing door's click takes the player into their house, completing a talk step there as they
+                // go in, and does nothing else for a quest (Housing.HouseDoors).
+                foreach (var problem in HouseDoors.QuestProblems(entry))
+                    _logger.LogWarning("Quest {id} {problem} in \"{file}\"; a Housing door only completes a talk step, without a line, as the player goes in, and never a quest's last.", entry.QuestId, problem, filePath);
 
                 foreach (var stateNpcId in entry.StateNpcIds())
                     index.ByStateNpc.GetOrAdd(stateNpcId, _ => []).Add(entry.QuestId);

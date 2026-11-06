@@ -12,6 +12,7 @@ using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Interactions;
 using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Minigames;
@@ -85,6 +86,14 @@ public sealed class QuestManager : IQuestManager
     public List<NpcInteractionOption> GetInteractionOptions(Player player, Npc npc)
     {
         var options = new List<NpcInteractionOption>();
+
+        // Evergrove: a Housing door offers no quest buttons, whatever the quest data says. Its click takes the player into
+        // their house, completing a talk step there as they go in (AdvanceTalkStepsAt); a button would complete the step
+        // without going in. The Gateway hands a door's click to the door before it could get here, and this keeps it so
+        // whichever way a click arrives.
+        if (HouseDoors.IsDoor(npc.DefinitionId))
+            return options;
+
         var quests = _resourceManager.Quests;
 
         foreach (var progress in player.Quests.InProgress)
@@ -273,6 +282,40 @@ public sealed class QuestManager : IQuestManager
 
             if (questEvent.CreditsOneQuest)
                 return;
+        }
+    }
+
+    // Evergrove: a talk step at an NPC the player goes through, such as a Housing door, is completed as they go, just
+    // before the move into the house (IHouseManager.EnterHouse's beforeTeleport). The door never shows the quest's own
+    // button (GetInteractionOptions), which would complete the step without going in. Nobody is there to say a line, so
+    // none plays. The quest's last step is left alone: completing it could hand the quest in, and its reward window
+    // can't survive the zone change that follows. OnEvent(NpcTalkedEvent) would hand it in, so this doesn't go through it.
+    public void AdvanceTalkStepsAt(Player player, Npc npc)
+    {
+        foreach (var progress in player.Quests.InProgress.OrderBy(progress => progress.QuestId))
+        {
+            if (!_resourceManager.Quests.TryGet(progress.QuestId, out var quest))
+                continue;
+
+            var goalIndex = TalkGoalHere(quest, progress, npc);
+
+            if (goalIndex < 0)
+                continue;
+
+            if (goalIndex >= quest.StepStartOf(quest.Goals.Count - 1))
+            {
+                _logger.LogWarning("Quest {questId}'s step {goalId} at npc {npcId} wasn't completed for character {characterId}: " +
+                    "it's in the quest's last step, and the hand-in can't follow the player through.",
+                    quest.QuestId, quest.Goals[goalIndex].NameId, npc.DefinitionId, player.CharacterId);
+                continue;
+            }
+
+            var result = quest.Goals[goalIndex].Progress(quest, new NpcTalkedEvent(npc), progress.ProgressFor(goalIndex));
+
+            if (result == QuestGoalResult.Completed)
+                CompleteGoal(player, quest, progress, goalIndex, npc, playDialogue: false);
+            else if (result == QuestGoalResult.Progressed)
+                ApplyProgress(player, quest, progress, goalIndex, result, npc);
         }
     }
 

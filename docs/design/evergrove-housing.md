@@ -32,6 +32,15 @@ Numbers marked *(placeholder)* are starting values to tune after real players ar
 - Each plot can use any lot type (seaside, snowhill, and so on), and the owner can switch lot type.
   *(Open: what happens to a build when the lot type changes. Simplest is to keep both builds and let the player
   switch back.)*
+- **Every account owns a free Apartment**, its home to start with: a personal plot like any other house. At login,
+  an account whose characters own no Apartment gets one on the character logging in, whatever other lots it has. It's
+  free whatever `Housing:FreeLots` says, and it's a bare house: no deed item, no fixtures, no coins or Station Cash.
+  Section 11 has the details.
+- **Losing a house never pays, and no way of losing one ever may.** Nothing sells, refunds, trades or abandons a house:
+  a house isn't an item, and creative fixtures never become items. So a house is worth nothing but the time its build
+  took, and a free Apartment that comes back after its character is deleted is worth nothing either. A way to lose a
+  house that paid anything would turn the free Apartment into coins. For the same reason, **never port the original's
+  rule that a loot card for a lot the player already owns can be cashed in for coins** (client row 69992).
 
 ## 3. The weekly competition
 
@@ -75,6 +84,10 @@ A plot with few votes is pulled towards the overall average, so it needs real su
   least 5 votes, so everyone who takes part gains something.
 - The winner joins the **Hall of Fame**. A winner can't win 1st place again for **4 weeks** *(placeholder)*; their
   plot can still be visited and voted on, and the next plot takes the prize.
+- **Prizes go to accounts, not houses.** A house can be lost and another made: an account whose Apartment goes with a
+  deleted character gets a new one under a new house id (section 11). So phase 4 keys each prize, and the 4-week wait
+  after a win, by the plot's account, never by its house, and pays the 25 for an entry only for a build that isn't
+  empty.
 - The **featured house** in the client's directory shows last week's winner.
 
 ### Moderation
@@ -119,7 +132,7 @@ Station Cash stays the **premium currency**, but it's **earned, never bought**: 
 | Votes | **Per account per week (task 32):** one vote per account per ranked plot per week, changeable, eligibility rules. See section 8 |
 | Rating | **Weekly vote-weighted score (task 32)**, worked out from this week's votes when it's shown. See section 8 |
 | Featured house | Top of the directory sort. Needs: last week's confirmed winner |
-| Houses | One per account per lot type, and no limit on how many lots. **Personal and ranked plots (task 32):** one ranked plot per account. **Shared (task 35):** every character on the account enters, builds in and manages all its houses. See section 8 |
+| Houses | One per account per lot type, and no limit on how many lots. **Personal and ranked plots (task 32):** one ranked plot per account. **Shared (task 35):** every character on the account enters, builds in and manages all its houses. See section 8. **A free Apartment for every account**, and the Housing door behind Samantha (first hour, P5). See section 11 |
 | Fixtures | **Free (PR #19):** `Housing:CreativeMode` offers all 1,706 placeable fixtures, unlimited; each placed piece records `IsCreative`, so it never returns an item. Wallpapers, floors and lots (`Housing:FreeLots`) are free. Dyeable pieces appear once, in their default colour |
 | Station Cash | A per-character balance with no way to earn it. Needs everything in section 4 |
 | Experience and levels | Not yet. OSFR PR #120 |
@@ -132,7 +145,8 @@ Each phase becomes cloud tasks once the one before it has been playtested.
 2. **Plots:** two per account, personal and ranked.
 3. **Voting and scoring:** per-account weekly votes with eligibility rules, and the vote-weighted score.
 4. **Competition cycle:** weeks, themes, the results list, staff confirmation, prizes, Hall of Fame, featured
-   winner, reports and unpublishing.
+   winner, reports and unpublishing. Prizes and the wait after a win go by account, and an empty build wins no entry
+   prize (section 3).
 5. **Station Cash economy:** binding and non-transferability, Marketplace prices, daily rewards and quest rewards.
    Level milestones follow when an experience system exists.
 
@@ -144,6 +158,12 @@ Each phase becomes cloud tasks once the one before it has been playtested.
 - What happens to a build when a plot changes lot type.
 - Deleting the character who bought a house still deletes the house, although it's the account's (section 8). It could
   move to another character on the account, or the deletion could be refused while the account has other characters.
+  Every account now has an Apartment, held by one of its characters (section 11), so this comes up more often: while
+  it stands, deleting that character loses the Apartment's build, and the next login brings a new, empty Apartment.
+- Which character holds an account's granted Apartment: the one logging in when it's given (as built, section 11), or
+  the account's oldest, so that on an older account it sits with the character the player has had longest. The holder
+  is who visitors see as the owner, and its friends are the only visitors let in without an invite while the Apartment
+  is unpublished (as a new one is) or locked.
 
 ## 8. As built: plots, shared houses and weekly voting (tasks 32 and 35)
 
@@ -243,3 +263,54 @@ featured winner, reports) is not built.
   (`ActivityLaunchChecks`). The daily wheel, switched off for now, isn't checked.
 - Nothing in a house offers a game itself. The objects that open games (cooking tables, postboxes, anvils, a farm's
   tools, a fishing spot) and the quest NPCs who offer a step's game are in Fabled Realms.
+
+## 11. As built: the starter Apartment and the Housing door (first hour, P5)
+
+- **Who gets one.** Every account none of whose characters owns an Apartment (zone 1024, entry 24 of `Houses.json`),
+  including one that owns other lots: in the original everyone had an Apartment, and an account whose only houses are
+  on lots the server no longer serves would otherwise have none it could enter. Existing accounts get theirs at their
+  next login.
+- **When.** At the first world login of each session, on the character logging in, before the house list goes out:
+  My Houses lists the Apartment from the first minute, without a relog. A grant that fails (the database out of reach
+  for a moment) never stops the login; the next login tries again, and so does the Housing door.
+- **Who holds it.** The character it's given on: on a new account its first character, on an older one whichever of
+  its characters is the first to log in once the server gives Apartments. As with any house (section 8), that
+  character is the one visitors see as the owner: the directory shows its name, `!house visit apartment <name>` and
+  "Go to House" find the Apartment under it, and its friends are the only visitors let in without an invite while the
+  Apartment is unpublished (as a new one is) or locked. Every character on the account still enters, builds in and
+  manages it. The player can't choose or change the holder, so an older account's Apartment may sit with a character
+  it seldom plays (section 7).
+- **What is saved.** One `Houses` row with every default: a personal plot, unpublished, unlocked, not members-only, no
+  name (it shows as "Apartment"). Nothing else: no deed item, no fixtures, no coins or Station Cash, even with
+  `Housing:FreeLots` off. It goes through the same serializable transaction as a Marketplace order (`HouseGrants`),
+  which refuses a lot any character on the account has, so a relog, or two characters logging in at once, gets no
+  second one. If a race ever got through, the account would have two empty Apartments, which is harmless.
+- **Once per account, with no record of it.** Owning one is the record. No column says an account was given one,
+  because a house is worth nothing (section 2): an account whose Apartment went with a deleted character gets a new,
+  empty one at its next login, and nothing else. A record would only be worth having if the Apartment ever came with
+  something of value, and it never may.
+- **Told in one line.** A grant at login says so in chat, and how to get in: My Houses, or `!house enter apartment`. A
+  character with no quests yet isn't told, as the welcome line sends them to Samantha, whose Housing quest takes them
+  there.
+- **The Marketplace.** While the grant is on, the Apartment is left off the Lots & Farms shelf, since every account has
+  one, and an order for it is refused at no charge.
+- **The Housing door.** A door named Housing stands behind Samantha in Cobblestone Village (`HouseDoors`). Clicking it
+  walks the player up to it, then takes them into their account's own house: straight in with one; with several, a
+  menu of at most 6, the ranked plot first, then by when anyone last went in, a house nobody has entered counting from
+  when it was made, so a lot just bought comes first (My Houses lists them all). An account still without its
+  Apartment (its grant at login failed) is given it there first. Anyone can use it, any time; it never shows quest
+  buttons. Each click it answers reads the account's houses, so it answers a player at most every half second. More
+  doors need only an `Npcs.json` row, a spawn and an id in `HouseDoors`.
+- **The Housing quest** (9100, Samantha → the door → Samantha) comes between Back for More and Samantha's Mail. The
+  door step is ticked as the player really goes in, just before the zone change, so nothing quest-related happens in
+  the house, and a refused entry ticks nothing. It pays 10 coins and 50 stars, once per character, like any quest.
+
+The setting is in the Gateway's `Housing` section (`gateway.json`, documented in `gateway.local.example.json`), read at
+startup. The Gateway's startup line names the starter house, or says it's off, and it warns there about a setting that
+leaves new players without a house: an id that names no lot the server serves, or the grant off while lots aren't free.
+The Housing quest's door step needs a house to go into, so **turn the grant off only while `Housing:FreeLots` is on**:
+otherwise a new player can't finish it, nor the quests after it.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `Housing:StarterHouseZoneId` | 1024 | The lot every account is given, by its zone id (1024 is the Apartment). 0 turns the grant off and puts the lot back on the shelf; so does an id that isn't a lot the server serves |

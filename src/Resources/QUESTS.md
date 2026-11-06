@@ -207,6 +207,28 @@ Murglot's patch:
 
 A target's `DialogueId` (with `ResponseId`) gives that NPC its own line.
 
+### A step at a Housing door
+
+A Housing door (`Housing.HouseDoors`; the one behind Samantha is `90101`) takes whoever clicks it into their
+account's own house. A talk goal whose NPC is a door is completed as the player really goes in, just before the
+move into the house (`IQuestManager.AdvanceTalkStepsAt`), so a click that doesn't take them in completes nothing.
+A door's click never opens the quest's menu, and a door offers no quest buttons however it's reached, so:
+
+- **A door's step is never the quest's last**, not even beside the last talk (`WithPrevious`): the hand-in
+  can't follow the player into the house. Bring them back to an NPC for it, as Samantha's Housing (9100) does:
+
+  ```json
+  { "Type": 0, "NameId": 437426, "DescriptionId": 437367, "Targets": [ { "NpcId": 90101 } ] },
+  { "Type": 0, "NameId": 94363, "DescriptionId": 46177, "DialogueId": 78487, "Targets": [ { "NpcId": 2045 } ] }
+  ```
+
+- **It says nothing**: no `DialogueId`, `Dialogue`, target `DialogueId` or `CompleteAfterDialogue`. Nobody stands
+  at a door to say a line, and the move would cut it off. The step's `DescriptionId` can say what to do.
+- **A door doesn't give or take a quest**, isn't one of a counted talk's NPCs, and doesn't offer a step's game.
+
+The loader warns about a quest that breaks any of these, and the test
+`HouseDoorTests.ShippedQuests_UseDoorsOnlyForStepsCompletedOnTheWayIn` fails on one.
+
 ## Conversations
 
 A talk goal's NPC says its `DialogueId` as one line. For more, give the goal a `Dialogue`: lines shown one

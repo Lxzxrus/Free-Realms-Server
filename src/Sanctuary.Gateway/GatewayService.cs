@@ -146,11 +146,16 @@ public class GatewayService : BackgroundService
             : 0;
 
         _logger.LogInformation(
-            "Housing: creative mode {CreativeMode} ({CreativeFixtures} fixtures, list limit {CreativeCatalogLimit}), free lots {FreeLots}.",
+            "Housing: creative mode {CreativeMode} ({CreativeFixtures} fixtures, list limit {CreativeCatalogLimit}), free lots {FreeLots}, starter house {StarterHouse}.",
             housingOptions.CreativeMode ? "on" : "off",
             creativeFixtures,
             housingOptions.CreativeCatalogLimit,
-            housingOptions.FreeLots ? "on" : "off");
+            housingOptions.FreeLots ? "on" : "off",
+            StarterHouse.Describe(housingOptions, _resourceManager.Zones));
+
+        // Evergrove: a starter house setting that leaves new players without a house is said now, not at the first login.
+        foreach (var problem in StarterHouse.Problems(housingOptions, _resourceManager.Zones, _resourceManager.Quests))
+            _logger.LogWarning("Housing: {problem}", problem);
 
         // The ranked-plot competition's settings. A time zone this machine doesn't know would stop every vote, so refuse
         // to start instead.

@@ -8,10 +8,13 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Packet.Common;
+using Sanctuary.Packet.Common.GameCommerce;
 
 namespace Sanctuary.Game.Tests;
 
@@ -166,6 +169,50 @@ public sealed class HousingLotZoneTests
             // The bundle's name is what the shelf shows: it must name what it sells.
             Assert.AreEqual(deed.NameId, bundle.NameId, $"{label}: bundle {bundle.Id} is named for something else.");
         }
+    }
+
+    /// <summary>
+    /// The shelf the Marketplace sends (<see cref="MarketplaceShelf"/>), from the shipped store: every lot the server
+    /// serves, free while lots are, except the Apartment while every account is given it (P5, Nate's decision 5). With the
+    /// grant off it's back, free like the rest, and nothing else on the shelf changes. No lot the server doesn't serve is
+    /// offered.
+    /// </summary>
+    [TestMethod]
+    public void TheShelf_OffersEveryServedLotFree_ButTheApartmentEveryAccountIsGiven()
+    {
+        Assert.IsTrue(_stores.TryGetValue(MainStoreId, out var store));
+
+        Dictionary<int, AppStoreBundleDefinition> Shelf(HousingOptions options) =>
+            MarketplaceShelf.Offered(store, _items, _zones, options).ToDictionary(bundle => bundle.Id);
+
+        var granting = Shelf(new HousingOptions());
+        var notGranting = Shelf(new HousingOptions { StarterHouseZoneId = 0 });
+        var apartment = HousingZones().Single(zone => zone.Id == 1024);
+
+        Assert.IsFalse(granting.ContainsKey(apartment.StoreBundleId), "Every account is given the Apartment, so it isn't offered.");
+        CollectionAssert.AreEquivalent(granting.Keys.Append(apartment.StoreBundleId).ToList(), notGranting.Keys.ToList(),
+            "The setting changes nothing else on the shelf.");
+
+        foreach (var zone in HousingZones())
+        {
+            var shelf = zone.Id == apartment.Id ? notGranting : granting;
+
+            Assert.IsTrue(shelf.TryGetValue(zone.StoreBundleId, out var bundle), $"{zone.DisplayName} isn't offered.");
+            Assert.AreEqual(0, bundle.Price + bundle.MembersOnlyPrice + bundle.AltCurrencyPrice, $"{zone.DisplayName} isn't free.");
+        }
+
+        var servedLots = HousingZones().Select(zone => zone.StoreBundleId).ToHashSet();
+        var lotsOffered = notGranting.Values.Where(bundle => bundle.Entries.Any(entry =>
+            _items.TryGetValue(entry.MarketingItemId, out var item) && item.Type == HouseItemType)).ToList();
+
+        Assert.IsTrue(lotsOffered.All(bundle => servedLots.Contains(bundle.Id)), "A lot the server doesn't serve is offered.");
+        Assert.IsTrue(store.Bundles.Values.Count(bundle => bundle.Entries.Any(entry =>
+            _items.TryGetValue(entry.MarketingItemId, out var item) && item.Type == HouseItemType)) > lotsOffered.Count,
+            "The store sells lots the server doesn't serve, which the shelf leaves off.");
+
+        // With lots not free, a lot shows its price.
+        var seaside = HousingZones().Single(zone => zone.Id == 14);
+        Assert.AreNotEqual(0, Shelf(new HousingOptions { FreeLots = false })[seaside.StoreBundleId].Price);
     }
 
     [TestMethod]

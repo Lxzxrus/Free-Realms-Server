@@ -22,6 +22,7 @@ public sealed class AdventurersJournalTests
     private const int IntroduceYourself = 2563;
     private const int CallTheCrew = 1801;
     private const int BackForMore = 3290;
+    private const int Housing = 9100;
     private const int SamanthasMail = 9101;
     private const int AssistantNeeded = 9102;
     private const int CobblestoneVillageCafe = 9103;
@@ -71,8 +72,8 @@ public sealed class AdventurersJournalTests
         CollectionAssert.AreEqual(
             new[]
             {
-                IntroduceYourself, CallTheCrew, BackForMore, SamanthasMail, AssistantNeeded, CobblestoneVillageCafe, DeliveryDerailed,
-                PackageRecovery
+                IntroduceYourself, CallTheCrew, BackForMore, Housing, SamanthasMail, AssistantNeeded, CobblestoneVillageCafe,
+                DeliveryDerailed, PackageRecovery
             },
             journal.HubQuests.Values
                 .Where(quest => quest.HubId == AdventurersJournal.CobblestoneVillageHubId)
@@ -84,7 +85,7 @@ public sealed class AdventurersJournalTests
     [TestMethod]
     public void HubQuests_AreNumberedInStoryOrderFromOne()
     {
-        CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5, 6, 7, 8 },
+        CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 },
             AdventurersJournal.HubQuests().Select(quest => quest.Unknown).ToArray());
     }
 
@@ -133,6 +134,7 @@ public sealed class AdventurersJournalTests
     {
         Assert.IsTrue(AdventurersJournal.IsStoryQuest(IntroduceYourself));
         Assert.IsTrue(AdventurersJournal.IsStoryQuest(CallTheCrew));
+        Assert.IsTrue(AdventurersJournal.IsStoryQuest(Housing));
         Assert.IsTrue(AdventurersJournal.IsStoryQuest(PackageRecovery));
         Assert.IsFalse(AdventurersJournal.IsStoryQuest(IntroduceYourselfElsewhere));
     }
@@ -147,7 +149,13 @@ public sealed class AdventurersJournalTests
         Assert.IsTrue(Between(new() { [IntroduceYourself] = true }), "Handed in, and Call the Crew! not taken yet.");
         Assert.IsFalse(Between(new() { [IntroduceYourself] = true, [CallTheCrew] = false }), "The next one is in the log.");
         Assert.IsTrue(Between(new() { [IntroduceYourself] = true, [CallTheCrew] = true }), "Back for More not taken yet.");
-        Assert.IsTrue(Between(HandedInUpTo(BackForMore)), "Samantha's Mail not taken yet.");
+        Assert.IsTrue(Between(HandedInUpTo(BackForMore)), "Housing not taken yet: Samantha offers it as Back for More is handed in.");
+
+        var housingTaken = HandedInUpTo(BackForMore);
+        housingTaken[Housing] = false;
+        Assert.IsFalse(Between(housingTaken), "Housing is in the log.");
+
+        Assert.IsTrue(Between(HandedInUpTo(Housing)), "Samantha's Mail not taken yet.");
         Assert.IsTrue(Between(HandedInUpTo(AssistantNeeded)), "The Cafe not taken yet: Simone offers it as Assistant Needed is handed in.");
 
         var cafeTaken = HandedInUpTo(AssistantNeeded);

@@ -5179,6 +5179,10 @@ local function spawnStaticNpcs(zone)
     zone:spawnNpc(36431, -410.36322, 38.700001, 154.676147, -3.525565)
     zone:spawnNpc(36431, -412.613403, 38.700001, 155.606384, -3.525565)
     zone:spawnNpc(36431, -410.993713, 38.700001, 156.24588, -3.525565)
+
+    -- Evergrove: the Housing door, 5.8 m behind Samantha and facing where new players arrive. A click takes the player
+    -- into their account's own house (Housing.HouseDoors), and Samantha's Housing quest (9100) sends new players there.
+    zone:spawnFixedNpc(90101, -1873.5, -46.46, 444.0, -2.356)
 end
 
 registerCallback("start", function(zone)

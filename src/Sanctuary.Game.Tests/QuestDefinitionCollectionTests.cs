@@ -197,11 +197,13 @@ public sealed class QuestDefinitionCollectionTests
     /// The first hour's Cobblestone Village chain (Ricky, Samantha, Simone, Jonelle): each quest is given by the NPC the
     /// one before it is handed in to, once that one is done, so a new player never has to look for the next giver. Where
     /// the earlier quest names it as <c>NextQuestId</c>, <see cref="QuestManager.OfferNextQuest"/> offers it straight
-    /// after the reward. Simone gives the Cobblestone Village Cafe (9103) as Assistant Needed (9102) is handed in, and
+    /// after the reward. Samantha gives Housing (9100) as Back for More (3290) is handed in, and Samantha's Mail (9101)
+    /// as Housing is. Simone gives the Cobblestone Village Cafe (9103) as Assistant Needed (9102) is handed in, and
     /// Delivery Derailed (9104) as the Cafe is.
     /// </summary>
     [TestMethod]
-    [DataRow(3290, 9101, true)]
+    [DataRow(3290, 9100, true)]
+    [DataRow(9100, 9101, true)]
     [DataRow(9101, 9102, true)]
     [DataRow(9102, 9103, true)]
     [DataRow(9103, 9104, true)]

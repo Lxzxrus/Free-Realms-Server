@@ -14,6 +14,7 @@ using Sanctuary.Database.Entities;
 using Sanctuary.Game;
 using Sanctuary.Game.Collections;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources;
@@ -36,6 +37,7 @@ public static class CommandPacketInteractRequestHandler
     private static IRewardManager _rewardManager = null!;
     private static IQuestManager _questManager = null!;
     private static IJobManager _jobManager = null!;
+    private static HouseDoorService _houseDoors = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -46,6 +48,7 @@ public static class CommandPacketInteractRequestHandler
         _rewardManager = serviceProvider.GetRequiredService<IRewardManager>();
         _questManager = serviceProvider.GetRequiredService<IQuestManager>();
         _jobManager = serviceProvider.GetRequiredService<IJobManager>();
+        _houseDoors = serviceProvider.GetRequiredService<HouseDoorService>();
     }
 
     public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
@@ -72,6 +75,15 @@ public static class CommandPacketInteractRequestHandler
                     _logger, out var itemDrop) && itemDrop is not null)
                 _rewardManager.TryGrantReward(connection.Player, itemDrop, petTreasureChest.Guid);
 
+            return true;
+        }
+
+        // Evergrove: a Housing door takes the player into their account's own house. Its click never reaches the door's
+        // quest buttons (Npc.OnInteract): a quest step at the door is completed as the player really goes in.
+        if (entity is Npc door && HouseDoors.IsDoor(door.DefinitionId))
+        {
+            _houseDoors.Use(connection.Player, door, () => ClientHousingPacketRequestPlayerHousesHandler.SendHouseList(connection),
+                Environment.TickCount64);
             return true;
         }
 
