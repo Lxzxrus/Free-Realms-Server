@@ -20,6 +20,7 @@ namespace Sanctuary.Game.Tests;
 public sealed class GameStationSpawnTests
 {
     private const int Table = 2417;            // beside Bordon Cloo, in Sanctuary
+    private const int LakeshoreTable = 33482;  // the capture gives it the cooking cursor (15)
     private const int LakesfieldTools = 33484; // Lakeshore Fields, whose game (570) isn't wired
     private const int Simone = 2069;
 
@@ -50,8 +51,9 @@ public sealed class GameStationSpawnTests
 
     /// <summary>
     /// A cooking step (the steak) whose game <paramref name="offeredBy"/> offers, then back to Simone, taken by the player
-    /// and indexed as the quest loader indexes a play step's NPC (QuestDefinitionCollection), so the zone asks the quest
-    /// manager for its buttons.
+    /// and indexed as the quest loader indexes it (QuestDefinitionCollection): Simone as its giver, and as its target with
+    /// the NPC who offers the step's game. So the zone asks the quest manager for both NPCs' buttons, and gives them their
+    /// quest's cursor at login.
     /// </summary>
     private void TakeCookingStepAt(int offeredBy)
     {
@@ -67,7 +69,11 @@ public sealed class GameStationSpawnTests
             ]
         });
 
-        _world.Resources.Quests.ByTarget.GetOrAdd(offeredBy, _ => []).Add(quest.QuestId);
+        var quests = _world.Resources.Quests;
+        quests.ByGiver.GetOrAdd(Simone, _ => []).Add(quest.QuestId);
+
+        foreach (var npcId in new[] { Simone, offeredBy }.Distinct())
+            quests.ByTarget.GetOrAdd(npcId, _ => []).Add(quest.QuestId);
     }
 
     [TestMethod]
@@ -120,5 +126,26 @@ public sealed class GameStationSpawnTests
 
         Assert.AreEqual((ContextIcons.QuestTurnIn, Steak), (option.IconId, option.ActivityId), "The quest's steak.");
         Assert.AreEqual(0, simone.QuestInteractRange);
+    }
+
+    /// <summary>
+    /// At each login the zone gives an NPC a quest names its quest's cursor (WorldZone.OnClientIsReady; a goal's
+    /// CursorId, 17 unless set), for everyone. A table a quest's step names keeps its own, the cooking cursor, as Simone
+    /// takes the quest's.
+    /// </summary>
+    [TestMethod]
+    public void AtLogin_ATableAQuestNames_KeepsItsCookingCursor_WhileSimoneTakesTheQuests()
+    {
+        TakeCookingStepAt(LakeshoreTable);
+
+        var table = _zone.Spawn(LakeshoreTable);
+        var simone = _zone.Spawn(Simone);
+
+        Assert.AreEqual((true, (byte)15), (table.HasCursor, table.CursorId), "As spawned.");
+
+        _zone.Zone.OnClientIsReady(_world.Player);
+
+        Assert.AreEqual((true, (byte)15), (table.HasCursor, table.CursorId), "The table's own.");
+        Assert.AreEqual((byte)17, simone.CursorId, "The quest's.");
     }
 }

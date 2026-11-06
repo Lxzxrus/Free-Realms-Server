@@ -109,7 +109,10 @@ public sealed class WorldZone : BaseZone
             if (!_questManager.IsQuestNpc(npc.DefinitionId))
                 continue;
 
-            if (_resourceManager.Quests.TryGetNpcCursorId(npc.DefinitionId, out var cursorId))
+            // Evergrove: a world object that opens games (GameStations) keeps its own cursor, where any other NPC a quest
+            // names takes its quest's (a goal's CursorId, 17 unless set).
+            if (!GameStations.TryGet(npc.DefinitionId, out _)
+                && _resourceManager.Quests.TryGetNpcCursorId(npc.DefinitionId, out var cursorId))
                 npc.CursorId = cursorId;
 
             if (_resourceManager.Quests.TryGetNpcInteractRange(npc.DefinitionId, out var interactRange))
