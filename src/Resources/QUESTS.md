@@ -189,10 +189,10 @@ game**: without one it has no target, and the loader warns. The game can still b
 menu. The NPC can be a world object that opens the game for anyone (`Minigames.GameStations`: cooking
 tables, postboxes, anvils, harvesting tools, the Frostbitten Banks fishing spot); the game then shows
 once on its menu, as the quest's button, before the object's other games. It keeps its own hover
-cursor, while any other NPC a quest names takes its quest's at the first login (a goal's `CursorId`, 17
-unless set). The step's text should name
-what the player clicks: the Cafe's step names Simone, so it uses 21837, not 94528, which sends you to
-the cooking table in front of her.
+cursor and its walk-in distance, while any other NPC a quest names takes its quest's at the first login
+(a goal's `CursorId`, 17 unless set, and the smallest `InteractRange` of its quests' goals, 12 unless
+set). The step's text should name what the player clicks: the Cafe's step names Simone, so it uses
+21837, not 94528, which sends you to the cooking table in front of her.
 
 ### Counted talk
 

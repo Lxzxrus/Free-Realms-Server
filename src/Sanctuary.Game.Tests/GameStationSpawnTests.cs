@@ -53,9 +53,12 @@ public sealed class GameStationSpawnTests
     /// A cooking step (the steak) whose game <paramref name="offeredBy"/> offers, then back to Simone, taken by the player
     /// and indexed as the quest loader indexes it (QuestDefinitionCollection): Simone as its giver, and as its target with
     /// the NPC who offers the step's game. So the zone asks the quest manager for both NPCs' buttons, and gives them their
-    /// quest's cursor at login.
+    /// quest's cursor and walk-in distance at login.
     /// </summary>
-    private void TakeCookingStepAt(int offeredBy)
+    /// <param name="offeredBy">The NPC who offers the steak.</param>
+    /// <param name="handInRange">How close to Simone the hand-in walks the player (its InteractRange, 12 unless
+    /// set).</param>
+    private void TakeCookingStepAt(int offeredBy, int handInRange = 12)
     {
         var quest = _world.Accept(new QuestDefinition
         {
@@ -65,7 +68,12 @@ public sealed class GameStationSpawnTests
             Goals =
             [
                 new PlayActivityGoal { NameId = 21837, ActivityId = Steak, NpcId = offeredBy },
-                new TalkToNpcGoal { NameId = 94536, Targets = [new TalkTarget { NpcId = Simone }] }
+                new TalkToNpcGoal
+                {
+                    NameId = 94536,
+                    InteractRange = handInRange,
+                    Targets = [new TalkTarget { NpcId = Simone }]
+                }
             ]
         });
 
@@ -147,5 +155,25 @@ public sealed class GameStationSpawnTests
 
         Assert.AreEqual((true, (byte)15), (table.HasCursor, table.CursorId), "The table's own.");
         Assert.AreEqual((byte)17, simone.CursorId, "The quest's.");
+    }
+
+    /// <summary>
+    /// At each login the zone also gives an NPC a quest names its quest's walk-in distance (WorldZone.OnClientIsReady; the
+    /// smallest InteractRange of the goals of every quest that names it, 12 unless set), for everyone. A table a quest's
+    /// step names keeps its own (<see cref="GameStations.WalkInRange"/>), as Simone takes the quest's: here a hand-in
+    /// that walks the player to within 3 of her, which would otherwise shrink the table's too.
+    /// </summary>
+    [TestMethod]
+    public void AtLogin_ATableAQuestNames_KeepsItsWalkIn_WhileSimoneTakesTheQuests()
+    {
+        TakeCookingStepAt(Table, handInRange: 3);
+
+        var table = _zone.Spawn(Table);
+        var simone = _zone.Spawn(Simone);
+
+        _zone.Zone.OnClientIsReady(_world.Player);
+
+        Assert.AreEqual(GameStations.WalkInRange, table.QuestInteractRange, "The table's own.");
+        Assert.AreEqual(3, simone.QuestInteractRange, "The quest's.");
     }
 }
