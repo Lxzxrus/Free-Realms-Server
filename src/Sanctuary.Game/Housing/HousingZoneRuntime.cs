@@ -1026,13 +1026,14 @@ public sealed class HousingZoneRuntime : IDisposable
 
     private DbHouse? LoadHouse(DatabaseContext dbContext)
     {
+        // Evergrove: by the house, whichever character holds it now. That can change while it's loaded (HouseHandover);
+        // the zone manager keeps the instance by the house, so it's still this one.
         return dbContext.Houses
             .AsNoTracking()
             .Include(house => house.Character)
             .Include(house => house.Fixtures)
             .FirstOrDefault(house =>
                 house.Id == _zone.HouseId &&
-                house.CharacterId == _zone.OwnerId &&
                 house.ZoneDefinitionId == _zone.DefinitionId);
     }
 
@@ -1925,7 +1926,7 @@ public sealed class HousingZoneRuntime : IDisposable
     /// <summary>
     /// Who the house is shown to <paramref name="viewer"/> as belonging to. A character on the owning account sees it as
     /// their own, as the client expects of a house it lets them edit (the owner's guid is also the one edit permission
-    /// in <see cref="PlayerHousingInstanceData.Permissions"/>). Everyone else sees the character who bought it.
+    /// in <see cref="PlayerHousingInstanceData.Permissions"/>). Everyone else sees the character holding it.
     /// </summary>
     private (ulong Guid, string Name) ShownOwner(DbHouse house, Player viewer)
     {

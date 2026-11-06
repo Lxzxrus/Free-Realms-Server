@@ -22,7 +22,7 @@ public class HousingPacketInviteNotification : BaseHousingPacket, ISerializableP
     public ulong InviteeGuid;
     public ulong HouseGuid;
 
-    /// <summary>The character who bought the house.</summary>
+    /// <summary>The character holding the house: its buyer, or the character it moved to when that one was deleted.</summary>
     public ulong OwnerGuid;
 
     public NameData InviterName = new();

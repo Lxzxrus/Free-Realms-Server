@@ -135,7 +135,9 @@ public sealed class HouseManager : IHouseManager
 
     public int SendOutLockedOutVisitors(HousingZone zone)
     {
-        if (zone.OwnerId is not ulong ownerId)
+        // Evergrove: the friends a lock lets stay are those of the character holding the house now, which can change while
+        // it's loaded (HouseHandover).
+        if (FindHolder(zone.HouseId) is not ulong ownerId)
             return 0;
 
         // A snapshot: leaving the house takes each visitor out of the zone's player list. Invited guests stay.
@@ -160,7 +162,7 @@ public sealed class HouseManager : IHouseManager
     {
         invitee = null;
 
-        if (inviter.Zone is not HousingZone zone || zone.OwnerId is not ulong ownerId)
+        if (inviter.Zone is not HousingZone zone)
             return HouseInviteResult.NotInHouse;
 
         if (!zone.IsOwner(inviter))
@@ -177,6 +179,10 @@ public sealed class HouseManager : IHouseManager
 
         if (invitee.Ignores.Any(ignored => ignored.Guid == inviter.Guid))
             return HouseInviteResult.Ignored;
+
+        // Evergrove: the invite names the character holding the house now (HouseHandover).
+        if (FindHolder(zone.HouseId) is not ulong ownerId)
+            return HouseInviteResult.NotInHouse;
 
         if (!_invites.Add(GuidHelper.GetPlayerId(invitee.Guid), zone.HouseId, GuidHelper.GetPlayerId(inviter.Guid), DateTimeOffset.UtcNow))
             return HouseInviteResult.TooSoon;
@@ -258,12 +264,20 @@ public sealed class HouseManager : IHouseManager
         return EnterHouseResult.Success;
     }
 
-    /// <summary>The account that owns the house: that of the character who bought it.</summary>
+    /// <summary>The account that owns the house: that of the character holding it.</summary>
     private ulong FindOwnerUserId(DbHouse house)
     {
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         return HousePlots.FindUserId(dbContext, house.CharacterId) ?? 0;
+    }
+
+    /// <summary>The character holding the house now, or <c>null</c> if it's gone.</summary>
+    private ulong? FindHolder(ulong houseId)
+    {
+        using var dbContext = _dbContextFactory.CreateDbContext();
+
+        return HouseOwnership.FindHolder(dbContext, houseId);
     }
 
     private void UpdateLastVisited(ulong houseId)
