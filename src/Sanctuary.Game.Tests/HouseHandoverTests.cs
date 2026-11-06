@@ -1,5 +1,4 @@
 using System;
-using System.Data;
 using System.Linq;
 
 using Microsoft.Data.Sqlite;
@@ -16,9 +15,9 @@ using Sanctuary.Packet.Common;
 namespace Sanctuary.Game.Tests;
 
 /// <summary>
-/// A deleted character's houses move to another character on its account (<see cref="HouseHandover"/>), deleted here
-/// as the Login server deletes one: the move, then the character, in one transaction, with the database's cascade on
-/// <c>Houses.CharacterId</c> taking whatever is left on it.
+/// A deleted character's houses move to another character on its account (<see cref="HouseHandover"/>). Characters are
+/// deleted here by the Login server's own delete (<see cref="CharacterDeletion"/>): the move, then the character, in one
+/// transaction, with the database's cascade on <c>Houses.CharacterId</c> taking whatever is left on it.
 /// </summary>
 [TestClass]
 public sealed class HouseHandoverTests
@@ -119,18 +118,15 @@ public sealed class HouseHandoverTests
         return house;
     }
 
-    /// <summary>Deletes the character as the Login server does: its houses move first, in the delete's transaction.</summary>
+    /// <summary>Deletes the character as the Login server does, with <see cref="CharacterDeletion.Delete"/>.</summary>
     private HouseHandoverResult Delete(ulong characterId)
     {
         using var dbContext = CreateDbContext();
-        using var transaction = dbContext.Database.BeginTransaction(IsolationLevel.Serializable);
+        var character = dbContext.Characters.Single(candidate => candidate.Id == characterId);
 
-        var handover = HouseHandover.MoveOff(dbContext, characterId);
+        var handover = CharacterDeletion.Delete(dbContext, character);
 
-        dbContext.Characters.Remove(dbContext.Characters.Single(character => character.Id == characterId));
-        dbContext.SaveChanges();
-        transaction.Commit();
-
+        Assert.IsNotNull(handover, "The character was deleted.");
         return handover;
     }
 
@@ -446,6 +442,54 @@ public sealed class HouseHandoverTests
         Assert.IsTrue(HouseAccess.MayBeInLockedHouse(Neighbour, [Friend(Eldest)], Builder, holder));
         Assert.IsFalse(HouseAccess.MayBeInLockedHouse(Neighbour, [Friend(Gone)], Builder, holder));
         Assert.IsTrue(HouseAccess.MayBeInLockedHouse(Builder, [], Builder, holder));
+    }
+
+    /// <summary>
+    /// The rest of the delete doesn't get in the houses' way: a guild leader's houses move like anyone's, while its guild
+    /// gets a new leader and its friend and ignore entries go, both ways.
+    /// </summary>
+    [TestMethod]
+    public void AGuildLeaderWithFriends_StillHandsOnItsHouses()
+    {
+        AddHouses(House(100, Gone, Seaside));
+
+        using (var dbContext = CreateDbContext())
+        {
+            dbContext.Guilds.Add(new DbGuild
+            {
+                Id = 1,
+                Name = "Builders",
+                Members =
+                {
+                    new DbGuildMember { Id = Gone, Role = GuildRole.Leader.Id },
+                    new DbGuildMember { Id = Stranger, Role = GuildRole.Member.Id }
+                }
+            });
+            dbContext.Friends.AddRange(
+                new DbFriend { CharacterId = Gone, FriendCharacterId = Stranger },
+                new DbFriend { CharacterId = Stranger, FriendCharacterId = Gone });
+            dbContext.Ignores.Add(new DbIgnore { CharacterId = Voter, IgnoreCharacterId = Gone });
+            dbContext.SaveChanges();
+
+            foreach (var member in dbContext.Characters.Where(character => character.Id == Gone || character.Id == Stranger))
+                member.GuildMemberId = member.Id;
+
+            dbContext.SaveChanges();
+        }
+
+        var handover = Delete(Gone);
+
+        CollectionAssert.AreEqual(new[] { new HouseMove(100, Seaside, Eldest) }, handover.Moved.ToArray());
+        Assert.AreEqual(Eldest, HolderOf(100));
+
+        using (var dbContext = CreateDbContext())
+        {
+            Assert.IsFalse(dbContext.Characters.Any(character => character.Id == Gone));
+            Assert.IsFalse(dbContext.Friends.Any(), "Its friend entries went, both ways.");
+            Assert.IsFalse(dbContext.Ignores.Any());
+            Assert.AreEqual(GuildRole.Leader.Id, dbContext.GuildMembers.Single(member => member.Id == Stranger).Role,
+                "The guild's other member leads it now.");
+        }
     }
 
     [TestMethod]

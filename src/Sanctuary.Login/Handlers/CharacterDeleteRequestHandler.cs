@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Data;
 using System.Data.Common;
 using System.Linq;
 
@@ -10,9 +9,9 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
+using Sanctuary.Game;
 using Sanctuary.Game.Housing;
 using Sanctuary.Packet;
-using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
 
 namespace Sanctuary.Login.Handlers;
@@ -70,70 +69,13 @@ public static class CharacterDeleteRequestHandler
         var strategy = dbContext.Database.CreateExecutionStrategy();
         var committed = TryExecute(strategy, character.Id, () =>
         {
-            // Evergrove: serializable, as for buying a lot. The houses' new characters are picked by the lots each already
-            // has, so two deletes on one account at once mustn't both give one character the same lot.
-            using var transaction = dbContext.Database.BeginTransaction(IsolationLevel.Serializable);
-
             try
             {
-                var guildMember = dbContext.GuildMembers
-                    .AsNoTracking()
-                    .SingleOrDefault(x => x.Id == character.Id);
+                // Evergrove: the delete, in its own transaction, is CharacterDeletion's, so the tests run the same one:
+                // the character's houses must move to another character on the account before it goes.
+                handover = CharacterDeletion.Delete(dbContext, character);
 
-                if (guildMember is not null)
-                {
-                    character.GuildMemberId = null;
-
-                    var deletedGuildMember = dbContext.GuildMembers
-                        .Where(x => x.Id == character.Id)
-                        .ExecuteDelete();
-
-                    if (deletedGuildMember <= 0)
-                        return false;
-
-                    var hasMembers = dbContext.GuildMembers.Any(x => x.GuildId == guildMember.GuildId);
-                    if (!hasMembers)
-                    {
-                        dbContext.Guilds
-                            .Where(x => x.Id == guildMember.GuildId)
-                            .ExecuteDelete();
-                    }
-                    else if (guildMember.Role == GuildRole.Leader.Id
-                             && !dbContext.GuildMembers.Any(x => x.GuildId == guildMember.GuildId && x.Role == GuildRole.Leader.Id))
-                    {
-                        var newLeader = dbContext.GuildMembers
-                            .Where(x => x.GuildId == guildMember.GuildId)
-                            // SQLite can't sort by DateTimeOffset or ulong in SQL, so sort after loading.
-                            .AsEnumerable()
-                            .OrderBy(x => x.Role)
-                            .ThenBy(x => x.Joined)
-                            .ThenBy(x => x.Id)
-                            .FirstOrDefault();
-
-                        if (newLeader is not null)
-                            newLeader.Role = GuildRole.Leader.Id;
-                    }
-                }
-
-                // Evergrove: houses belong to the account, so they move to another of its characters before the
-                // delete's cascade can take them (docs/design/evergrove-housing.md, section 8).
-                handover = HouseHandover.MoveOff(dbContext, character.Id);
-
-                // Delete references first to avoid foreign key constraint violations.
-                var characterId = character.Id;
-
-                var friends = dbContext.Friends.Where(f =>
-                    f.CharacterId == characterId || f.FriendCharacterId == characterId);
-
-                var ignores = dbContext.Ignores.Where(i =>
-                    i.CharacterId == characterId || i.IgnoreCharacterId == characterId);
-
-                dbContext.Friends.RemoveRange(friends);
-                dbContext.Ignores.RemoveRange(ignores);
-                dbContext.Remove(character);
-
-                if (dbContext.SaveChanges() == 0)
-                    return false;
+                return handover is not null;
             }
             catch (DbUpdateException ex)
             {
@@ -141,9 +83,6 @@ public static class CharacterDeleteRequestHandler
 
                 return false;
             }
-
-            transaction.Commit();
-            return true;
         });
 
         if (!committed)

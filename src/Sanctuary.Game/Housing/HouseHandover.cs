@@ -29,9 +29,10 @@ public static class HouseHandover
 {
     /// <summary>
     /// Moves the houses on <paramref name="characterId"/> to other characters on its account. Call it in the
-    /// transaction that deletes the character, before the delete: the delete's cascade then takes only the houses left
-    /// on it. Make the transaction serializable, so two deletes on one account at once can't both give one character
-    /// the same lot. The moves are written to the database straight away, not through the change tracker.
+    /// transaction that deletes the character, before the delete, as <see cref="CharacterDeletion.Delete"/> does: the
+    /// delete's cascade then takes only the houses left on it. Make the transaction serializable, so two deletes on one
+    /// account at once can't both give one character the same lot. The moves are written to the database straight
+    /// away, not through the change tracker.
     /// </summary>
     /// <remarks>
     /// A house that moves keeps everything but the character it's on: its id, which its votes are kept by; its plot and
