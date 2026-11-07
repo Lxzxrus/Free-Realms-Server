@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
@@ -39,10 +40,18 @@ public static class PacketZoneSafeTeleportRequestHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PacketZoneSafeTeleportRequest), packet);
 
-        // Out of a house or a fishing hole: the hub points of interest are all in the starting zone.
+        // Out of a house or a fishing hole: the hub points of interest are all in the starting zone. A zone change that
+        // comes too soon after the last waits for its turn (ZoneTeleports).
         if (connection.Player.Zone is HousingZone or FishingZone)
         {
-            connection.Player.ReturnToStartingZone();
+            var player = connection.Player;
+
+            ZoneTeleports.Request(player, Environment.TickCount64, () =>
+            {
+                if (!player.ReturnToStartingZone())
+                    ChatHelper.SendSystemMessage(player, "The teleport failed. Please try again.");
+            });
+
             return true;
         }
 

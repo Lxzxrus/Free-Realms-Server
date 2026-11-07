@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Numerics;
 using System.Text;
+using System.Threading;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,6 +47,9 @@ public class GatewayConnection : UdpConnection
 
     // Player will only be null during login.
     public Player Player { get; private set; } = null!;
+
+    // 1 once the player has been saved for good (SavePlayerOnce).
+    private int _playerSaved;
 
     public string Locale { get; set; } = "en_US";
 
@@ -94,7 +98,7 @@ public class GatewayConnection : UdpConnection
 
             _loginClient.SendCharacterLogout(GuidHelper.GetPlayerId(Player.Guid));
 
-            SavePlayerToDatabase();
+            SavePlayerOnce();
         }
         catch (Exception ex)
         {
@@ -104,6 +108,21 @@ public class GatewayConnection : UdpConnection
         {
             Player.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Saves the player at the end of their session: at logout, or as the Gateway stops while they're online
+    /// (<see cref="GatewayServer.SaveOnlinePlayers"/>). Only the first call saves: a second would add the play time
+    /// since login again. A trade can disconnect a player on another thread, so the two may race.
+    /// </summary>
+    /// <returns>Whether this call saved them.</returns>
+    public bool SavePlayerOnce()
+    {
+        if (Interlocked.Exchange(ref _playerSaved, 1) != 0)
+            return false;
+
+        SavePlayerToDatabase();
+        return true;
     }
 
     public override void OnRoutePacket(Span<byte> data)
@@ -533,6 +552,10 @@ public class GatewayConnection : UdpConnection
         dbCharacter.ChatBubbleForegroundColor = Player.ChatBubbleForegroundColor;
         dbCharacter.ChatBubbleBackgroundColor = Player.ChatBubbleBackgroundColor;
         dbCharacter.ChatBubbleSize = Player.ChatBubbleSize;
+
+        // The quest the player tracks. Picking one in the quest helper changes it in memory only (one packet per
+        // click); accepting a quest writes it at once.
+        dbCharacter.ActiveQuestId = Player.ActiveQuestId != 0 ? Player.ActiveQuestId : null;
 
         // SaveChanges returns the rows changed. Zero means nothing changed since the last save (a quick relog, or
         // logging out inside a house), not a failure; a real failure throws.
