@@ -50,6 +50,19 @@ public static class HousingFixtureRules
         return 0;
     }
 
+    /// <summary>
+    /// Whether a placed part may take <paramref name="tintId"/> when the client saves it: a dye from the palette, on a
+    /// part that takes dye, as painting gives. The client sends back the tint it was shown, so a real one asks for
+    /// nothing else. A part placed from inventory goes back to inventory in its tint, and each tint is an inventory row
+    /// of its own, so any other tint was a new row on every pick-up.
+    /// </summary>
+    public static bool CanPaint(IResourceManager resourceManager, int itemDefinitionId, int tintId)
+    {
+        return HousingDyeTints.Names.ContainsKey(tintId) &&
+            resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var definition) &&
+            HousingDyeTints.IsDyeable(definition);
+    }
+
     public static FixtureDefinition? BuildFixtureDefinition(IResourceManager resourceManager, int itemDefinitionId)
     {
         if (!resourceManager.ClientItemDefinitions.TryGetValue(itemDefinitionId, out var itemDefinition))
