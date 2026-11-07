@@ -90,7 +90,7 @@ public class GatewayService : BackgroundService
         }
 
         // Load resources.
-        if (!_resourceManager.Load())
+        if (!_resourceManager.Load() || !_resourceManager.LoadZoneGeometry())
         {
             _logger.LogCritical("Cannot start {server}, failed to load resources.", nameof(GatewayServer));
 
@@ -215,8 +215,8 @@ public class GatewayService : BackgroundService
                 hadData |= _server.GiveTime();
                 hadData |= _client.GiveTime();
 
-                // Fishing's bite timers, the match-three clocks and the zone moves that wait their turn, here on the
-                // packet thread like everything else that touches a player's items or moves them.
+                // Fishing's bite timers, the match-three clocks, and the pet requests and zone moves that wait their
+                // turn, here on the packet thread like everything else that touches a player's items or moves them.
                 var tickNow = Environment.TickCount64;
 
                 if (tickNow >= fishingTickAt)
@@ -224,6 +224,7 @@ public class GatewayService : BackgroundService
                     fishingTickAt = tickNow + GatewayServer.FishingTickMs;
                     _server.TickFishing(tickNow);
                     _server.TickMinigames();
+                    _server.TickPetRequests(tickNow);
                     _server.TickZoneTeleports(tickNow);
                 }
 

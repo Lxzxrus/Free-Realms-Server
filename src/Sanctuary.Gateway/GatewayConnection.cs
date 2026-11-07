@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -39,6 +39,14 @@ public class GatewayConnection : UdpConnection
     private readonly IServiceProvider _serviceProvider;
     private readonly IResourceManager _resourceManager;
     private readonly IDbContextFactory<DatabaseContext> _dbContextFactory;
+
+    /// <summary>
+    /// Most database writes one connection may have queued at once (see <see cref="QueueWork"/>). Each equip queues one and
+    /// a player clicks a few at a time, so this only stops a client that sends them faster than the database saves them.
+    /// </summary>
+    public const int MaxQueuedWork = 64;
+
+    private readonly SerialWorkQueue _work = new(MaxQueuedWork);
 
     private ICipher _cipher;
 #pragma warning disable CS0649
@@ -108,6 +116,21 @@ public class GatewayConnection : UdpConnection
         {
             Player.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Whether <see cref="QueueWork"/> takes more work now. A handler checks it before changing anything the work saves,
+    /// and refuses the packet if not.
+    /// </summary>
+    public bool CanQueueWork => !_work.IsFull;
+
+    /// <summary>
+    /// Runs database work off the packet thread, after this connection's earlier work. Refused (false) while
+    /// <see cref="MaxQueuedWork"/> items wait, so check <see cref="CanQueueWork"/> first.
+    /// </summary>
+    public bool QueueWork(Action work)
+    {
+        return _work.TryQueue(work, ex => _logger.LogError(ex, "{connection} queued work failed.", this));
     }
 
     /// <summary>
@@ -184,9 +207,25 @@ public class GatewayConnection : UdpConnection
 #endif
     }
 
+    // Anyone who knows this connection's address can send it packets that fail their CRC check, as fast as they like, so
+    // a line for each would let them fill the disk: the first is logged, then one a minute at most, with the count so far.
+    private const int CrcRejectLogInterval = 60000;
+
+    // when OnCrcReject last logged (Environment.TickCount64), 0 = never
+    private long _crcRejectLoggedAt;
+
     public override void OnCrcReject(Span<byte> data)
     {
-        _logger.LogError("[CrcReject] Guid: {guid}, Data: {data}", Player?.Guid, PacketLog.Hex(data));
+        var now = Environment.TickCount64;
+
+        if (_crcRejectLoggedAt != 0 && now - _crcRejectLoggedAt < CrcRejectLogInterval)
+            return;
+
+        _crcRejectLoggedAt = now;
+
+        GetStats(out var stats);
+
+        _logger.LogError("[CrcReject] Guid: {guid}, Data: {data} ({count} from this connection so far, logged once a minute at most)", Player?.Guid, PacketLog.Hex(data), stats.CrcRejectedPackets);
     }
 
     public override void OnPacketCorrupt(Span<byte> data, UdpCorruptionReason reason)
@@ -194,19 +233,19 @@ public class GatewayConnection : UdpConnection
         _logger.LogError("[PacketCorrupt] Guid: {guid}, Reason: {reason}, Data: {data}", Player?.Guid, reason, PacketLog.Hex(data));
     }
 
-    public void SendTunneled(ISerializablePacket packet, bool reliable = true, bool secure = false)
+    public void SendTunneled(ISerializablePacket serializablePacket, bool reliable = true, bool secure = false)
     {
-        var packetTunneled = new PacketTunneledClientPacket
+        var packetTunneledClientPacket = new PacketTunneledClientPacket
         {
-            Payload = packet.Serialize()
+            Payload = serializablePacket.Serialize()
         };
 
-        Send(packetTunneled, reliable, secure);
+        Send(packetTunneledClientPacket, reliable, secure);
     }
 
-    public void Send(ISerializablePacket packet, bool reliable = true, bool secure = false)
+    public void Send(ISerializablePacket serializablePacket, bool reliable = true, bool secure = false)
     {
-        var data = packet.Serialize();
+        var data = serializablePacket.Serialize();
 
         if (secure)
             InternalSendSecure(data);
@@ -257,6 +296,8 @@ public class GatewayConnection : UdpConnection
         }
 
         Player = player;
+        player.LoginStartedAt = DateTimeOffset.UtcNow;
+        player.SecondsSinceLastLogin = WelcomeScreenHelper.SecondsSinceLastLogin(dbCharacter.LastLogin, player.LoginStartedAt);
 
         // Start - ClientPcData
 
@@ -378,17 +419,27 @@ public class GatewayConnection : UdpConnection
             });
         }
 
+        foreach (var dbPet in dbCharacter.Pets)
+        {
+            if (!_resourceManager.ClientItemDefinitions.TryGetValue(dbPet.Definition, out var clientItemDefinition) ||
+                !PetHelper.TryGetModel(_resourceManager, clientItemDefinition, out var modelDefinition))
+            {
+                continue;
+            }
+
+            PetHelper.AddPet(Player, _resourceManager, dbPet, clientItemDefinition, modelDefinition);
+        }
+
         // TODO
 
         // Start - Store on DB
+
         var clientActionBar = new ClientActionBar();
 
         clientActionBar.Id = 2; // ItemActionBar
 
-        clientActionBar.Slots.Add(0, new ActionBarSlot() { IsEmpty = true });
-        clientActionBar.Slots.Add(1, new ActionBarSlot() { IsEmpty = true });
-        clientActionBar.Slots.Add(2, new ActionBarSlot() { IsEmpty = true });
-        clientActionBar.Slots.Add(3, new ActionBarSlot() { IsEmpty = true });
+        for (var slot = 0; slot < Player.ItemActionBarSlotCount; slot++)
+            clientActionBar.Slots.Add(slot, new ActionBarSlot() { IsEmpty = true });
 
         Player.ActionBars.Add(clientActionBar.Id, clientActionBar);
         // End - Store on DB
@@ -533,25 +584,34 @@ public class GatewayConnection : UdpConnection
             rotation = Player.StartingZoneRotation;
         }
 
-        dbCharacter.PositionX = float.IsNaN(position.X) ? null : position.X;
-        dbCharacter.PositionY = float.IsNaN(position.Y) ? null : position.Y;
-        dbCharacter.PositionZ = float.IsNaN(position.Z) ? null : position.Z;
+        // Evergrove: MariaDB refuses a float it can't store, an infinity or one as large as float.MaxValue, and a failed
+        // save here stopped the whole Gateway. The packet handlers refuse such positions and rotations from the client;
+        // in case one gets here another way, a position outside the world or a rotation beyond any real one is saved as
+        // nothing, as NaN already was, and the next login uses the spawn point's instead.
+        var savePosition = Positions.IsInWorld(position);
+        var saveRotation = Positions.IsWithinRotationLimit(rotation);
 
-        dbCharacter.RotationX = float.IsNaN(rotation.X) ? null : rotation.X;
-        dbCharacter.RotationZ = float.IsNaN(rotation.Z) ? null : rotation.Z;
+        dbCharacter.PositionX = savePosition ? position.X : null;
+        dbCharacter.PositionY = savePosition ? position.Y : null;
+        dbCharacter.PositionZ = savePosition ? position.Z : null;
+
+        dbCharacter.RotationX = saveRotation ? rotation.X : null;
+        dbCharacter.RotationZ = saveRotation ? rotation.Z : null;
 
         dbCharacter.ActiveProfileId = Player.ActiveProfileId;
 
         dbCharacter.ActiveTitleId = Player.ActiveTitle;
 
-        if (dbCharacter.LastLogin.HasValue)
-            dbCharacter.PlayTime += (int)(DateTimeOffset.UtcNow - dbCharacter.LastLogin.Value).TotalMinutes;
+        dbCharacter.PlayTime += (int)Math.Max(0, (DateTimeOffset.UtcNow - Player.LoginStartedAt).TotalMinutes);
 
         // End ClientPcData
 
         dbCharacter.ChatBubbleForegroundColor = Player.ChatBubbleForegroundColor;
         dbCharacter.ChatBubbleBackgroundColor = Player.ChatBubbleBackgroundColor;
         dbCharacter.ChatBubbleSize = Player.ChatBubbleSize;
+
+        foreach (var dbPet in dbContext.Pets.Where(pet => pet.CharacterId == dbCharacter.Id))
+            PetHelper.SavePetState(Player, dbPet);
 
         // The quest the player tracks. Picking one in the quest helper changes it in memory only (one packet per
         // click); accepting a quest writes it at once.

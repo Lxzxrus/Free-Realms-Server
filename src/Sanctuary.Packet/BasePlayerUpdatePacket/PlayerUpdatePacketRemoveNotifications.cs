@@ -1,6 +1,7 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 using Sanctuary.Core.IO;
+using Sanctuary.Packet.Common;
 
 namespace Sanctuary.Packet;
 
@@ -8,7 +9,7 @@ public class PlayerUpdatePacketRemoveNotifications : BasePlayerUpdatePacket, ISe
 {
     public new const short OpCode = 11;
 
-    public List<ulong> Guids = new();
+    public List<RemoveNotificationInfo> Notifications { get; set; } = [];
 
     public PlayerUpdatePacketRemoveNotifications() : base(OpCode)
     {
@@ -20,14 +21,7 @@ public class PlayerUpdatePacketRemoveNotifications : BasePlayerUpdatePacket, ISe
 
         Write(writer);
 
-        writer.Write(Guids.Count);
-
-        foreach (var guid in Guids)
-        {
-            writer.Write(guid);
-            writer.Write(0);
-            writer.Write(0);
-        }
+        writer.Write(Notifications);
 
         return writer.Buffer;
     }

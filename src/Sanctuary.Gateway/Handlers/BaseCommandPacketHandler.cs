@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -31,6 +31,7 @@ public static class BaseCommandPacketHandler
 
         return opCode switch
         {
+            FreeInteractionNpc.OpCode => FreeInteractionNpcHandler.HandlePacket(connection, reader.Span),
             CommandPacketInteractRequest.OpCode => CommandPacketInteractRequestHandler.HandlePacket(connection, reader.Span),
             PacketDialogResponse.OpCode => PacketDialogResponseHandler.HandlePacket(connection, reader.Span),
             CommandPacketInteractionStartWheel.OpCode => CommandPacketInteractionStartWheelHandler.HandlePacket(connection, reader.Span),

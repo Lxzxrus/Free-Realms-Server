@@ -23,6 +23,10 @@ public class GatewayServer : UdpManager<GatewayConnection>
     {
         _logger = logger;
         _resourceManager = resourceManager;
+
+        // Run game callbacks after releasing the UDP connection lock. Zone ticks send
+        // packets while holding zone locks, so inline callbacks can invert that order.
+        EventQueuing = true;
     }
 
     public override bool OnConnectRequest(UdpConnection udpConnection)
@@ -141,8 +145,38 @@ public class GatewayServer : UdpManager<GatewayConnection>
         }
     }
 
+    /// <summary>
+    /// Evergrove: carries out the pet requests that came too soon once their turn comes (PetHelper.StartWaitingRequest).
+    /// Main loop, the thread that handles their packets.
+    /// </summary>
+    public void TickPetRequests(long now)
+    {
+        try
+        {
+            foreach (var connection in ConnectionList.ToArray())
+            {
+                if (connection?.Player is not { } player)
+                    continue;
+
+                try
+                {
+                    PetHelper.StartWaitingRequest(player, now);
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(exception, "Pets: a waiting request of {player} failed.", player.Guid);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Pets: the tick failed.");
+        }
+    }
+
     public void OnStarted()
     {
+        _resourceManager.Zones.CollectionChanged -= Zones_CollectionChanged;
         _resourceManager.Zones.CollectionChanged += Zones_CollectionChanged;
     }
 
@@ -186,6 +220,8 @@ public class GatewayServer : UdpManager<GatewayConnection>
 
     public void OnStopping()
     {
+        _resourceManager.Zones.CollectionChanged -= Zones_CollectionChanged;
+
         var packetNotice = new PacketWorldShutdownNotice();
 
         // Scheduled maintenance and updates.
@@ -202,4 +238,11 @@ public class GatewayServer : UdpManager<GatewayConnection>
             connection.Send(UdpChannel.Reliable1, packetData);
         }
     }
+
+    public override void Dispose()
+    {
+        _resourceManager.Zones.CollectionChanged -= Zones_CollectionChanged;
+        base.Dispose();
+    }
+
 }

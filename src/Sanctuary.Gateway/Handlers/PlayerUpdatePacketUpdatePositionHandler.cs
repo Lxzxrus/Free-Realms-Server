@@ -34,9 +34,17 @@ public static class PlayerUpdatePacketUpdatePositionHandler
 
         // _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PlayerUpdatePacketUpdatePosition), packet);
 
+        // Evergrove: a player who has fallen through the world can fall past Positions.HeightLimit. Their height is held
+        // at the limit (Positions.ClampHeight) rather than counted as a fault, which disconnected them within a second.
+        packet.Position = Positions.ClampHeight(packet.Position);
+
         // A real client sends finite numbers. NaN compares false with everything, so it would pass every
         // "too far away" check; a connection that sends it is counted as faulty and dropped if it keeps on.
-        if (!Positions.IsFinite(packet.Position) || !Positions.IsFinite(packet.Rotation))
+        // Nor does a real client leave the world: pets and NPCs act on its position, and far out there a pet
+        // following its owner could freeze the zone's tick inside the navmesh. Its rotation is a heading, each
+        // component between -1 and 1. A far larger one, though finite, could put a boombox or cake the player sets
+        // down at a NaN or absurd position, which other players were sent.
+        if (!Positions.IsFinite(packet.Position) || !Positions.IsWithinRotationLimit(packet.Rotation) || !Positions.IsInWorld(packet.Position))
         {
             connection.ReportFault();
             return true;
@@ -44,11 +52,12 @@ public static class PlayerUpdatePacketUpdatePositionHandler
 
         packet.Guid = connection.Player.Guid;
 
+        connection.Player.PositionState = packet.State;
         connection.Player.UpdatePosition(packet.Position, packet.Rotation);
 
         _questManager.OnPlayerMoved(connection.Player);
 
-        connection.Player.SendTunneledToVisible(packet);
+        connection.Player.RelayPosition(packet);
 
         return true;
     }

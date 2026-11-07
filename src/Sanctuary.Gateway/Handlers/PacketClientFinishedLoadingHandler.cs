@@ -44,6 +44,12 @@ public static class PacketClientFinishedLoadingHandler
 
         connection.Player.Zone.OnClientFinishedLoading(connection.Player);
 
+        // Evergrove: on the zone's tick, like every other summon, rather than building the pet from the packet thread
+        // while the zone reads the pet's state.
+        connection.Player.PlayerPet.QueueAction(connection.Player.PlayerPet.RestorePet);
+
+        connection.Player.SendTunneled(connection.Player.GetWeaponFlairOverridePacket());
+
         connection.Player.SendToolbar();
 
         return true;
