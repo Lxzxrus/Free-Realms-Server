@@ -21,59 +21,186 @@
     "SubTextNameId": -2118222202
   },
   {
+    "Key": "fossils",
+    "Name": "Pile of Fossils",
+    "ModelId": 724,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05
+  },
+  {
+    "Key": "rare-fossils",
+    "Name": "Rare Pile of Fossils",
+    "ModelId": 845,
+    "Scale": 1,
+    "CompositeEffectId": 5740,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05,
+    "SubTextNameId": -2118222202
+  },
+  {
+    "Key": "sparkling-water",
+    "Name": "Sparkling Water",
+    "ModelId": 271,
+    "Scale": 1,
+    "CompositeEffectId": 15381,
+    "ExtraCompositeEffectIds": [
+      5742
+    ],
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": 0
+  },
+  {
+    "Key": "rare-sparkling-water",
+    "Name": "Rare Sparkling Water",
+    "ModelId": 271,
+    "Scale": 1,
+    "CompositeEffectId": 15382,
+    "ExtraCompositeEffectIds": [
+      5740
+    ],
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": 0,
+    "SubTextNameId": -2118222202
+  },
+  {
+    "Key": "flowers",
+    "Name": "Pile of Flowers",
+    "ModelId": 248,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05
+  },
+  {
+    "Key": "rare-flowers",
+    "Name": "Rare Pile of Flowers",
+    "ModelId": 670,
+    "Scale": 1,
+    "CompositeEffectId": 5740,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05,
+    "SubTextNameId": -2118222202
+  },
+  {
+    "Key": "robgoblin-junk",
+    "Name": "Robgoblin Junkpile",
+    "ModelId": 333,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05
+  },
+  {
+    "Key": "rare-robgoblin-junk",
+    "Name": "Rare Robgoblin Junkpile",
+    "ModelId": 671,
+    "Scale": 1,
+    "CompositeEffectId": 5740,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05,
+    "SubTextNameId": -2118222202
+  },
+  {
+    "Key": "shells",
+    "Name": "Pile of Shells",
+    "ModelId": 317,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05
+  },
+  {
+    "Key": "rare-shells",
+    "Name": "Rare Pile of Shells",
+    "ModelId": 672,
+    "Scale": 1,
+    "CompositeEffectId": 5740,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05,
+    "SubTextNameId": -2118222202
+  },
+  {
+    "Key": "leaves",
+    "Name": "Pile of Leaves",
+    "ModelId": 326,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05
+  },
+  {
+    "Key": "rare-leaves",
+    "Name": "Rare Pile of Leaves",
+    "ModelId": 650,
+    "Scale": 1,
+    "CompositeEffectId": 5740,
+    "InteractRange": 12,
+    "CursorId": 18,
+    "PlacementYOffset": -0.05,
+    "SubTextNameId": -2118222202
+  },
+  {
     "Key": "hastis-homework",
     "Name": "Hasti's Homework",
     "ModelId": 584,
-    "Scale": 1.0,
-    "CompositeEffectId": 5386,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
     "InteractRange": 12,
     "CursorId": 17,
-    "PlacementYOffset": 0.0,
-    "DropTable": []
+    "PlacementYOffset": 0
   },
   {
     "Key": "smashing-hammers",
-    "Name": "Hammer",
+    "Name": "Shovel",
     "ModelId": 197,
-    "Scale": 1.0,
-    "CompositeEffectId": 5386,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
     "InteractRange": 12,
     "CursorId": 17,
-    "PlacementYOffset": 0.0,
-    "DropTable": []
+    "PlacementYOffset": 0
   },
   {
     "Key": "smashing-chisels",
-    "Name": "Chisel",
+    "Name": "Pick",
     "ModelId": 196,
-    "Scale": 1.0,
-    "CompositeEffectId": 5386,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
     "InteractRange": 12,
     "CursorId": 17,
-    "PlacementYOffset": 0.0,
-    "DropTable": []
+    "PlacementYOffset": 0
   },
   {
     "Key": "box-o-rocks",
     "Name": "Rock",
     "ModelId": 84,
-    "Scale": 1.0,
-    "CompositeEffectId": 5386,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
     "InteractRange": 12,
     "CursorId": 17,
-    "PlacementYOffset": 0.0,
-    "DropTable": []
+    "PlacementYOffset": 0
   },
   {
     "Key": "tin-ore",
     "Name": "Tin Ore",
     "ModelId": 611,
-    "Scale": 1.0,
-    "CompositeEffectId": 5386,
+    "Scale": 1,
+    "CompositeEffectId": 5742,
     "InteractRange": 12,
     "CursorId": 17,
-    "PlacementYOffset": 0.0,
-    "DropTable": []
+    "PlacementYOffset": 0
   },
   {
     "Key": "briarwood-rare-exploration-coin",
@@ -374,135 +501,53 @@
     "DropTable": []
   },
   {
-    "Key": "fossils",
-    "Name": "Pile of Fossils",
-    "ModelId": 724,
+    "Key": "woe-is-willie-flowers",
+    "Name": "Flowers",
+    "ModelId": 541,
     "Scale": 1,
     "CompositeEffectId": 5742,
     "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05
-  },
-  {
-    "Key": "rare-fossils",
-    "Name": "Rare Pile of Fossils",
-    "ModelId": 845,
-    "Scale": 1,
-    "CompositeEffectId": 5740,
-    "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05,
-    "SubTextNameId": -2118222202
-  },
-  {
-    "Key": "sparkling-water",
-    "Name": "Sparkling Water",
-    "ModelId": 271,
-    "Scale": 1,
-    "CompositeEffectId": 15381,
-    "ExtraCompositeEffectIds": [
-      5742
-    ],
-    "InteractRange": 12,
-    "CursorId": 18,
+    "CursorId": 17,
     "PlacementYOffset": 0
   },
   {
-    "Key": "rare-sparkling-water",
-    "Name": "Rare Sparkling Water",
-    "ModelId": 271,
-    "Scale": 1,
-    "CompositeEffectId": 15382,
-    "ExtraCompositeEffectIds": [
-      5740
-    ],
-    "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": 0,
-    "SubTextNameId": -2118222202
-  },
-  {
-    "Key": "flowers",
-    "Name": "Pile of Flowers",
-    "ModelId": 248,
+    "Key": "one-mans-trash-camp",
+    "Name": "Rubbish Pile",
+    "ModelId": 862,
     "Scale": 1,
     "CompositeEffectId": 5742,
     "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05
+    "CursorId": 17,
+    "PlacementYOffset": 0
   },
   {
-    "Key": "rare-flowers",
-    "Name": "Rare Pile of Flowers",
-    "ModelId": 670,
-    "Scale": 1,
-    "CompositeEffectId": 5740,
-    "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05,
-    "SubTextNameId": -2118222202
-  },
-  {
-    "Key": "robgoblin-junk",
-    "Name": "Robgoblin Junkpile",
-    "ModelId": 333,
+    "Key": "one-mans-trash-chugawug",
+    "Name": "Rubbish Pile",
+    "ModelId": 862,
     "Scale": 1,
     "CompositeEffectId": 5742,
     "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05
+    "CursorId": 17,
+    "PlacementYOffset": 0
   },
   {
-    "Key": "rare-robgoblin-junk",
-    "Name": "Rare Robgoblin Junkpile",
-    "ModelId": 671,
-    "Scale": 1,
-    "CompositeEffectId": 5740,
-    "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05,
-    "SubTextNameId": -2118222202
-  },
-  {
-    "Key": "shells",
-    "Name": "Pile of Shells",
-    "ModelId": 317,
+    "Key": "one-mans-trash-vendors",
+    "Name": "Rubbish Pile",
+    "ModelId": 862,
     "Scale": 1,
     "CompositeEffectId": 5742,
     "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05
+    "CursorId": 17,
+    "PlacementYOffset": 0
   },
   {
-    "Key": "rare-shells",
-    "Name": "Rare Pile of Shells",
-    "ModelId": 672,
-    "Scale": 1,
-    "CompositeEffectId": 5740,
-    "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05,
-    "SubTextNameId": -2118222202
-  },
-  {
-    "Key": "leaves",
-    "Name": "Pile of Leaves",
-    "ModelId": 326,
+    "Key": "one-mans-trash-stage",
+    "Name": "Rubbish Pile",
+    "ModelId": 862,
     "Scale": 1,
     "CompositeEffectId": 5742,
     "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05
-  },
-  {
-    "Key": "rare-leaves",
-    "Name": "Rare Pile of Leaves",
-    "ModelId": 650,
-    "Scale": 1,
-    "CompositeEffectId": 5740,
-    "InteractRange": 12,
-    "CursorId": 18,
-    "PlacementYOffset": -0.05,
-    "SubTextNameId": -2118222202
+    "CursorId": 17,
+    "PlacementYOffset": 0
   }
 ]

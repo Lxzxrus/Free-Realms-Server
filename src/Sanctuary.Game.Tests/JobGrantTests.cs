@@ -153,9 +153,9 @@ public sealed class JobGrantTests
     [TestMethod]
     public void Trainer_ShowsTheMarker_OnlyWhileItHasAJobToTeach()
     {
-        const ulong reed = 100000002968; // Fisherman
-        const ulong therin = 100000001201; // Miner
-        const ulong stranger = 100000000001;
+        const int reed = 2968; // Fisherman
+        const int therin = 1201; // Miner
+        const int stranger = 1;
         static bool Known(int profileId) => true;
 
         Assert.AreEqual(JobTrainers.NotificationImageId, JobTrainers.NotificationImageFor(reed, _ => false, Known));
@@ -169,10 +169,10 @@ public sealed class JobGrantTests
     [TestMethod]
     public void Trainer_ShowsNoMarker_ForAJobWithNothingToDoYet()
     {
-        const ulong johnnyThunder = 100000003010; // Kart Driver, beside Shakey at the speedway
-        const ulong madJack = 100000003009;       // Demo Derby Driver, beside him
-        const ulong harold = 100000002910;        // Brawler
-        const ulong simone = 100000002069;        // Chef, Cobblestone Village
+        const int johnnyThunder = 3010; // Kart Driver, beside Shakey at the speedway
+        const int madJack = 3009;       // Demo Derby Driver, beside him
+        const int harold = 2910;        // Brawler
+        const int simone = 2069;        // Chef, Cobblestone Village
         static bool Known(int profileId) => true;
 
         Assert.AreEqual(0, JobTrainers.NotificationImageFor(johnnyThunder, _ => false, Known), "No racing yet.");
@@ -274,10 +274,10 @@ public sealed class JobGrantTests
 
         foreach (var trainer in JobTrainers.All)
         {
-            var npcId = (int)(trainer.NpcGuid - 100000000000);
+            var npcId = trainer.NpcId;
 
-            Assert.IsTrue(Regex.IsMatch(spawnScript, $@"spawnNpcWithGuid\({npcId}, {trainer.NpcGuid},"),
-                $"{trainer.Name} ({trainer.NpcGuid}) isn't spawned by FabledRealms.lua.");
+            Assert.IsTrue(Regex.IsMatch(spawnScript, $@"spawnNpcWithGuid\({npcId}, {100000000000L + npcId},"),
+                $"{trainer.Name} ({npcId}) isn't spawned by FabledRealms.lua.");
             Assert.AreEqual(trainer.Name, npcNames.GetValueOrDefault(npcId), $"npc {npcId} isn't {trainer.Name}.");
             Assert.IsTrue(profileIds.Contains(trainer.ProfileId), $"{trainer.Name} teaches unknown job {trainer.ProfileId}.");
             Assert.IsFalse(Enum.IsDefined((SpecialProfileIds)trainer.ProfileId), $"{trainer.Name} teaches a staff job.");

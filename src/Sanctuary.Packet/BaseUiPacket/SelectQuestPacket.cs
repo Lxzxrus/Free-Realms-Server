@@ -20,15 +20,12 @@ public class SelectQuestPacket : BaseUiPacket, IDeserializable<SelectQuestPacket
 
         var reader = new PacketReader(data);
 
-        if (!reader.TryRead(out short opCode))
-            return false;
-
-        if (!reader.TryRead(out byte subOpCode))
+        if (!value.TryRead(ref reader))
             return false;
 
         if (!reader.TryRead(out value.QuestId))
             return false;
 
-        return true;
+        return reader.RemainingLength == 0;
     }
 }

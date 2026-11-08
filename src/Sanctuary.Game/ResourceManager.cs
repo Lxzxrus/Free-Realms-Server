@@ -51,6 +51,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public static readonly string MimicFile = Path.Combine(BaseDirectory, "Mimic.json");
 
     public static readonly string ZonesDirectory = Path.Combine(BaseDirectory, "Zones");
+    public static readonly string ZoneEnvironmentsDirectory = Path.Combine(ZonesDirectory, "Environments");
     public static readonly string HousesFile = Path.Combine(BaseDirectory, "Houses.json");
     public static readonly string PetsFile = Path.Combine(BaseDirectory, "Pets.json");
     public static readonly string MountsFile = Path.Combine(BaseDirectory, "Mounts.json");
@@ -106,6 +107,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public Minigames.Mimic.MimicDefinitions Mimic { get; private set; } = new();
 
     public ZoneDefinitionCollection Zones { get; }
+    public ZoneEnvironmentCollection ZoneEnvironments { get; }
     public HouseDefinitionCollection Houses { get; }
     public MountDefinitionCollection Mounts { get; }
     public PetDefinitionCollection Pets { get; }
@@ -171,6 +173,7 @@ public class ResourceManager : IResourceManager, IDisposable
         ClientActivityDefinitions = new(_logger);
 
         Zones = new(_logger);
+        ZoneEnvironments = new(_logger);
         Houses = new(_logger);
         Mounts = new(_logger);
         Pets = new(_logger);
@@ -359,6 +362,9 @@ public class ResourceManager : IResourceManager, IDisposable
             return false;
 
         Mimic = mimic;
+
+        if (!ZoneEnvironments.Load(ZoneEnvironmentsDirectory))
+            return false;
 
         if (!Zones.Load(ZonesDirectory))
             return false;
@@ -551,8 +557,6 @@ public class ResourceManager : IResourceManager, IDisposable
                 loaded = NpcAmbient.Load(NpcAmbientFile);
             else if (e.FullPath == NameFilterFile)
                 loaded = NameFilter.Load(NameFilterFile);
-            else if (e.FullPath == QuestsFile)
-                loaded = Quests.Load(QuestsFile);
             else if (e.FullPath == RewardTablesFile)
                 loaded = RewardTables.Load(RewardTablesFile);
             else if (e.FullPath == RankLevelsFile)
@@ -561,6 +565,8 @@ public class ResourceManager : IResourceManager, IDisposable
                 loaded = CombatAbilities.Load(CombatAbilitiesFile);
             else if (e.FullPath == CombatJobsFile)
                 loaded = CombatJobs.Load(CombatJobsFile);
+            else if (e.FullPath == QuestsFile)
+                loaded = Quests.Load(QuestsFile);
             else
                 _logger.LogWarning("Unknown file changed. File: {filepath}", e.FullPath);
 

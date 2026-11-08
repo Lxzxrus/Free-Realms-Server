@@ -21,6 +21,7 @@ public sealed class AdventurersJournalTests
 {
     private const int IntroduceYourself = 2563;
     private const int CallTheCrew = 1801;
+    private const int BackForMore = 3290;
     private const int IntroduceYourselfElsewhere = 2564;
 
     private static string FindSourceFile(params string[] relativePath)
@@ -54,7 +55,7 @@ public sealed class AdventurersJournalTests
             journal.Hubs.Values.Where(hub => hub.RegionId == 1).Select(hub => hub.Id).ToArray(),
             "The client makes a region's first unfinished hub current, so no other hub may come before the story's.");
 
-        CollectionAssert.AreEqual(new[] { IntroduceYourself, CallTheCrew },
+        CollectionAssert.AreEqual(new[] { IntroduceYourself, CallTheCrew, BackForMore },
             journal.HubQuests.Values
                 .Where(quest => quest.HubId == AdventurersJournal.CobblestoneVillageHubId)
                 .OrderBy(quest => quest.Unknown)
@@ -65,7 +66,7 @@ public sealed class AdventurersJournalTests
     [TestMethod]
     public void HubQuests_AreNumberedInStoryOrderFromOne()
     {
-        CollectionAssert.AreEqual(new[] { 1, 2 },
+        CollectionAssert.AreEqual(new[] { 1, 2, 3 },
             AdventurersJournal.HubQuests().Select(quest => quest.Unknown).ToArray());
     }
 
@@ -101,9 +102,9 @@ public sealed class AdventurersJournalTests
                 Assert.IsTrue(quests.TryGet(story[index - 1], out var previous));
                 Assert.IsTrue(quests.TryGet(story[index], out var next));
 
-                Assert.AreEqual(previous.QuestId, next.PrerequisiteQuestId,
+                Assert.AreEqual((int?)previous.QuestId, next.PrerequisiteQuestId,
                     $"Quest {next.QuestId} should need {previous.QuestId}, the story quest before it.");
-                Assert.AreEqual(previous.GoalTargetGuid(previous.Goals.Count - 1), next.GiverGuid,
+                Assert.AreEqual(previous.GoalTargetNpcId(previous.Goals.Count - 1), next.GiverNpcId,
                     $"Quest {next.QuestId} should be given where {previous.QuestId} is handed in.");
             }
         }
@@ -126,7 +127,8 @@ public sealed class AdventurersJournalTests
         Assert.IsFalse(Between(new() { [IntroduceYourself] = false }), "The first quest is in the log.");
         Assert.IsTrue(Between(new() { [IntroduceYourself] = true }), "Handed in, and Call the Crew! not taken yet.");
         Assert.IsFalse(Between(new() { [IntroduceYourself] = true, [CallTheCrew] = false }), "The next one is in the log.");
-        Assert.IsFalse(Between(new() { [IntroduceYourself] = true, [CallTheCrew] = true }), "The story is finished.");
+        Assert.IsTrue(Between(new() { [IntroduceYourself] = true, [CallTheCrew] = true }), "Back for More not taken yet.");
+        Assert.IsFalse(Between(new() { [IntroduceYourself] = true, [CallTheCrew] = true, [BackForMore] = true }), "The story is finished.");
         Assert.IsFalse(Between(new() { [IntroduceYourselfElsewhere] = true }),
             "The other town's Introduce Yourself rules this story out; its quests are never taken.");
     }

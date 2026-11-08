@@ -4,14 +4,16 @@ namespace Sanctuary.Packet;
 
 public class QuestObjectiveActivatedPacket : BaseQuestPacket, ISerializablePacket
 {
-    public const int SubOpCode = 8;
+    public new const int OpCode = 8;
 
     public int QuestId;
     public int ObjectiveId;
     public int RequiredCount;
+
+    // Never read by the client.
     public bool Unknown2;
 
-    public QuestObjectiveActivatedPacket() : base(SubOpCode)
+    public QuestObjectiveActivatedPacket() : base(OpCode)
     {
     }
 

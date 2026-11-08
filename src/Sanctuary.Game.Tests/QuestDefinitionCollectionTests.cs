@@ -10,6 +10,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Game.Resources;
 using Sanctuary.Game.Resources.Definitions;
+using Sanctuary.Game.Resources.Definitions.QuestGoals;
 
 namespace Sanctuary.Game.Tests;
 
@@ -40,34 +41,76 @@ public sealed class QuestDefinitionCollectionTests
         return quests;
     }
 
-    private static HashSet<ulong> NpcGuidsSpawnedByFabledRealms()
+    // Quests name NPCs by their Npcs.json id, which each spawn names first (spawnNpcWithGuid(id, guid, ...); upstream
+    // OSFR's #164 turns these into spawnFixedNpc(id, ...)).
+    private static HashSet<int> NpcIdsSpawnedByFabledRealms()
     {
         var script = File.ReadAllText(FindSourceFile("Scripts", "Zone", "FabledRealms.lua"));
 
-        var guids = Regex.Matches(script, @"spawnNpcWithGuid\(\s*\d+\s*,\s*(\d+)")
-            .Select(match => ulong.Parse(match.Groups[1].Value))
+        var ids = Regex.Matches(script, @"spawn(?:NpcWithGuid|FixedNpc)\(\s*(\d+)\s*,")
+            .Select(match => int.Parse(match.Groups[1].Value))
             .ToHashSet();
 
-        Assert.IsTrue(guids.Count > 0, "Found no spawnNpcWithGuid calls in FabledRealms.lua.");
+        Assert.IsTrue(ids.Count > 0, "Found no NPC spawns in FabledRealms.lua.");
 
-        return guids;
+        return ids;
     }
 
-    private static IEnumerable<(string Field, ulong Guid)> NpcGuidsNamedBy(QuestDefinition quest)
+    private static IEnumerable<(string Field, int NpcId)> NpcIdsNamedBy(QuestDefinition quest)
     {
-        yield return ("GiverGuid", quest.GiverGuid);
-        yield return ("TargetGuid", quest.TargetGuid);
+        yield return ("GiverNpcId", quest.GiverNpcId);
+        yield return ("TargetNpcId", quest.TargetNpcId);
 
         for (var i = 0; i < quest.Goals.Count; i++)
-            foreach (var guid in quest.Goals[i].AllTalkTargetGuids())
-                yield return ($"Goals[{i}]", guid);
+            if (quest.Goals[i] is TalkToNpcGoal talkGoal)
+                foreach (var npcId in talkGoal.AllTalkTargetNpcIds())
+                    yield return ($"Goals[{i}]", npcId);
+    }
+
+    /// <summary>Mistakes in a goal's conversation that would show a blank line or trap the player in it.</summary>
+    private static IEnumerable<string> ConversationProblems(QuestGoal goal)
+    {
+        var talkGoal = goal as TalkToNpcGoal;
+
+        if (talkGoal is { CompleteAfterDialogue: true, IsCounted: true })
+            yield return "CompleteAfterDialogue is set on a counted talk goal, where it does nothing";
+
+        if (talkGoal is { CompleteAfterDialogue: true } && goal.Dialogue.Count == 0)
+            yield return "CompleteAfterDialogue is set without a Dialogue";
+
+        foreach (var problem in LineProblems(goal.Dialogue))
+            yield return problem;
+    }
+
+    private static IEnumerable<string> LineProblems(List<QuestDialogueLine> lines)
+    {
+        foreach (var line in lines)
+        {
+            if (line.TextId == 0)
+                yield return "a Dialogue line has no TextId";
+
+            if (line.Choices.Count == 0)
+                continue;
+
+            if (line.Choices.TrueForAll(choice => choice.Retry))
+                yield return $"every answer to line {line.TextId} is a Retry, so it can never be passed";
+
+            foreach (var choice in line.Choices)
+            {
+                if (choice.ResponseTextId == 0)
+                    yield return $"an answer to line {line.TextId} has no ResponseTextId";
+
+                foreach (var problem in LineProblems(choice.Then))
+                    yield return problem;
+            }
+        }
     }
 
     [TestMethod]
     public void ShippedConversations_HaveNoProblems()
     {
         var problems = LoadQuests(FindShippedQuests()).Quests.Values
-            .SelectMany(quest => quest.Goals.SelectMany(goal => goal.ConversationProblems()
+            .SelectMany(quest => quest.Goals.SelectMany(goal => ConversationProblems(goal)
                 .Select(problem => $"Quest {quest.QuestId}, goal {goal.NameId}: {problem}")))
             .ToList();
 
@@ -85,8 +128,8 @@ public sealed class QuestDefinitionCollectionTests
         {
             Assert.IsTrue(quest.Goals.Count > 0, $"Quest {quest.QuestId} has no goals.");
 
-            if (quest.GiverGuid != 0)
-                Assert.IsTrue(quests.ByGiver.TryGetValue(quest.GiverGuid, out var ids) && ids.Contains(quest.QuestId),
+            if (quest.GiverNpcId != 0)
+                Assert.IsTrue(quests.ByGiver.TryGetValue(quest.GiverNpcId, out var ids) && ids.Contains(quest.QuestId),
                     $"Quest {quest.QuestId} is missing from its giver's index.");
         }
     }
@@ -94,13 +137,13 @@ public sealed class QuestDefinitionCollectionTests
     [TestMethod]
     public void ShippedQuests_NameOnlyNpcsThatFabledRealmsSpawns()
     {
-        var spawned = NpcGuidsSpawnedByFabledRealms();
+        var spawned = NpcIdsSpawnedByFabledRealms();
         var quests = LoadQuests(FindShippedQuests());
 
         var unspawned = quests.Quests.Values
-            .SelectMany(quest => NpcGuidsNamedBy(quest)
-                .Where(named => named.Guid != 0 && !spawned.Contains(named.Guid))
-                .Select(named => $"{quest.QuestId} {named.Field} {named.Guid}"))
+            .SelectMany(quest => NpcIdsNamedBy(quest)
+                .Where(named => named.NpcId != 0 && !spawned.Contains(named.NpcId))
+                .Select(named => $"{quest.QuestId} {named.Field} {named.NpcId}"))
             .ToList();
 
         Assert.AreEqual(0, unspawned.Count,
@@ -113,19 +156,13 @@ public sealed class QuestDefinitionCollectionTests
     {
         // The npc a quest sends the player to shows its name in the interaction pop-up; without one the pop-up is
         // blank, as for Missing Homework's squirrel (4313).
-        var script = File.ReadAllText(FindSourceFile("Scripts", "Zone", "FabledRealms.lua"));
-        var npcIdByGuid = Regex.Matches(script, @"spawnNpcWithGuid\(\s*(\d+)\s*,\s*(\d+)")
-            .GroupBy(match => ulong.Parse(match.Groups[2].Value))
-            .ToDictionary(group => group.Key, group => int.Parse(group.First().Groups[1].Value));
-
         var npcs = new NpcDefinitionCollection(NullLogger.Instance);
         Assert.IsTrue(npcs.Load(FindSourceFile("Resources", "Npcs.json")));
 
         var unnamed = LoadQuests(FindShippedQuests()).Quests.Values
-            .SelectMany(quest => NpcGuidsNamedBy(quest)
-                .Where(named => npcIdByGuid.TryGetValue(named.Guid, out var npcId) &&
-                    npcs.TryGetValue(npcId, out var npc) && npc.NameId == 0 && string.IsNullOrEmpty(npc.Name))
-                .Select(named => $"{quest.QuestId} {named.Field} {named.Guid}"))
+            .SelectMany(quest => NpcIdsNamedBy(quest)
+                .Where(named => npcs.TryGetValue(named.NpcId, out var npc) && npc.NameId == 0 && string.IsNullOrEmpty(npc.Name))
+                .Select(named => $"{quest.QuestId} {named.Field} {named.NpcId}"))
             .ToList();
 
         Assert.AreEqual(0, unnamed.Count, "Quests name npcs with no name in Npcs.json: " + string.Join(", ", unnamed));
@@ -138,7 +175,7 @@ public sealed class QuestDefinitionCollectionTests
 
         foreach (var quest in quests.Quests.Values)
         {
-            int[] references = [quest.PrerequisiteQuestId, quest.NextQuestId, .. quest.ExcludesQuestIds];
+            int[] references = [quest.PrerequisiteQuestId ?? 0, quest.NextQuestId ?? 0, .. quest.ExcludesQuestIds];
 
             foreach (var reference in references.Where(id => id != 0))
                 Assert.IsTrue(quests.Quests.ContainsKey(reference),
@@ -168,7 +205,7 @@ public sealed class QuestDefinitionCollectionTests
 
         foreach (var quest in LoadQuests(FindShippedQuests()).Quests.Values)
         {
-            foreach (var goal in quest.Goals.Where(goal => goal.Type == QuestGoalType.Collect))
+            foreach (var goal in quest.Goals.OfType<CollectGoal>())
             {
                 if (!types.ContainsKey(goal.CollectNodeType))
                 {
@@ -215,7 +252,7 @@ public sealed class QuestDefinitionCollectionTests
     }
 
     private static string Quest(int id, string extra = "") =>
-        $$"""{ "QuestId": {{id}}, "Goals": [ { "NameId": {{id}}1 } ]{{extra}} }""";
+        $$"""{ "QuestId": {{id}}, "Goals": [ { "Type": 0, "NameId": {{id}}1 } ]{{extra}} }""";
 
     [TestMethod]
     [DataRow(@", ""NextQuestId"": 99", "NextQuestId")]
@@ -253,13 +290,13 @@ public sealed class QuestDefinitionCollectionTests
     [TestMethod]
     public void Reload_ReplacesTheQuests()
     {
-        var path = WriteQuestFile($$"""[ {{Quest(1, @", ""GiverGuid"": 500, ""NextQuestId"": 2")}}, {{Quest(2)}} ]""");
+        var path = WriteQuestFile($$"""[ {{Quest(1, @", ""GiverNpcId"": 500, ""NextQuestId"": 2")}}, {{Quest(2)}} ]""");
 
         try
         {
             var quests = LoadQuests(path);
 
-            File.WriteAllText(path, $$"""[ {{Quest(3, @", ""GiverGuid"": 600")}} ]""");
+            File.WriteAllText(path, $$"""[ {{Quest(3, @", ""GiverNpcId"": 600")}} ]""");
             Assert.IsTrue(quests.Load(path));
 
             CollectionAssert.AreEquivalent(new[] { 3 }, quests.Quests.Keys.ToArray());
@@ -275,7 +312,7 @@ public sealed class QuestDefinitionCollectionTests
     [TestMethod]
     public void BrokenReload_KeepsTheLoadedQuests()
     {
-        var path = WriteQuestFile($$"""[ {{Quest(1, @", ""GiverGuid"": 500")}} ]""");
+        var path = WriteQuestFile($$"""[ {{Quest(1, @", ""GiverNpcId"": 500")}} ]""");
 
         try
         {
@@ -301,7 +338,7 @@ public sealed class QuestDefinitionCollectionTests
         var shippedJson = JsonNode.Parse(File.ReadAllText(FindShippedQuests()))!.AsArray();
         var disabledJson = JsonNode.Parse(File.ReadAllText(FindSourceFile("Resources", "Quests.disabled.json")))!.AsArray();
 
-        Assert.IsTrue(disabledJson.Count > 0);
+        // Upstream OSFR spawns the NPCs of the five quests Evergrove had parked, so the file is empty after the merge.
 
         var shippedIds = shippedJson.Select(quest => (int)quest!["QuestId"]!).ToHashSet();
         foreach (var quest in disabledJson)

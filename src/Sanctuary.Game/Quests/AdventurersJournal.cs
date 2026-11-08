@@ -19,10 +19,11 @@ public static class AdventurersJournal
     public const int CobblestoneVillageHubId = 3;
 
     /// <summary>
-    /// Evergrove's first story, in the order it is played: Introduce Yourself (Samantha sends you to Ricky), then Call
-    /// the Crew! (Ricky sends you to Shakey and back). Each quest is offered where the one before it is handed in.
+    /// Evergrove's first story, in the order it is played: Introduce Yourself (Samantha sends you to Ricky), Call the
+    /// Crew! (Ricky sends you to Shakey and back), then Back for More (Ricky sends you back to Samantha). Each quest is
+    /// offered where the one before it is handed in.
     /// </summary>
-    public static readonly IReadOnlyList<int> CobblestoneVillageStory = [2563, 1801];
+    public static readonly IReadOnlyList<int> CobblestoneVillageStory = [2563, 1801, 3290];
 
     /// <summary>Every story, by the hub it fills.</summary>
     public static readonly IReadOnlyDictionary<int, IReadOnlyList<int>> Stories = new Dictionary<int, IReadOnlyList<int>>
@@ -49,7 +50,15 @@ public static class AdventurersJournal
     /// client would make that next quest current, and as it isn't in the player's quest log, the welcome window's box
     /// would show neither a title nor an objective.
     /// </summary>
-    public static bool IsBetweenStoryQuests(IReadOnlyDictionary<int, bool> playerQuests)
+    public static bool IsBetweenStoryQuests(QuestLog quests) =>
+        IsBetweenStoryQuests(questId => quests.Contains(questId) ? quests.IsCompleted(questId) : null);
+
+    /// <inheritdoc cref="IsBetweenStoryQuests(QuestLog)"/>
+    public static bool IsBetweenStoryQuests(IReadOnlyDictionary<int, bool> playerQuests) =>
+        IsBetweenStoryQuests(questId => playerQuests.TryGetValue(questId, out var completed) ? completed : null);
+
+    /// <param name="stateOf">Whether a quest is finished: <c>true</c> done, <c>false</c> in the log, <c>null</c> not taken.</param>
+    private static bool IsBetweenStoryQuests(System.Func<int, bool?> stateOf)
     {
         foreach (var story in Stories.Values)
         {
@@ -57,7 +66,7 @@ public static class AdventurersJournal
 
             foreach (var questId in story)
             {
-                if (!playerQuests.TryGetValue(questId, out var completed))
+                if (stateOf(questId) is not { } completed)
                 {
                     if (started)
                         return true;

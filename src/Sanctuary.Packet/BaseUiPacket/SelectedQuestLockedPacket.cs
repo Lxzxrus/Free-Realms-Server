@@ -20,15 +20,12 @@ public class SelectedQuestLockedPacket : BaseUiPacket, IDeserializable<SelectedQ
 
         var reader = new PacketReader(data);
 
-        if (!reader.TryRead(out short opCode))
-            return false;
-
-        if (!reader.TryRead(out byte subOpCode))
+        if (!value.TryRead(ref reader))
             return false;
 
         if (!reader.TryRead(out value.IsLocked))
             return false;
 
-        return true;
+        return reader.RemainingLength == 0;
     }
 }

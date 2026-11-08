@@ -24,6 +24,7 @@ public abstract class DatabaseContext : DbContext
     public DbSet<DbCharacterQuest> CharacterQuests => Set<DbCharacterQuest>();
     public DbSet<DbCharacterCollectionEntry> CharacterCollectionEntries => Set<DbCharacterCollectionEntry>();
     public DbSet<DbCharacterCompletedCollection> CharacterCompletedCollections => Set<DbCharacterCompletedCollection>();
+    public DbSet<DbCharacterQuestProgress> CharacterQuestProgress => Set<DbCharacterQuestProgress>();
 
     public DatabaseContext()
     {

@@ -37,6 +37,7 @@ public interface IResourceManager
     Minigames.Mimic.MimicDefinitions Mimic { get; }
 
     ZoneDefinitionCollection Zones { get; }
+    ZoneEnvironmentCollection ZoneEnvironments { get; }
     MountDefinitionCollection Mounts { get; }
     PetDefinitionCollection Pets { get; }
     PlayerTitleCollection PlayerTitles { get; }

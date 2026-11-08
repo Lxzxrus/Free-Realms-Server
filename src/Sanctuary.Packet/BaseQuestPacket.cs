@@ -6,7 +6,7 @@ public class BaseQuestPacket
 {
     public const short OpCode = 49;
 
-    private readonly int SubOpCode;
+    private int SubOpCode;
 
     public BaseQuestPacket(int subOpCode)
     {

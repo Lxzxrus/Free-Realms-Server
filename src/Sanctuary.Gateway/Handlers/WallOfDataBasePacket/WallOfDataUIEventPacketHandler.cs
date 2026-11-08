@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game;
+using Sanctuary.Game.Quests;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -14,6 +15,7 @@ public static class WallOfDataUIEventPacketHandler
 {
     private static ILogger _logger = null!;
     private static IResourceManager _resourceManager = null!;
+    private static IQuestManager _questManager = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -21,6 +23,7 @@ public static class WallOfDataUIEventPacketHandler
         _logger = loggerFactory.CreateLogger(nameof(WallOfDataUIEventPacketHandler));
 
         _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
+        _questManager = serviceProvider.GetRequiredService<IQuestManager>();
     }
 
     public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
@@ -36,6 +39,8 @@ public static class WallOfDataUIEventPacketHandler
         // Opening "My Houses" only reports a UI event, so refresh the house list when the player opens it.
         if (packet.TableName == "MyStuffBrowser" && packet.Callback == "GotoMyHouses")
             ClientHousingPacketRequestPlayerHousesHandler.SendHouseList(connection);
+        if (packet.TableName == "StoryBook" && packet.Callback == "AbandonQuest" && int.TryParse(packet.Param, out var questId))
+            _questManager.AbandonQuest(connection.Player, questId);
 
         return true;
     }
