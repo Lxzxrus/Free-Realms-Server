@@ -27,6 +27,10 @@
     <PackageVersion Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
     <PackageVersion Include="MiniValidation" Version="0.10.0" />
     <PackageVersion Include="MSTest" Version="4.2.3" />
+    <!-- Pomelo.EntityFrameworkCore.MySql brings this in, but 9.0.0 (its latest) only asks for 2.4.0, which has
+         GHSA-473q-m89c-ghf8. Sanctuary.Database.MySql references it directly to get a fixed version; drop that
+         reference once Pomelo itself asks for 2.6.1 or later. -->
+    <PackageVersion Include="MySqlConnector" Version="2.6.2" />
     <PackageVersion Include="NLog" Version="6.1.4" />
     <PackageVersion Include="NLog.Extensions.Logging" Version="6.1.4" />
     <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
