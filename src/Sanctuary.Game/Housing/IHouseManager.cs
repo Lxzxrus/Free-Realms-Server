@@ -45,7 +45,7 @@ public enum HouseInviteResult
 public interface IHouseManager
 {
     /// <summary>
-    /// The houses the character's account owns, whichever of its characters bought them, with their
+    /// The houses the character's account owns, whichever of its characters holds them, with their
     /// <see cref="DbHouse.Character"/>.
     /// </summary>
     IReadOnlyList<DbHouse> GetOwnedHouses(ulong characterId);

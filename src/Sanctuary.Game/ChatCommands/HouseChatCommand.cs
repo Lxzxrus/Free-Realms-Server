@@ -67,14 +67,14 @@ public sealed class HouseChatCommand : IChatCommand
     {
         var characterId = GuidHelper.GetPlayerId(invoker.Guid);
         var names = _houseManager.GetOwnedHouses(characterId)
-            .Select(house => (Name: GetHouseName(house), house.Plot, BoughtBy: house.CharacterId == characterId ? null : CharacterName(house.Character)))
+            .Select(house => (Name: GetHouseName(house), house.Plot, HeldBy: house.CharacterId == characterId ? null : CharacterName(house.Character)))
             .OrderBy(house => house.Name)
-            .Select(house => (house.Plot, house.BoughtBy) switch
+            .Select(house => (house.Plot, house.HeldBy) switch
             {
                 (HousePlot.Ranked, null) => $"{house.Name} (ranked plot)",
-                (HousePlot.Ranked, var buyer) => $"{house.Name} (ranked plot, on {buyer})",
+                (HousePlot.Ranked, var holder) => $"{house.Name} (ranked plot, on {holder})",
                 (_, null) => house.Name,
-                (_, var buyer) => $"{house.Name} (on {buyer})"
+                (_, var holder) => $"{house.Name} (on {holder})"
             })
             .ToList();
 

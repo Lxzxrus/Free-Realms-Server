@@ -41,6 +41,11 @@ public class DbHouse
     public DateTimeOffset Created { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset LastVisited { get; set; } = DateTimeOffset.UtcNow;
 
+    /// <summary>
+    /// The character holding the house, whom visitors see as its owner: the one that bought it, until that character
+    /// is deleted and the house moves to another character on the account (<c>HouseHandover</c>). Every character on
+    /// the account owns it alike.
+    /// </summary>
     public ulong CharacterId { get; set; }
     public DbCharacter Character { get; set; } = null!;
 

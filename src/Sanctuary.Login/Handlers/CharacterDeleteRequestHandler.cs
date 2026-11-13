@@ -1,14 +1,17 @@
 ﻿using System;
+using System.Data.Common;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
+using Sanctuary.Game;
+using Sanctuary.Game.Housing;
 using Sanctuary.Packet;
-using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
 
 namespace Sanctuary.Login.Handlers;
@@ -17,6 +20,7 @@ namespace Sanctuary.Login.Handlers;
 public static class CharacterDeleteRequestHandler
 {
     private static ILogger _logger = null!;
+    private static GatewayServer _gatewayServer = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
@@ -24,6 +28,7 @@ public static class CharacterDeleteRequestHandler
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
         _logger = loggerFactory.CreateLogger(nameof(CharacterDeleteRequestHandler));
 
+        _gatewayServer = serviceProvider.GetRequiredService<GatewayServer>();
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
     }
 
@@ -61,67 +66,32 @@ public static class CharacterDeleteRequestHandler
             return true;
         }
 
-        var strategy = dbContext.Database.CreateExecutionStrategy();
-        var committed = strategy.Execute(() =>
+        // Evergrove: a character in the world, playing on another client, can't be deleted, just as it can't log in
+        // twice (CharacterLoginRequestHandler). It would play on as a character that no longer exists, and its logout
+        // save would find nothing to save to.
+        if (_gatewayServer.Gateways.Any(gateway => gateway.OnlineCharacters.Contains(character.Id)))
         {
-            using var transaction = dbContext.Database.BeginTransaction();
+            _logger.LogInformation("Refused to delete character {CharacterId}: it's in the world.", character.Id);
 
+            characterDeleteReply.Status = 2;
+
+            connection.Send(characterDeleteReply);
+
+            return true;
+        }
+
+        HouseHandoverResult? handover = null;
+
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+        var committed = TryExecute(strategy, character.Id, () =>
+        {
             try
             {
-                var guildMember = dbContext.GuildMembers
-                    .AsNoTracking()
-                    .SingleOrDefault(x => x.Id == character.Id);
+                // Evergrove: the delete, in its own transaction, is CharacterDeletion's, so the tests run the same one:
+                // the character's houses must move to another character on the account before it goes.
+                handover = CharacterDeletion.Delete(dbContext, character);
 
-                if (guildMember is not null)
-                {
-                    character.GuildMemberId = null;
-
-                    var deletedGuildMember = dbContext.GuildMembers
-                        .Where(x => x.Id == character.Id)
-                        .ExecuteDelete();
-
-                    if (deletedGuildMember <= 0)
-                        return false;
-
-                    var hasMembers = dbContext.GuildMembers.Any(x => x.GuildId == guildMember.GuildId);
-                    if (!hasMembers)
-                    {
-                        dbContext.Guilds
-                            .Where(x => x.Id == guildMember.GuildId)
-                            .ExecuteDelete();
-                    }
-                    else if (guildMember.Role == GuildRole.Leader.Id
-                             && !dbContext.GuildMembers.Any(x => x.GuildId == guildMember.GuildId && x.Role == GuildRole.Leader.Id))
-                    {
-                        var newLeader = dbContext.GuildMembers
-                            .Where(x => x.GuildId == guildMember.GuildId)
-                            // SQLite can't sort by DateTimeOffset or ulong in SQL, so sort after loading.
-                            .AsEnumerable()
-                            .OrderBy(x => x.Role)
-                            .ThenBy(x => x.Joined)
-                            .ThenBy(x => x.Id)
-                            .FirstOrDefault();
-
-                        if (newLeader is not null)
-                            newLeader.Role = GuildRole.Leader.Id;
-                    }
-                }
-
-                // Delete references first to avoid foreign key constraint violations.
-                var characterId = character.Id;
-
-                var friends = dbContext.Friends.Where(f =>
-                    f.CharacterId == characterId || f.FriendCharacterId == characterId);
-
-                var ignores = dbContext.Ignores.Where(i =>
-                    i.CharacterId == characterId || i.IgnoreCharacterId == characterId);
-
-                dbContext.Friends.RemoveRange(friends);
-                dbContext.Ignores.RemoveRange(ignores);
-                dbContext.Remove(character);
-
-                if (dbContext.SaveChanges() == 0)
-                    return false;
+                return handover is not null;
             }
             catch (DbUpdateException ex)
             {
@@ -129,9 +99,6 @@ public static class CharacterDeleteRequestHandler
 
                 return false;
             }
-
-            transaction.Commit();
-            return true;
         });
 
         if (!committed)
@@ -143,11 +110,52 @@ public static class CharacterDeleteRequestHandler
             return true;
         }
 
+        if (handover is not null)
+            LogHandover(character.Id, handover);
+
         characterDeleteReply.Status = 1;
         characterDeleteReply.EntityKey = packet.EntityKey;
 
         connection.Send(characterDeleteReply);
 
         return true;
+    }
+
+    /// <summary>
+    /// Evergrove: runs the delete through the execution strategy, which on MariaDB tries it again after a deadlock. A
+    /// database error that still gets out (from moving the houses, say, or a deadlock it gave up on) refuses the delete
+    /// with nothing changed, rather than leaving the client with no answer.
+    /// </summary>
+    private static bool TryExecute(IExecutionStrategy strategy, ulong characterId, Func<bool> delete)
+    {
+        try
+        {
+            return strategy.Execute(delete);
+        }
+        catch (Exception exception) when (exception is DbException or RetryLimitExceededException)
+        {
+            _logger.LogError(exception, "Failed to delete character {CharacterId}.", characterId);
+
+            return false;
+        }
+    }
+
+    private static void LogHandover(ulong characterId, HouseHandoverResult handover)
+    {
+        foreach (var move in handover.Moved)
+        {
+            _logger.LogInformation("Deleted character {CharacterId}'s house {HouseId} (lot {ZoneDefinitionId}) moved to character {HolderId}.",
+                characterId, move.HouseId, move.ZoneDefinitionId, move.HolderId);
+        }
+
+        if (handover.Unmoved.Count == 0)
+            return;
+
+        _logger.LogInformation("Deleted character {CharacterId}'s houses {HouseIds} went with it: {Reason}.",
+            characterId,
+            string.Join(", ", handover.Unmoved),
+            handover.OtherCharacters == 0
+                ? "its account has no other character"
+                : "every other character on its account already has that lot");
     }
 }
