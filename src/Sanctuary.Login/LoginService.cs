@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using Sanctuary.Core.Configuration;
 using Sanctuary.Database;
 using Sanctuary.Game;
+using Sanctuary.Login.Handlers;
 using Sanctuary.Packet.Common.Extensions;
 
 namespace Sanctuary.Login;
@@ -89,6 +90,8 @@ public class LoginService : BackgroundService
                 var hadData = false;
                 hadData |= _loginServer.GiveTime();
                 hadData |= _gatewayServer.GiveTime();
+
+                CharacterLoginRequestHandler.ProcessPendingLogins();
 
                 if (!hadData)
                     Thread.Sleep(1);

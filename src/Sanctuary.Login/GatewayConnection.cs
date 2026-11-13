@@ -13,6 +13,7 @@ using Sanctuary.Packet.Common;
 using Sanctuary.UdpLibrary;
 using Sanctuary.UdpLibrary.Enumerations;
 using Sanctuary.Core.Helpers;
+using Sanctuary.Game.Helpers;
 
 namespace Sanctuary.Login;
 
@@ -24,7 +25,24 @@ public class GatewayConnection : LoginServerConnection
     public string ServerAddress { get; set; } = null!;
     public GameServerData ServerData { get; set; } = null!;
 
-    public HashSet<ulong> OnlineCharacters { get; set; } = new();
+    // Online character id -> the gateway session that logged it in (upstream OSFR PR #190).
+    private readonly OnlineCharacterSessions _onlineSessions = new();
+
+    public int OnlineCount => _onlineSessions.Count;
+
+    public bool IsOnline(ulong characterId) => _onlineSessions.IsOnline(characterId);
+
+    public void MarkOnline(ulong characterId, ulong session) => _onlineSessions.MarkOnline(characterId, session);
+
+    public void MarkReleased(ulong characterId) => _onlineSessions.MarkReleased(characterId);
+
+    public bool TryLogout(ulong characterId, ulong session) => _onlineSessions.TryLogout(characterId, session);
+
+    /// <summary>
+    /// Whether this gateway passed the challenge in <see cref="GatewayLoginRequest"/> (only then is its address set).
+    /// Until it has, nothing else it sends is handled.
+    /// </summary>
+    public bool IsAuthenticated => !string.IsNullOrEmpty(ServerAddress);
 
     public GatewayConnection(ILogger<GatewayConnection> logger, IOptionsMonitor<LoginServerOptions> options, GatewayServer gatewayServer, SocketAddress socketAddress, int connectCode) : base(options, gatewayServer, socketAddress, connectCode)
     {
@@ -53,11 +71,21 @@ public class GatewayConnection : LoginServerConnection
             return;
         }
 
+        // Evergrove: a gateway that hasn't passed the challenge may only send the challenge. Before, any connection to
+        // the login-gateway port could mark characters online or offline, or answer a release request.
+        if (opCode != GatewayLoginRequest.OpCode && !IsAuthenticated)
+        {
+            _logger.LogWarning("{connection} sent a packet before passing the gateway challenge. ( OpCode: {opcode} )", this, opCode);
+            Disconnect();
+            return;
+        }
+
         var handled = opCode switch
         {
             GatewayLoginRequest.OpCode => GatewayLoginRequestHandler.HandlePacket(this, data),
             GatewayCharacterLogin.OpCode => GatewayCharacterLoginHandler.HandlePacket(this, data),
             GatewayCharacterLogout.OpCode => GatewayCharacterLogoutHandler.HandlePacket(this, data),
+            GatewayCharacterReleaseReply.OpCode => GatewayCharacterReleaseReplyHandler.HandlePacket(this, data),
             _ => false
         };
 

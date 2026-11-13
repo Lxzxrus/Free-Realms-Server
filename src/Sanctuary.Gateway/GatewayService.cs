@@ -246,10 +246,10 @@ public class GatewayService : BackgroundService
 
                         // Login keeps its own list of who is online here, to refuse a second login of the same
                         // character. A new connection starts that list empty.
-                        var online = _server.OnlineCharacterIds();
+                        var online = _server.OnlineCharacterSessions();
 
-                        foreach (var id in online)
-                            _client.SendCharacterLogin(id);
+                        foreach (var (id, session) in online)
+                            _client.SendCharacterLogin(id, session);
 
                         if (online.Count > 0)
                             _logger.LogInformation("Told the Login server about {Count} players already online.", online.Count);

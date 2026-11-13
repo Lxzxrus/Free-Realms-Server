@@ -1925,6 +1925,11 @@ public class UdpConnection : PriorityQueueMember
         }
     }
 
+    public long MillisecondsSinceLastReceive()
+    {
+        return LastReceive();
+    }
+
     private UdpClockStamp LastReceive(UdpClockStamp useStamp)
     {
         lock (_guard)
