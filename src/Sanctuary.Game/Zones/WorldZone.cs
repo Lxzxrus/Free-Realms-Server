@@ -86,13 +86,15 @@ public sealed class WorldZone : BaseZone
 
         SendShopData(player);
 
-        // Upstream OSFR also sends its "Hot New Items!" Marketplace announcement here. Evergrove doesn't: PR #118 took
-        // store ads out of the welcome window, and this is one more (AnnouncementBasePacketHandler answers with none).
+        // Evergrove doesn't send upstream's "Hot New Items!" Marketplace announcement here (PR #118), but that doesn't
+        // keep the ad out: the welcome window draws its own default "Hot New Items!" ad whenever its announcement list
+        // is empty (docs/research/heros-journal.md).
 
         _questManager.RestoreJournal(player);
 
-        // After the quests: the welcome window's "Hero's Journal Quest" box shows the journal's current quest, which
-        // the client works out from the quests just sent (AdventurersJournal).
+        // The welcome window goes after the quests. That order was chosen for its journal box, which this client
+        // doesn't have (docs/research/heros-journal.md). The Hero's Journal itself works out its current quest from
+        // the quests just sent (AdventurersJournal).
         if (player.SeenOneTimeNotifications.TryAdd(OneTimeNotification.WelcomeInfo))
             SendWelcomeInfo(player);
 

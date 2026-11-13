@@ -499,9 +499,9 @@ public sealed class QuestManager : IQuestManager
     {
         RefreshObjectiveTarget(player);
 
-        // The welcome window, sent next, shows the journal's current quest, which the client picks with the finished
-        // set. Between two story quests it would pick the one not taken yet and show it without any text; without the
-        // set it says there are no quests. The set follows once the next one is taken (AcceptQuest, AdventurersJournal).
+        // The Hero's Journal shows a current quest, which the client picks with the finished set. Between two story
+        // quests it would pick the one not taken yet and show it without any text; without the set it shows no current
+        // quest. The set follows once the next one is taken (AcceptQuest, AdventurersJournal).
         if (!AdventurersJournal.IsBetweenStoryQuests(player.Quests))
             SendJournalQuestStates(player);
     }

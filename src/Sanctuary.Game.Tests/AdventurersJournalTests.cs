@@ -13,7 +13,7 @@ using Sanctuary.Game.Zones;
 namespace Sanctuary.Game.Tests;
 
 /// <summary>
-/// The Adventurer's Journal, which picks the quest the welcome window's "Hero's Journal Quest" box shows
+/// The Adventurer's Journal, which picks the quest the Hero's Journal shows as current
 /// (docs/research/heros-journal.md).
 /// </summary>
 [TestClass]
