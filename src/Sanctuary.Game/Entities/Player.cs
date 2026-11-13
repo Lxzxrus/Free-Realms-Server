@@ -149,6 +149,12 @@ public sealed class Player : ClientPcData, IEntity
     /// </summary>
     public long NextZoneTeleportAt { get; set; }
 
+    /// <summary>When the player may next summon a mount: each one is a new npc, and a new NPC GUID, shown to everyone near.</summary>
+    public long NextMountSpawnAt { get; set; }
+
+    /// <summary>When the player may next pick up one of their own quest pickups: each one is saved to the database.</summary>
+    public long NextQuestPickupAt { get; set; }
+
     /// <summary>
     /// The move to another zone that came too soon and waits for its turn (<see cref="ZoneTeleports"/>), or
     /// <c>null</c>.

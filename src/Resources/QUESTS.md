@@ -9,20 +9,22 @@ required.
 If the file is broken (a quest with no goals, the same `QuestId` twice, or a link to a quest that isn't
 in the file), the server refuses it and logs why: at startup it won't start, and on a reload it keeps
 the quests it had. Quests are loaded into `src/Sanctuary.Game/Resources/Definitions/QuestDefinition.cs` /
-`QuestGoal.cs` - read those two files for the authoritative field list. This doc is a guide for
+`QuestGoals/QuestGoal.cs` - read those two files for the authoritative field list. This doc is a guide for
 using them, not a substitute.
 
 ## Before you start
 
-`GiverGuid` and `TargetGuid` must be the guid of an NPC already spawned in a zone script (the
-`100000000000 + definitionId` convention used by `zone.spawnNpcWithGuid` calls, e.g.
-`src/Scripts/Zone/FabledRealms.lua`) - not the `Npcs.json` definition id itself.
+`GiverNpcId`, `TargetNpcId` and each talk goal's `Targets[].NpcId` name an NPC by its `Npcs.json` id,
+and that NPC must be spawned by a zone script: `zone:spawnFixedNpc(id, x, y, z, heading)` in
+`src/Scripts/Zone/FabledRealms.lua`. The server derives the NPC's GUID from that id (upstream OSFR #164),
+so never write a GUID into quest data.
 
-The server doesn't validate this: if the guid doesn't match a spawned NPC, the quest silently can
-never be offered or turned in - no error, no log. The test
+The server doesn't validate this: if no spawned NPC has the id, the quest silently can never be offered
+or turned in - no error, no log. The test
 `QuestDefinitionCollectionTests.ShippedQuests_NameOnlyNpcsThatFabledRealmsSpawns` catches it instead,
-so `dotnet test` fails on any quest naming a guid `FabledRealms.lua` doesn't spawn.
-`/npc spawn <definitionId>` (admin-only) prints a guid you can use for ad hoc testing.
+so `dotnet test` fails on any quest naming an NPC `FabledRealms.lua` doesn't spawn.
+Quests match an NPC by its id, so one spawned for ad hoc testing with `!npc spawn <definitionId>`
+(admin-only) works too.
 
 ## Minimal quest
 
@@ -37,15 +39,13 @@ The smallest valid entry is a single "talk to this NPC" quest with no reward:
   "GiverDialogueId": 0,
   "ObjectiveDescriptionId": 0,
   "IconId": 43278,
-  "GiverGuid": 100000001201,
-  "TargetGuid": 100000001201,
+  "GiverNpcId": 1201,
+  "TargetNpcId": 1201,
   "RewardCoins": 0,
   "RewardExperience": 0,
   "RewardItems": [],
-  "PrerequisiteQuestId": 0,
-  "NextQuestId": 0,
   "Goals": [
-    { "NameId": 0, "TargetGuid": 100000001201 }
+    { "Type": 0, "NameId": 0, "Targets": [ { "NpcId": 1201 } ] }
   ]
 }
 ```
@@ -63,14 +63,15 @@ done. Each goal becomes its own tracker row.
 
 ```json
 "Goals": [
-  { "NameId": 100103, "DescriptionId": 100104, "DialogueId": 384144, "TargetGuid": 100000003018 },
-  { "NameId": 94511,  "DescriptionId": 94512,  "DialogueId": 94257,  "TargetGuid": 100000002049 }
+  { "Type": 0, "NameId": 100103, "DescriptionId": 100104, "DialogueId": 384144, "Targets": [ { "NpcId": 3018 } ] },
+  { "Type": 0, "NameId": 94511,  "DescriptionId": 94512,  "DialogueId": 94257,  "Targets": [ { "NpcId": 2049 } ] }
 ]
 ```
 
-- `NameId` is the tracker row text AND the goal's client-side identity - it must be unique across
-  a quest's goals, or the client can't tell them apart (checkmarks/progress won't render right).
-  The loader warns on a duplicate.
+- `NameId` is the tracker row text AND the goal's identity, on the client and in the database - it must
+  be unique across a quest's goals, or the client can't tell them apart (checkmarks/progress won't
+  render right). The loader warns on a duplicate. Players' progress is saved under it, so changing the
+  `NameId` of a goal live characters may be on needs a migration (see "Database").
 - `DialogueId` on the **final** goal becomes the turn-in speech bubble; an earlier talk goal's
   `DialogueId` is what its NPC says as that step is ticked off.
 - `Type` defaults to `0` (TalkToNpc) if omitted.
@@ -79,7 +80,7 @@ done. Each goal becomes its own tracker row.
 
 | Type | Value | Completes when... |
 |---|---|---|
-| `TalkToNpc` | 0 | player interacts with `TargetGuid` |
+| `TalkToNpc` | 0 | player interacts with the NPC in `Targets` (or the quest's `TargetNpcId` when it names none) |
 | `ReachLocation` | 1 | player gets within `ReachRadius` (default 12) of `ReachPosition`, checked on every position update (2D, X/Z only) |
 | `Collect` | 2 | player gathers `RequiredCount` pickups of the node type `CollectNodeType` |
 
@@ -88,7 +89,7 @@ battle-instance-encounter goal type. Don't add one without also building what wo
 
 ### ReachLocation example
 
-Use `/whereami` in-game to grab coordinates while standing where you want the goal to trigger.
+Use `!whereami` in-game to grab coordinates while standing where you want the goal to trigger.
 
 ```json
 { "NameId": 93294, "Type": 1, "ReachPosition": [-690.38, 2.3, -1060.25], "ReachRadius": 15 }
@@ -110,31 +111,34 @@ doesn't place them. Three files do:
   asset mirror); `Scale` sizes it (that plank is a 14 m bridge board, so `0.07` makes a stick about 1 m long);
   `NameId` is the hover text ("Stick of Firewood");
   `DropTable` is empty, so gathering one gives nothing but the quest credit.
-- `CollectionNodePools.json`: a pool of that type in a zone (`merry-vale-firewood`).
-  `MaxActiveNodes` `0` puts a node on every spawn point; `RespawnSeconds` is how long a gathered one
-  stays gone.
+- `CollectionNodePools.json`: a pool of that type in a zone (`merry-vale-firewood`) with
+  `"PlayerSpecific": true`. `MaxActiveNodes` `0` puts a node on every spawn point.
 - `CollectionNodeSpawns/<zone id>/<pool key>.json`: the spawn points. Ids are unique across every
-  file. Stand on the spot and use `/whereami`, or take the height from an NPC or a waypoint
+  file. Stand on the spot and use `!whereami`, or take the height from an NPC or a waypoint
   (`Maps/FabledRealms.map`) right beside it, so the node sits on the ground.
 
-Anyone can gather a quest's nodes, on the quest or not, so each needs a short respawn.
+A Collect goal counts only player-specific pickups (upstream OSFR #166): each player sees a pool's
+pickups only while one of their quests needs them, a picked one disappears for that player alone, and
+each spawn point counts once. The server warns at startup about a Collect goal whose node type has no
+player-specific pool, since nothing can ever credit it. A node type may also name a quest collection
+entry (`CollectionId`, `CollectionEntryId`), ticked when the player picks one up: Hasti's homework
+ticks collection 313.
 `RequiredCount` must be at least `1`, and the test
 `ShippedCollectGoals_HaveEnoughPickupsOutAtOnce` fails when a goal needs more pickups than its
 pools put out at once, or names a type that doesn't exist.
 
 ### Counted talk
 
-A talk goal with `RequiredCount` above 1 and a `TargetGuids` list completes after the player has
+A talk goal with `RequiredCount` above 1 and several `Targets` completes after the player has
 clicked that many of the listed NPCs, in any order, each counting once. Every one not yet clicked
 shows the "?". Root of the Problem (3103) picks five of the fourteen chugaroot plants on Farmer
 Murglot's patch:
 
 ```json
-{ "NameId": 386167, "RequiredCount": 5, "TargetGuids": [100000001714, 100000001715, 100000001716] }
+{ "Type": 0, "NameId": 386167, "RequiredCount": 5, "Targets": [ { "NpcId": 1714 }, { "NpcId": 1715 }, { "NpcId": 1716 } ] }
 ```
 
-`TargetDialogueIds` (with `TargetResponseIds`) gives each NPC in `TargetGuids` its own line, in the
-same order.
+A target's `DialogueId` (with `ResponseId`) gives that NPC its own line.
 
 ## Conversations
 
@@ -181,17 +185,10 @@ The loader warns, and the tests fail, when a question has only wrong answers, an
 ## Disabled quests
 
 [`Quests.disabled.json`](Quests.disabled.json) holds quests the server doesn't load, because they
-name npcs no zone script spawns yet. Their entries are kept exactly as they were, so bringing one
-back means moving it into `Quests.json` once its npcs spawn, and restoring the chain links that
-were cut when it left:
-
-| Quest | Missing npcs | Restore when it comes back |
-|---|---|---|
-| 104146 Brawler: Restless Rumors | `100000033082` | Move together with 104154; they chain to each other |
-| 104154 Brawler: The Growler Report | `100000033082`, `100000033083` | Move together with 104146 |
-| 3010 Looking for Lavender | `100000040011`, `100000040012` | Set 3011's `PrerequisiteQuestId` back to `3010` |
-| 3031 Purr...fect Secret | `100000040016`-`100000040019` | Set 3032's `PrerequisiteQuestId` back to `3031` |
-| 3081 Sobering Homecoming | `100000040032`-`100000040034` | Set 3080's `NextQuestId` back to `3081` |
+name npcs no zone script spawns yet. It is empty: the five it held (104146, 104154, 3010, 3031,
+3081) came back with upstream OSFR's spawns. To park a quest, move its entry there unchanged and cut
+the chain links (`PrerequisiteQuestId`, `NextQuestId`) other quests have to it, noting them here so
+they can be restored.
 
 ## Rewards
 
@@ -199,6 +196,9 @@ were cut when it left:
 - `RewardItems` - a list of item definition ids added to the player's bags. These **are**
   validated against the item definitions at grant time; an unknown id won't grant (check the
   server log if a reward item silently doesn't show up).
+- `RewardCollectionId` - a quest collection (`Collections.json`) shown with the rewards on the offer
+  and the turn-in (upstream OSFR #166). Its entries are ticked by the quest's pickups, not by the
+  turn-in.
 
 ## Badges
 
@@ -236,14 +236,18 @@ say) aren't in the client we ship; leave those ids out rather than borrowing unr
 a lost row's exact words exist under another id, use that one: Birthday Surprises' "Speak with
 Tumbolina" row is gone, and 71001, from another quest, reads the same.
 
-## No database migration needed
+## Database
 
-`CharacterQuests` stores `QuestId, CharacterId, Completed, GoalProgress, GoalCount` generically -
-adding quests to `Quests.json` is purely additive and needs no EF Core migration.
+Adding a quest needs no migration. `CharacterQuests` stores each character's quests by `QuestId`, with
+`CurrentGoalId` the `NameId` of the goal they are on, and `CharacterQuestProgress` stores progress
+per goal `NameId` (the NPCs talked to, the pickups gathered). So changing a live quest's goals matters:
+a character on a goal whose `NameId` is gone restarts the quest at login. When a goal's `NameId` has to
+change, add a migration for both providers that moves the rows, as `ReconcileUpstreamQuestGoals` does
+for Hasti's Homework Heist (46489 to 74443).
 
 ## Checklist
 
-1. Confirm the giver/target NPCs are already spawned in a zone script - note their guids.
+1. Confirm the giver/target NPCs are already spawned in a zone script - note their `Npcs.json` ids.
 2. Pick a unique `QuestId`.
 3. Write the entry with its `Goals`, one per step.
 4. Wire `PrerequisiteQuestId`/`NextQuestId` if it's part of a chain, `ExcludesQuestIds` if it's

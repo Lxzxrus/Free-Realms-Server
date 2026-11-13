@@ -19,6 +19,7 @@ public static class PacketMountSpawnHandler
     private static ILogger _logger = null!;
 
     private const int MountTeleportCompositeEffectId = 46;
+    private const int MinSpawnIntervalMs = 1000;
     private static IResourceManager _resourceManager = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
@@ -63,6 +64,13 @@ public static class PacketMountSpawnHandler
     {
         if (!_resourceManager.Mounts.TryGetValue(mountInfo.Definition, out var mountDefinition))
             return;
+
+        // Evergrove: a player summons a mount once in a while; a client spawning one after another used up the zone's
+        // NPC GUIDs and kept everyone near busy with new mounts. One a second is plenty.
+        if (Environment.TickCount64 < connection.Player.NextMountSpawnAt)
+            return;
+
+        connection.Player.NextMountSpawnAt = Environment.TickCount64 + MinSpawnIntervalMs;
 
         connection.Player.Dismount();
 

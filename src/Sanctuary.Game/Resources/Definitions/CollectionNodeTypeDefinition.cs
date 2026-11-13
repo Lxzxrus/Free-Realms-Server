@@ -15,4 +15,6 @@ public sealed class CollectionNodeTypeDefinition
     public byte CursorId { get; set; } = 18;
     public float PlacementYOffset { get; set; }
     public int SubTextNameId { get; set; }
+    public int CollectionId { get; set; }
+    public int CollectionEntryId { get; set; }
 }

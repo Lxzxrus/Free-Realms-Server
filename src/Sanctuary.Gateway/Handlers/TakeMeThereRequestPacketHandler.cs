@@ -26,8 +26,10 @@ public static class TakeMeThereRequestPacketHandler
     }
 
     /// <summary>
-    /// Reached through <see cref="PacketClientLuaMetricsHandler"/>, which reads the request: it is one of the
-    /// client's Lua metrics events, and every other event shares its opcode.
+    /// Reached through <see cref="PacketClientLuaMetricsHandler"/>, which finds the request in the client's Lua
+    /// metrics report. The stock client's button itself is answered by <see cref="ClientPathRequestPacketHandler"/>:
+    /// this reply (type 1) only reaches the client's breadcrumb trail, which drops it unless it is waiting for or
+    /// showing a path of its own.
     /// </summary>
     public static bool HandlePacket(GatewayConnection connection, TakeMeThereRequestPacket request)
     {

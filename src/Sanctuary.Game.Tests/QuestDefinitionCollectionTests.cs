@@ -41,8 +41,8 @@ public sealed class QuestDefinitionCollectionTests
         return quests;
     }
 
-    // Quests name NPCs by their Npcs.json id, which each spawn names first (spawnNpcWithGuid(id, guid, ...); upstream
-    // OSFR's #164 turns these into spawnFixedNpc(id, ...)).
+    // Quests name NPCs by their Npcs.json id, which each spawn names first: spawnFixedNpc(id, ...) since upstream OSFR's
+    // #164 derived fixed NPC GUIDs from it, spawnNpcWithGuid(id, guid, ...) before.
     private static HashSet<int> NpcIdsSpawnedByFabledRealms()
     {
         var script = File.ReadAllText(FindSourceFile("Scripts", "Zone", "FabledRealms.lua"));
@@ -222,6 +222,61 @@ public sealed class QuestDefinitionCollectionTests
                     problems.Add($"Quest {quest.QuestId}, goal {goal.NameId}: needs {goal.RequiredCount} " +
                         $"\"{goal.CollectNodeType}\", and {outAtOnce} are out at once");
             }
+        }
+
+        Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// Upstream OSFR's #166 credits a Collect goal only from player-specific pickups (<c>CollectGoal.Matches</c>), so a
+    /// goal whose node type has no player-specific pool can never be finished. The server only warns about it.
+    /// </summary>
+    [TestMethod]
+    public void ShippedCollectGoals_GatherPlayerSpecificPickups()
+    {
+        var resources = Path.GetDirectoryName(FindShippedQuests())!;
+
+        var pools = new CollectionNodePoolDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(pools.Load(Path.Combine(resources, "CollectionNodePools.json")));
+
+        var playerSpecific = pools.Values.Where(pool => pool.PlayerSpecific).Select(pool => pool.NodeType).ToHashSet();
+
+        var problems = LoadQuests(FindShippedQuests()).Quests.Values
+            .SelectMany(quest => quest.Goals.OfType<CollectGoal>()
+                .Where(goal => !playerSpecific.Contains(goal.CollectNodeType))
+                .Select(goal => $"Quest {quest.QuestId}, goal {goal.NameId}: \"{goal.CollectNodeType}\" has no player-specific pool"))
+            .ToList();
+
+        Assert.AreEqual(0, problems.Count, string.Join("\n", problems));
+    }
+
+    /// <summary>
+    /// Quest collections (upstream OSFR #166): a quest's <c>RewardCollectionId</c> is a shipped collection, and the entry
+    /// a quest pickup ticks belongs to the collection its node type names, in Evergrove's Collections.json.
+    /// </summary>
+    [TestMethod]
+    public void ShippedQuestCollections_Resolve()
+    {
+        var resources = Path.GetDirectoryName(FindShippedQuests())!;
+
+        var collections = new CollectionDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(collections.Load(Path.Combine(resources, "Collections.json")));
+
+        var types = new CollectionNodeTypeDefinitionCollection(NullLogger.Instance);
+        Assert.IsTrue(types.Load(Path.Combine(resources, "CollectionNodeTypes.json")));
+
+        var problems = new List<string>();
+
+        foreach (var quest in LoadQuests(FindShippedQuests()).Quests.Values)
+        {
+            if (quest.RewardCollectionId != 0 && !collections.ContainsKey(quest.RewardCollectionId))
+                problems.Add($"Quest {quest.QuestId} rewards unknown collection {quest.RewardCollectionId}");
+        }
+
+        foreach (var type in types.Values.Where(type => type.CollectionEntryId != 0))
+        {
+            if (!collections.TryGetEntry(type.CollectionEntryId, out var match) || match.Definition.Id != type.CollectionId)
+                problems.Add($"Node type {type.Key} ticks entry {type.CollectionEntryId}, which isn't in collection {type.CollectionId}");
         }
 
         Assert.AreEqual(0, problems.Count, string.Join("\n", problems));

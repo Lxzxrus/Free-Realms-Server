@@ -276,7 +276,8 @@ public sealed class JobGrantTests
         {
             var npcId = trainer.NpcId;
 
-            Assert.IsTrue(Regex.IsMatch(spawnScript, $@"spawnNpcWithGuid\({npcId}, {100000000000L + npcId},"),
+            // Upstream OSFR #164: fixed spawns name only the NPC id; the GUID is derived from it.
+            Assert.IsTrue(Regex.IsMatch(spawnScript, $@"spawnFixedNpc\({npcId}, "),
                 $"{trainer.Name} ({npcId}) isn't spawned by FabledRealms.lua.");
             Assert.AreEqual(trainer.Name, npcNames.GetValueOrDefault(npcId), $"npc {npcId} isn't {trainer.Name}.");
             Assert.IsTrue(profileIds.Contains(trainer.ProfileId), $"{trainer.Name} teaches unknown job {trainer.ProfileId}.");

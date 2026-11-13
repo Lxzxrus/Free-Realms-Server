@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
@@ -35,10 +36,16 @@ public static class GuildNameRequestPacketHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(GuildNameRequestPacket), packet);
 
+        // Evergrove: GetGuildId throws on a GUID without the guild prefix, which only a modified client sends.
+        if (!GuidHelper.IsGuildGuid(packet.Guid))
+            return true;
+
+        var guildId = GuidHelper.GetGuildId(packet.Guid);
+
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var guildName = dbContext.Guilds
-            .Where(x => x.Id == packet.Guid)
+            .Where(x => x.Id == guildId)
             .Select(x => x.Name)
             .SingleOrDefault();
 

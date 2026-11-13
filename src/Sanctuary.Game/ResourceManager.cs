@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Resources;
+using Sanctuary.Game.Resources.Definitions.QuestGoals;
 using Sanctuary.Game.Resources.Definitions.Rewards;
 
 namespace Sanctuary.Game;
@@ -414,6 +415,21 @@ public class ResourceManager : IResourceManager, IDisposable
 
         if (!Quests.Load(QuestsFile))
             return false;
+
+        var playerSpecificNodeTypes = CollectionNodePools.Values
+            .Where(pool => pool.PlayerSpecific)
+            .Select(pool => pool.NodeType)
+            .ToHashSet();
+
+        foreach (var quest in Quests.Quests.Values)
+        {
+            foreach (var collectGoal in quest.Goals.OfType<CollectGoal>())
+            {
+                if (!string.IsNullOrEmpty(collectGoal.CollectNodeType) && !playerSpecificNodeTypes.Contains(collectGoal.CollectNodeType))
+                    _logger.LogWarning("Collect goal on quest {id} uses node type {type}, which has no player-specific pool; it can never be credited.",
+                        quest.QuestId, collectGoal.CollectNodeType);
+            }
+        }
 
         foreach (var coin in CollectionCoins.Values)
         {
