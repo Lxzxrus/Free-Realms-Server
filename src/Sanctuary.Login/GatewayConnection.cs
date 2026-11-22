@@ -26,6 +26,9 @@ public class GatewayConnection : LoginServerConnection
 
     public HashSet<ulong> OnlineCharacters { get; set; } = new();
 
+    /// <summary>Whether this connection passed the challenge (GatewayLoginRequestHandler). Until then it is not a gateway.</summary>
+    public bool IsAuthenticated { get; set; }
+
     public GatewayConnection(ILogger<GatewayConnection> logger, IOptionsMonitor<LoginServerOptions> options, GatewayServer gatewayServer, SocketAddress socketAddress, int connectCode) : base(options, gatewayServer, socketAddress, connectCode)
     {
         _logger = logger;
@@ -50,6 +53,15 @@ public class GatewayConnection : LoginServerConnection
         if (!reader.TryRead(out byte opCode))
         {
             _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", PacketLog.Hex(data));
+            return;
+        }
+
+        // Only the challenge may come before the challenge is passed: anyone who reaches this port could otherwise report
+        // characters online, which the server status counts (Evergrove). Ignored rather than disconnected: the real
+        // Gateway may have queued a logout while it was reconnecting, ahead of its challenge, and must not lose the link.
+        if (!IsAuthenticated && opCode != GatewayLoginRequest.OpCode)
+        {
+            _logger.LogWarning("{connection} sent opcode {opcode} before passing the challenge; ignored.", this, opCode);
             return;
         }
 

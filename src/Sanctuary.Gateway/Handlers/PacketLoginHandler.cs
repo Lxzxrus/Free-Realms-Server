@@ -76,6 +76,19 @@ public static class PacketLoginHandler
             return true;
         }
 
+        // In every build: a ticket the Login server made more than a few minutes ago, or before tickets carried their time,
+        // is refused (GatewayTicket). The player logs in again for a new one.
+        if (!GatewayTicket.IsFresh(ticket, DateTimeOffset.UtcNow))
+        {
+            _logger.LogWarning("{connection} connected with an expired ticket. ( Guid: {guid} )", connection, packetLogin.Guid);
+
+            connection.Send(packetLoginReply);
+
+            connection.Disconnect();
+
+            return true;
+        }
+
         ulong characterId;
 
         try

@@ -83,7 +83,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     protected readonly PooledList<TConnection> ConnectionList;
     protected readonly PooledList<UdpConnection> DisconnectPendingList;
 
-    protected readonly ConcurrentDictionary<int, TConnection> AddressHashTable;
+    // Keyed by the whole address, which compares by its bytes: a key that was only its hash code let two addresses that
+    // hash alike share an entry, and removing one connection could then take out the other's (Evergrove).
+    // Each key is the connection's own copy (UdpConnection.SocketAddress), never the receive buffer.
+    protected readonly ConcurrentDictionary<SocketAddress, TConnection> AddressHashTable;
     protected readonly ConcurrentDictionary<int, TConnection> ConnectCodeHashTable;
 
     private readonly Internal.PriorityQueue<UdpConnection, UdpClockStamp>? PriorityQueue;
@@ -225,7 +228,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         ConnectionList = new PooledList<TConnection>();
         DisconnectPendingList = new PooledList<UdpConnection>();
 
-        AddressHashTable = new ConcurrentDictionary<int, TConnection>(Environment.ProcessorCount, Params.HashTableSize);
+        AddressHashTable = new ConcurrentDictionary<SocketAddress, TConnection>(Environment.ProcessorCount, Params.HashTableSize);
 
         // rarely used, so make it a fraction of the main tables size
         ConnectCodeHashTable = new ConcurrentDictionary<int, TConnection>(Environment.ProcessorCount, Math.Max(Params.HashTableSize / 5, 10));
@@ -752,10 +755,9 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                     return;
                 }
 
-                // Skip protocol version
-                reader.Advance(4);
-
-                if (!reader.TryReadInt32(out int connectCode))
+                // Skip protocol version. A request too short to hold it and the connect code is dropped quietly: Advance
+                // threw on it, and each one was logged as an exception (Evergrove).
+                if (!reader.TryReadInt32(out _) || !reader.TryReadInt32(out int connectCode))
                     return;
 
                 var newCon = ActivatorUtilities.CreateInstance<TConnection>(_serviceProvider, this, socketAddress, connectCode);
@@ -803,7 +805,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
                                     lock (_connectionGuard)
                                     {
-                                        AddressHashTable.Remove(AddressHashValue(curCon.SocketAddress), out _);
+                                        AddressHashTable.TryRemove(KeyValuePair.Create(curCon.SocketAddress, curCon));
                                         _connectLimiter.ConnectionRemoved(curCon.SocketAddress, CachedClock);
 
                                         // copy it, since the caller's socket address is the receive buffer, reused for the next packet
@@ -813,7 +815,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                                         curCon.EndPoint = ipEndPoint;
                                         curCon.SocketAddress = newAddress;
 
-                                        AddressHashTable.TryAdd(AddressHashValue(curCon.SocketAddress), curCon);
+                                        AddressHashTable.TryAdd(curCon.SocketAddress, curCon);
                                         _connectLimiter.ConnectionAdded(curCon.SocketAddress, CachedClock);
                                     }
 
@@ -880,16 +882,11 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     {
         lock (_connectionGuard)
         {
-            if (AddressHashTable.TryGetValue(AddressHashValue(socketAddress), out var udpConnection))
+            if (AddressHashTable.TryGetValue(socketAddress, out var udpConnection))
                 return udpConnection;
         }
 
         return null;
-    }
-
-    protected int AddressHashValue(SocketAddress socketAddress)
-    {
-        return socketAddress.GetHashCode();
     }
 
     public void AddConnection(TConnection con)
@@ -898,7 +895,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         {
             ConnectionList.Add(con);
 
-            if (AddressHashTable.TryAdd(AddressHashValue(con.SocketAddress), con))
+            if (AddressHashTable.TryAdd(con.SocketAddress, con))
                 _connectLimiter.ConnectionAdded(con.SocketAddress, CachedClock);
 
             ConnectCodeHashTable.TryAdd(con.ConnectCode, con);
@@ -1166,9 +1163,14 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
             if (PriorityQueue is not null)
                 PriorityQueue.Remove(con);
 
-            ConnectCodeHashTable.Remove(con.ConnectCode, out _);
+            if (con is not TConnection conInstance)
+                return;
 
-            if (!AddressHashTable.TryRemove(AddressHashValue(con.SocketAddress), out var conInstance))
+            // Only this connection's own entries: another connection may hold the same connect code (the client picks
+            // it), and removing by key alone took that one's entry out instead (Evergrove).
+            ConnectCodeHashTable.TryRemove(KeyValuePair.Create(conInstance.ConnectCode, conInstance));
+
+            if (!AddressHashTable.TryRemove(KeyValuePair.Create(conInstance.SocketAddress, conInstance)))
                 return;
 
             _connectLimiter.ConnectionRemoved(conInstance.SocketAddress, CachedClock);

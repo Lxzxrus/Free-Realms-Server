@@ -98,11 +98,19 @@ public class StatConverter : JsonConverter<object>
 
     public override void Write(Utf8JsonWriter writer, object? value, JsonSerializerOptions options)
     {
+        // Each branch returns: the throw below used to follow every write, so no stat could be written (Evergrove).
         if (value is float floatValue)
+        {
             writer.WriteNumberValue(floatValue);
-        else if (value is int intValue)
-            writer.WriteNumberValue(intValue);
+            return;
+        }
 
-        throw new NotImplementedException();
+        if (value is int intValue)
+        {
+            writer.WriteNumberValue(intValue);
+            return;
+        }
+
+        throw new NotSupportedException($"A stat value must be a float or an int, not {value?.GetType().Name ?? "null"}.");
     }
 }
