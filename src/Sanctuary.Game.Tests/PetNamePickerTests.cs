@@ -13,9 +13,10 @@ namespace Sanctuary.Game.Tests;
 
 /// <summary>
 /// Checks every name the client's pet name picker makes against the pet name rules and a name filter
-/// (<see cref="PetHelper.IsValidName"/>), so a NameFilter.txt can be checked before it is deployed. The filter refuses a
-/// name that holds one of its words anywhere, and the picker's names include Scrappy, Spike and Muffin, so a word such
-/// as "crap" refuses every title paired with one. The picker's parts are in the game client, which isn't in the
+/// (<see cref="PetHelper.IsValidName"/>), so a NameFilter.txt can be checked before it is deployed. The filter refuses
+/// most of its words anywhere in a word of the name, and the picker's names include Scrappy, Spike and Muffin, so a word
+/// such as "crap" refuses every title paired with one unless it is whole-word only or Scrappy is its cover
+/// (<see cref="NameFilterCollection"/>). The picker's parts are in the game client, which isn't in the
 /// repository, so the check runs only when EVERGROVE_CLIENT names the client's folder (the one with FreeRealms.exe);
 /// it checks the NameFilter.txt that EVERGROVE_NAME_FILTER names, or else the repository's src/Resources/NameFilter.txt:
 /// <code>
@@ -52,7 +53,7 @@ public sealed class PetNamePickerTests
 
         // Grouped by the filter word that refuses each name, which is the word to remove or narrow.
         var reasons = refused
-            .GroupBy(name => nameFilter.FirstOrDefault(token => name.Contains(token, StringComparison.OrdinalIgnoreCase)))
+            .GroupBy(name => NameFilterCollection.FindRefusedEntry(nameFilter, name))
             .Select(group => $"{(group.Key is null ? "the name rules" : $"\"{group.Key}\"")}: {group.Count()}, such as "
                 + string.Join(", ", group.Take(3).Select(name => $"\"{name}\"")));
 
@@ -75,7 +76,7 @@ public sealed class PetNamePickerTests
                    select template.Replace("[*pet_first*]", title).Replace("[*pet_second*]", name)];
     }
 
-    private static string FindShippedNameFilter()
+    internal static string FindShippedNameFilter()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {

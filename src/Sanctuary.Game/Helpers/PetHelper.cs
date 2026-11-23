@@ -14,6 +14,7 @@ using Sanctuary.Packet;
 using Sanctuary.Game.Resources.Definitions;
 using Sanctuary.Game.Resources.Definitions.Rewards;
 using Sanctuary.Packet.Common;
+using Sanctuary.Game.Resources;
 
 namespace Sanctuary.Game.Helpers;
 
@@ -102,7 +103,7 @@ public static class PetHelper
     public static bool IsValidName(string name, IEnumerable<string> nameFilter) =>
         !string.IsNullOrWhiteSpace(name) && name.Length <= NameMaxLength && name.Any(IsNameLetter)
         && Enumerable.Range(0, name.Length).All(index => IsNameCharacter(name, index))
-        && !nameFilter.Any(token => name.Contains(token, StringComparison.OrdinalIgnoreCase));
+        && !NameFilterCollection.Refuses(nameFilter, name);
 
     private static bool IsNameLetter(char character) => character is >= 'A' and <= '\u024F' && char.IsLetter(character);
 

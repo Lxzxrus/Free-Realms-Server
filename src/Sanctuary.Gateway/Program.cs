@@ -184,6 +184,9 @@ if (!StartupChecks.Passes(host.Services.GetRequiredService<ILogger<Program>>(), 
     return 1;
 }
 
+// Log files older than 30 days are deleted, at start and then daily (LogRetention).
+using var logRetention = LogRetention.Start(configuration, host.Services.GetRequiredService<ILogger<Program>>());
+
 await host.RunAsync();
 
 return 0;

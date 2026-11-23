@@ -121,6 +121,9 @@ const bool isDebugBuild = false;
 if (!StartupChecks.Passes(app.Logger, isDebugBuild, StartupChecks.CheckBuild(isDebugBuild, app.Configuration)))
     return 1;
 
+// Log files older than 30 days are deleted, at start and then daily (LogRetention).
+using var logRetention = LogRetention.Start(app.Configuration, app.Logger);
+
 #if DEBUG
 
 app.UseHttpLogging();

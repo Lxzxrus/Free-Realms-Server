@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Sanctuary.Database;
+using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -16,6 +18,7 @@ public static class PacketCheckNameRequestHandler
 {
     private static ILogger _logger = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
+    private static IResourceManager _resourceManager = null!;
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -23,6 +26,7 @@ public static class PacketCheckNameRequestHandler
         _logger = loggerFactory.CreateLogger(nameof(PacketCheckNameRequestHandler));
 
         _dbContextFactory = serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>();
+        _resourceManager = serviceProvider.GetRequiredService<IResourceManager>();
     }
 
     public static bool HandlePacket(LoginConnection connection, Span<byte> data)
@@ -47,8 +51,6 @@ public static class PacketCheckNameRequestHandler
             LastName = packet.LastName
         };
 
-        // TODO: Validate name against CharacterCreateNames.txt
-
         // Results
         // -1	Char_Name_Invalid_PS3
         //  4	Char_Name_Invalid_PS3
@@ -61,6 +63,26 @@ public static class PacketCheckNameRequestHandler
         //  9	First_Name_Long_PS3
         // 10	Last_Name_Long_PS3
         // def	Char_Unable_Log_Server_PS3
+
+        // Evergrove: the name rules (CharacterNameRules), which creation applies too. Only "is it taken" was checked.
+        var problem = CharacterNameRules.Check(packet.FirstName, packet.LastName, _resourceManager.NameFilter);
+
+        if (problem != CharacterNameProblem.None)
+        {
+            packetCheckNameReply.Result = problem switch
+            {
+                CharacterNameProblem.Profane => 3,
+                CharacterNameProblem.FirstNameTooShort => 7,
+                CharacterNameProblem.LastNameTooShort => 8,
+                CharacterNameProblem.FirstNameTooLong => 9,
+                CharacterNameProblem.LastNameTooLong => 10,
+                _ => 4
+            };
+
+            connection.SendTunneled(packetCheckNameReply);
+
+            return true;
+        }
 
         using var dbContext = _dbContextFactory.CreateDbContext();
 

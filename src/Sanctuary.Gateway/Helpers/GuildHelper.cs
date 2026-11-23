@@ -9,6 +9,7 @@ using Sanctuary.Database;
 using Sanctuary.Game;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
+using Sanctuary.Game.Resources;
 
 namespace Sanctuary.Gateway.Helpers;
 
@@ -48,7 +49,7 @@ public static class GuildHelper
 
     public static bool IsProfane(string name, IEnumerable<string> nameFilter)
     {
-        return nameFilter.Any(token => name.Contains(token, StringComparison.OrdinalIgnoreCase));
+        return NameFilterCollection.Refuses(nameFilter, name);
     }
 
     public static int? GetMemberRole(DatabaseContext dbContext, ulong guildGuid, ulong playerGuid)

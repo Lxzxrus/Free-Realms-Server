@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Sanctuary.Game.Resources;
 
 namespace Sanctuary.Game.Housing;
 
@@ -45,7 +46,7 @@ public static class HouseNames
         if (!name.All(c => char.IsLetterOrDigit(c) || c == ' ' || AllowedPunctuation.Contains(c)))
             return HouseNameResult.IllegalCharacters;
 
-        if (nameFilter.Any(token => name.Contains(token, StringComparison.OrdinalIgnoreCase)))
+        if (NameFilterCollection.Refuses(nameFilter, name))
             return HouseNameResult.Filtered;
 
         return HouseNameResult.Valid;
