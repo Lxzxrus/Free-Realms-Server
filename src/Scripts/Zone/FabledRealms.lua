@@ -4160,6 +4160,17 @@ local function spawnStaticNpcs(zone)
     zone:spawnFixedNpc(40033, 510.5, 86.4, 1934.0, -3.053)
     zone:spawnFixedNpc(40034, 628.5, 80.45, 1743.5, -0.101)
 
+    -- Evergrove: at the six Cooking Table map points with no table NPC (Simone's, Auguste Frydaze's, Helena's,
+    -- Bristlewood's, Shrouded Glade's and Wugachug's), the zone's own table is scenery a click doesn't reach. A table
+    -- NPC of the same model stands on it, at its spot, heading and size (Npcs.json), and opens the recipes
+    -- (Minigames.GameStations).
+    zone:spawnFixedNpc(90001, -1830.417, -42.160942, 431.24234, -2.211701)
+    zone:spawnFixedNpc(90002, -507.29666, -5.597965, 165.28078, -1.643959)
+    zone:spawnFixedNpc(90003, -1256.3146, -59.328835, 863.014, 0.909753)
+    zone:spawnFixedNpc(90004, -448.62274, -87.88603, 2296.8774, 1.279557)
+    zone:spawnFixedNpc(90005, 88.8966, 41.131054, 1019.85706, -1.203425)
+    zone:spawnFixedNpc(90006, 90.359474, 33.155796, -357.50912, 2.898116)
+
     zone:spawnNpc(36310, -1472.180908, -34.02, 439.242676, -2.408259)
     zone:spawnNpc(36311, -1391.067383, -31.795259, 475.003265, -3.106686)
     zone:spawnNpc(36312, -1391.108887, -30.367764, 470.50296, -1.570796)

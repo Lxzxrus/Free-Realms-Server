@@ -94,8 +94,9 @@ public sealed class QuestWorld : IDisposable
         // As the Gateway builds them: the job manager refreshes trainer badges through the quest manager, which takes
         // the job manager lazily.
         JobManager jobs = null!;
+        Launcher = new RecordingLauncher(this);
         Quests = new QuestManager(Resources, null!, DbContextFactory, new Lazy<IJobManager>(() => questJobs ?? jobs),
-            new Launcher(this), Logged);
+            Launcher, Logged);
         Jobs = jobs = new JobManager(Resources, DbContextFactory, null!, Quests, NullLogger<JobManager>.Instance);
 
         // The pet tests' connection that never connects, so the packets a step or a turn-in sends go nowhere.
@@ -124,7 +125,13 @@ public sealed class QuestWorld : IDisposable
 
     public Player Player { get; }
 
-    /// <summary>The games the quest manager asked the launcher to open for the player (activity ids), in order.</summary>
+    /// <summary>
+    /// The Gateway's launcher as the quests see it, and the world objects that open games
+    /// (<see cref="GameStationMenu"/>): what it is asked to open is recorded in <see cref="Launched"/>.
+    /// </summary>
+    public IActivityLauncher Launcher { get; }
+
+    /// <summary>The games the launcher was asked to open for the player (activity ids), in order.</summary>
     public List<int> Launched { get; } = [];
 
     /// <summary>What the launcher answers: the game opened, unless a test says what stopped it.</summary>
@@ -227,7 +234,7 @@ public sealed class QuestWorld : IDisposable
     /// The Gateway's launcher, as far as the quests see it: each game asked for is recorded, and answered with
     /// <see cref="LaunchResult"/>.
     /// </summary>
-    private sealed class Launcher(QuestWorld world) : IActivityLauncher
+    private sealed class RecordingLauncher(QuestWorld world) : IActivityLauncher
     {
         public ActivityLaunchResult Launch(Player player, int activityId)
         {

@@ -15,7 +15,6 @@ using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Minigames.MatchThree;
 using Sanctuary.Game.Minigames.Mimic;
 using Sanctuary.Game.Quests;
-using Sanctuary.Game.Zones;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
@@ -71,23 +70,20 @@ public static class FlashMinigameHandler
 
         var player = connection.Player;
 
-        // Evergrove: the client shows no minigame start screen inside a house, so a session opened there could never be
-        // started or closed, and every game after it would be refused as another one open until a relog.
-        if (player.Zone is HousingZone)
-            return ActivityLaunchResult.InsideAHouse;
+        // Evergrove: none opens inside a house, one never started gives way, and one started or the wheel keeps it shut
+        // (ActivityLaunchChecks, where the reasons are).
+        var opens = ActivityLaunchChecks.FlashMinigame(player, out var givesWay);
 
-        // Evergrove: a start screen closed before Go may never tell the server, so a session that never started gives way
-        // to the next game the player opens. It has paid nothing and can't: once it is gone, its Go is refused (TryStart).
-        if (player.FlashMinigame is { Started: false } unstarted)
+        if (givesWay is not null)
         {
             _logger.LogInformation("Minigame: session {stateId} for {player} never started; it gives way to activity {activity}.",
-                unstarted.StateId, player.Guid, activity.Id);
+                givesWay.StateId, player.Guid, activity.Id);
 
-            Close(connection, unstarted);
+            Close(connection, givesWay);
         }
 
-        if (player.FlashMinigame is not null || player.WheelSession is not null)
-            return ActivityLaunchResult.AnotherGameOpen;
+        if (opens != ActivityLaunchResult.Opened)
+            return opens;
 
         var session = new FlashMinigameSession(Interlocked.Increment(ref _nextStateId), definition);
         player.FlashMinigame = session;

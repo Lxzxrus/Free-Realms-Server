@@ -19,9 +19,6 @@ public static class ActivityPacketJoinActivityRequestHandler
     private static ILogger _logger = null!;
     private static IResourceManager _resourceManager = null!;
 
-    // Evergrove: what a player who picks a minigame inside a house is told.
-    private const string NoGamesInAHouse = "Games can't be played inside a house. Step outside to play.";
-
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
@@ -45,10 +42,10 @@ public static class ActivityPacketJoinActivityRequestHandler
 
         var opened = Open(connection, clientActivityDefinition);
 
-        // Evergrove: the Games menu is on the dock inside a house too, where no minigame can show; say so rather than
-        // nothing.
-        if (opened == ActivityLaunchResult.InsideAHouse)
-            ChatHelper.SendSystemMessage(connection.Player, NoGamesInAHouse);
+        // Evergrove: the Games menu is on the dock inside a house too, where no game opens (ActivityLaunchChecks); say so
+        // rather than nothing, in the words a quest's NPC and a world object use (ActivityLaunches).
+        if (opened == ActivityLaunchResult.InsideAHouse && ActivityLaunches.Explain(opened) is { } line)
+            ChatHelper.SendSystemMessage(connection.Player, line);
 
         if (opened != ActivityLaunchResult.NotAGamesMenuGame)
             return true;
@@ -134,9 +131,10 @@ public static class ActivityPacketJoinActivityRequestHandler
     /// <summary>
     /// Evergrove: opens one of the games the server serves, as choosing it in the Games menu does: the wheel, a Flash
     /// minigame (match three, Cooking) or a fishing hole, each with its own checks. A Flash minigame is
-    /// <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the player has one or the wheel open;
+    /// <see cref="ActivityLaunchResult.AnotherGameOpen"/> while the player has one they started or the wheel open; it and
+    /// a fishing hole are <see cref="ActivityLaunchResult.InsideAHouse"/> inside a house (ActivityLaunchChecks);
     /// <see cref="ActivityLaunchResult.NotAGamesMenuGame"/> for any other activity. The NPC who offers a quest step's game
-    /// opens it through here too (<see cref="ActivityLauncher"/>).
+    /// and a world object that opens games open them through here too (<see cref="ActivityLauncher"/>).
     /// </summary>
     public static ActivityLaunchResult Open(GatewayConnection connection, Sanctuary.Packet.Common.ClientActivityDefinition activity)
     {
@@ -152,6 +150,12 @@ public static class ActivityPacketJoinActivityRequestHandler
 
         if (FishingHandler.IsFishingHole(activity.Id))
         {
+            // Evergrove: refused inside a house too, though whether a hole's start screen would show there is unverified
+            // (ActivityLaunchChecks).
+            var opens = ActivityLaunchChecks.FishingHole(connection.Player);
+            if (opens != ActivityLaunchResult.Opened)
+                return opens;
+
             FishingHandler.Join(connection, activity);
             return ActivityLaunchResult.Opened;
         }

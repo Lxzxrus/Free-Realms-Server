@@ -178,16 +178,21 @@ counts only while the step is open; a game won before is not remembered. A step 
 saves each as it counts, so a relog keeps them.
 
 `NpcId` is the NPC who offers the game while the step is open: clicking them opens its start screen the
-way the Games menu does (`IActivityLauncher`, with the menu's checks: with another game or the wheel
-open, nothing opens and the chat tells the player to finish or close it first), and the step's marker,
+way the Games menu does (`IActivityLauncher`, with the menu's checks: with a game the player has started
+or the wheel open, nothing opens and the chat tells them to finish or close it first, while a start
+screen left open before Go gives way to the new one), and the step's marker,
 Take Me There and "?" point at them, as a talk step's do. With nothing else on their menu
 the game opens at the click; beside other options (a trainer's job, another quest's game) it is one more
 button, the game's name as the Games menu lists it (the activity's `NameId`, such as 386024 for the
-steak), so two recipes at one NPC are two different buttons. No world object, such as a cooking table,
-starts a game yet, so **a play step names the NPC who offers its game**: without one it has no target,
-and the loader warns. The game can still be won from the Games menu. The step's text should name the
-game, not a table to click: the Cafe's step uses 21837, not 94528, which sends you to Simone's cooking
-table.
+steak), so two recipes at one NPC are two different buttons. **A play step names the NPC who offers its
+game**: without one it has no target, and the loader warns. The game can still be won from the Games
+menu. The NPC can be a world object that opens the game for anyone (`Minigames.GameStations`: cooking
+tables, postboxes, anvils, harvesting tools, the Frostbitten Banks fishing spot); the game then shows
+once on its menu, as the quest's button, before the object's other games. It keeps its own hover
+cursor and its walk-in distance, while any other NPC a quest names takes its quest's at the first login
+(a goal's `CursorId`, 17 unless set, and the smallest `InteractRange` of its quests' goals, 12 unless
+set). The step's text should name what the player clicks: the Cafe's step names Simone, so it uses
+21837, not 94528, which sends you to the cooking table in front of her.
 
 ### Counted talk
 

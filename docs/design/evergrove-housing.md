@@ -231,3 +231,15 @@ featured winner, reports) is not built.
   player's account owns the plot. Every character on the owning account gets the owner's panel instead, alts included.
   So none of a player's characters can vote for their own ranked plot, while anyone else's account can. Staff have no
   special voting rule.
+
+## 10. As built: games inside a house
+
+- **No game with a start screen opens inside a house**: neither a Flash minigame (match three, Cooking) nor, for now, a
+  fishing hole. The client shows no Flash minigame's start screen in a house, so a game opened there would show
+  nothing and the player wouldn't know why. Whether a fishing hole's start screen shows there is **unverified**: it is
+  sent differently (`FishingHandler.Join`), and nobody has checked. Ariel, who played the original, is asked whether
+  fishing worked from inside a house; if it did, holes open there again. The Games menu is on the dock inside a house
+  too: a pick there opens nothing, and the chat says "Games can't be played inside a house. Step outside to play."
+  (`ActivityLaunchChecks`). The daily wheel, switched off for now, isn't checked.
+- Nothing in a house offers a game itself. The objects that open games (cooking tables, postboxes, anvils, a farm's
+  tools, a fishing spot) and the quest NPCs who offer a step's game are in Fabled Realms.
