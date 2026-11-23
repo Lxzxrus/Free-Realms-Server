@@ -9,7 +9,8 @@ namespace Sanctuary.Game.Resources.Definitions.QuestGoals;
 
 public sealed class ReachLocationGoal : QuestGoal
 {
-    // [x, y, z]. The proximity check is 2D, so the Y only feeds the map pin.
+    // [x, y, z]. The proximity check is 2D, but Y must be the ground height: Take Me There looks the point up on the
+    // navmesh, which only searches a few metres up and down from it.
     [JsonConverter(typeof(Vector3XzJsonConverter))]
     public Vector3 ReachPosition { get; set; }
 
