@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Resources.Definitions.QuestGoals;
 
@@ -32,13 +33,22 @@ public sealed class QuestDefinition
 
     public int RewardCoins { get; set; }
 
-    // Goes to the player's active profile.
+    // Stars, on the job worn at the turn-in. Evergrove: on RewardProfileId's job instead when the character has it.
     public int RewardExperience { get; set; }
+
+    // Evergrove: the job (a Profiles.json id) RewardExperience goes to when the character has it, whichever job they
+    // wear, so a Chef quest's stars fill the Chef bar. 0 = the job worn at the turn-in, as for a character without it.
+    public int RewardProfileId { get; set; }
 
     // Item definition ids.
     public List<int> RewardItems { get; set; } = [];
 
     public int RewardCollectionId { get; set; }
+
+    // Evergrove: a job (a Profiles.json id) the turn-in teaches, as the job's trainer would, before the rewards, so the
+    // quest's stars can go to it (RewardProfileId, or the job worn: the player is switched into it). A player who has
+    // the job already is taught nothing. 0 = none.
+    public int TeachesProfileId { get; set; }
 
     public int? PrerequisiteQuestId { get; set; }
     public int? NextQuestId { get; set; }
@@ -57,11 +67,32 @@ public sealed class QuestDefinition
     public int TurnInDialogueId =>
         Goals.Count > 0 && Goals[^1].ConversationFor(TargetNpcId) is { Count: > 0 } lines ? lines[^1].TextId : 0;
 
-    // Shared by the offer flow and the giver's badge so the two can't drift.
+    // Shared by the offer flow and the giver's badge so the two can't drift. Evergrove: a step won by playing a game is
+    // the NPC who offers the game, when it names one (PlayActivityGoal.NpcId).
     public int GoalTargetNpcId(int goalIndex)
-        => goalIndex >= 0 && goalIndex < Goals.Count && Goals[goalIndex] is TalkToNpcGoal talkGoal
-            ? talkGoal.TargetNpcId(this)
+        => goalIndex >= 0 && goalIndex < Goals.Count
+            ? Goals[goalIndex] switch
+            {
+                TalkToNpcGoal talkGoal => talkGoal.TargetNpcId(this),
+                PlayActivityGoal { NpcId: not 0 } playGoal => playGoal.NpcId,
+                _ => TargetNpcId
+            }
             : TargetNpcId;
+
+    // Evergrove: what the turn-in gives besides coins and stars, for the rule that a quest with a step whose wins the
+    // client reports (Cooking, PlayableActivities.WinsOf) gives only those: its items, its collection, and a job no
+    // trainer gives. A job a trainer gives for a click isn't scarce. Described for the startup warning.
+    public IEnumerable<string> RewardsBeyondCoinsAndStars()
+    {
+        if (RewardItems.Count > 0)
+            yield return $"items {string.Join(", ", RewardItems)}";
+
+        if (RewardCollectionId != 0)
+            yield return $"collection {RewardCollectionId}";
+
+        if (TeachesProfileId != 0 && !JobTrainers.All.Any(trainer => trainer.ProfileId == TeachesProfileId))
+            yield return $"job {TeachesProfileId}, which no trainer gives";
+    }
 
     public IEnumerable<int> StateNpcIds()
         => Goals.SelectMany(goal => goal.HideNpcIdsWhenDone.Concat(goal.NpcEffectsUntilDone.Select(effect => effect.NpcId))).Distinct();
@@ -85,6 +116,10 @@ public sealed class QuestDefinition
 
         return goalIndex;
     }
+
+    // Evergrove: the goals of the quest's last step, the last goal and those open with it (WithPrevious). Whichever of
+    // them is done last hands the quest in.
+    public IEnumerable<QuestGoal> LastStepGoals() => Goals.Skip(StepStartOf(Goals.Count - 1));
 
     private bool IsGoalDoneFor(QuestLog playerQuests, int goalIndex)
     {
@@ -131,6 +166,10 @@ public sealed class QuestDefinition
         {
             if (Goals[goalIndex].Matches(this, new NpcTalkedEvent(npc))
                 && !(goalProgress is TalkProgress talkProgress && talkProgress.HasTalkedTo(npc.DefinitionId)))
+                return true;
+
+            // Evergrove: the NPC who offers an open play step's game shows the "?" a talk step's NPC shows.
+            if (Goals[goalIndex] is PlayActivityGoal playGoal && playGoal.IsOfferedBy(npc.DefinitionId))
                 return true;
         }
 

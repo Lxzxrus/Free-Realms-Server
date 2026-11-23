@@ -2682,17 +2682,59 @@
     "TargetNpcId": 2069,
     "RewardCoins": 15,
     "RewardExperience": 40,
+    "RewardProfileId": 45,
     "RewardItems": [],
+    "TeachesProfileId": 45,
     "PrerequisiteQuestId": 9101,
+    "NextQuestId": 9103,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
-    "Comment": "Simone says she'll teach you the Chef job (140529), and her trainer menu is where you take it: a quest can't grant a job yet. 9103 is kept for the Cobblestone Village Cafe quest, which comes next once a quest step can be a cooking game; until then Simone offers Delivery Derailed when you click her again, beside the Chef job.",
+    "Comment": "Simone says she'll teach you the chef job (140529), and the turn-in does: Chef (45) is given the way her trainer menu gives it, before the rewards. Its stars go to Chef (RewardProfileId), as do the rest of the chef chain's (9103 to 9105), whichever job is worn. She offers the Cobblestone Village Cafe (9103) straight after.",
     "Goals": [
       {
         "Type": 0,
         "NameId": 140539,
         "DescriptionId": 140547,
         "DialogueId": 140529,
+        "Targets": [
+          {
+            "NpcId": 2069
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Chef: Cobblestone Village Cafe",
+    "QuestId": 9103,
+    "TitleId": 94275,
+    "DescriptionId": 94276,
+    "GiverDialogueId": 94274,
+    "ObjectiveDescriptionId": 100247,
+    "IconId": 43278,
+    "GiverNpcId": 2069,
+    "TargetNpcId": 2069,
+    "RewardCoins": 20,
+    "RewardExperience": 50,
+    "RewardProfileId": 45,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 9102,
+    "NextQuestId": 9104,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Win Cooking: Simone's Spiralmint Steak (activity 450), then take it to Simone. No world object starts a game yet, so Simone offers the steak herself while the step is open (its NpcId): clicking her opens the game's start screen as the Games menu does, and the step's marker and Take Me There point at her. The steak can be cooked from the Games menu all the same. Her offer 94278 and the step's row 94528 send you to her cooking table, so they wait for it: her offer is 94274, the same words without the table, and the step's row is 21837, from the unreleased first version of this quest (21831), which names only the steak. 100259 and 100265 are her offer to a player who arrives without Assistant Needed. No row near the title is her thanks: 21841 is, from that first version.",
+    "Goals": [
+      {
+        "Type": 3,
+        "NameId": 21837,
+        "DescriptionId": 94534,
+        "ActivityId": 450,
+        "NpcId": 2069
+      },
+      {
+        "Type": 0,
+        "NameId": 94536,
+        "DialogueId": 21841,
         "Targets": [
           {
             "NpcId": 2069
@@ -2713,12 +2755,13 @@
     "TargetNpcId": 4096,
     "RewardCoins": 20,
     "RewardExperience": 50,
+    "RewardProfileId": 45,
     "RewardItems": [],
-    "PrerequisiteQuestId": 9102,
+    "PrerequisiteQuestId": 9103,
     "NextQuestId": 9105,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
-    "Comment": "Simone sends you to Jonelle, on the road north towards Sanctuary. Its prerequisite becomes the Cafe quest (9103) once that exists.",
+    "Comment": "Simone sends you to Jonelle, on the road north towards Sanctuary.",
     "Goals": [
       {
         "Type": 0,
@@ -2745,6 +2788,7 @@
     "TargetNpcId": 4096,
     "RewardCoins": 30,
     "RewardExperience": 70,
+    "RewardProfileId": 45,
     "RewardItems": [],
     "PrerequisiteQuestId": 9104,
     "NotificationAvailable": 2,
