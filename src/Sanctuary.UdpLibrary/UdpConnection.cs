@@ -810,7 +810,38 @@ public class UdpConnection : PriorityQueueMember
         InternalDisconnect(0, DisconnectReason.CorruptPacket);
     }
 
+    /// <summary>
+    /// How deep packets may nest (a reliable packet in a group in a reliable packet...). A real client nests a few levels
+    /// at most. Each level is a call, and nothing else limited them: a reliable packet carrying another with the same
+    /// stamp is handled before the stamp moves on, so a 64 KiB message of them made thousands of nested calls, and the
+    /// stack overflow that followed can't be caught. The whole server process died.
+    /// </summary>
+    internal const int MaxCookedPacketDepth = 8;
+
+    // how deep ProcessCookedPacket is nested right now
+    private int _cookedPacketDepth;
+
     internal void ProcessCookedPacket(Span<byte> data)
+    {
+        if (_cookedPacketDepth >= MaxCookedPacketDepth)
+        {
+            CallbackCorruptPacket(data, UdpCorruptionReason.NestedTooDeep);
+            return;
+        }
+
+        _cookedPacketDepth++;
+
+        try
+        {
+            ProcessCookedPacketAtDepth(data);
+        }
+        finally
+        {
+            _cookedPacketDepth--;
+        }
+    }
+
+    private void ProcessCookedPacketAtDepth(Span<byte> data)
     {
         var reader = new PacketReader(data);
 

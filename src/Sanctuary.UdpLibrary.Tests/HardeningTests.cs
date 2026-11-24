@@ -110,6 +110,48 @@ public class HardeningTests
         Assert.AreEqual(Status.Connected, c.Status, "the server still accepts players");
     }
 
+    /// <summary>
+    /// A reliable packet carrying another with the same stamp is handled before the stamp moves on, so packets could nest
+    /// without end: one call per 4 bytes, thousands in a 64 KiB message, and a stack overflow, which nothing can catch,
+    /// ended the whole server. Nesting stops at UdpConnection.MaxCookedPacketDepth.
+    /// </summary>
+    [TestMethod]
+    public void DeeplyNestedPacketsAreCorruptNotAStackOverflow()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // 100 reliable packets one inside the other, all stamped 0, around one byte of game data
+        var packet = Enumerable.Range(0, 100).SelectMany(_ => new byte[] { 0, 9, 0, 0 }).Append((byte)1).ToArray();
+
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(packet));
+        network.Pump(3, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+        Assert.AreEqual(0, serverA.Received.Count, "nothing from inside it was handled");
+
+        var (_, b) = Client(network, server, "10.0.0.3");
+        Assert.AreEqual(Status.Connected, b.Status, "the server still accepts players");
+    }
+
+    [TestMethod]
+    public void PacketsNestedAFewLevelsStillArrive()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(0, 9, 0, 0, 0, 9, 0, 0, 42));
+        network.Pump(3, server);
+
+        Assert.AreEqual(Status.Connected, serverA.Status);
+        CollectionAssert.AreEqual(new byte[] { 42 }, serverA.Received.Single());
+    }
+
     [TestMethod]
     [DataRow(new byte[] { 0, 25, 0xff }, DisplayName = "group length cut off after its first byte")]
     [DataRow(new byte[] { 0, 25, 0xff, 0xff, 0xff, 0x80 }, DisplayName = "group length cut off inside its 4-byte form")]
