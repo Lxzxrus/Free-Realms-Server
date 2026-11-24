@@ -74,6 +74,18 @@ public class LoginConnection : LoginServerConnection
     {
         var reader = new PacketReader(data);
 
+        // Before signing in, a client sends its LoginRequest (and perhaps asks for the server list). Anything else
+        // before then isn't a real client's: it counts as a fault (five disconnect it) and is never handled or
+        // logged, so a connection that hasn't signed in can't write a line per packet, or run the database queries
+        // the other handlers make.
+        if (UserId == 0 && (!reader.TryRead(out byte earlyOpCode) || earlyOpCode is not (LoginRequest.OpCode or ServerListRequest.OpCode)))
+        {
+            ReportFault();
+            return;
+        }
+
+        reader.Reset();
+
         if (!reader.TryRead(out byte opCode))
         {
             _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", PacketLog.Hex(data));
