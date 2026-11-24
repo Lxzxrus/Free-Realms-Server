@@ -51,6 +51,20 @@ public sealed class GatewayTicketTests
     }
 
     [TestMethod]
+    [DataRow("ffffffff-ffff-7fff-bfff-ffffffffffff", DisplayName = "the largest time 48 bits hold")]
+    [DataRow("e7000000-0000-7000-8000-000000000000", DisplayName = "just past the year 9999")]
+    [DataRow("e677d21f-dbff-7000-8000-000000000000", DisplayName = "the last millisecond of 9999")]
+    [DataRow("00000000-0000-7000-8000-000000000000", DisplayName = "1970")]
+    public void TicketWithAForgedTimeIsRefusedWithoutThrowing(string forged)
+    {
+        // a version 7 Guid, as Guid.TryParse reads it from the client, whose time is the client's to choose
+        var ticket = Guid.Parse(forged);
+
+        Assert.AreEqual(7, ticket.Version);
+        Assert.IsFalse(GatewayTicket.IsFresh(ticket, Issued));
+    }
+
+    [TestMethod]
     public void TicketSurvivesTheClientsTextForm()
     {
         // the client is given the ticket as 32 hex digits and sends it back the same way

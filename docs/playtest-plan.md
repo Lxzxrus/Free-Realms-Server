@@ -57,8 +57,9 @@ Run a **Debug build in the Development environment** for this playtest:
 - The WebAPI only logs request and response lines in a Debug build in Development, which P5 needs.
 
 > **Never expose this setup to the internet.** A Debug build only starts because S1's files set
-> `AllowDebugBuild`. A Debug Gateway skips the login-ticket check (`#if !DEBUG` in
-> `PacketLoginHandler`), so anyone who reaches port 20260 can log in as any character with
+> `AllowDebugBuild`. A Debug Gateway doesn't match the login ticket against the database (`#if !DEBUG` in
+> `PacketLoginHandler`; it still refuses a ticket that isn't a fresh version 7 Guid, which `run_client.py -g` makes),
+> so anyone who reaches port 20260 can log in as any character with
 > `run_client.py -g <id>`. Play on your home network only.
 
 ### Two clients

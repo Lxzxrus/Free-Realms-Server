@@ -106,6 +106,9 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     private byte[] _buffer;
     private SocketAddress _socketAddress;
 
+    /// <summary>The shortest connect request a connection can be made from: the 2-byte header, the protocol version and the connect code.</summary>
+    internal const int MinConnectRequestLength = 2 + 4 + 4;
+
     public bool EventQueuing
     {
         // don't allow changing of queuing mode while inside GiveTime from another thread
@@ -739,6 +742,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             if (zeroByte == 0 && packetType == (byte)UdpPacketType.Connect)
             {
+                // A request too short to hold the protocol version and the connect code can't become a connection, so it
+                // is dropped before it is counted against the sender's connect allowance (a burst of them would
+                // otherwise refuse the sender's next real request).
+                if (data.Length < MinConnectRequestLength)
+                    return;
+
                 ConnectRefusal refusal;
 
                 lock (_connectionGuard)
@@ -1170,10 +1179,11 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
             // it), and removing by key alone took that one's entry out instead (Evergrove).
             ConnectCodeHashTable.TryRemove(KeyValuePair.Create(conInstance.ConnectCode, conInstance));
 
-            if (!AddressHashTable.TryRemove(KeyValuePair.Create(conInstance.SocketAddress, conInstance)))
-                return;
-
-            _connectLimiter.ConnectionRemoved(conInstance.SocketAddress, CachedClock);
+            // The limiter counted this connection only if it got the address's entry (AddConnection), so it is told only
+            // if this connection still had it. The list is left either way: a connection that never had the entry would
+            // otherwise stay in it for good, and count towards MaxConnections.
+            if (AddressHashTable.TryRemove(KeyValuePair.Create(conInstance.SocketAddress, conInstance)))
+                _connectLimiter.ConnectionRemoved(conInstance.SocketAddress, CachedClock);
 
             ConnectionList.Remove(conInstance);
         }

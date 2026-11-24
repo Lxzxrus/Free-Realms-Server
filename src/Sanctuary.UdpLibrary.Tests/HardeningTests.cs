@@ -132,8 +132,10 @@ public class HardeningTests
     }
 
     [TestMethod]
+    // 2 to 5 bytes made Advance(4) throw (a line with a stack trace for each); 6 to 9 bytes were already dropped
     [DataRow(new byte[] { 0, 1 }, DisplayName = "header only")]
     [DataRow(new byte[] { 0, 1, 0, 0 }, DisplayName = "protocol version cut off")]
+    [DataRow(new byte[] { 0, 1, 0, 0, 3 }, DisplayName = "protocol version one byte short")]
     [DataRow(new byte[] { 0, 1, 0, 0, 0, 3, 0, 0 }, DisplayName = "connect code cut off")]
     public void TruncatedConnectRequestIsDroppedQuietly(byte[] packet)
     {
@@ -149,6 +151,80 @@ public class HardeningTests
 
         var (_, a) = Client(network, server, "10.0.0.2");
         Assert.AreEqual(Status.Connected, a.Status, "the server still accepts players");
+    }
+
+    [TestMethod]
+    public void TruncatedConnectRequestsDoNotUseUpTheConnectAllowance()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.ConnectRatePerIp = 2;
+            p.ConnectRateWindow = 10_000;
+        });
+
+        // from the player's own address, more short requests than the allowance
+        var sameAddress = new IPEndPoint(IPAddress.Parse("10.0.0.2"), 40999);
+
+        for (var i = 0; i < 3; i++)
+            network.Deliver(sameAddress, server.EndPoint, [0, 1, 0, 0, 0, 3, 0, 0]);
+
+        network.Pump(3, server);
+
+        var (_, a) = Client(network, server, "10.0.0.2");
+
+        Assert.AreEqual(Status.Connected, a.Status, "the player's real request is still admitted");
+        Assert.AreEqual(1, server.Accepted.Count);
+    }
+
+    /// <summary>
+    /// A connection's entries are removed only if they are still its own. When a connection was removed late (twice,
+    /// say), after a new connection had taken over its address, removing by address alone took the new one's entry,
+    /// and the new connection's packets went nowhere.
+    /// </summary>
+    [TestMethod]
+    public void RemovingAnOldConnectionLeavesTheNewOneAtItsAddress()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+
+        (FakeManager Manager, FakeConnection Connection) ClientAt(int port)
+        {
+            var udpParams = FakeManager.ClientParams();
+            udpParams.Port = port;
+
+            var manager = FakeManager.Create(network, "10.0.0.2", udpParams);
+            var connection = manager.EstablishConnection(ServerIp, server.EndPoint.Port);
+            Assert.IsNotNull(connection);
+
+            network.Pump(5, server, manager);
+
+            return (manager, connection);
+        }
+
+        var (first, a) = ClientAt(41000);
+        Assert.AreEqual(Status.Connected, a.Status);
+        var serverA = server.Accepted.Single();
+
+        a.Disconnect();
+        network.Pump(10, server, first);
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        first.Dispose();
+
+        // the same address and port again: a player reconnecting from the same place
+        var (second, b) = ClientAt(41000);
+        Assert.AreEqual(Status.Connected, b.Status);
+        var serverB = server.Accepted.Last();
+        Assert.AreNotSame(serverA, serverB);
+
+        // the old connection is removed again, late
+        server.RemoveConnection(serverA);
+
+        b.Send(UdpChannel.Reliable1, [7]);
+        network.Pump(10, server, second);
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        CollectionAssert.AreEqual(new byte[] { 7 }, serverB.Received.Single(), "the new connection still gets its packets");
     }
 
     /// <summary>

@@ -32,13 +32,17 @@ public static class GatewayTicket
         if (!ticket.TryWriteBytes(bytes, bigEndian: true, out _))
             return false;
 
-        long unixMilliseconds = 0;
+        long issued = 0;
 
         for (var i = 0; i < 6; i++)
-            unixMilliseconds = unixMilliseconds << 8 | bytes[i];
+            issued = issued << 8 | bytes[i];
 
-        var issued = DateTimeOffset.FromUnixTimeMilliseconds(unixMilliseconds);
+        // Compared in milliseconds, never made into a DateTimeOffset: a ticket's 48 bits come from the client and can
+        // name a time past the year 9999, which DateTimeOffset can't hold (it threw on those). 48 bits plus today's
+        // time can't overflow a long.
+        var nowMs = now.ToUnixTimeMilliseconds();
 
-        return issued <= now + ClockSkew && now - issued <= Lifetime;
+        return issued <= nowMs + (long)ClockSkew.TotalMilliseconds
+            && nowMs - issued <= (long)Lifetime.TotalMilliseconds;
     }
 }

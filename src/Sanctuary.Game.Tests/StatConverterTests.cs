@@ -30,4 +30,18 @@ public sealed class StatConverterTests
         Assert.AreEqual(stat.Value, reread.Value);
         StringAssert.Contains(written, $"\"Value\":{value}");
     }
+
+    [TestMethod]
+    public void AnIntValueIsWrittenAsAnInt()
+    {
+        // reading gives a float for "7" (TryGetSingle comes first), so only a value set in code reaches the int branch
+        var written = JsonSerializer.Serialize(new ClientItemStatDefinition { Value = 7 });
+
+        StringAssert.Contains(written, "\"Value\":7");
+        Assert.IsFalse(written.Contains("\"Value\":7.", System.StringComparison.Ordinal), written);
+    }
+
+    [TestMethod]
+    public void AnyOtherValueIsRefused() =>
+        Assert.ThrowsExactly<System.NotSupportedException>(() => JsonSerializer.Serialize(new ClientItemStatDefinition { Value = "seven" }));
 }
