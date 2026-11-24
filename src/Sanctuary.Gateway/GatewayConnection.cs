@@ -151,6 +151,11 @@ public class GatewayConnection : UdpConnection
 
     public override void OnRoutePacket(Span<byte> data)
     {
+        // A connection that is closing (a refused login, a logout) handles nothing more. One datagram can carry many
+        // packets, and without this each of them would be handled, and logged, in turn.
+        if (Status != Status.Connected)
+            return;
+
         if ((!_useEncryption || !_cipher.Decrypt(data, out var finalLength))
             && (_useEncryption || !PacketUtils.UnwrapPacket(data, out finalLength, _cipher)))
         {

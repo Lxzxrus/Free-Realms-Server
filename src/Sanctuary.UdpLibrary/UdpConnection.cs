@@ -181,7 +181,12 @@ public class UdpConnection : PriorityQueueMember
 
             ConnectionConfig.CrcBytes = UdpManager.Params.CrcBytes;
             ConnectionConfig.MaxRawPacketSize = UdpManager.Params.MaxRawPacketSize;
-            ConnectionConfig.EncryptCode = UdpManager.Random();
+            // The code every packet's CRC is seeded with, which the client learns from the confirm: knowing a
+            // connection's code is what it takes to send that connection packets it accepts. UdpManager.Random's
+            // generator is seeded from the clock and its next value is its last one fed back, so a client that saw
+            // its own code could work out the next player's. A value from the system's secure generator can't be
+            // worked out (the range is the one UdpManager.Random gives).
+            ConnectionConfig.EncryptCode = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1, int.MaxValue);
 
             SetupEncryptModel();
 

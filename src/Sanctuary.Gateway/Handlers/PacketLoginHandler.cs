@@ -46,9 +46,16 @@ public static class PacketLoginHandler
     {
         if (!PacketLogin.TryDeserialize(data, out var packetLogin))
         {
-            _logger.LogError("Failed to deserialize {packet}.", nameof(PacketLogin));
+            // A real client's PacketLogin always parses, so this is someone else's packet: close the connection rather
+            // than log one line for each of a flood of them.
+            _logger.LogWarning("{connection} sent a {packet} that doesn't parse ( {length} bytes ). Disconnecting it.", connection, nameof(PacketLogin), data.Length);
+
+            connection.Disconnect();
+
             return false;
         }
+
+        // No ticket in any line below: it is the player's credential for this login (and the key of the cipher).
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PacketLogin), packetLogin);
 
@@ -56,7 +63,7 @@ public static class PacketLoginHandler
 
         if (packetLogin.Version != _options.ClientVersion)
         {
-            _logger.LogError("{connection} connected with a different client version. ( Guid: {guid}, ClientVersion: \"{version}\" )", connection, packetLogin.Guid, packetLogin.Version);
+            _logger.LogError("{connection} connected with a different client version. ( Guid: {guid}, ClientVersion: \"{version}\" )", connection, packetLogin.Guid, PacketLog.Text(packetLogin.Version, 32));
 
             connection.Send(packetLoginReply);
 
@@ -67,7 +74,7 @@ public static class PacketLoginHandler
 
         if (!Guid.TryParse(packetLogin.Ticket, out var ticket))
         {
-            _logger.LogError("{connection} connected with an invalid ticket. ( Guid: {guid}, Ticket: \"{ticket}\" )", connection, packetLogin.Guid, packetLogin.Ticket);
+            _logger.LogError("{connection} connected with an invalid ticket. ( Guid: {guid}, Ticket: {length} chars )", connection, packetLogin.Guid, packetLogin.Ticket?.Length ?? 0);
 
             connection.Send(packetLoginReply);
 
@@ -142,7 +149,7 @@ public static class PacketLoginHandler
 
         if (character is null)
         {
-            _logger.LogWarning("{connection} connected with an invalid guid or ticket. ( Guid: {guid}, Ticket: \"{ticket}\" )", connection, packetLogin.Guid, packetLogin.Ticket);
+            _logger.LogWarning("{connection} connected with an invalid guid or ticket. ( Guid: {guid} )", connection, packetLogin.Guid);
 
             connection.Send(packetLoginReply);
 
@@ -164,7 +171,7 @@ public static class PacketLoginHandler
             }
             else
             {
-                _logger.LogWarning("{connection} connected with a banned account. ( Guid: {guid}, Ticket: \"{ticket}\" )", connection, packetLogin.Guid, packetLogin.Ticket);
+                _logger.LogWarning("{connection} connected with a banned account. ( Guid: {guid} )", connection, packetLogin.Guid);
 
                 connection.Send(packetLoginReply);
 

@@ -25,6 +25,9 @@ public class LoginConnection : LoginServerConnection
 
     public ulong UserId { get; set; }
 
+    /// <summary>Whether this connection's second LoginRequest has been logged (LoginRequestHandler logs it once).</summary>
+    public bool LoggedTwiceLogin { get; set; }
+
     public LoginConnection(ILogger<LoginConnection> logger, IOptionsMonitor<LoginServerOptions> options, LoginServer loginServer, SocketAddress socketAddress, int connectCode) : base(options, loginServer, socketAddress, connectCode)
     {
         _logger = logger;
@@ -49,6 +52,11 @@ public class LoginConnection : LoginServerConnection
 
     public override void OnRoutePacket(Span<byte> data)
     {
+        // A connection that is closing (a refused login waiting for its reply to arrive) handles nothing more. One
+        // datagram can carry many packets, and without this each of them would be handled, and logged, in turn.
+        if (Status != Status.Connected)
+            return;
+
         if ((!_useEncryption || !_cipher.Decrypt(data, out var finalLength))
             && (_useEncryption || !PacketUtils.UnwrapPacket(data, out finalLength, _cipher)))
         {
