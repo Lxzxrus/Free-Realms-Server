@@ -23,6 +23,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public static readonly string SkinToneMappingsFile = Path.Combine(BaseDirectory, "CharacterCreate", "SkinToneMappings.txt");
     public static readonly string FacePaintMappingsFile = Path.Combine(BaseDirectory, "CharacterCreate", "FacePaintMappings.txt");
     public static readonly string ModelCustomizationMappingsFile = Path.Combine(BaseDirectory, "CharacterCreate", "ModelCustomizationMappings.txt");
+    public static readonly string StarterClothingFile = Path.Combine(BaseDirectory, "CharacterCreate", "StarterClothing.txt");
 
     public static readonly string ModelsFile = Path.Combine(BaseDirectory, "Models.txt");
 
@@ -80,6 +81,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public IdToStringLookup SkinToneMappings { get; }
     public IdToStringLookup FacePaintMappings { get; }
     public IdToStringLookup ModelCustomizationMappings { get; }
+    public StarterClothingCollection StarterClothing { get; }
 
     public ModelDefinitionCollection Models { get; }
 
@@ -149,6 +151,7 @@ public class ResourceManager : IResourceManager, IDisposable
         SkinToneMappings = new(_logger);
         FacePaintMappings = new(_logger);
         ModelCustomizationMappings = new(_logger);
+        StarterClothing = new(_logger);
 
         Models = new(_logger);
 
@@ -215,6 +218,9 @@ public class ResourceManager : IResourceManager, IDisposable
             return false;
 
         if (!ModelCustomizationMappings.Load(ModelCustomizationMappingsFile))
+            return false;
+
+        if (!StarterClothing.Load(StarterClothingFile))
             return false;
 
         if (!Models.Load(ModelsFile))
@@ -533,6 +539,8 @@ public class ResourceManager : IResourceManager, IDisposable
                 loaded = FacePaintMappings.Load(FacePaintMappingsFile);
             else if (e.FullPath == ModelCustomizationMappingsFile)
                 loaded = ModelCustomizationMappings.Load(ModelCustomizationMappingsFile);
+            else if (e.FullPath == StarterClothingFile)
+                loaded = StarterClothing.Load(StarterClothingFile);
             else if (e.FullPath == ModelsFile)
                 loaded = Models.Load(ModelsFile);
             else if (e.FullPath == ClientItemDefinitionsFile)
