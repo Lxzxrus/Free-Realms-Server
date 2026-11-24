@@ -273,6 +273,50 @@ internal sealed class FakeConnection : UdpConnection
     public int EncryptCode => ConnectionConfig.EncryptCode;
 
     /// <summary>
+    /// With <see cref="EncryptMethod.UserSupplied"/> on, a packet body of this byte and a 2-byte length goes out as 3
+    /// bytes and comes back as that many bytes of 0x55: a stand-in for compression, where a few bytes inflate to many.
+    /// </summary>
+    public const byte Expand = 0xC0;
+
+    protected override int EncryptUserSupplied(Span<byte> destData, Span<byte> sourceData)
+    {
+        if (sourceData.Length == 3 && sourceData[0] == Expand)
+        {
+            destData[0] = 1;
+            destData[1] = sourceData[1];
+            destData[2] = sourceData[2];
+            return 3;
+        }
+
+        destData[0] = 0;
+        sourceData.CopyTo(destData.Slice(1));
+        return sourceData.Length + 1;
+    }
+
+    protected override int DecryptUserSupplied(Span<byte> destData, Span<byte> sourceData)
+    {
+        if (sourceData.IsEmpty)
+            return -1;
+
+        if (sourceData[0] == 1)
+        {
+            if (sourceData.Length != 3)
+                return -1;
+
+            var length = sourceData[1] << 8 | sourceData[2];
+
+            if (length > destData.Length)
+                return -1;
+
+            destData.Slice(0, length).Fill(0x55);
+            return length;
+        }
+
+        sourceData.Slice(1).CopyTo(destData);
+        return sourceData.Length - 1;
+    }
+
+    /// <summary>
     /// Wraps an internal packet the way this (client) connection would put it on the wire: no encryption, two CRC bytes.
     /// </summary>
     public byte[] Craft(params byte[] packet)
