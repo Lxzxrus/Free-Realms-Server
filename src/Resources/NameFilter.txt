@@ -391,3 +391,17 @@ twink|twinkly|twinkle|twinkling
 wank|swanky
 =xx
 =xxx
+
+# Evergrove additions (24 November 2026, from the launch-prep review): hate terms the list lacks, and "mongoloid",
+# which "mong"'s cover "mongo" let through.
+hitler
+=nazi
+=nazis
+retard|retardant
+=chink
+=chinks
+=dyke
+=gook
+=gooks
+kkk
+mongoloid

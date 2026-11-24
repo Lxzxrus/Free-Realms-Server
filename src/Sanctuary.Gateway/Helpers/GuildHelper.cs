@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Game;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Game.Resources;
@@ -47,9 +48,14 @@ public static class GuildHelper
 
     public static bool IsValidName(string name) => ValidateName(name) == GuildNameValidationResult.Valid;
 
-    public static bool IsProfane(string name, IEnumerable<string> nameFilter)
+    /// <summary>
+    /// Whether the name filter refuses <paramref name="name"/>, or it uses a staff word (CharacterNameRules.StaffWords),
+    /// so the guild would pass for staff. Every route to a guild's name checks this: creation, the guild packet's rename
+    /// and the name-change rename (creation and the guild packet's rename never did, though they were meant to).
+    /// </summary>
+    public static bool IsRefused(string name, IEnumerable<string> nameFilter)
     {
-        return NameFilterCollection.Refuses(nameFilter, name);
+        return NameFilterCollection.Refuses(nameFilter, name) || CharacterNameRules.UsesAny(name, CharacterNameRules.StaffWords);
     }
 
     public static int? GetMemberRole(DatabaseContext dbContext, ulong guildGuid, ulong playerGuid)

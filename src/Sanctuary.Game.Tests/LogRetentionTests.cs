@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 
+using Microsoft.Extensions.Configuration;
+
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Core.Configuration;
@@ -50,6 +52,40 @@ public sealed class LogRetentionTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [TestMethod]
+    public void DevelopmentAdminLogsAreKeptToo()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"evergrove-logs-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var path = Path.Combine(directory, "Admin-2026-09-01.log");
+            File.WriteAllText(path, "line");
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-90));
+
+            Assert.AreEqual(0, LogRetention.DeleteOlderThan(directory, DateTime.UtcNow.AddDays(-LogRetention.DefaultDays)));
+            Assert.IsTrue(File.Exists(path), "NLog.Development.config's staff command log");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    [DataRow("2147483647", DisplayName = "the largest int")]
+    [DataRow("100000", DisplayName = "past what a date can go back")]
+    public void AHugeRetentionIsCappedRatherThanFatal(string days)
+    {
+        var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new System.Collections.Generic.Dictionary<string, string?> { [LogRetention.DaysKey] = days })
+            .Build();
+
+        // threw (TimeSpan.FromDays overflowed) and stopped the server at startup
+        using var retention = LogRetention.Start(configuration, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
     }
 
     [TestMethod]

@@ -121,6 +121,9 @@ public static class CheckNamePacketHandler
                 return CheckNameResponse.IllegalCharacters;
             case CharacterNameProblem.Profane:
                 return CheckNameResponse.Profane;
+            case CharacterNameProblem.Reserved:
+                // a staff or server word: "taken" is the client's message that fits
+                return CheckNameResponse.Taken;
         }
 
         using var dbContext = _dbContextFactory.CreateDbContext();
@@ -144,7 +147,7 @@ public static class CheckNamePacketHandler
                 return CheckNameResponse.IllegalCharacters;
         }
 
-        if (GuildHelper.IsProfane(guildName, _resourceManager.NameFilter))
+        if (GuildHelper.IsRefused(guildName, _resourceManager.NameFilter))
             return CheckNameResponse.Profane;
 
         using var dbContext = _dbContextFactory.CreateDbContext();

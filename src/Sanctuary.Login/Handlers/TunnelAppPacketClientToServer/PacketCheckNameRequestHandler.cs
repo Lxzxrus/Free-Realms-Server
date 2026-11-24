@@ -39,6 +39,14 @@ public static class PacketCheckNameRequestHandler
 
         _logger.LogTrace("Received {name} packet. ( {packet} )", nameof(PacketCheckNameRequest), packet);
 
+        // The creation screen checks names after logging in. Before that a check is someone else's: each one is a
+        // database query, and the replies would tell which names exist.
+        if (connection.UserId == 0)
+        {
+            connection.ReportFault();
+            return true;
+        }
+
         if (string.IsNullOrWhiteSpace(packet.FirstName))
         {
             _logger.LogError("Invalid name received.");
@@ -72,6 +80,7 @@ public static class PacketCheckNameRequestHandler
             packetCheckNameReply.Result = problem switch
             {
                 CharacterNameProblem.Profane => 3,
+                CharacterNameProblem.Reserved => 2, // a staff or server word: "taken" is the client's message that fits
                 CharacterNameProblem.FirstNameTooShort => 7,
                 CharacterNameProblem.LastNameTooShort => 8,
                 CharacterNameProblem.FirstNameTooLong => 9,

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 using Sanctuary.Game.Resources;
 
@@ -13,7 +14,10 @@ public enum CharacterNameProblem
     FirstNameTooShort,
     FirstNameTooLong,
     LastNameTooShort,
-    LastNameTooLong
+    LastNameTooLong,
+
+    /// <summary>A staff or server word (<see cref="CharacterNameRules.ReservedWords"/>): the client is told it's taken.</summary>
+    Reserved
 }
 
 /// <summary>
@@ -29,6 +33,20 @@ public static class CharacterNameRules
 
     /// <summary>The client's name picker joins last names of up to 16 letters ("Imperialantlers" is 15).</summary>
     public const int LastNameMaxLength = 16;
+
+    /// <summary>
+    /// Words no part of a character's name may be (after folding: "Âdmin" is "admin"), so nobody passes for staff or
+    /// for the server in chat, trades or the friends list. Guild names may not use them either, apart from the server's
+    /// own name (<see cref="StaffWords"/>; "Evergrove Builders" is fine).
+    /// </summary>
+    public static readonly IReadOnlySet<string> ReservedWords = new HashSet<string>
+    {
+        "admin", "administrator", "moderator", "mod", "gm", "gamemaster", "staff", "system", "server", "official",
+        "developer", "sysop", "soe", "evergrove",
+    };
+
+    /// <summary><see cref="ReservedWords"/> without the server's name: the words a guild name may not use.</summary>
+    public static readonly IReadOnlySet<string> StaffWords = ReservedWords.Where(word => word != "evergrove").ToHashSet();
 
     /// <param name="lastName">Empty or null for none: a last name is optional.</param>
     public static CharacterNameProblem Check(string? firstName, string? lastName, IEnumerable<string> nameFilter)
@@ -53,15 +71,23 @@ public static class CharacterNameRules
         if (!IsNamePart(firstName) || lastName.Length > 0 && !IsNamePart(lastName))
             return CharacterNameProblem.IllegalCharacters;
 
+        if (UsesAny(firstName, ReservedWords) || UsesAny(lastName, ReservedWords))
+            return CharacterNameProblem.Reserved;
+
         if (NameFilterCollection.Refuses(nameFilter, $"{firstName} {lastName}"))
             return CharacterNameProblem.Profane;
 
         return CharacterNameProblem.None;
     }
 
+    /// <summary>Whether a word of <paramref name="name"/>, folded as the name filter folds it, is one of <paramref name="words"/>.</summary>
+    public static bool UsesAny(string name, IReadOnlySet<string> words) =>
+        NameFilterCollection.WordsOf(name).Any(words.Contains);
+
     // Latin letters (accents too) and apostrophes, as the client's name box allows; at least one letter, and no
-    // apostrophe at the start. The old check (CharacterNameHelper) also let through the symbols between Z and a and in
-    // Latin-1 (such as [ ] ^ _ and ×).
+    // apostrophe at the start. Every letter has to fold to plain a to z (é is e, ø is o, ß is ss), so the name filter
+    // can read the whole name: a letter that doesn't (such as ƀ) would hide a word from it. The old check
+    // (CharacterNameHelper) also let through the symbols between Z and a and in Latin-1 (such as [ ] ^ _ and ×).
     private static bool IsNamePart(string part)
     {
         if (part[0] == '\'')
@@ -72,7 +98,7 @@ public static class CharacterNameRules
             if (character == '\'')
                 continue;
 
-            if (character > 'ɏ' || !char.IsLetter(character))
+            if (character > 'ɏ' || !char.IsLetter(character) || !NameFilterCollection.FoldsToBasicLatin(character))
                 return false;
         }
 

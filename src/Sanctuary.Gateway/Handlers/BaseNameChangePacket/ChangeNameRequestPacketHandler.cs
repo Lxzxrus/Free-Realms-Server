@@ -152,7 +152,7 @@ public static class ChangeNameRequestPacketHandler
         if (!GuildHelper.IsValidName(guildName))
             return ChangeNameResponse.Error;
 
-        if (GuildHelper.IsProfane(guildName, _resourceManager.NameFilter))
+        if (GuildHelper.IsRefused(guildName, _resourceManager.NameFilter))
             return ChangeNameResponse.Error;
 
         using var dbContext = _dbContextFactory.CreateDbContext();

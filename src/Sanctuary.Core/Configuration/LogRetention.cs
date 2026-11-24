@@ -18,6 +18,9 @@ public static class LogRetention
     public const string DaysKey = "Logging:RetentionDays";
     public const int DefaultDays = 30;
 
+    /// <summary>The most days <see cref="DaysKey"/> may set (ten years). Far more overflowed and stopped the server at startup.</summary>
+    public const int MaxDays = 3650;
+
     /// <summary>The folder NLog writes to: <c>${basedir}/Logs</c> in every NLog.config.</summary>
     public static string LogDirectory => Path.Combine(AppContext.BaseDirectory, "Logs");
 
@@ -30,6 +33,12 @@ public static class LogRetention
 
         if (days <= 0)
             return new Timer(_ => { });
+
+        if (days > MaxDays)
+        {
+            logger.LogWarning("{key} is {days}; keeping logs {max} days, the most it allows.", DaysKey, days, MaxDays);
+            days = MaxDays;
+        }
 
         var maxAge = TimeSpan.FromDays(days);
 
@@ -51,7 +60,8 @@ public static class LogRetention
 
     /// <summary>
     /// Deletes the <c>.log</c> files in <paramref name="directory"/> last written before <paramref name="cutoffUtc"/>,
-    /// except Audit logs. Returns how many it deleted. A file it can't delete (still open, say) is left for the next day.
+    /// except the logs of staff commands (Audit-, and Admin- from NLog.Development.config). Returns how many it deleted.
+    /// A file it can't delete (still open, say) is left for the next day.
     /// </summary>
     public static int DeleteOlderThan(string directory, DateTime cutoffUtc)
     {
@@ -62,7 +72,9 @@ public static class LogRetention
 
         foreach (var file in Directory.EnumerateFiles(directory, "*.log"))
         {
-            if (Path.GetFileName(file).StartsWith("Audit-", StringComparison.OrdinalIgnoreCase))
+            var name = Path.GetFileName(file);
+
+            if (name.StartsWith("Audit-", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Admin-", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             if (File.GetLastWriteTimeUtc(file) >= cutoffUtc)

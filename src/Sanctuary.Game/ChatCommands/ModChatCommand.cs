@@ -101,17 +101,29 @@ public class ModChatCommand : IChatCommand
 
     private static bool TryResolveTarget(Player invoker, DatabaseContext dbContext, string targetName, out ulong targetUserId)
     {
-        var target = dbContext.Characters
+        var targets = dbContext.Characters
             .Where(character => character.FullName == targetName)
             .Select(character => new { character.UserId, character.User.IsAdmin, character.User.IsMod })
-            .SingleOrDefault();
+            .Take(2)
+            .ToList();
 
-        if (target is null)
+        if (targets.Count == 0)
         {
             ChatHelper.SendSystemMessage(invoker, $"No player named \"{targetName}\" was found.");
             targetUserId = 0;
             return false;
         }
+
+        // Two characters can share a name made before names were checked everywhere (Evergrove launch prep). A command
+        // by name can't tell them apart, so it says so (SingleOrDefault threw here, and the command just failed).
+        if (targets.Count > 1)
+        {
+            ChatHelper.SendSystemMessage(invoker, $"More than one character is named \"{targetName}\", so this can't tell which one you mean. An admin can sort it out in the database.");
+            targetUserId = 0;
+            return false;
+        }
+
+        var target = targets[0];
 
         ChatCommandRole targetRole = ChatHelper.GetRoleFromFlags(target.IsAdmin, target.IsMod);
         if (!IsAuthorizedAgainstTarget(invoker.ChatCommandRole, targetRole))
