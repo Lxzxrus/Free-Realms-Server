@@ -170,12 +170,23 @@ public static class FishingHandler
         // Echoed as the client sent it, as edenfps did.
         connection.SendTunneled(new MiniGameGameStartPacket(stateId, groupId, gameId));
 
+        // Into the hole's zone, and into fishing with it. A move to another zone that comes too soon after the player's
+        // last waits for its turn (ZoneTeleports), like their moves into a house or to a point of interest.
+        ZoneTeleports.Request(player, Environment.TickCount64, () => EnterHole(connection, stateId, hole));
+
+        return true;
+    }
+
+    private static void EnterHole(GatewayConnection connection, int stateId, FishingZoneDefinition hole)
+    {
+        var player = connection.Player;
+
         // Never a zone made here: TeleportToZone moves the player and sends the zoning.
         if (!player.TeleportToZone(hole.Id, null, hole.SpawnPosition, hole.SpawnRotation))
         {
             _logger.LogWarning("Fishing: {player} could not enter hole {activityId} ({zone}).", player.Guid, hole.Id, hole.Name);
             connection.SendTunneled(new MiniGameLeavePacket(stateId));
-            return true;
+            return;
         }
 
         player.FishingSession = new FishingSession(new PlayerFishingHost(player, _resourceManager, _dbContextFactory, _sessionLogger), hole, _sessionLogger, Random.Shared);
@@ -188,8 +199,6 @@ public static class FishingHandler
         });
 
         _logger.LogInformation("Fishing: {player} entered hole {activityId} ({zone}).", player.Guid, hole.Id, hole.Name);
-
-        return true;
     }
 
     /// <summary>The minigame's end: back to where the player stood before fishing.</summary>
@@ -202,9 +211,13 @@ public static class FishingHandler
 
         connection.SendTunneled(new MiniGameLeavePacket(stateId));
 
-        // Leaving the hole's zone ends the session and takes the client out of fishing (FishingZone).
-        if (!player.ReturnToStartingZone())
-            _logger.LogWarning("Fishing: {player} could not leave hole {activityId}.", player.Guid, stateId);
+        // Leaving the hole's zone ends the session and takes the client out of fishing (FishingZone). It is a move to
+        // another zone, so one that comes too soon after the last waits for its turn (ZoneTeleports).
+        ZoneTeleports.Request(player, Environment.TickCount64, () =>
+        {
+            if (!player.ReturnToStartingZone())
+                _logger.LogWarning("Fishing: {player} could not leave hole {activityId}.", player.Guid, stateId);
+        });
 
         return true;
     }
