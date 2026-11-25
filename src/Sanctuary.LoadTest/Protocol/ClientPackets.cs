@@ -51,9 +51,9 @@ public static class ClientPackets
         data.Write(0);              // FacePaint: none
         data.Write(1);              // SkinTone: SkinToneMappings.txt
         data.Write(0);              // ItemHands
-        data.Write(101);            // ItemFeet: caster squaretip
-        data.Write(103);            // ItemLegs: caster slacks
-        data.Write(104);            // ItemChest: caster shortcloak
+        data.Write(17412);          // ItemFeet: a starter outfit (StarterClothing.txt, outfit 12)
+        data.Write(14964);          // ItemLegs
+        data.Write(28178);          // ItemChest
         data.Write(0);              // ItemHead
         data.Write(0);              // ItemShoulders
         data.Write(0);              // TintHands
