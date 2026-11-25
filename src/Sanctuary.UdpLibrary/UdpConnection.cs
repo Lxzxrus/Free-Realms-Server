@@ -758,6 +758,15 @@ public class UdpConnection : PriorityQueueMember
                         finalLen = len + 1;
                     }
 
+                    // A sender never builds a packet larger than MaxRawPacketSize before it encrypts it (see
+                    // rawDataBytesMax), so one that comes out larger was made to: compression can turn a few dozen
+                    // bytes into the whole 8 KiB buffer, and the reliable channel keeps what arrives ahead of its turn.
+                    if (finalLen > UdpManager.Params.MaxRawPacketSize)
+                    {
+                        CallbackCorruptPacket(data, UdpCorruptionReason.DecryptedTooLarge);
+                        return;
+                    }
+
                     finalStart = _tempDecryptBuffer[i];
                 }
 
@@ -820,6 +829,13 @@ public class UdpConnection : PriorityQueueMember
 
     // how deep ProcessCookedPacket is nested right now
     private int _cookedPacketDepth;
+
+    /// <summary>The least time, in milliseconds, between two answers to a connection's clock-sync requests.</summary>
+    internal const int ClockReflectMinInterval = 1000;
+
+    // when this connection last answered a clock-sync request, if it has
+    private UdpClockStamp _lastClockReflectTime;
+    private bool _clockReflectSent;
 
     internal void ProcessCookedPacket(Span<byte> data)
     {
@@ -1189,6 +1205,14 @@ public class UdpConnection : PriorityQueueMember
                     // if it has been over a second since our manager got processing time, then we should not reflect clock-sync packets as we will have introduced too much lag ourselves.
                     if (UdpManager.ProcessingInducedLag > 1000)
                         break;
+
+                    // One answer per interval. A client asks every ClockSyncDelay (tens of seconds), or every 10 s until
+                    // it has two answers; one datagram can hold many requests, and each answer is a send of its own.
+                    if (_clockReflectSent && UdpManager.CachedClockElapsed(_lastClockReflectTime) < ClockReflectMinInterval)
+                        break;
+
+                    _clockReflectSent = true;
+                    _lastClockReflectTime = UdpManager.CachedClock;
 
                     // prepare UdpPacketClockReflect packet
                     Span<byte> buf = stackalloc byte[40 + 4];
