@@ -19,6 +19,15 @@ public class ModelDefinitionCollection : ObservableConcurrentDictionary<int, Mod
         _logger = logger;
     }
 
+    /// <summary>
+    /// The model, if a player's character may have it: the ones marked valid for player characters in the model list
+    /// (the human and pixie boys and girls). Every other model is an npc's or a creature's.
+    /// </summary>
+    public bool TryGetPlayerModel(int id, out ModelDefinition model)
+    {
+        return TryGetValue(id, out model!) && model.IsValidForPC;
+    }
+
     public bool Load(string filePath)
     {
         if (!File.Exists(filePath))

@@ -73,7 +73,8 @@ public static class CharacterCreateRequestHandler
             return true;
         }
 
-        if (!_resourceManager.Models.TryGetValue(characterData.Model, out var model))
+        // Only the models the character creator offers: the rest of the model list is npcs and creatures.
+        if (!_resourceManager.Models.TryGetPlayerModel(characterData.Model, out var model))
         {
             _logger.LogError("Failed to create character, invalid character model. {id}", characterData.Model);
 
