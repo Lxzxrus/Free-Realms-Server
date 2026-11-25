@@ -60,9 +60,13 @@ public static class FishingHandler
         return false;
     }
 
+    /// <summary>What a player without a rod is told instead of getting the hole's start screen.</summary>
+    public const string NeedARod = "You need a fishing rod to fish here. Buy one in the Coin Store and equip it, then try again.";
+
     /// <summary>
-    /// The hole's start screen, as edenfps sent it: the invite, "launched", and the minigame's info. The client then
-    /// shows the start screen, and its Go button sends a start game (39/5) with the activity id as the state id.
+    /// The hole's start screen: the invite, "launched", and the minigame's info. The client shows the start screen,
+    /// and its Go button sends a start game (39/5) with the activity id as the state id. A player with no rod equipped
+    /// is told so instead: the client can't cast without one, so fishing would leave them stuck in the hole.
     /// </summary>
     public static void Join(GatewayConnection connection, ClientActivityDefinition activity)
     {
@@ -71,6 +75,14 @@ public static class FishingHandler
         // Already fishing there: nothing to start.
         if (player.FishingSession?.ActivityId == activity.Id)
             return;
+
+        if (EquippedRodId(player) == 0)
+        {
+            player.PendingFishingActivityId = 0;
+            ChatHelper.SendSystemMessage(player, NeedARod);
+            _logger.LogDebug("Fishing: {player} has no rod, so hole {activityId} wasn't offered.", player.Guid, activity.Id);
+            return;
+        }
 
         player.PendingFishingActivityId = activity.Id;
 
@@ -85,7 +97,11 @@ public static class FishingHandler
             ProfileType = FishingMiniGameType,
             Type = FishingMiniGameType,
             PreselectedGameId = activity.Id,
-            ShowActionBar = true
+            ShowActionBar = true,
+            // The start screen: the client shows it and waits for Go (MiniGameInfo offset 0x267, read by the client's
+            // PlayerStartMiniGame, 0x9BEB70). Off, as edenfps sent it, the client starts the game by itself the moment
+            // the info arrives, so the map's teleport to a hole's water threw the player straight into the hole.
+            Unknown11 = true
         };
 
         var miniGameGroupInfo = new MiniGameGroupInfo
@@ -166,6 +182,14 @@ public static class FishingHandler
             return false;
 
         player.PendingFishingActivityId = 0;
+
+        // The rod was unequipped while the start screen was up: close the screen rather than strand them in the hole.
+        if (EquippedRodId(player) == 0)
+        {
+            connection.SendTunneled(new MiniGameLeavePacket(stateId));
+            ChatHelper.SendSystemMessage(player, NeedARod);
+            return true;
+        }
 
         // Echoed as the client sent it, as edenfps did.
         connection.SendTunneled(new MiniGameGameStartPacket(stateId, groupId, gameId));

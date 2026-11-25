@@ -40,8 +40,12 @@ code the pieces live as below. Where they say to type `tp x y z`, `tporigin` or 
 
 1. **Start screen.** Choosing a hole in the Games menu (activities 560 to 565), or picking a hole on the map's
    points of interest while in Fabled Realms, sends the hole's start screen: the invite, "launched" and minigame info
-   packets edenfps sent. The map first teleports the player to the hole's water in Fabled Realms, as before; from a
-   house or another hole it only takes the player back to Fabled Realms.
+   packets edenfps sent, with the start-screen flag on (`MiniGameInfo.Unknown11`, the client's offset 0x267). With
+   the flag off, as edenfps sent it, the client starts the game the moment the info arrives, so the map's teleport
+   threw players straight into the hole with no start screen. The map first teleports the player to the hole's water
+   in Fabled Realms, as before; from a house or another hole it only takes the player back to Fabled Realms. A player
+   with no rod equipped gets a chat line instead of the start screen (and a rod taken off while the screen is up
+   closes it at Go): the client can't cast without a rod, so they would be stuck in the hole.
 2. **Into the hole.** The start screen's button sends a start game for the activity. The server takes the player into
    the hole's zone with `Player.TeleportToZone` (zone id = activity id) and sets the fishing state bit, 0x400000. The
    client switches to fishing and asks to register; the loading screen waits for the answer: casting range (from the
@@ -115,9 +119,9 @@ refused and not used up (before, any use ate it for nothing).
 - **The treasure chest is item 3016,** a members-only house fixture (`hsg_chest_02`, cost 50,000, no trade), granted
   to anyone, member or not. About one cast in seventeen brings it up (one in six with the Treasure Magnet). On a
   housing server that may be too generous, or the wrong item.
-- **No rod or job check on the server.** The real client needs a rod to cast, but a modified one could fish without.
-  Catches pay no coins today (fish have no resell value), so this is left for later: refuse a start or a cast when
-  `FishingHandler.EquippedRodId` finds no rod.
+- **No job check, and the rod is only checked on the way in.** A hole isn't offered or started without a rod
+  equipped (any profile's), but casts aren't checked: a modified client could take the rod off once inside. Catches
+  pay no coins today (fish have no resell value), so that is left for later.
 
 ## Check in game (Nate)
 
