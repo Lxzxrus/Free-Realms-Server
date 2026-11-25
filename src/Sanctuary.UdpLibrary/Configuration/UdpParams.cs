@@ -443,6 +443,23 @@ public class UdpParams
     public int IncomingFragmentBytesMax;
 
     /// <summary>
+    /// <see cref="IncomingLogicalPacketMax"/> for a connection the application has called
+    /// <see cref="UdpConnection.RaiseIncomingPacketLimits"/> on, once it knows who is on the other end (the Gateway does
+    /// when a player's login succeeds).  It only ever raises the limit: a value at or below
+    /// <see cref="IncomingLogicalPacketMax"/> changes nothing.
+    /// </summary>
+    /// <remarks>default = 0 (no raise)</remarks>
+    public int RaisedIncomingLogicalPacketMax;
+
+    /// <summary>
+    /// <see cref="IncomingFragmentBytesMax"/> for a connection the application has called
+    /// <see cref="UdpConnection.RaiseIncomingPacketLimits"/> on.  It only ever raises the cap, and never adds one where
+    /// <see cref="IncomingFragmentBytesMax"/> is 0.
+    /// </summary>
+    /// <remarks>default = 0 (no raise)</remarks>
+    public int RaisedIncomingFragmentBytesMax;
+
+    /// <summary>
     /// Most connections one IP address may hold on this manager at once.  Connect requests over the limit are ignored, so
     /// the other side times out as if the server were full.  0 = no limit.
     /// </summary>
@@ -575,6 +592,8 @@ public class UdpParams
         ParallelConnectionGiveTime = false;
         IncomingLogicalPacketMax = 20 * 1024 * 1024;
         IncomingFragmentBytesMax = 0;
+        RaisedIncomingLogicalPacketMax = 0;
+        RaisedIncomingFragmentBytesMax = 0;
         MaxConnectionsPerIp = 0;
         ConnectRatePerIp = 0;
         ConnectRateGlobal = 0;

@@ -139,6 +139,9 @@ public class UdpConnection : PriorityQueueMember
     // bytes reserved by fragmented packets being reassembled, across all reliable channels (see UdpParams.IncomingFragmentBytesMax)
     internal int IncomingFragmentBytes;
 
+    // set by RaiseIncomingPacketLimits; until then UdpParams.IncomingLogicalPacketMax and IncomingFragmentBytesMax apply
+    private volatile bool IncomingPacketLimitsRaised;
+
     // packets waiting in the manager's event queue for OnRoutePacket (see UdpParams.MaxQueuedPacketsPerConnection)
     internal int QueuedPackets;
 
@@ -1914,6 +1917,45 @@ public class UdpConnection : PriorityQueueMember
             InternalDisconnect(0, DisconnectReason.CorruptPacket);
 
             return true;
+        }
+    }
+
+    /// <summary>
+    /// From now on, packets from the other side may be as large as <see cref="Configuration.UdpParams.RaisedIncomingLogicalPacketMax"/>
+    /// and <see cref="Configuration.UdpParams.RaisedIncomingFragmentBytesMax"/> rather than the limits every connection
+    /// starts with. Call it once the application knows who is on the other end, never before: the lower starting limits are
+    /// what keeps a stranger from making the server hold large buffers. A packet already being reassembled keeps the
+    /// limit it was checked against.
+    /// </summary>
+    public void RaiseIncomingPacketLimits()
+    {
+        IncomingPacketLimitsRaised = true;
+    }
+
+    /// <summary>The largest packet the other side may send now, after reassembly from fragments.</summary>
+    internal int IncomingLogicalPacketMax
+    {
+        get
+        {
+            var udpParams = UdpManager.Params;
+
+            return IncomingPacketLimitsRaised
+                ? Math.Max(udpParams.IncomingLogicalPacketMax, udpParams.RaisedIncomingLogicalPacketMax)
+                : udpParams.IncomingLogicalPacketMax;
+        }
+    }
+
+    /// <summary>Bytes of fragmented packets the other side may have in reassembly at once now; 0 = no cap.</summary>
+    internal int IncomingFragmentBytesMax
+    {
+        get
+        {
+            var udpParams = UdpManager.Params;
+
+            // 0 means no cap, so raising never adds one
+            return IncomingPacketLimitsRaised && udpParams.IncomingFragmentBytesMax > 0
+                ? Math.Max(udpParams.IncomingFragmentBytesMax, udpParams.RaisedIncomingFragmentBytesMax)
+                : udpParams.IncomingFragmentBytesMax;
         }
     }
 

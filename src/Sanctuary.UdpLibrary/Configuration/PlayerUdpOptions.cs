@@ -21,6 +21,17 @@ public sealed class PlayerUdpOptions
     /// <summary>Bytes of fragmented packets one connection may have in reassembly at once.</summary>
     public int IncomingFragmentBytesMax { get; set; } = 64 * 1024;
 
+    /// <summary>
+    /// <see cref="IncomingLogicalPacketMax"/> once a player has logged in to the Gateway (the Login server never raises it).
+    /// The largest packet a real client sends is the coin store's item definitions request: searching the Coin Shop asks
+    /// for every item, 15 bytes plus 4 per item, 68,879 bytes for the 17,216 items in <c>CoinStoreItems.json</c>. 96 KiB
+    /// fits 24,572 items.
+    /// </summary>
+    public int LoggedInLogicalPacketMax { get; set; } = 96 * 1024;
+
+    /// <summary><see cref="IncomingFragmentBytesMax"/> once a player has logged in to the Gateway.</summary>
+    public int LoggedInFragmentBytesMax { get; set; } = 96 * 1024;
+
     public int MaxConnectionsPerIp { get; set; } = 10;
 
     public int ConnectRatePerIp { get; set; } = 5;
@@ -71,6 +82,8 @@ public sealed class PlayerUdpOptions
         udpParams.OutgoingBufferSize = OutgoingBufferSize;
         udpParams.IncomingLogicalPacketMax = IncomingLogicalPacketMax;
         udpParams.IncomingFragmentBytesMax = IncomingFragmentBytesMax;
+        udpParams.RaisedIncomingLogicalPacketMax = LoggedInLogicalPacketMax;
+        udpParams.RaisedIncomingFragmentBytesMax = LoggedInFragmentBytesMax;
         udpParams.MaxConnectionsPerIp = MaxConnectionsPerIp;
         udpParams.ConnectRatePerIp = ConnectRatePerIp;
         udpParams.ConnectRateGlobal = ConnectRateGlobal;
