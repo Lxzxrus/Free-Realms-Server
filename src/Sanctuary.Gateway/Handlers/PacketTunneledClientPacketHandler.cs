@@ -24,17 +24,19 @@ public static class PacketTunneledClientPacketHandler
 
     public static bool HandlePacket(GatewayConnection connection, Span<byte> data)
     {
-        if (!PacketTunneledClientPacket.TryDeserialize(data, out var packetTunneledClientPacket))
-        {
-            _logger.LogError("Failed to deserialize {packet}.", nameof(PacketTunneledClientPacket));
-            return false;
-        }
-
         // Every tunneled packet is about the player. The game client sends none before its login is answered, so
-        // one that arrives earlier is from something else, and the handlers would throw on the missing player.
+        // one that arrives earlier is from something else, and the handlers would throw on the missing player. It is
+        // a fault before it is even parsed, so one that doesn't parse can't be logged instead (a line per packet,
+        // from a connection that hasn't logged in).
         if (connection.Player is null)
         {
             connection.ReportFault();
+            return false;
+        }
+
+        if (!PacketTunneledClientPacket.TryDeserialize(data, out var packetTunneledClientPacket))
+        {
+            _logger.LogError("Failed to deserialize {packet}.", nameof(PacketTunneledClientPacket));
             return false;
         }
 

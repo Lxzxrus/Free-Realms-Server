@@ -25,6 +25,9 @@ public class LoginConnection : LoginServerConnection
 
     public ulong UserId { get; set; }
 
+    /// <summary>Whether this connection's second LoginRequest has been logged (LoginRequestHandler logs it once).</summary>
+    public bool LoggedTwiceLogin { get; set; }
+
     public LoginConnection(ILogger<LoginConnection> logger, IOptionsMonitor<LoginServerOptions> options, LoginServer loginServer, SocketAddress socketAddress, int connectCode) : base(options, loginServer, socketAddress, connectCode)
     {
         _logger = logger;
@@ -49,6 +52,11 @@ public class LoginConnection : LoginServerConnection
 
     public override void OnRoutePacket(Span<byte> data)
     {
+        // A connection that is closing (a refused login waiting for its reply to arrive) handles nothing more. One
+        // datagram can carry many packets, and without this each of them would be handled, and logged, in turn.
+        if (Status != Status.Connected)
+            return;
+
         if ((!_useEncryption || !_cipher.Decrypt(data, out var finalLength))
             && (_useEncryption || !PacketUtils.UnwrapPacket(data, out finalLength, _cipher)))
         {
@@ -65,6 +73,18 @@ public class LoginConnection : LoginServerConnection
     private void OnHandlePacket(Span<byte> data)
     {
         var reader = new PacketReader(data);
+
+        // Before signing in, a client sends its LoginRequest (and perhaps asks for the server list). Anything else
+        // before then isn't a real client's: it counts as a fault (five disconnect it) and is never handled or
+        // logged, so a connection that hasn't signed in can't write a line per packet, or run the database queries
+        // the other handlers make.
+        if (UserId == 0 && (!reader.TryRead(out byte earlyOpCode) || earlyOpCode is not (LoginRequest.OpCode or ServerListRequest.OpCode)))
+        {
+            ReportFault();
+            return;
+        }
+
+        reader.Reset();
 
         if (!reader.TryRead(out byte opCode))
         {

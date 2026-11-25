@@ -6,6 +6,7 @@ using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using Sanctuary.Core.Helpers;
 using Sanctuary.WebAPI.Options;
 
 namespace Sanctuary.WebAPI.Security;
@@ -100,7 +101,7 @@ public sealed class LoginThrottle
                     addressState.LockedUntil = now + lockout;
 
                     _logger.LogWarning("Login locked for {Lockout} after {Failures} failures. ( Username: {Username}, Address: {Address} )",
-                        lockout, addressState.Failures, username, address);
+                        lockout, addressState.Failures, PacketLog.Text(username, 64), address);
                 }
             }
 
@@ -119,7 +120,7 @@ public sealed class LoginThrottle
                     accountState.LockedUntil = now + _options.AccountWindow;
 
                     _logger.LogWarning("Account locked for {Lockout} after {Failures} failures from all addresses, except for addresses it has logged in from. ( Username: {Username} )",
-                        _options.AccountWindow, accountState.Failures, username);
+                        _options.AccountWindow, accountState.Failures, PacketLog.Text(username, 64));
                 }
             }
         }

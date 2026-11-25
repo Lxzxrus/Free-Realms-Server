@@ -13,5 +13,6 @@ public enum UdpCorruptionReason
     FragmentOversized,
     FragmentBad,
     FragmentExpected,
-    AckBad
+    AckBad,
+    NestedTooDeep
 }

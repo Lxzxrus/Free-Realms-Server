@@ -181,7 +181,12 @@ public class UdpConnection : PriorityQueueMember
 
             ConnectionConfig.CrcBytes = UdpManager.Params.CrcBytes;
             ConnectionConfig.MaxRawPacketSize = UdpManager.Params.MaxRawPacketSize;
-            ConnectionConfig.EncryptCode = UdpManager.Random();
+            // The code every packet's CRC is seeded with, which the client learns from the confirm: knowing a
+            // connection's code is what it takes to send that connection packets it accepts. UdpManager.Random's
+            // generator is seeded from the clock and its next value is its last one fed back, so a client that saw
+            // its own code could work out the next player's. A value from the system's secure generator can't be
+            // worked out (the range is the one UdpManager.Random gives).
+            ConnectionConfig.EncryptCode = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1, int.MaxValue);
 
             SetupEncryptModel();
 
@@ -805,7 +810,38 @@ public class UdpConnection : PriorityQueueMember
         InternalDisconnect(0, DisconnectReason.CorruptPacket);
     }
 
+    /// <summary>
+    /// How deep packets may nest (a reliable packet in a group in a reliable packet...). A real client nests a few levels
+    /// at most. Each level is a call, and nothing else limited them: a reliable packet carrying another with the same
+    /// stamp is handled before the stamp moves on, so a 64 KiB message of them made thousands of nested calls, and the
+    /// stack overflow that followed can't be caught. The whole server process died.
+    /// </summary>
+    internal const int MaxCookedPacketDepth = 8;
+
+    // how deep ProcessCookedPacket is nested right now
+    private int _cookedPacketDepth;
+
     internal void ProcessCookedPacket(Span<byte> data)
+    {
+        if (_cookedPacketDepth >= MaxCookedPacketDepth)
+        {
+            CallbackCorruptPacket(data, UdpCorruptionReason.NestedTooDeep);
+            return;
+        }
+
+        _cookedPacketDepth++;
+
+        try
+        {
+            ProcessCookedPacketAtDepth(data);
+        }
+        finally
+        {
+            _cookedPacketDepth--;
+        }
+    }
+
+    private void ProcessCookedPacketAtDepth(Span<byte> data)
     {
         var reader = new PacketReader(data);
 
