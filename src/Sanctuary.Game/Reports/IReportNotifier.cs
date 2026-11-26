@@ -12,9 +12,17 @@ public sealed record ReportNotification(
     string Zone,
     string Position,
     string ClientText,
-    string ServerContext)
+    string ServerContext,
+    bool AboutStaff = false)
 {
-    public static ReportNotification From(DbReport report, string summary) => new(
+    /// <summary>
+    /// A report as it is passed on outside the game. One about a staff member (<paramref name="aboutStaff"/>) is passed on
+    /// without the reporter, the target or any text: the channel it goes to can be read by staff who may not read it (the
+    /// rank rule of <c>!mod report</c>), so it only says that one exists.
+    /// </summary>
+    public static ReportNotification From(DbReport report, string summary, bool aboutStaff = false) => aboutStaff
+        ? new(report.Id, report.Kind, string.Empty, null, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, AboutStaff: true)
+        : new(
         report.Id,
         report.Kind,
         report.ReporterName,

@@ -99,6 +99,9 @@ public static class DiscordPayload
 
     public static string BuildContent(ReportNotification notification)
     {
+        if (notification.AboutStaff)
+            return $"**Report #{notification.Id}** ({notification.Kind.ToString().ToLowerInvariant()}) about a staff member. Who and what are withheld here; staff who outrank them can read it in game: !mod report {notification.Id}";
+
         var builder = new StringBuilder();
 
         builder.Append(notification.Kind == ReportKind.Bug ? "**Bug report #" : "**Report #").Append(notification.Id).Append("** (")

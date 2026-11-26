@@ -5,6 +5,8 @@ using System.Linq;
 
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Core.Helpers;
+using Sanctuary.Database.Entities;
 using Sanctuary.Game.ChatCommands;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
@@ -36,10 +38,18 @@ public sealed class ReportDesk
         var name = ModArguments.CleanText(reportedName, ReportLimits.MaxTargetNameLength);
 
         if (name is not null && _zoneManager.TryGetPlayer(name, out var target))
-            online = new OnlineReportTarget(target.UserId, target.CharacterId, target.Name.FullName, target.ChatEvidence.Snapshot());
+            online = OnlineTargetOf(target);
 
-        return AlertStaff(reporter, _service.SubmitPlayerReport(ContextOf(reporter), name, lines, online));
+        // The name typed may differ in case from the character's (the exact lookup above misses it, the database finds it),
+        // so the service looks the character up again by its id once the database has named it.
+        return AlertStaff(reporter, _service.SubmitPlayerReport(ContextOf(reporter), name, lines, online, FindOnlineByCharacter));
     }
+
+    private static OnlineReportTarget OnlineTargetOf(Player target) =>
+        new(target.UserId, target.CharacterId, target.Name.FullName, target.ChatEvidence.Snapshot());
+
+    private OnlineReportTarget? FindOnlineByCharacter(ulong characterId) =>
+        _zoneManager.TryGetPlayer(GuidHelper.GetPlayerGuid(characterId), out var player) ? OnlineTargetOf(player) : null;
 
     public ReportResult ReportHouse(Player reporter, ulong houseGuid, ulong ownerGuid, string? houseName, string? ownerName) =>
         AlertStaff(reporter, _service.SubmitHouseReport(ContextOf(reporter), houseGuid, ownerGuid, houseName, ownerName));
@@ -59,7 +69,19 @@ public sealed class ReportDesk
             string.Create(CultureInfo.InvariantCulture, $"{position.X:F1} {position.Y:F1} {position.Z:F1}"));
     }
 
-    /// <summary>One system message to each staff member online, for a report that was kept.</summary>
+    /// <summary>
+    /// The staff who are told of a report as it is filed: those who may read it. The same rank rule as <c>!mod report</c>
+    /// (<see cref="ModChatCommand.MayCloseReportAbout"/>): the notice names the reporter and the target, so staff who may
+    /// not read the report (the reported staff member, and staff who do not outrank them) are not told it exists.
+    /// </summary>
+    internal static List<T> SelectRecipients<T>(IEnumerable<T> candidates, Func<T, ulong> userIdOf, Func<T, ChatCommandRole> roleOf,
+        DbReport report, ChatCommandRole? targetRole) =>
+        candidates
+            .Where(candidate => roleOf(candidate) >= ChatCommandRole.Mod
+                && ModChatCommand.MayCloseReportAbout(userIdOf(candidate), roleOf(candidate), report.TargetUserId, targetRole))
+            .ToList();
+
+    /// <summary>One system message to each staff member online who may read the report, for a report that was kept.</summary>
     private ReportResult AlertStaff(Player reporter, ReportResult result)
     {
         if (result.Outcome != ReportOutcome.Accepted || result.Report is null)
@@ -67,7 +89,9 @@ public sealed class ReportDesk
 
         var notice = ReportQueries.FormatStaffNotice(result.Report, result.Summary);
 
-        foreach (var staff in _zoneManager.Zones.SelectMany(zone => zone.Players).Where(player => player.ChatCommandRole >= ChatCommandRole.Mod).ToList())
+        var online = _zoneManager.Zones.SelectMany(zone => zone.Players).ToList();
+
+        foreach (var staff in SelectRecipients(online, player => player.UserId, player => player.ChatCommandRole, result.Report, result.TargetRole))
         {
             try
             {

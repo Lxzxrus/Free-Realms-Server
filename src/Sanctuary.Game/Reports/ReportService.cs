@@ -39,7 +39,8 @@ public enum ReportOutcome
 }
 
 /// <summary>The result of a report. <see cref="Summary"/> is the short line staff see for a bug (its category).</summary>
-public readonly record struct ReportResult(ReportOutcome Outcome, DbReport? Report = null, string Summary = "");
+/// <param name="TargetRole">The role of the reported account, when the report names one (null: no account, or it was deleted). Who may be told is decided by it.</param>
+public readonly record struct ReportResult(ReportOutcome Outcome, DbReport? Report = null, string Summary = "", ChatCommandRole? TargetRole = null);
 
 /// <summary>
 /// Takes in-game reports: applies the limits, drops self-reports and repeats, writes the row and passes it on to the
@@ -74,8 +75,14 @@ public sealed class ReportService
     public ReportRateLimiter Limiter { get; }
 
     /// <summary>A report on a player, from the chat log's "Report" or /report.</summary>
+    /// <param name="online">The reported player if they were found online by the name typed.</param>
+    /// <param name="findOnline">
+    /// Looks an online player up by character id. Used when the database finds the character but <paramref name="online"/> is
+    /// null, which is what a name typed in another case does (the database ignores case, the list of online players does not),
+    /// so the server's own chat record is kept whatever case was typed.
+    /// </param>
     public ReportResult SubmitPlayerReport(ReportContext reporter, string? reportedName, IReadOnlyList<(int Channel, string Message, ulong Time)> lines,
-        OnlineReportTarget? online)
+        OnlineReportTarget? online, Func<ulong, OnlineReportTarget?>? findOnline = null)
     {
         var name = ModArguments.CleanText(reportedName, ReportLimits.MaxTargetNameLength);
 
@@ -112,6 +119,8 @@ public sealed class ReportService
 
                 if (found is not null)
                 {
+                    online = findOnline?.Invoke(found.Id);
+
                     targetUserId = found.UserId;
                     targetCharacterId = found.Id;
                     targetName = found.FullName ?? name;
@@ -438,12 +447,16 @@ public sealed class ReportService
 
         Limiter.RecordAccepted(report.ReporterUserId, budget, established);
 
+        // The target name can be free text the reporting client typed, so it must not be able to forge fields of the line.
         _auditLogger.LogInformation("report|{Kind}|#{Id}, Actor: \"{ActorName}\" (user {UserId}), Target: \"{Target}\", In: {Zone} {Position}",
-            report.Kind, report.Id, report.ReporterName, report.ReporterUserId, report.TargetName, report.Zone, report.Position);
+            report.Kind, report.Id, StaffActionLog.ForAuditLine(report.ReporterName), report.ReporterUserId,
+            StaffActionLog.ForAuditLine(report.TargetName), report.Zone, report.Position);
+
+        var targetRole = TargetRoleOf(dbContext, report.TargetUserId);
 
         try
         {
-            _notifier.Notify(ReportNotification.From(report, summary));
+            _notifier.Notify(ReportNotification.From(report, summary, aboutStaff: targetRole >= ChatCommandRole.Mod));
         }
         catch (Exception exception)
         {
@@ -451,7 +464,24 @@ public sealed class ReportService
             _logger.LogError(exception, "The report notifier failed for report {Id}.", report.Id);
         }
 
-        return new ReportResult(ReportOutcome.Accepted, report, summary);
+        return new ReportResult(ReportOutcome.Accepted, report, summary, targetRole);
+    }
+
+    /// <summary>
+    /// The role of the reported account, which decides who may be told of the report. If it cannot be read, the highest
+    /// role is assumed, so the report is told to as few people as possible rather than to everyone.
+    /// </summary>
+    private ChatCommandRole? TargetRoleOf(DatabaseContext dbContext, ulong? targetUserId)
+    {
+        try
+        {
+            return ReportQueries.GetUserRole(dbContext, targetUserId);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Failed to read the role of the account a report is about; it is treated as staff.");
+            return ChatCommandRole.Admin;
+        }
     }
 
     private static DbReport NewReport(ReportContext reporter, ReportKind kind, DateTimeOffset now) => new()

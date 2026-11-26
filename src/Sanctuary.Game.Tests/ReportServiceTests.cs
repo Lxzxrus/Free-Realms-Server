@@ -1031,4 +1031,86 @@ public sealed class ReportServiceTests
         Assert.AreEqual(ReportStatus.Closed, reports["about nobody"].Status);
         Assert.AreEqual(ReportStatus.Open, reports["about staff"].Status, "a report about staff is left to the rank rule");
     }
+
+    // ---- Who is told of a report, and the online lookup ----
+
+    private void MakeTargetStaff(bool admin)
+    {
+        using var dbContext = CreateDbContext();
+        var user = dbContext.Users.Single(u => u.Id == TargetUser);
+
+        user.IsAdmin = admin;
+        user.IsMod = !admin;
+        dbContext.SaveChanges();
+    }
+
+    [TestMethod]
+    public void AReportAboutAPlayer_CarriesThePlayersRole_AndTheFullNotification()
+    {
+        var result = _service.SubmitPlayerReport(Reporter(), "Bob Smith", Lines, null);
+
+        Assert.AreEqual(ChatCommandRole.Player, result.TargetRole);
+        Assert.IsFalse(_notifier.Sent.Single().AboutStaff);
+        Assert.AreEqual("Rita Reporter", _notifier.Sent.Single().ReporterName);
+    }
+
+    [DataTestMethod]
+    [DataRow(false, ChatCommandRole.Mod)]
+    [DataRow(true, ChatCommandRole.Admin)]
+    public void AReportAboutStaff_CarriesTheirRole_AndReachesDiscordWithoutWhoOrWhat(bool admin, ChatCommandRole role)
+    {
+        MakeTargetStaff(admin);
+
+        var result = _service.SubmitPlayerReport(Reporter(), "Bob Smith", Lines, Online("hello"));
+
+        Assert.AreEqual(ReportOutcome.Accepted, result.Outcome);
+        Assert.AreEqual(role, result.TargetRole);
+
+        var sent = _notifier.Sent.Single();
+        var content = DiscordPayload.BuildContent(sent);
+
+        Assert.IsTrue(sent.AboutStaff);
+        Assert.AreEqual(Reports().Single().Id, sent.Id);
+
+        foreach (var secret in new[] { "Rita", "Reporter", "Bob", "Smith", "noob", "hello", "Wugachug" })
+            Assert.IsFalse(content.Contains(secret, StringComparison.Ordinal), $"the post must not contain '{secret}'");
+
+        StringAssert.Contains(content, $"Report #{sent.Id}");
+    }
+
+    [TestMethod]
+    public void AReportAboutAnAccountThatCannotBeReadAsStaff_IsTreatedAsStaffNotAsEveryone()
+    {
+        // A role lookup that fails must lean to telling fewer people.
+        var report = new DbReport { Id = 9, Kind = ReportKind.Player, ReporterName = "r", TargetUserId = TargetUser, Created = _clock.GetUtcNow() };
+
+        Assert.IsTrue(ReportNotification.From(report, string.Empty, aboutStaff: true).AboutStaff);
+        Assert.IsTrue(string.IsNullOrEmpty(ReportNotification.From(report, string.Empty, aboutStaff: true).ReporterName));
+    }
+
+    [TestMethod]
+    public void PlayerReport_FindsTheOnlineTargetByCharacter_WhateverCaseTheNameWasTypedIn()
+    {
+        ulong? asked = null;
+
+        var result = _service.SubmitPlayerReport(Reporter(), "Bob Smith", Lines, online: null, findOnline: characterId =>
+        {
+            asked = characterId;
+            return Online("what the server saw");
+        });
+
+        Assert.AreEqual(ReportOutcome.Accepted, result.Outcome);
+        Assert.AreEqual(TargetCharacter, asked);
+        StringAssert.Contains(Reports().Single().ServerContext, "what the server saw");
+        Assert.AreNotEqual("target offline", Reports().Single().ServerContext);
+    }
+
+    [TestMethod]
+    public void PlayerReport_WithNoOneOnlineAsThatCharacter_SaysTheTargetIsOffline()
+    {
+        _service.SubmitPlayerReport(Reporter(), "Bob Smith", Lines, online: null, findOnline: _ => null);
+
+        Assert.AreEqual("target offline", Reports().Single().ServerContext);
+    }
+
 }
