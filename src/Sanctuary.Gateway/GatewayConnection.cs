@@ -54,6 +54,9 @@ public class GatewayConnection : UdpConnection
     private bool _useEncryption; // Hardcoded in the client.
 #pragma warning restore CS0649
 
+    // whether this player's current idle stretch has been logged (PacketClientMetricsHandler)
+    internal bool IdleLogged;
+
     // Player will only be null during login.
     public Player Player { get; private set; } = null!;
 

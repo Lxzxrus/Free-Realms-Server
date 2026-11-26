@@ -142,6 +142,9 @@ public class UdpConnection : PriorityQueueMember
     // packets waiting in the manager's event queue for OnRoutePacket (see UdpParams.MaxQueuedPacketsPerConnection)
     internal int QueuedPackets;
 
+    // memory those packets hold, as UdpManager.QueuedPacketCost counts it (see UdpParams.MaxQueuedBytesPerConnection)
+    internal int QueuedBytes;
+
     // packets that failed their CRC check, waiting in the manager's event queue for OnCrcReject (see UdpManager.MaxQueuedCrcRejects)
     internal int QueuedCrcRejects;
 
