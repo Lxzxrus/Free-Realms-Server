@@ -29,8 +29,6 @@ using Sanctuary.UdpLibrary.Enumerations;
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
-const string DiscordWebhookClientName = "DiscordWebhook";
-
 var builder = new HostBuilder();
 
 builder.ConfigureHostConfiguration((configurationBuilder) =>
@@ -160,12 +158,11 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
 
     // In-game reports. Discord is the only call this server makes to a third party: it goes from a background queue,
     // through a client with a 5 second timeout that follows no redirects, so a slow Discord can't stall the Gateway.
-    serviceCollection.AddHttpClient(DiscordWebhookClientName, client => client.Timeout = TimeSpan.FromSeconds(5))
-        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+    serviceCollection.AddDiscordWebhookClient();
 
     serviceCollection.AddSingleton(serviceProvider => DiscordWebhookReportNotifier.Create(
         serviceProvider.GetRequiredService<IOptions<ReportsOptions>>().Value.DiscordWebhookUrl,
-        serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(DiscordWebhookClientName),
+        serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(DiscordWebhookHttpClient.Name),
         serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("ReportNotifier")));
 
     serviceCollection.AddSingleton<IReportNotifier>(serviceProvider => serviceProvider.GetRequiredService<DiscordWebhookReportNotifier>());
