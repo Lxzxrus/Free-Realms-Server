@@ -606,6 +606,40 @@ public sealed class ReportServiceTests
     }
 
     [TestMethod]
+    public void Queries_ALongBugDescriptionIsWrappedSoStaffCanReadAllOfIt()
+    {
+        var words = Enumerable.Range(1, 250).Select(i => $"w{i:D3}").ToArray();
+        var description = string.Join(' ', words);
+
+        Assert.IsTrue(description.Length is > 1000 and <= ReportLimits.MaxBugDescriptionLength);
+
+        _service.SubmitBugReport(Reporter(), $"<BugSubmission Category=\"Gameplay\" BugDescription=\"{description}\"/>");
+
+        var lines = ReportQueries.FormatDetails(Reports().Single());
+
+        Assert.IsTrue(lines.All(line => line.Length <= ReportQueries.MaxLineLength));
+        Assert.IsFalse(lines.Any(line => line.Contains("cut here")), "everything fits, so nothing is flagged as cut");
+
+        var shown = lines.SkipWhile(line => line != "The report:").Skip(1).ToList();
+        var seen = string.Join(' ', shown).Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(word => word.StartsWith('w') && word.Length == 4).ToArray();
+
+        CollectionAssert.AreEqual(words, seen, "every word of the description is shown, in order, none cut in half");
+    }
+
+    [TestMethod]
+    public void Queries_ABugTextTooLongForTheLinesIsFlaggedAsCut()
+    {
+        var lines = new List<string>();
+
+        ReportQueries.AddWrapped(lines, "Description: " + new string('x', 4000), ReportQueries.MaxBugTextLines);
+
+        Assert.AreEqual(ReportQueries.MaxBugTextLines + 1, lines.Count);
+        Assert.IsTrue(lines.All(line => line.Length <= ReportQueries.MaxLineLength));
+        StringAssert.Contains(lines[^1], "cut here");
+        StringAssert.Contains(lines[^1], "Reports table");
+    }
+
+    [TestMethod]
     public void Queries_StaffNoticesHaveTheDocumentedShape()
     {
         _service.SubmitPlayerReport(Reporter(), "Bob Smith", Lines, null);
