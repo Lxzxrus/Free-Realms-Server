@@ -95,14 +95,15 @@ internal static class ModArguments
 
         foreach (var rune in text.EnumerateRunes())
         {
-            if (IsDropped(rune) || rune == Rune.ReplacementChar)
-                continue;
-
+            // Any kind of whitespace, line breaks included, becomes a plain space.
             if (Rune.IsWhiteSpace(rune))
             {
                 pendingSpace = builder.Length > 0;
                 continue;
             }
+
+            if (IsDropped(rune) || rune == Rune.ReplacementChar)
+                continue;
 
             var needed = rune.Utf16SequenceLength + (pendingSpace ? 1 : 0);
 

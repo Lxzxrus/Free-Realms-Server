@@ -399,18 +399,26 @@ public class ModChatCommand : IChatCommand
         if (!TryResolveTarget(invoker, dbContext, targetName, true, out var resolved))
             return true;
 
-        var total = dbContext.StaffActions.Count(action => action.TargetUserId == resolved.UserId);
-
-        // Newest first by id: it grows with time, and SQLite can't sort a DateTimeOffset.
-        var recent = dbContext.StaffActions
-            .AsNoTracking()
-            .Where(action => action.TargetUserId == resolved.UserId)
-            .OrderByDescending(action => action.Id)
-            .Take(HistoryLimit)
-            .ToList();
+        var (total, recent) = LoadHistory(dbContext, resolved.UserId);
 
         ChatHelper.SendSystemMessage(invoker, string.Join('\n', FormatHistory(targetName, total, recent)));
         return true;
+    }
+
+    /// <summary>How many staff actions an account has, and the last <see cref="HistoryLimit"/> of them, newest first.</summary>
+    internal static (int Total, List<DbStaffAction> Recent) LoadHistory(DatabaseContext dbContext, ulong userId)
+    {
+        var total = dbContext.StaffActions.Count(action => action.TargetUserId == userId);
+
+        // Newest first by id: it grows with time, and SQLite can't sort a DateTimeOffset or a ulong (hence the cast).
+        var recent = dbContext.StaffActions
+            .AsNoTracking()
+            .Where(action => action.TargetUserId == userId)
+            .OrderByDescending(action => (long)action.Id)
+            .Take(HistoryLimit)
+            .ToList();
+
+        return (total, recent);
     }
 
     /// <summary>
