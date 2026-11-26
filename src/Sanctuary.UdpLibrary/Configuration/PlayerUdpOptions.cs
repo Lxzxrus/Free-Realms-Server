@@ -29,6 +29,13 @@ public sealed class PlayerUdpOptions
 
     public int ConnectRateWindow { get; set; } = 10000;
 
+    /// <summary>
+    /// The smallest packet size a connect request may ask for; one asking for less is ignored. The servers send packets
+    /// of up to 512 bytes. Half of that leaves room for a client that asks for less than the usual, while keeping what
+    /// a send costs the server under three times the usual (<c>MinRawPacketSizeTests</c> measures it). 0 = no minimum.
+    /// </summary>
+    public int MinRawPacketSize { get; set; } = 256;
+
     public int HandshakeTimeout { get; set; } = 10000;
 
     /// <summary>
@@ -84,6 +91,7 @@ public sealed class PlayerUdpOptions
         udpParams.ConnectRatePerIp = ConnectRatePerIp;
         udpParams.ConnectRateGlobal = ConnectRateGlobal;
         udpParams.ConnectRateWindow = ConnectRateWindow;
+        udpParams.MinRawPacketSize = MinRawPacketSize;
         udpParams.HandshakeTimeout = HandshakeTimeout;
         udpParams.UnverifiedReplyRatePerIp = UnverifiedReplyRatePerIp;
         udpParams.UnverifiedReplyWindow = UnverifiedReplyWindow;

@@ -18,6 +18,7 @@ The server-to-server link between Login and Gateway (UDP 20041) doesn't use them
 | `ConnectRatePerIp` | 5 | New connections one address may open per `ConnectRateWindow` |
 | `ConnectRateGlobal` | 200 | New connections the server accepts per `ConnectRateWindow` in total: the limit that holds when a flood comes from many addresses |
 | `ConnectRateWindow` | 10000 ms | The window the two rates count over |
+| `MinRawPacketSize` | 256 | The smallest packet size a connect request may ask for. Client and server use the smaller of their two sizes (the server's is 512), and everything sent reliably is cut into pieces of that size, so the size a client asks for decides how many packets each send costs the server. The game client asks for 512. A request asking for less than the minimum is ignored before any connection limit is counted, and the client times out as if the server were full. It is counted in `RefusedPacketSize` and logged once a minute, on a line of its own that says what size was asked for. One sent to an address that already has a connection is ignored without being counted, and changes nothing about that connection. If real players can't connect and that warning is in the log, set `Udp__MinRawPacketSize=0` and restart: 0 = no minimum |
 | `HandshakeTimeout` | 10000 ms | A connection that hasn't sent one valid packet within this is dropped without a reply. A real client talks as soon as it's connected; a connect request with a forged sender address never can |
 | `UnverifiedReplyRatePerIp` | 20 | Replies one address may get per `UnverifiedReplyWindow` before it has proven it owns that address: see [Replies to forged addresses](#replies-to-forged-addresses) |
 | `UnverifiedReplyWindow` | 10000 ms | The window `UnverifiedReplyRatePerIp` counts over |
@@ -31,8 +32,8 @@ The server-to-server link between Login and Gateway (UDP 20041) doesn't use them
 | `MaxQueuedPacketsPerConnection` | 4096 | Gateway only: packets one connection may have waiting for their handlers, which the Gateway runs from a queue after the UDP library's locks are released. A real client sends a few a second. The first value, 512, disconnected a player every time they entered their apartment (25 November 2026): more than 512 waited at once while the Gateway built the zone. Which packets they were wasn't recorded, so the warning now lists the commonest sizes waiting (the packets are still encrypted there) and says which limit was hit |
 | `MaxQueuedBytesPerConnection` | 2 MiB | Gateway only: memory those waiting packets may hold, so the queue's memory per player stays bounded whatever the count. Each packet counts what it really holds: at least `PooledPacketSize` (512) plus 128 for its event, however few bytes it carries. That's about 3,200 small packets, or 32 of the largest |
 
-A connect request over a connection limit is ignored, so the client times out as if the server were full. All other
-limits disconnect. Every one of them logs a warning saying which limit and why; refused connects are logged once a
+A connect request over a connection limit, or asking for less than `MinRawPacketSize`, is ignored, so the client times
+out as if the server were full. All other limits disconnect. Every one of them logs a warning saying which limit and why; refused connects are logged once a
 minute with a count, since a refused client retries every second.
 
 Five more things changed with no setting:

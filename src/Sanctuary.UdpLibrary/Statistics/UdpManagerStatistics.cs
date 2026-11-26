@@ -68,6 +68,12 @@ public struct UdpManagerStatistics
     public long RefusedTooManyAddresses;
 
     /// <summary>
+    /// number of connect requests ignored because they asked for packets smaller than MinRawPacketSize (one that reaches
+    /// a connection that already exists is ignored too, but not counted)
+    /// </summary>
+    public long RefusedPacketSize;
+
+    /// <summary>
     /// number of requests from unverified addresses left unanswered because the reply would have been larger than the
     /// request, or because the address was over <see cref="Configuration.UdpParams.UnverifiedReplyRatePerIp"/>
     /// </summary>
@@ -151,6 +157,7 @@ public struct UdpManagerStatistics
         RefusedAddressRate = 0;
         RefusedGlobalRate = 0;
         RefusedTooManyAddresses = 0;
+        RefusedPacketSize = 0;
         RefusedReplySize = 0;
         RefusedReplyRate = 0;
         ConnectionFaults = 0;

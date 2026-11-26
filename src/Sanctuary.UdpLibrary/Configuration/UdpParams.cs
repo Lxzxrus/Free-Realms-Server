@@ -469,6 +469,15 @@ public class UdpParams
     public int ConnectRateWindow;
 
     /// <summary>
+    /// The smallest <see cref="MaxRawPacketSize"/> a connect request may ask for.  The two sides use the smaller of their
+    /// sizes, and everything sent reliably is cut into pieces of that size, so the other side's choice decides how many
+    /// packets each send costs this one.  A connect request asking for less is ignored, like one over a connection limit.
+    /// It can't be larger than <see cref="MaxRawPacketSize"/>.  0 = no minimum.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int MinRawPacketSize;
+
+    /// <summary>
     /// A connection accepted by this manager that has not sent a single packet passing its CRC check within this many
     /// milliseconds is dropped without a reply.  A real client starts talking as soon as the confirm packet arrives; a
     /// connect request from a spoofed address never can, because the confirm (and its encrypt code) went to the real owner
@@ -590,6 +599,7 @@ public class UdpParams
         ConnectRatePerIp = 0;
         ConnectRateGlobal = 0;
         ConnectRateWindow = 10000;
+        MinRawPacketSize = 0;
         HandshakeTimeout = 0;
         UnverifiedReplyRatePerIp = 0;
         UnverifiedReplyWindow = 10000;

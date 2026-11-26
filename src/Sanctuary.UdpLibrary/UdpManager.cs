@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -148,6 +149,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
         // raw packet size must be at least 64 bytes
         ArgumentOutOfRangeException.ThrowIfLessThan(udpParams.MaxRawPacketSize, 64);
+
+        // the least a connect request may ask for can't be more than we use ourselves, or every request would be ignored
+        ArgumentOutOfRangeException.ThrowIfNegative(udpParams.MinRawPacketSize);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(udpParams.MinRawPacketSize, Math.Min(udpParams.MaxRawPacketSize, Constants.HardMaxRawPacketSize));
 
         // incoming socket buffer size must be at least as big as one raw packet
         ArgumentOutOfRangeException.ThrowIfLessThan(udpParams.IncomingBufferSize, udpParams.MaxRawPacketSize);
@@ -738,6 +743,22 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             if (zeroByte == 0 && packetType == (byte)UdpPacketType.Connect)
             {
+                // Checked before the limits below, so a request that is ignored for its size uses up none of them and makes
+                // no connection.  (A request too short to say a size is never answered either: under 10 bytes makes no
+                // connection, and the connection that 10 to 13 bytes make can't read a size, so it never confirms and goes
+                // at the handshake timeout.)
+                if (Params.MinRawPacketSize > 0 && data.Length >= ConnectRequestSizeOffset + sizeof(int))
+                {
+                    var askedSize = BinaryPrimitives.ReadInt32BigEndian(data.Slice(ConnectRequestSizeOffset));
+
+                    if (askedSize < Params.MinRawPacketSize)
+                    {
+                        CountRefusal(ConnectRefusal.PacketSize);
+                        LogRefusal(socketAddress, ConnectRefusal.PacketSize, askedSize);
+                        return;
+                    }
+                }
+
                 ConnectRefusal refusal;
 
                 lock (_connectionGuard)
@@ -931,8 +952,20 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     // the largest server status reply an application may write (the Login server's is 6 bytes)
     private const int MaxServerStatusReply = 64;
 
-    private void LogRefusal(SocketAddress socketAddress, ConnectRefusal refusal)
+    // where a connect request says the largest packet its sender takes: a zero, the type, the protocol version, the connect
+    // code, then this
+    internal const int ConnectRequestSizeOffset = 10;
+
+    // Requests ignored for their size have a line a minute of their own.  They use up no limit, so whoever sends them can
+    // send as many as they like, and sharing the line would let them hide which connection limit was being hit.
+    private UdpClockStamp _lastSizeRefusalLogTime;
+    private int _sizeRefusalsSinceLog;
+
+    private void LogRefusal(SocketAddress socketAddress, ConnectRefusal refusal, int askedSize = 0)
     {
+        ref var _lastRefusalLogTime = ref (refusal == ConnectRefusal.PacketSize ? ref _lastSizeRefusalLogTime : ref this._lastRefusalLogTime);
+        ref var _refusalsSinceLog = ref (refusal == ConnectRefusal.PacketSize ? ref _sizeRefusalsSinceLog : ref this._refusalsSinceLog);
+
         if (_lastRefusalLogTime != 0 && CachedClockElapsed(_lastRefusalLogTime) < RefusalLogInterval)
         {
             _refusalsSinceLog++;
@@ -945,6 +978,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
             ConnectRefusal.AddressConnections => $"that address already has {Params.MaxConnectionsPerIp} connections, the most allowed",
             ConnectRefusal.AddressRate => $"that address opened {Params.ConnectRatePerIp} connections within {Params.ConnectRateWindow / 1000} s, the most allowed",
             ConnectRefusal.GlobalRate => $"{Params.ConnectRateGlobal} connections were opened within {Params.ConnectRateWindow / 1000} s, the most allowed",
+            ConnectRefusal.PacketSize => $"it asked for packets of at most {askedSize} bytes, and the least allowed is {Params.MinRawPacketSize}",
             _ => "too many addresses are connecting at once"
         };
 
@@ -968,6 +1002,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                 case ConnectRefusal.AddressRate: ManagerStats.RefusedAddressRate++; break;
                 case ConnectRefusal.GlobalRate: ManagerStats.RefusedGlobalRate++; break;
                 case ConnectRefusal.TooManyAddresses: ManagerStats.RefusedTooManyAddresses++; break;
+                case ConnectRefusal.PacketSize: ManagerStats.RefusedPacketSize++; break;
             }
         }
     }

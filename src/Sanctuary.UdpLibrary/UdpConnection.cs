@@ -891,6 +891,12 @@ public class UdpConnection : PriorityQueueMember
                     if (!reader.TryReadInt32(out var maxRawPacketSize))
                         return;
 
+                    // The manager ignores a first request that asks for less than the minimum (UdpParams.MinRawPacketSize)
+                    // before it makes a connection.  One that reaches a connection that already exists is ignored here,
+                    // whole: it neither changes this connection's packet size nor ends it.
+                    if (UdpManager.Params.MinRawPacketSize > 0 && maxRawPacketSize < UdpManager.Params.MinRawPacketSize)
+                        return;
+
                     var otherSideProtocolName = string.Empty;
 
                     if (otherSideProtocolVersion > 2 && data.Length > 14)
