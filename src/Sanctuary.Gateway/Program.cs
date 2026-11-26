@@ -175,6 +175,7 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
 
     serviceCollection.AddSingleton<ReportDesk>();
     serviceCollection.AddHostedService<ReportNotifierService>();
+    serviceCollection.AddHostedService<ReportRetentionService>();
 });
 
 builder.ConfigureLogging((hostBuilderContext, loggingBuilder) =>

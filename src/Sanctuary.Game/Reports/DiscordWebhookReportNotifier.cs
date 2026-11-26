@@ -13,15 +13,22 @@ namespace Sanctuary.Game.Reports;
 /// <summary>
 /// Posts each new report to a Discord webhook. The game never waits for Discord: <see cref="Notify"/> only puts the report
 /// in a bounded queue (a full queue drops the report with a warning), and <see cref="RunAsync"/>, run by a hosted
-/// service, posts them one at a time. A post is tried at most twice: a 429 waits the time Discord asks (capped), a
-/// server error or timeout waits a short while, anything else is given up. The address is a secret and is never logged.
+/// service, posts them one at a time, at most one every <see cref="DefaultMinInterval"/> (Discord allows a webhook about
+/// 30 messages a minute). A post is tried up to three times: a 429 waits the time Discord asks (up to
+/// <see cref="MaxRetryWait"/>, since nothing else waits on this queue), a server error or timeout is tried once more
+/// after a short while, anything else is given up. The address is a secret and is never logged.
 /// </summary>
 public sealed class DiscordWebhookReportNotifier : IReportNotifier
 {
     public const int QueueCapacity = 100;
 
     /// <summary>The longest a 429's Retry-After is obeyed; a longer one gives the report up.</summary>
-    public static readonly TimeSpan MaxRetryWait = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan MaxRetryWait = TimeSpan.FromMinutes(5);
+
+    /// <summary>The least time between two posts: 30 a minute, Discord's own limit for a webhook.</summary>
+    public static readonly TimeSpan DefaultMinInterval = TimeSpan.FromSeconds(2);
+
+    private const int MaxAttempts = 3;
 
     private static readonly TimeSpan ErrorRetryWait = TimeSpan.FromSeconds(2);
 
@@ -43,7 +50,7 @@ public sealed class DiscordWebhookReportNotifier : IReportNotifier
         _httpClient = httpClient;
         _logger = logger;
         _delay = delay ?? ((span, token) => Task.Delay(span, token));
-        _minInterval = minInterval ?? TimeSpan.FromMilliseconds(500);
+        _minInterval = minInterval ?? DefaultMinInterval;
     }
 
     /// <summary>
@@ -109,7 +116,7 @@ public sealed class DiscordWebhookReportNotifier : IReportNotifier
         }
     }
 
-    /// <summary>Posts one report, with at most one retry. Returns whether Discord took it.</summary>
+    /// <summary>Posts one report: a rate limit is waited out and retried, anything else gets one retry. Returns whether Discord took it.</summary>
     internal async Task<bool> SendAsync(ReportNotification notification, CancellationToken cancellationToken)
     {
         if (_webhook is null)
@@ -117,9 +124,10 @@ public sealed class DiscordWebhookReportNotifier : IReportNotifier
 
         var json = DiscordPayload.Build(notification);
 
-        for (var attempt = 1; attempt <= 2; attempt++)
+        for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
             TimeSpan wait;
+            var rateLimited = false;
 
             try
             {
@@ -140,6 +148,7 @@ public sealed class DiscordWebhookReportNotifier : IReportNotifier
                     }
 
                     wait = asked;
+                    rateLimited = true;
                 }
                 else if ((int)response.StatusCode >= 500)
                 {
@@ -159,13 +168,14 @@ public sealed class DiscordWebhookReportNotifier : IReportNotifier
                 _logger.LogDebug("Posting report {Id} to Discord failed: {Type}.", notification.Id, exception.GetType().Name);
             }
 
-            if (attempt == 2)
+            // Only a rate limit is worth more than one retry: it says exactly when to come back.
+            if (attempt == MaxAttempts || (attempt == 2 && !rateLimited))
                 break;
 
             await _delay(wait, cancellationToken);
         }
 
-        _logger.LogWarning("Report {Id} was not posted to Discord after a retry.", notification.Id);
+        _logger.LogWarning("Report {Id} was not posted to Discord after retrying.", notification.Id);
         return false;
     }
 }

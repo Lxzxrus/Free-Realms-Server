@@ -87,6 +87,8 @@ public sealed class ReportRoutingTests
         StringAssert.Contains(program, "new ReportService(");
         StringAssert.Contains(program, "AddSingleton<IReportNotifier>(");
         StringAssert.Contains(program, "AddHostedService<ReportNotifierService>()");
+        StringAssert.Contains(program, "AddHostedService<ReportRetentionService>()");
+        StringAssert.Contains(program, "AddDiscordWebhookClient()");
         StringAssert.Contains(program, "AddOptions<ReportsOptions>()");
     }
 

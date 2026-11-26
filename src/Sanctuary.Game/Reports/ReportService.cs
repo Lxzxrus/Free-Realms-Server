@@ -121,6 +121,9 @@ public sealed class ReportService
             if (HasOpenReport(dbContext, reporter.UserId, ReportKind.Player, targetUserId, targetName, null))
                 return Dropped(ReportOutcome.Duplicate, reporter, "already open");
 
+            if (Screen(dbContext, reporter, now, targetUserId, targetName) is { } screened)
+                return screened;
+
             var report = NewReport(reporter, ReportKind.Player, now);
 
             report.TargetName = Cap(targetName, DbReport.MaxTargetNameLength);
@@ -177,6 +180,9 @@ public sealed class ReportService
             if (HasOpenReport(dbContext, reporter.UserId, ReportKind.House, null, null, houseId))
                 return Dropped(ReportOutcome.Duplicate, reporter, "already open");
 
+            if (Screen(dbContext, reporter, now, house.UserId, null) is { } screened)
+                return screened;
+
             var owner = house.FullName ?? "?";
             var houseLabel = ModArguments.CleanText(house.Name, 64) ?? "(unnamed)";
             var ownerMatches = ownerGuid == GuidHelper.GetPlayerGuid(house.CharacterId);
@@ -231,6 +237,9 @@ public sealed class ReportService
 
             using var dbContext = _dbContextFactory.CreateDbContext();
 
+            if (Screen(dbContext, reporter, now, null, null) is { } screened)
+                return screened;
+
             var report = NewReport(reporter, ReportKind.Bug, now);
 
             report.ClientText = Cap(clientText, DbReport.MaxClientTextLength);
@@ -249,6 +258,88 @@ public sealed class ReportService
             return Dropped(ReportOutcome.Limited, reporter, "limit reached");
 
         return null;
+    }
+
+    /// <summary>
+    /// The limits that need the database, checked before anything is written: the account must be old enough, there is a
+    /// ceiling on open reports overall, and one player (or house owner) cannot have more than a few open reports about
+    /// them. A target is given as an account or, when there is none, by the name the client typed.
+    /// </summary>
+    private ReportResult? Screen(DatabaseContext dbContext, ReportContext reporter, DateTimeOffset now, ulong? targetUserId, string? targetName)
+    {
+        var created = dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == reporter.UserId)
+            .Select(user => (DateTimeOffset?)user.Created)
+            .FirstOrDefault();
+
+        if (created is null || now - created.Value < ReportLimits.MinAccountAge)
+            return Dropped(ReportOutcome.Limited, reporter, "account too new");
+
+        var open = dbContext.Reports.Where(report => report.Status == ReportStatus.Open);
+
+        if (open.Count() >= ReportLimits.MaxOpenReports)
+            return Dropped(ReportOutcome.Limited, reporter, "too many open reports");
+
+        if (targetUserId is { } userId)
+        {
+            if (open.Count(report => report.TargetUserId == userId) >= ReportLimits.MaxOpenReportsPerTarget)
+                return Dropped(ReportOutcome.Limited, reporter, "too many open reports about the target");
+        }
+        else if (targetName is not null && open.Count(report => report.TargetUserId == null && report.TargetName == targetName) >= ReportLimits.MaxOpenReportsPerTarget)
+        {
+            return Dropped(ReportOutcome.Limited, reporter, "too many open reports about the target");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Deletes closed reports older than <see cref="ReportLimits.ClosedRetention"/>, so the table does not grow without
+    /// end. Open reports are never deleted: staff close them. Returns how many were deleted; a database failure is logged
+    /// and counts as none.
+    /// </summary>
+    public int PruneClosed()
+    {
+        if (_dbContextFactory is null)
+            return 0;
+
+        try
+        {
+            var cutoff = _timeProvider.GetUtcNow() - ReportLimits.ClosedRetention;
+
+            using var dbContext = _dbContextFactory.CreateDbContext();
+
+            // The dates are compared here, not in SQL: SQLite can't compare a DateTimeOffset. Only ids and dates are read,
+            // and only of closed reports, which this very method keeps to a month's worth.
+            var old = dbContext.Reports
+                .AsNoTracking()
+                .Where(report => report.Status == ReportStatus.Closed)
+                .Select(report => new { report.Id, report.ClosedAt })
+                .AsEnumerable()
+                .Where(report => report.ClosedAt is { } closedAt && closedAt < cutoff)
+                .Select(report => report.Id)
+                .ToList();
+
+            var deleted = 0;
+
+            foreach (var batch in old.Chunk(200))
+            {
+                deleted += dbContext.Reports
+                    .Where(report => report.Status == ReportStatus.Closed && batch.Contains(report.Id))
+                    .ExecuteDelete();
+            }
+
+            if (deleted > 0)
+                _logger.LogInformation("Deleted {Count} closed report(s) older than {Days} days.", deleted, (int)ReportLimits.ClosedRetention.TotalDays);
+
+            return deleted;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Failed to delete old closed reports.");
+            return 0;
+        }
     }
 
     private ReportResult Save(DatabaseContext dbContext, DbReport report, ReportBudget budget, string summary)

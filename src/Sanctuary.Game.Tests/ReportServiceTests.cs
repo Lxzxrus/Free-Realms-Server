@@ -296,6 +296,8 @@ public sealed class ReportServiceTests
     {
         _service.SubmitPlayerReport(Reporter(), "Bob Smith", Lines, null);
 
+        AddAccount(3);
+
         var other = new ReportContext(3, 30, "Carl Other", "Wugachug", "0 0 0");
 
         Assert.AreEqual(ReportOutcome.Accepted, _service.SubmitPlayerReport(other, "Bob Smith", Lines, null).Outcome);
@@ -631,5 +633,159 @@ public sealed class ReportServiceTests
 
         // Without report data the history is the staff actions alone, as before.
         Assert.AreEqual(1, ModChatCommand.FormatHistory("Bob Smith", 0, []).Count);
+    }
+
+    // ---- Limits across accounts, the age of the account, the open ceilings and retention ----
+
+    private void AddAccount(ulong id, DateTimeOffset? created = null)
+    {
+        using var dbContext = CreateDbContext();
+
+        dbContext.Users.Add(new DbUser { Id = id, Username = "user" + id, Password = "x", Created = created ?? DateTimeOffset.UnixEpoch });
+        dbContext.SaveChanges();
+    }
+
+    private static ReportContext Account(ulong user) => new(user, user * 10, "Reporter " + user, "Wugachug", "0 0 0");
+
+    private const string BugXml = "<BugSubmission Category=\"Gameplay\"/>";
+
+    [TestMethod]
+    public void AnAccountTooNewToReportIsLimited_AndOldEnoughIsNot()
+    {
+        AddAccount(50, _clock.GetUtcNow() - TimeSpan.FromMinutes(2));
+
+        Assert.AreEqual(ReportOutcome.Limited, _service.SubmitPlayerReport(Account(50), "Bob Smith", Lines, null).Outcome);
+        Assert.AreEqual(ReportOutcome.Limited, _service.SubmitBugReport(Account(50), BugXml).Outcome);
+        Assert.AreEqual(ReportOutcome.Limited, _service.SubmitHouseReport(Account(50), GuidHelper.GetHouseGuid(5), GuidHelper.GetPlayerGuid(TargetCharacter), "Bob's Place", "Bob Smith").Outcome);
+        Assert.AreEqual(0, Reports().Count);
+        Assert.AreEqual(0, _notifier.Sent.Count);
+
+        _clock.Advance(ReportLimits.MinAccountAge);
+
+        Assert.AreEqual(ReportOutcome.Accepted, _service.SubmitPlayerReport(Account(50), "Bob Smith", Lines, null).Outcome);
+    }
+
+    [TestMethod]
+    public void AnAccountWithNoRowIsLimited()
+    {
+        Assert.AreEqual(ReportOutcome.Limited, _service.SubmitPlayerReport(Account(777), "Bob Smith", Lines, null).Outcome);
+        Assert.AreEqual(0, Reports().Count);
+    }
+
+    [TestMethod]
+    public void ManyAccountsCannotPileOpenReportsOnOneTarget()
+    {
+        var last = 100UL + (ulong)ReportLimits.MaxOpenReportsPerTarget + 2;
+
+        for (var user = 100UL; user <= last; user++)
+            AddAccount(user);
+
+        var outcomes = new List<ReportOutcome>();
+
+        for (var user = 100UL; user <= last; user++)
+            outcomes.Add(_service.SubmitPlayerReport(Account(user), "Bob Smith", Lines, null).Outcome);
+
+        Assert.AreEqual(ReportLimits.MaxOpenReportsPerTarget, outcomes.Count(outcome => outcome == ReportOutcome.Accepted));
+        Assert.AreEqual(3, outcomes.Count(outcome => outcome == ReportOutcome.Limited));
+
+        // House reports about their owner count against the same player.
+        Assert.AreEqual(ReportOutcome.Limited, _service.SubmitHouseReport(Account(last), GuidHelper.GetHouseGuid(5), GuidHelper.GetPlayerGuid(TargetCharacter), "x", "y").Outcome);
+
+        // Another target is not affected, and closing one makes room.
+        Assert.AreEqual(ReportOutcome.Accepted, _service.SubmitPlayerReport(Account(100), "Someone Else", Lines, null).Outcome);
+
+        using (var dbContext = CreateDbContext())
+            Assert.IsTrue(ReportQueries.TryClose(dbContext, Reports().First().Id, 7, null, _clock.GetUtcNow()));
+
+        Assert.AreEqual(ReportOutcome.Accepted, _service.SubmitPlayerReport(Account(last), "Bob Smith", Lines, null).Outcome);
+    }
+
+    [TestMethod]
+    public void ManyAccountsCannotPileReportsOnANameNobodyHas()
+    {
+        var last = 100UL + (ulong)ReportLimits.MaxOpenReportsPerTarget;
+
+        for (var user = 100UL; user <= last; user++)
+            AddAccount(user);
+
+        var accepted = 0;
+
+        for (var user = 100UL; user <= last; user++)
+        {
+            if (_service.SubmitPlayerReport(Account(user), "Nobody Here", Lines, null).Outcome == ReportOutcome.Accepted)
+                accepted++;
+        }
+
+        Assert.AreEqual(ReportLimits.MaxOpenReportsPerTarget, accepted);
+    }
+
+    [TestMethod]
+    public void ManyAccountsTogetherAreHeldToTheGlobalHourlyLimit_AndItResets()
+    {
+        var accounts = ReportLimits.GlobalReportsPerHour + 5;
+        var last = 200UL + (ulong)accounts - 1;
+
+        for (var user = 200UL; user <= last; user++)
+            AddAccount(user);
+
+        var accepted = 0;
+
+        // Each account reports a different target so neither the duplicate rule nor the per-target cap is what stops it.
+        for (var user = 200UL; user <= last; user++)
+        {
+            if (_service.SubmitPlayerReport(Account(user), "Target " + user, Lines, null).Outcome == ReportOutcome.Accepted)
+                accepted++;
+        }
+
+        Assert.AreEqual(ReportLimits.GlobalReportsPerHour, accepted);
+
+        // Bugs have their own allowance, so a flood of reports does not stop them.
+        Assert.AreEqual(ReportOutcome.Accepted, _service.SubmitBugReport(Account(200), BugXml).Outcome);
+
+        _clock.Advance(TimeSpan.FromMinutes(61));
+
+        Assert.AreEqual(ReportOutcome.Accepted, _service.SubmitPlayerReport(Account(last), "Target again", Lines, null).Outcome);
+    }
+
+    [TestMethod]
+    public void TheOpenCeilingStopsNewReportsUntilStaffCloseSome()
+    {
+        using (var dbContext = CreateDbContext())
+        {
+            for (var i = 0; i < ReportLimits.MaxOpenReports; i++)
+                dbContext.Reports.Add(new DbReport { Kind = ReportKind.Bug, Created = _clock.GetUtcNow(), ReporterUserId = 9, ReporterName = "x", Status = ReportStatus.Open });
+
+            dbContext.SaveChanges();
+        }
+
+        Assert.AreEqual(ReportOutcome.Limited, _service.SubmitPlayerReport(Reporter(), "Bob Smith", Lines, null).Outcome);
+        Assert.AreEqual(ReportOutcome.Limited, _service.SubmitBugReport(Reporter(), BugXml).Outcome);
+
+        using (var dbContext = CreateDbContext())
+            Assert.IsTrue(ReportQueries.TryClose(dbContext, Reports().First().Id, 7, null, _clock.GetUtcNow()));
+
+        Assert.AreEqual(ReportOutcome.Accepted, _service.SubmitPlayerReport(Reporter(), "Bob Smith", Lines, null).Outcome);
+    }
+
+    [TestMethod]
+    public void PruneClosed_DeletesOldClosedReportsOnly()
+    {
+        var now = _clock.GetUtcNow();
+
+        using (var dbContext = CreateDbContext())
+        {
+            dbContext.Reports.AddRange(
+                new DbReport { Kind = ReportKind.Bug, Created = now.AddDays(-90), ReporterName = "old closed", Status = ReportStatus.Closed, ClosedAt = now.AddDays(-80) },
+                new DbReport { Kind = ReportKind.Bug, Created = now.AddDays(-90), ReporterName = "old open", Status = ReportStatus.Open },
+                new DbReport { Kind = ReportKind.Bug, Created = now.AddDays(-5), ReporterName = "new closed", Status = ReportStatus.Closed, ClosedAt = now.AddDays(-1) },
+                new DbReport { Kind = ReportKind.Bug, Created = now.AddDays(-40), ReporterName = "closed just past", Status = ReportStatus.Closed, ClosedAt = now - ReportLimits.ClosedRetention - TimeSpan.FromHours(1) },
+                new DbReport { Kind = ReportKind.Bug, Created = now.AddDays(-40), ReporterName = "closed just inside", Status = ReportStatus.Closed, ClosedAt = now - ReportLimits.ClosedRetention + TimeSpan.FromHours(1) });
+            dbContext.SaveChanges();
+        }
+
+        Assert.AreEqual(2, _service.PruneClosed());
+
+        CollectionAssert.AreEquivalent(new[] { "old open", "new closed", "closed just inside" }, Reports().Select(report => report.ReporterName).ToList());
+        Assert.AreEqual(0, _service.PruneClosed());
     }
 }

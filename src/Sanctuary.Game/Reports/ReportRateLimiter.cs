@@ -33,6 +33,9 @@ public sealed class ReportRateLimiter
 
     private readonly object _lock = new();
     private readonly Dictionary<ulong, Account> _accounts = [];
+
+    // The same counts across every account. Each is bounded by its limit, so none of them grows with the number of accounts.
+    private readonly Account _global = new();
     private readonly TimeProvider _timeProvider;
     private DateTimeOffset _lastSweep;
 
@@ -57,11 +60,13 @@ public sealed class ReportRateLimiter
             var account = GetAccount(userId);
 
             Prune(account.Attempts, now, ReportLimits.AttemptWindow);
+            Prune(_global.Attempts, now, ReportLimits.AttemptWindow);
 
-            if (account.Attempts.Count >= ReportLimits.AttemptsPerWindow)
+            if (account.Attempts.Count >= ReportLimits.AttemptsPerWindow || _global.Attempts.Count >= ReportLimits.GlobalAttemptsPerWindow)
                 return false;
 
             account.Attempts.Enqueue(now);
+            _global.Attempts.Enqueue(now);
             return true;
         }
     }
@@ -73,6 +78,15 @@ public sealed class ReportRateLimiter
 
         lock (_lock)
         {
+            var global = QueueFor(_global, budget);
+
+            Prune(global, now, Day);
+
+            var (globalPerHour, globalPerDay) = GlobalLimitsFor(budget);
+
+            if (global.Count >= globalPerDay || CountWithin(global, now, Hour) >= globalPerHour)
+                return false;
+
             if (!_accounts.TryGetValue(userId, out var account))
                 return true;
 
@@ -92,7 +106,10 @@ public sealed class ReportRateLimiter
         var now = _timeProvider.GetUtcNow();
 
         lock (_lock)
+        {
             QueueFor(GetAccount(userId), budget).Enqueue(now);
+            QueueFor(_global, budget).Enqueue(now);
+        }
     }
 
     /// <summary>How many accounts are remembered (for tests: it must not grow without bound).</summary>
@@ -108,6 +125,10 @@ public sealed class ReportRateLimiter
     private static (int PerHour, int PerDay) LimitsFor(ReportBudget budget) => budget == ReportBudget.Bug
         ? (ReportLimits.BugsPerHour, ReportLimits.BugsPerDay)
         : (ReportLimits.ReportsPerHour, ReportLimits.ReportsPerDay);
+
+    private static (int PerHour, int PerDay) GlobalLimitsFor(ReportBudget budget) => budget == ReportBudget.Bug
+        ? (ReportLimits.GlobalBugsPerHour, ReportLimits.GlobalBugsPerDay)
+        : (ReportLimits.GlobalReportsPerHour, ReportLimits.GlobalReportsPerDay);
 
     private static Queue<DateTimeOffset> QueueFor(Account account, ReportBudget budget) =>
         budget == ReportBudget.Bug ? account.Bugs : account.Reports;

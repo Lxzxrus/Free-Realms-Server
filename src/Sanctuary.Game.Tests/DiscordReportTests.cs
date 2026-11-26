@@ -462,4 +462,33 @@ public sealed class DiscordReportTests
 
         Assert.AreEqual(2, handler.Requests.Count);
     }
+
+    [TestMethod]
+    public async Task Send_RepeatedRateLimitsAreWaitedOutAndTheReportIsStillPosted()
+    {
+        var handler = new FakeHandler(_ => TooMany(1), _ => TooMany(2), _ => Status(HttpStatusCode.NoContent));
+        var (notifier, waits) = Notifier(handler);
+
+        Assert.IsTrue(await notifier.SendAsync(Notification(), CancellationToken.None));
+        Assert.AreEqual(3, handler.Requests.Count);
+        CollectionAssert.AreEqual(new[] { TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2) }, waits);
+    }
+
+    [TestMethod]
+    public async Task Send_ARateLimitThatNeverEndsIsGivenUpAfterThreeTries()
+    {
+        var handler = new FakeHandler(_ => TooMany(1));
+        var (notifier, waits) = Notifier(handler);
+
+        Assert.IsFalse(await notifier.SendAsync(Notification(), CancellationToken.None));
+        Assert.AreEqual(3, handler.Requests.Count);
+        Assert.AreEqual(2, waits.Count);
+    }
+
+    [TestMethod]
+    public void Run_PostsNoFasterThanDiscordsWebhookLimit()
+    {
+        // Discord allows a webhook about 30 messages a minute.
+        Assert.IsTrue(DiscordWebhookReportNotifier.DefaultMinInterval >= TimeSpan.FromSeconds(2));
+    }
 }

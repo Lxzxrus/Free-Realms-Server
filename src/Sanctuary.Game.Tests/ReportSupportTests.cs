@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Game.Reports;
@@ -311,5 +312,78 @@ public sealed class ReportSupportTests
         limiter.TryBeginAttempt(9999);
 
         Assert.AreEqual(1, limiter.AccountCount);
+    }
+
+    [TestMethod]
+    public void Limiter_AllAccountsTogetherAreHeldToTheGlobalHourlyAndDailyLimits()
+    {
+        var clock = new ManualTimeProvider();
+        var limiter = new ReportRateLimiter(clock);
+
+        // One report each from many accounts: no account is near its own limit.
+        for (ulong user = 1; user <= (ulong)ReportLimits.GlobalReportsPerHour; user++)
+        {
+            Assert.IsTrue(limiter.CanAccept(user, ReportBudget.Report));
+            limiter.RecordAccepted(user, ReportBudget.Report);
+        }
+
+        Assert.IsFalse(limiter.CanAccept(9999, ReportBudget.Report), "a new account is held by the global limit");
+        Assert.IsTrue(limiter.CanAccept(9999, ReportBudget.Bug), "bugs have their own global allowance");
+
+        // The daily limit: 30 an hour, for as many hours as it takes to reach 200.
+        var total = ReportLimits.GlobalReportsPerHour;
+        ulong next = 1000;
+
+        while (total < ReportLimits.GlobalReportsPerDay)
+        {
+            clock.Advance(TimeSpan.FromMinutes(61));
+
+            for (var i = 0; i < ReportLimits.GlobalReportsPerHour && total < ReportLimits.GlobalReportsPerDay; i++, total++)
+            {
+                Assert.IsTrue(limiter.CanAccept(next, ReportBudget.Report));
+                limiter.RecordAccepted(next++, ReportBudget.Report);
+            }
+        }
+
+        clock.Advance(TimeSpan.FromMinutes(61));
+
+        Assert.IsFalse(limiter.CanAccept(next, ReportBudget.Report), "a day's worth has been taken");
+
+        clock.Advance(TimeSpan.FromHours(24));
+
+        Assert.IsTrue(limiter.CanAccept(next, ReportBudget.Report));
+    }
+
+    [TestMethod]
+    public void Limiter_AttemptsFromAllAccountsTogetherAreBounded()
+    {
+        var limiter = new ReportRateLimiter(new ManualTimeProvider());
+
+        var allowed = 0;
+
+        for (ulong user = 1; user <= (ulong)ReportLimits.GlobalAttemptsPerWindow + 50; user++)
+        {
+            if (limiter.TryBeginAttempt(user))
+                allowed++;
+        }
+
+        Assert.AreEqual(ReportLimits.GlobalAttemptsPerWindow, allowed);
+    }
+
+    [TestMethod]
+    public void Queries_NewestFirstSortsByIdOnSqlite_AndByThePlainKeyOnMySql()
+    {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        using var sqlite = new Sanctuary.Database.Sqlite.SqliteDatabaseContext(new DbContextOptionsBuilder().UseSqlite(connection).Options);
+
+        var mySql = new Sanctuary.Database.MySql.MySqlDatabaseContext(new DbContextOptionsBuilder()
+            .UseMySql("Server=localhost;Database=unused", new MariaDbServerVersion(new Version(10, 11, 0))).Options);
+
+        var sqliteSql = ReportQueries.NewestFirst(sqlite, sqlite.Reports).ToQueryString();
+        var mySqlSql = ReportQueries.NewestFirst(mySql, mySql.Reports).ToQueryString();
+
+        StringAssert.Contains(sqliteSql, "CAST", "SQLite can't sort an unsigned column, so it sorts by a cast");
+        Assert.IsFalse(mySqlSql.Contains("CAST", StringComparison.OrdinalIgnoreCase), mySqlSql);
+        StringAssert.Contains(mySqlSql, "ORDER BY `r`.`Id` DESC");
     }
 }
