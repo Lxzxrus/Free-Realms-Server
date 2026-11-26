@@ -55,6 +55,16 @@
     // "FreeLots": true,
   },
 
+  // In-game reports (docs/research/reports.md). Staff online always get a one-line notice; this also posts each new
+  // report to a private Discord channel. Read at startup: restart the server after changing it.
+  "Reports": {
+    // A Discord webhook address: in the channel's settings, Integrations > Webhooks > New Webhook > Copy Webhook URL.
+    // It must be https://discord.com/api/webhooks/... (or discordapp.com), anything else is refused and logged.
+    // This is a secret that lets anyone post to that channel, so it goes only in this git-ignored file or in the
+    // environment (Reports__DiscordWebhookUrl), never in a tracked file. Empty (the default) posts nowhere.
+    // "DiscordWebhookUrl": "",
+  },
+
   // The weekly ranked-plot competition (docs/design/evergrove-housing.md, section 3). Read at startup: restart the
   // server after changing these. The numbers are the design's placeholders.
   "Competition": {

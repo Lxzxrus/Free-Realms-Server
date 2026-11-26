@@ -70,6 +70,8 @@ services:
     environment:
       <<: *common-env
       Server__LoginGatewayChallenge: ${LOGIN_GATEWAY_CHALLENGE:?Set LOGIN_GATEWAY_CHALLENGE, see .env.example}
+      # Optional: where new in-game reports are posted (docs/research/reports.md). Empty is off.
+      Reports__DiscordWebhookUrl: ${REPORTS_DISCORD_WEBHOOK_URL:-}
     depends_on:
       sanctuary.mysql:
         condition: service_healthy
