@@ -76,6 +76,13 @@ public sealed class StaffActionLog
         Details = entry.Details is null ? null : Truncate(entry.Details, DbStaffAction.MaxDetailsLength)
     };
 
+    /// <summary>
+    /// Text that a player chose (a name they typed), made safe to put between quotes in an audit file line: a double
+    /// quote or backslash in it could close the quotes and forge fields of the line, so each becomes an apostrophe or slash.
+    /// </summary>
+    internal static string ForAuditLine(string? text) =>
+        string.IsNullOrEmpty(text) ? string.Empty : text.Replace('"', '\'').Replace('\\', '/');
+
     internal static string Truncate(string? text, int maxLength)
     {
         if (string.IsNullOrEmpty(text))

@@ -114,7 +114,7 @@ public class ChatCommandManager : IChatCommandManager
             action,
             invoker.Name,
             invoker.Guid,
-            targetName is null ? string.Empty : $", Target: \"{targetName}\"",
+            targetName is null ? string.Empty : $", Target: \"{StaffActionLog.ForAuditLine(targetName)}\"",
             detail is null ? string.Empty : $", {detail}"
         );
 
