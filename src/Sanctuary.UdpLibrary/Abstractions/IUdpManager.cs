@@ -55,4 +55,7 @@ public interface IUdpManager
     void IncrementApplicationPacketsReceived();
     void IncrementCorruptPacketErrors();
     void IncrementFaultLimitDisconnects();
+
+    /// <summary>Counts, and now and then logs, a connection dropped at <see cref="Configuration.UdpParams.StartingTimeout"/>.</summary>
+    void ReportStartingTimeout(UdpConnection con, long age);
 }

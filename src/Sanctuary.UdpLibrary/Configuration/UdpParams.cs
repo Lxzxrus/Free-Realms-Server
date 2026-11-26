@@ -537,7 +537,7 @@ public class UdpParams
 
     /// <summary>
     /// <see cref="MaxQueuedPacketsPerConnection"/> for a connection until the application calls
-    /// <see cref="UdpConnection.RaiseQueuedPacketLimits"/> on it, which it does once it knows who is on the other end (the
+    /// <see cref="UdpConnection.RaiseStartingLimits"/> on it, which it does once it knows who is on the other end (the
     /// Gateway does when a player's login succeeds).  Before that a connection has next to nothing to say, so there is no
     /// reason to let it hold much.  It only ever lowers the limit: a value above
     /// <see cref="MaxQueuedPacketsPerConnection"/> changes nothing.  0 = the same limit from the start.  An application
@@ -549,12 +549,46 @@ public class UdpParams
 
     /// <summary>
     /// <see cref="MaxQueuedBytesPerConnection"/> for a connection until the application calls
-    /// <see cref="UdpConnection.RaiseQueuedPacketLimits"/> on it.  It only ever lowers the limit.  0 = the same limit from
+    /// <see cref="UdpConnection.RaiseStartingLimits"/> on it.  It only ever lowers the limit.  0 = the same limit from
     /// the start.  Otherwise it must be enough for one packet (<see cref="PooledPacketSize"/> plus 128), or the manager
     /// refuses to start.
     /// </summary>
     /// <remarks>default = 0</remarks>
     public int StartingMaxQueuedBytesPerConnection;
+
+    /// <summary>
+    /// How far ahead of the next reliable packet it expects a connection takes one, until the application calls
+    /// <see cref="UdpConnection.RaiseStartingLimits"/> on it.  A reliable packet that arrives early is kept until the
+    /// ones before it arrive, each in a buffer of <see cref="PooledPacketSize"/>, up to the channel's
+    /// <see cref="UdpReliableConfig.MaxInstandingPackets"/> on each of the four channels.  This is how many of those a
+    /// connection may make the manager keep before the application knows who it is; one further ahead is treated as
+    /// lost, and the other side sends it again.  Packets that arrive in order are not affected.  It only ever lowers the
+    /// window.  0 = the channel's own window from the start.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int StartingReliableWindow;
+
+    /// <summary>
+    /// <see cref="ReliableOverflowBytes"/> for a connection until the application calls
+    /// <see cref="UdpConnection.RaiseStartingLimits"/> on it: the most reliable data that may wait for it, sent or not
+    /// yet sent.  Whatever the application answers before it knows who is on the other end is small, so a connection that
+    /// has this much waiting has been asking for answers it never takes.  It only ever lowers the limit.  0 = the same
+    /// limit from the start; otherwise at least four packets' worth, or the manager refuses to start.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int StartingReliableOverflowBytes;
+
+    /// <summary>
+    /// A connection the application has not called <see cref="UdpConnection.RaiseStartingLimits"/> on within this many
+    /// milliseconds of being made is disconnected, whatever it has sent in the meantime.  Unlike
+    /// <see cref="HandshakeTimeout"/>, which only waits for one valid packet, this waits for the application to know who
+    /// is on the other end, so a connection that never gets that far doesn't hold its place.  A connection with a packet
+    /// still waiting for its handler (<see cref="EventQueuing"/>) is given until that packet has been handled.  An
+    /// application that sets it must call that method on every connection it means to keep.  0 = off; otherwise no
+    /// less than <see cref="HandshakeTimeout"/> or one second, or the manager refuses to start.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int StartingTimeout;
 
     public string ProtocolName;
 
@@ -630,6 +664,9 @@ public class UdpParams
         MaxQueuedBytesPerConnection = 0;
         StartingMaxQueuedPacketsPerConnection = 0;
         StartingMaxQueuedBytesPerConnection = 0;
+        StartingReliableWindow = 0;
+        StartingReliableOverflowBytes = 0;
+        StartingTimeout = 0;
         ProtocolName = string.Empty;
         UserSuppliedEncryptExpansionBytes = 0;
         UserSuppliedEncryptExpansionBytes2 = 0;

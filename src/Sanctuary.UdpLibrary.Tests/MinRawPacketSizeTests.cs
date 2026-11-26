@@ -81,6 +81,9 @@ public class MinRawPacketSizeTests
         var accepted = server.Accepted.Single();
         var before = network.Sent.Count;
 
+        // this much is only ever sent to a player who has logged in (StartingWindowAndTimeoutTests covers one who hasn't)
+        accepted.RaiseStartingLimits();
+
         var payload = new byte[Payload];
         new Random(7).NextBytes(payload);
 

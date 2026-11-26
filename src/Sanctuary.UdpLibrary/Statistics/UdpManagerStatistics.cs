@@ -97,6 +97,11 @@ public struct UdpManagerStatistics
     public long QueueLimitDisconnects;
 
     /// <summary>
+    /// number of connections disconnected because the application had not raised their starting limits within StartingTimeout
+    /// </summary>
+    public long StartingTimeoutDisconnects;
+
+    /// <summary>
     /// number of connections currently being managed
     /// </summary>
     public int ConnectionCount;
@@ -163,6 +168,7 @@ public struct UdpManagerStatistics
         ConnectionFaults = 0;
         FaultLimitDisconnects = 0;
         QueueLimitDisconnects = 0;
+        StartingTimeoutDisconnects = 0;
         ConnectionCount = 0;
         DisconnectPendingCount = 0;
         EventListCount = 0;

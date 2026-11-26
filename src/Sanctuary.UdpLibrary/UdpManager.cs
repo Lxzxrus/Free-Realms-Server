@@ -203,10 +203,22 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
         Params.MaxDataHoldSize = Math.Min(Params.MaxDataHoldSize, Params.MaxRawPacketSize);
 
-        // the starting queue limits (see UdpConnection.RaiseQueuedPacketLimits): 0 is off, less makes no sense, and a
+        // the starting queue limits (see UdpConnection.RaiseStartingLimits): 0 is off, less makes no sense, and a
         // memory limit that can't hold even one packet would have every connection dropped at its first
         ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingMaxQueuedPacketsPerConnection);
         ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingMaxQueuedBytesPerConnection);
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingReliableWindow);
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingReliableOverflowBytes);
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingTimeout);
+
+        // room for the few small answers a connection gets before the application knows it, or the first would end it
+        if (Params.StartingReliableOverflowBytes > 0)
+            ArgumentOutOfRangeException.ThrowIfLessThan(Params.StartingReliableOverflowBytes, 4 * Params.MaxRawPacketSize);
+
+        // a time too short to log in within would end every connection, and one inside the handshake's own would only
+        // count the connections that has already given up on
+        if (Params.StartingTimeout > 0)
+            ArgumentOutOfRangeException.ThrowIfLessThan(Params.StartingTimeout, Math.Max(1000, Params.HandshakeTimeout));
 
         if (Params.StartingMaxQueuedBytesPerConnection > 0)
             ArgumentOutOfRangeException.ThrowIfLessThan(Params.StartingMaxQueuedBytesPerConnection, QueuedPacketCost(0));
@@ -999,6 +1011,33 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         sinceLog = 0;
     }
 
+    // connections dropped at the starting timeout come as fast as strangers can connect, so they share a line a minute
+    private UdpClockStamp _lastStartingTimeoutLogTime;
+    private int _startingTimeoutsSinceLog;
+
+    /// <summary>Counts, and now and then logs, a connection dropped at <see cref="UdpParams.StartingTimeout"/>.</summary>
+    public void ReportStartingTimeout(UdpConnection con, long age)
+    {
+        lock (_statsGuard)
+        {
+            ManagerStats.StartingTimeoutDisconnects++;
+        }
+
+        if (_lastStartingTimeoutLogTime != 0 && CachedClockElapsed(_lastStartingTimeoutLogTime) < RefusalLogInterval)
+        {
+            _startingTimeoutsSinceLog++;
+            return;
+        }
+
+        if (_startingTimeoutsSinceLog > 0)
+            Logger.LogWarning("Disconnecting {connection}: it connected {seconds} s ago and still hasn't logged in (the limit is {limit} s). {count} other connections went the same way since the last line like this.", con, age / 1000, Params.StartingTimeout / 1000, _startingTimeoutsSinceLog);
+        else
+            Logger.LogWarning("Disconnecting {connection}: it connected {seconds} s ago and still hasn't logged in (the limit is {limit} s).", con, age / 1000, Params.StartingTimeout / 1000);
+
+        _lastStartingTimeoutLogTime = CachedClock;
+        _startingTimeoutsSinceLog = 0;
+    }
+
     private void CountRefusal(ConnectRefusal refusal)
     {
         lock (_statsGuard)
@@ -1107,7 +1146,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
             // Queued, the handlers run when the queue is delivered, so a connection sending packets faster than they run
             // would queue them without limit, and every other connection's packets would wait behind its own.
             // The limits are the connection's own: lower until the application has said who it is (see
-            // UdpConnection.RaiseQueuedPacketLimits).
+            // UdpConnection.RaiseStartingLimits).
             var cost = QueuedPacketCost(data.Length);
             var maxCount = con.MaxQueuedPackets;
             var maxBytes = con.MaxQueuedBytes;

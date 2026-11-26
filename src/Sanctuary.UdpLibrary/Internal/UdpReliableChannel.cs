@@ -166,7 +166,8 @@ internal class UdpReliableChannel
         var reliableId = GetReliableIncomingId(reliableStamp);
 
         // if we do not have buffer space to hold onto this packet, then we simply must pretend like it was lost
-        if (reliableId >= ReliableIncomingId + Config.MaxInstandingPackets)
+        // (a connection still at its starting limits is given less of it: see UdpParams.StartingReliableWindow)
+        if (reliableId >= ReliableIncomingId + UdpConnection.IncomingReliableWindow(Config.MaxInstandingPackets))
             return;
 
         if (reliableId >= ReliableIncomingId)

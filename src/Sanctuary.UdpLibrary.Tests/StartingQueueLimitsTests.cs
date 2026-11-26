@@ -15,7 +15,7 @@ namespace Sanctuary.UdpLibrary.Tests;
 /// sized for a player loading a zone. They applied from the moment a connection was made, so a connection that had not
 /// logged in could have as much waiting as a player. <see cref="UdpParams.StartingMaxQueuedPacketsPerConnection"/> and
 /// <see cref="UdpParams.StartingMaxQueuedBytesPerConnection"/> apply until the application calls
-/// <see cref="UdpConnection.RaiseQueuedPacketLimits"/>, which the Gateway does when a login succeeds.
+/// <see cref="UdpConnection.RaiseStartingLimits"/>, which the Gateway does when a login succeeds.
 /// </summary>
 [TestClass]
 public class StartingQueueLimitsTests
@@ -122,7 +122,7 @@ public class StartingQueueLimitsTests
         var (client, sender) = Client(network, server);
         var accepted = server.Accepted.Single();
 
-        accepted.RaiseQueuedPacketLimits();
+        accepted.RaiseStartingLimits();
 
         DeliverSmallPackets(network, client, sender, server, 1000);
         network.Pump(20, server);
@@ -142,7 +142,7 @@ public class StartingQueueLimitsTests
         var serverA = server.Accepted[0];
         var serverB = server.Accepted[1];
 
-        serverA.RaiseQueuedPacketLimits();
+        serverA.RaiseStartingLimits();
 
         DeliverSmallPackets(network, clientA, a, server, 100);
         DeliverSmallPackets(network, clientB, b, server, 100);
@@ -183,7 +183,7 @@ public class StartingQueueLimitsTests
         var (client, sender) = Client(network, server);
         var accepted = server.Accepted.Single();
 
-        accepted.RaiseQueuedPacketLimits();
+        accepted.RaiseStartingLimits();
 
         sender.Send(UdpChannel.Reliable1, new byte[40_000]);
 
@@ -256,7 +256,7 @@ public class StartingQueueLimitsTests
         var (clientA, a) = Client(network, server, "10.0.0.2");
         var (clientB, b) = Client(network, server, "10.0.0.3");
 
-        server.Accepted[1].RaiseQueuedPacketLimits();
+        server.Accepted[1].RaiseStartingLimits();
 
         DeliverSmallPackets(network, clientA, a, server, 33);
         DeliverSmallPackets(network, clientB, b, server, 41);

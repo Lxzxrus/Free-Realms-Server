@@ -145,8 +145,9 @@ public class UdpConnection : PriorityQueueMember
     // memory those packets hold, as UdpManager.QueuedPacketCost counts it (see UdpParams.MaxQueuedBytesPerConnection)
     internal int QueuedBytes;
 
-    // set by RaiseQueuedPacketLimits; until then the lower UdpParams.StartingMaxQueued...PerConnection limits apply
-    private volatile bool _queuedPacketLimitsRaised;
+    // set by RaiseStartingLimits; until then what UdpParams' Starting... settings say applies: lower queue limits, a
+    // smaller reliable window, and a time by which it must have been called
+    private volatile bool _startingLimitsRaised;
 
     /// <summary>Whether a limit now in force on this connection is a starting one, lower than the full limit.</summary>
     internal bool AtStartingQueueLimits =>
@@ -154,15 +155,41 @@ public class UdpConnection : PriorityQueueMember
         || MaxQueuedBytes != UdpManager.Params.MaxQueuedBytesPerConnection;
 
     /// <summary>
-    /// From now on this connection may have as much waiting for the application as any other
-    /// (<see cref="Configuration.UdpParams.MaxQueuedPacketsPerConnection"/> and
-    /// <see cref="Configuration.UdpParams.MaxQueuedBytesPerConnection"/>) rather than the lower limits every connection
-    /// starts with. Call it once the application knows who is on the other end, never before: the starting limits are
-    /// what keeps a stranger from making the server hold a full queue.
+    /// From now on this connection has the limits of any other, rather than the ones every connection starts with
+    /// (the <c>Starting...</c> settings of <see cref="Configuration.UdpParams"/>): it may have as much waiting for the
+    /// application (<see cref="Configuration.UdpParams.MaxQueuedPacketsPerConnection"/>), as much reliable data may
+    /// wait for it (<see cref="Configuration.UdpParams.ReliableOverflowBytes"/>), reliable packets may arrive as far
+    /// out of order as the channel allows, and it is no longer dropped at
+    /// <see cref="Configuration.UdpParams.StartingTimeout"/>. Call it once the application knows who is on the other
+    /// end, never before: the starting limits are what keeps a stranger from making the server hold much, or from
+    /// holding a place for long.
     /// </summary>
-    public void RaiseQueuedPacketLimits()
+    public void RaiseStartingLimits()
     {
-        _queuedPacketLimitsRaised = true;
+        _startingLimitsRaised = true;
+    }
+
+    // how soon a connection past its starting timeout, but with a packet still waiting for its handler, is looked at again
+    private const int StartingTimeoutRecheck = 250;
+
+    /// <summary>
+    /// The most reliable data that may wait for this connection now before it is disconnected for falling behind:
+    /// <see cref="Configuration.UdpParams.ReliableOverflowBytes"/>, or
+    /// <see cref="Configuration.UdpParams.StartingReliableOverflowBytes"/> if that is lower and the starting limits still
+    /// apply.  0 = no limit.
+    /// </summary>
+    internal int ReliableOverflowLimit => StartingOrFull(UdpManager.Params.StartingReliableOverflowBytes, UdpManager.Params.ReliableOverflowBytes);
+
+    /// <summary>
+    /// How far ahead of the next reliable packet it expects this connection takes one now: the channel's own
+    /// <paramref name="full"/> window, or <see cref="Configuration.UdpParams.StartingReliableWindow"/> if that is
+    /// smaller and the starting limits still apply.
+    /// </summary>
+    internal int IncomingReliableWindow(int full)
+    {
+        var starting = UdpManager.Params.StartingReliableWindow;
+
+        return _startingLimitsRaised || starting <= 0 ? full : Math.Min(starting, full);
     }
 
     /// <summary>The most packets this connection may have waiting for the application now; 0 = no limit.</summary>
@@ -176,7 +203,7 @@ public class UdpConnection : PriorityQueueMember
     // the starting limit only ever lowers: it never loosens a full limit that is lower still, and 0 means there is none
     private int StartingOrFull(int starting, int full)
     {
-        if (_queuedPacketLimitsRaised || starting <= 0)
+        if (_startingLimitsRaised || starting <= 0)
             return full;
 
         return full > 0 ? Math.Min(starting, full) : starting;
@@ -1493,6 +1520,33 @@ public class UdpConnection : PriorityQueueMember
                         nextSchedule = Math.Min(nextSchedule, UdpManager.Params.HandshakeTimeout - age);
                     }
 
+                    // A connection still at its starting limits has until UdpParams.StartingTimeout for the application
+                    // to raise them.  What it sends in the meantime doesn't count: it connected and never got as far as
+                    // the application knowing who it is.  One with a packet still waiting for its handler is left for
+                    // now: when handlers run from a queue that packet may be its login, held up behind the others, and it
+                    // is checked again once the queue has got to it.  (It can't keep one waiting by itself for long: the
+                    // starting queue limits bound what it may have there.)
+                    if (!_startingLimitsRaised && UdpManager.Params.StartingTimeout > 0 && Status == Status.Connected)
+                    {
+                        var age = ConnectionAge();
+
+                        if (age >= UdpManager.Params.StartingTimeout)
+                        {
+                            if (QueuedPackets == 0)
+                            {
+                                UdpManager.ReportStartingTimeout(this, age);
+                                InternalDisconnect(0, DisconnectReason.Timeout);
+                                return;
+                            }
+
+                            nextSchedule = Math.Min(nextSchedule, StartingTimeoutRecheck);
+                        }
+                        else
+                        {
+                            nextSchedule = Math.Min(nextSchedule, UdpManager.Params.StartingTimeout - age);
+                        }
+                    }
+
                     // sync clock if required
 
                     if (UdpManager.Params.ClockSyncDelay > 0)
@@ -1553,10 +1607,13 @@ public class UdpConnection : PriorityQueueMember
                     if (totalPendingBytes > ConnectionStats.MaxPendingBytes)
                         ConnectionStats.MaxPendingBytes = totalPendingBytes;
 
-                    if (UdpManager.Params.ReliableOverflowBytes != 0 && totalPendingBytes >= UdpManager.Params.ReliableOverflowBytes)
+                    // lower until the application has raised the starting limits: see UdpParams.StartingReliableOverflowBytes
+                    var overflowLimit = ReliableOverflowLimit;
+
+                    if (overflowLimit != 0 && totalPendingBytes >= overflowLimit)
                     {
                         UdpManager.Logger.LogWarning("Disconnecting {connection}: it fell behind, with {pending} KiB of reliable data waiting for it (the limit is {limit} KiB).",
-                            this, totalPendingBytes / 1024, UdpManager.Params.ReliableOverflowBytes / 1024);
+                            this, totalPendingBytes / 1024, overflowLimit / 1024);
 
                         InternalDisconnect(0, DisconnectReason.ReliableOverflow);
                         return;

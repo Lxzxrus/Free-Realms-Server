@@ -612,7 +612,7 @@ public class HardeningTests
 
         // a zone load is a logged-in player's, and the Gateway raises the queue limits when a login succeeds
         // (StartingQueueLimitsTests covers a connection that hasn't logged in)
-        serverA.RaiseQueuedPacketLimits();
+        serverA.RaiseStartingLimits();
 
         // all read in one poll, before any is handled: small packets (40 bytes)
         var line = new byte[40];

@@ -7,14 +7,18 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Sanctuary.Game.Tests;
 
 /// <summary>
-/// A connection's queue limits are low until <c>UdpConnection.RaiseQueuedPacketLimits</c> is called, and what keeps a
-/// stranger from filling a queue is that only a successful login calls it. The Gateway's handlers aren't unit-tested, so
-/// this reads their source: one call, in the login handler, after the player has been made.
+/// A connection has low limits, and a time by which it must log in, until <c>UdpConnection.RaiseStartingLimits</c> is
+/// called. What keeps a stranger from filling a queue or holding a place is that only a successful login calls it. The
+/// servers' handlers aren't unit-tested, so this reads their source: one call in the Gateway's login handler after the
+/// player has been made, one in the Login server's after the account has signed in, and no other.
 /// </summary>
 [TestClass]
-public class QueueLimitRaiseTests
+public class StartingLimitsRaiseTests
 {
-    private const string Raise = "RaiseQueuedPacketLimits(";
+    private const string Raise = "RaiseStartingLimits(";
+
+    private const string GatewayHandler = "Sanctuary.Gateway/Handlers/PacketLoginHandler.cs";
+    private const string LoginHandler = "Sanctuary.Login/Handlers/LoginRequestHandler.cs";
 
     private static string FindSource()
     {
@@ -42,8 +46,11 @@ public class QueueLimitRaiseTests
     private static string Code(string file) =>
         string.Join('\n', File.ReadLines(file).Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
 
+    private static string Code(string source, string relative) =>
+        Code(Path.Combine(source, relative.Replace('/', Path.DirectorySeparatorChar)));
+
     [TestMethod]
-    public void OnlyTheGatewaysLoginHandlerRaisesTheQueueLimits()
+    public void OnlyTheTwoLoginHandlersRaiseTheStartingLimits()
     {
         var source = FindSource();
         var separator = Path.DirectorySeparatorChar;
@@ -55,17 +62,16 @@ public class QueueLimitRaiseTests
             .Where(file => !file.Contains($"{separator}bin{separator}") && !file.Contains($"{separator}obj{separator}"))
             .Select(file => (File: Path.GetRelativePath(source, file).Replace(separator, '/'), Calls: Count(Code(file), Raise)))
             .Where(found => found.Calls > 0)
+            .OrderBy(found => found.File, StringComparer.Ordinal)
             .ToList();
 
-        Assert.HasCount(1, callers, "callers: " + string.Join(", ", callers.Select(found => found.File)));
-        Assert.AreEqual("Sanctuary.Gateway/Handlers/PacketLoginHandler.cs", callers[0].File);
-        Assert.AreEqual(1, callers[0].Calls);
+        Assert.AreEqual($"{GatewayHandler} x1, {LoginHandler} x1", string.Join(", ", callers.Select(found => $"{found.File} x{found.Calls}")));
     }
 
     [TestMethod]
-    public void TheLimitsAreRaisedOnlyAfterThePlayerHasBeenMade()
+    public void TheGatewayRaisesOnlyAfterThePlayerHasBeenMade()
     {
-        var handler = Code(Path.Combine(FindSource(), "Sanctuary.Gateway", "Handlers", "PacketLoginHandler.cs"));
+        var handler = Code(FindSource(), GatewayHandler);
 
         var ticketChecked = handler.IndexOf("connection.InitializeCipher(packetLogin.Ticket)", StringComparison.Ordinal);
         var playerMade = handler.IndexOf("connection.CreatePlayerFromDatabase(character)", StringComparison.Ordinal);
@@ -77,5 +83,24 @@ public class QueueLimitRaiseTests
         Assert.IsTrue(replied > 0, "the handler still marks success the way this test knows");
         Assert.IsTrue(raised > playerMade, "raised after the ticket has been checked and the player made, never before");
         Assert.IsTrue(raised < replied, "and before the client is told it is in, so its next packets find the full limits");
+    }
+
+    [TestMethod]
+    public void TheLoginServerRaisesOnlyAfterTheAccountHasSignedIn()
+    {
+        var handler = Code(FindSource(), LoginHandler);
+
+        var sessionLooked = handler.IndexOf("dbContext.Users.SingleOrDefault(x => x.Session == packet.Session)", StringComparison.Ordinal);
+        var lockChecked = handler.IndexOf("_options.IsLocked", StringComparison.Ordinal);
+        var signedIn = handler.IndexOf("connection.UserId = user.Id;", StringComparison.Ordinal);
+        var raised = handler.IndexOf(Raise, StringComparison.Ordinal);
+        var replied = handler.IndexOf("loginReply.LoggedIn = true;", StringComparison.Ordinal);
+
+        Assert.IsTrue(sessionLooked > 0, "the handler still looks the session up the way this test knows");
+        Assert.IsTrue(lockChecked > sessionLooked, "and still checks the server lock after that");
+        Assert.IsTrue(signedIn > lockChecked, "and only then marks the connection as signed in");
+        Assert.IsTrue(replied > 0, "the handler still marks success the way this test knows");
+        Assert.IsTrue(raised > signedIn, "raised after the session and the lock have been checked, never before");
+        Assert.IsTrue(raised < replied, "and before the client is told it is in");
     }
 }

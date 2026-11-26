@@ -96,6 +96,30 @@ public sealed class PlayerUdpOptions
     /// </summary>
     public int PreLoginMaxQueuedBytes { get; set; } = 32 * 1024;
 
+    /// <summary>
+    /// How far out of order a reliable packet may arrive, and be kept, until the connection has logged in (on the Login
+    /// server, signed in). The full window is 400 packets on each of four channels, each kept in a 512-byte buffer;
+    /// a client that hasn't logged in sends one or two packets. Packets that arrive in order aren't affected, and one
+    /// too far ahead is sent again by the client. 0 = the full window from the start.
+    /// </summary>
+    public int PreLoginReliableWindow { get; set; } = 16;
+
+    /// <summary>
+    /// <see cref="ReliableOverflowBytes"/> until the connection has logged in (on the Login server, signed in). Before
+    /// then the servers only send small answers (a refusal, the server list), so a connection with this much waiting for
+    /// it keeps asking and never takes the answers. 0 = the same limit from the start.
+    /// </summary>
+    public int PreLoginReliableOverflowBytes { get; set; } = 64 * 1024;
+
+    /// <summary>
+    /// A connection that hasn't logged in (on the Login server, signed in) within this long of connecting is
+    /// disconnected, whatever it has sent. A capture of the original game shows the client sending its login to the
+    /// gateway a tenth of a second after connecting, and in local runs with the game client the whole stay on the Login
+    /// server, character select included, took about 30 s; nothing records when in that stay it signs in, so this is
+    /// twice that. A login still waiting in the Gateway's queue is not cut off. 0 = off.
+    /// </summary>
+    public int PreLoginTimeout { get; set; } = 60000;
+
     public void ApplyTo(UdpParams udpParams)
     {
         udpParams.IncomingBufferSize = IncomingBufferSize;
@@ -119,5 +143,8 @@ public sealed class PlayerUdpOptions
         udpParams.MaxQueuedBytesPerConnection = MaxQueuedBytesPerConnection;
         udpParams.StartingMaxQueuedPacketsPerConnection = PreLoginMaxQueuedPackets;
         udpParams.StartingMaxQueuedBytesPerConnection = PreLoginMaxQueuedBytes;
+        udpParams.StartingReliableWindow = PreLoginReliableWindow;
+        udpParams.StartingReliableOverflowBytes = PreLoginReliableOverflowBytes;
+        udpParams.StartingTimeout = PreLoginTimeout;
     }
 }
