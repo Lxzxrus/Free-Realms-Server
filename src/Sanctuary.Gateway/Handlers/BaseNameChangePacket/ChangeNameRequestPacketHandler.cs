@@ -84,8 +84,22 @@ public static class ChangeNameRequestPacketHandler
 
     private static ChangeNameResponse OnChangeCharacterName(GatewayConnection connection, ChangeNameRequestPacket packet)
     {
-        if (CharacterNameHelper.Check(packet.Name.FirstName, packet.Name.LastName) != CharacterNameProblem.None)
+        if (string.IsNullOrWhiteSpace(packet.Name.FirstName)
+            || packet.Name.LastName != string.Empty && string.IsNullOrWhiteSpace(packet.Name.LastName))
+        {
             return ChangeNameResponse.Error;
+        }
+
+        if (packet.Name.FirstName.Length is < 3 or > 14)
+            return ChangeNameResponse.Error;
+
+        if (packet.Name.LastName != string.Empty && (packet.Name.LastName.Length is < 3 or > 14))
+            return ChangeNameResponse.Error;
+
+        if (CharacterNameHelper.ContainsIllegalCharacters(packet.Name.FullName))
+        {
+            return ChangeNameResponse.Error;
+        }
 
         if (_resourceManager.NameFilter.Any(token =>
             packet.Name.FullName.Contains(token, StringComparison.OrdinalIgnoreCase)))
@@ -108,9 +122,7 @@ public static class ChangeNameRequestPacketHandler
             return ChangeNameResponse.ServiceUnavailable;
         }
 
-        // By full name: that is what staff commands and reports find a player by (see CharacterNameHelper.Compose).
-        var fullName = CharacterNameHelper.Compose(packet.Name.FirstName, packet.Name.LastName);
-        var taken = dbContext.Characters.Any(x => x.FullName == fullName || (x.FirstName == packet.Name.FirstName && x.LastName == packet.Name.LastName));
+        var taken = dbContext.Characters.Any(x => x.FirstName == packet.Name.FirstName && x.LastName == packet.Name.LastName);
         if (taken)
             return ChangeNameResponse.Error;
 

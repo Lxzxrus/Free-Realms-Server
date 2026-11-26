@@ -112,7 +112,7 @@ public sealed class ReportService
             string? ambiguity = null;
 
             // Always asked of the database, even when an online player was found by the name: the report carries only a name, and
-            // two accounts can hold one (see CharacterNameHelper.Check; older characters were never checked). Then the target is
+            // two accounts can hold one (character creation does not check full names yet: PR #139's name rules). Then the target is
             // not known, and the report must not be put on whichever of them was found first.
             var matches = dbContext.Characters
                 .AsNoTracking()

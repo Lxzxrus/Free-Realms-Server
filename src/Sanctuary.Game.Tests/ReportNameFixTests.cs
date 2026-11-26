@@ -103,68 +103,6 @@ public sealed class ReportNameFixTests
         return dbContext.Reports.AsNoTracking().ToList();
     }
 
-    // ---- Names are checked ----
-
-    [TestMethod]
-    [DataRow("Alice", "Admin", CharacterNameProblem.None)]
-    [DataRow("Alice", "", CharacterNameProblem.None)]
-    [DataRow("Alice", null, CharacterNameProblem.None)]
-    [DataRow("O'Neil", "D'Arcy", CharacterNameProblem.None)]
-    [DataRow("Alice Admin", "", CharacterNameProblem.IllegalCharacters)]
-    [DataRow("Alice", "Bob Carl", CharacterNameProblem.IllegalCharacters)]
-    [DataRow(" Alice", "", CharacterNameProblem.IllegalCharacters)]
-    [DataRow("Alice", "   ", CharacterNameProblem.Empty)]
-    [DataRow("", "Admin", CharacterNameProblem.Empty)]
-    [DataRow(null, "Admin", CharacterNameProblem.Empty)]
-    [DataRow("Al", "Admin", CharacterNameProblem.FirstNameTooShort)]
-    [DataRow("Alice", "Ad", CharacterNameProblem.LastNameTooShort)]
-    [DataRow("Abcdefghijklmno", "", CharacterNameProblem.FirstNameTooLong)]
-    [DataRow("Alice", "Abcdefghijklmno", CharacterNameProblem.LastNameTooLong)]
-    [DataRow("Ali\nce", "", CharacterNameProblem.IllegalCharacters)]
-    [DataRow("Ali\u202Ece", "", CharacterNameProblem.IllegalCharacters)]
-    [DataRow("Ali\u0085ce", "", CharacterNameProblem.IllegalCharacters)]
-    [DataRow("Ali\u00A0ce", "", CharacterNameProblem.IllegalCharacters)]
-    [DataRow("Ali\u00ADce", "", CharacterNameProblem.IllegalCharacters)]
-    [DataRow("Ali\"ce", "", CharacterNameProblem.IllegalCharacters)]
-    [DataRow("Al1ce", "", CharacterNameProblem.IllegalCharacters)]
-    public void NameCheck_RefusesWhatCouldNotBeOneUniquePlayer(string? first, string? last, CharacterNameProblem expected)
-    {
-        Assert.AreEqual(expected, CharacterNameHelper.Check(first, last));
-    }
-
-    [TestMethod]
-    public void Compose_IsTheFullNameTheDatabaseComputes()
-    {
-        Assert.AreEqual("Alice Admin", CharacterNameHelper.Compose("Alice", "Admin"));
-        Assert.AreEqual("Alice Admin", CharacterNameHelper.Compose("Alice Admin", ""));
-        Assert.AreEqual("Alice", CharacterNameHelper.Compose("Alice", null));
-
-        using var dbContext = CreateDbContext();
-
-        Assert.AreEqual(2, dbContext.Characters.Count(character => character.FullName == "Alice Admin"));
-    }
-
-    [TestMethod]
-    public void CreationRename_AndTheNameCheck_UseTheSameRules()
-    {
-        // The Login and Gateway servers can't be started in a test, so the wiring is read from the source.
-        foreach (var path in new[]
-        {
-            "Sanctuary.Login/Handlers/CharacterCreateRequestHandler.cs",
-            "Sanctuary.Gateway/Handlers/BaseNameChangePacket/CheckNamePacketHandler.cs",
-            "Sanctuary.Gateway/Handlers/BaseNameChangePacket/ChangeNameRequestPacketHandler.cs"
-        })
-        {
-            var source = Source(path);
-
-            StringAssert.Contains(source, "CharacterNameHelper.Check(", path);
-            StringAssert.Contains(source, "CharacterNameHelper.Compose(", path);
-            StringAssert.Contains(source, "x.FullName == fullName", path);
-        }
-
-        StringAssert.Contains(Source("Sanctuary.Login/Handlers/CharacterCreateRequestHandler.cs"), "NameFilter");
-    }
-
     private static string Source(string relativePath)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
