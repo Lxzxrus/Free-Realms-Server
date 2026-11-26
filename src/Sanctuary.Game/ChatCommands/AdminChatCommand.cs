@@ -81,7 +81,7 @@ public class AdminChatCommand : IChatCommand
         if (_zoneManager.TryGetPlayer(targetName, out var targetPlayer))
             targetPlayer.IsMod = isMod;
 
-        _chatCommandManager.LogAction(this, invoker, isMod ? "Promote" : "Demote", targetName, null);
+        _chatCommandManager.LogAction(this, invoker, isMod ? "Promote" : "Demote", targetName, null, target.UserId, target.Id);
 
         ChatHelper.SendSystemMessage(invoker, isMod
             ? $"{targetName} has been promoted to moderator."

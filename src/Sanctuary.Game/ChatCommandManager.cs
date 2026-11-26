@@ -4,9 +4,11 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reflection;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+using Sanctuary.Database;
 using Sanctuary.Game.ChatCommands;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
@@ -17,6 +19,7 @@ public class ChatCommandManager : IChatCommandManager
 {
     private readonly ILogger _logger;
     private readonly ILogger _auditLogger;
+    private readonly StaffActionLog _staffActionLog;
     private readonly IServiceProvider _serviceProvider;
     private readonly ConcurrentDictionary<string, IChatCommand> _commands = [];
 
@@ -27,6 +30,11 @@ public class ChatCommandManager : IChatCommandManager
         _logger = loggerFactory.CreateLogger<ChatCommandManager>();
         _auditLogger = loggerFactory.CreateLogger("Audit");
         _serviceProvider = serviceProvider;
+
+        _staffActionLog = new StaffActionLog(
+            serviceProvider.GetService<IDbContextFactory<DatabaseContext>>(),
+            serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System,
+            _logger);
     }
 
     public string Prefix { get; } = "!";
@@ -92,6 +100,15 @@ public class ChatCommandManager : IChatCommandManager
 
     public void LogAction(IChatCommand command, Player invoker, string action, string? targetName, string? detail)
     {
+        LogAction(command, invoker, action, targetName, detail, null, null);
+    }
+
+    /// <summary>
+    /// Writes the action to the audit log file and to the staff log table. The table write can fail, and then it is
+    /// only logged: the command has already happened.
+    /// </summary>
+    public void LogAction(IChatCommand command, Player invoker, string action, string? targetName, string? detail, ulong? targetUserId, ulong? targetCharacterId)
+    {
         _auditLogger.LogInformation("{Command}|{Action}|Actor: \"{ActorName}\" ({ActorGuid}){Target}{Detail}",
             command.KeyWord,
             action,
@@ -100,5 +117,15 @@ public class ChatCommandManager : IChatCommandManager
             targetName is null ? string.Empty : $", Target: \"{targetName}\"",
             detail is null ? string.Empty : $", {detail}"
         );
+
+        _staffActionLog.TryWrite(new StaffActionEntry(
+            invoker.UserId,
+            invoker.Name.FullName,
+            command.KeyWord,
+            action,
+            targetUserId,
+            targetCharacterId,
+            targetName,
+            detail));
     }
 }
