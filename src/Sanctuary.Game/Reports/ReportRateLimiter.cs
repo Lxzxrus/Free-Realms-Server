@@ -13,6 +13,21 @@ public enum ReportBudget
     Bug
 }
 
+/// <summary>Which limit stopped a report.</summary>
+public enum ReportRefusal
+{
+    None,
+
+    /// <summary>This account has used its own allowance.</summary>
+    Account,
+
+    /// <summary>The allowance of all accounts together is used up.</summary>
+    Global,
+
+    /// <summary>The share of the global allowance open to accounts that are not yet established is used up.</summary>
+    GlobalNewAccounts
+}
+
 /// <summary>
 /// How many reports an account may make, kept in memory and counted per account, not per character or connection, so
 /// switching characters or reconnecting does not reset it. A restart does reset it. Time comes from a
@@ -35,7 +50,9 @@ public sealed class ReportRateLimiter
     private readonly Dictionary<ulong, Account> _accounts = [];
 
     // The same counts across every account. Each is bounded by its limit, so none of them grows with the number of accounts.
+    // _global counts every kept report; _globalNew only those of accounts that were not yet established.
     private readonly Account _global = new();
+    private readonly Account _globalNew = new();
     private readonly TimeProvider _timeProvider;
     private DateTimeOffset _lastSweep;
 
@@ -46,8 +63,9 @@ public sealed class ReportRateLimiter
     }
 
     /// <summary>
-    /// Counts an attempt, accepted or not. False once the account has tried too often lately: nothing else should be
-    /// done for it then, not even a database query.
+    /// Counts an attempt by this account, accepted or not. False once the account has tried too often lately: nothing
+    /// else should be done for it then, not even a database query. Only the account's own count is used: a count shared
+    /// by all accounts would let a few throwaway accounts use it up and refuse everybody.
     /// </summary>
     public bool TryBeginAttempt(ulong userId)
     {
@@ -60,19 +78,40 @@ public sealed class ReportRateLimiter
             var account = GetAccount(userId);
 
             Prune(account.Attempts, now, ReportLimits.AttemptWindow);
-            Prune(_global.Attempts, now, ReportLimits.AttemptWindow);
 
-            if (account.Attempts.Count >= ReportLimits.AttemptsPerWindow || _global.Attempts.Count >= ReportLimits.GlobalAttemptsPerWindow)
+            if (account.Attempts.Count >= ReportLimits.AttemptsPerWindow)
                 return false;
 
             account.Attempts.Enqueue(now);
-            _global.Attempts.Enqueue(now);
             return true;
         }
     }
 
-    /// <summary>Whether the account may make another report of this budget now. Counts nothing.</summary>
-    public bool CanAccept(ulong userId, ReportBudget budget)
+    /// <summary>Whether the account's own allowance of this budget has room. Counts nothing.</summary>
+    public ReportRefusal CheckAccount(ulong userId, ReportBudget budget)
+    {
+        var now = _timeProvider.GetUtcNow();
+
+        lock (_lock)
+        {
+            if (!_accounts.TryGetValue(userId, out var account))
+                return ReportRefusal.None;
+
+            var queue = QueueFor(account, budget);
+
+            Prune(queue, now, Day);
+
+            var (perHour, perDay) = LimitsFor(budget);
+
+            return queue.Count < perDay && CountWithin(queue, now, Hour) < perHour ? ReportRefusal.None : ReportRefusal.Account;
+        }
+    }
+
+    /// <summary>
+    /// Whether the allowance of all accounts together has room for another report of this budget. An account that is not
+    /// <paramref name="established"/> is held to its smaller share as well. Counts nothing.
+    /// </summary>
+    public ReportRefusal CheckGlobal(ReportBudget budget, bool established)
     {
         var now = _timeProvider.GetUtcNow();
 
@@ -85,23 +124,27 @@ public sealed class ReportRateLimiter
             var (globalPerHour, globalPerDay) = GlobalLimitsFor(budget);
 
             if (global.Count >= globalPerDay || CountWithin(global, now, Hour) >= globalPerHour)
-                return false;
+                return ReportRefusal.Global;
 
-            if (!_accounts.TryGetValue(userId, out var account))
-                return true;
+            if (established)
+                return ReportRefusal.None;
 
-            var queue = QueueFor(account, budget);
+            var fresh = QueueFor(_globalNew, budget);
 
-            Prune(queue, now, Day);
+            Prune(fresh, now, Day);
 
-            var (perHour, perDay) = LimitsFor(budget);
+            var (newPerHour, newPerDay) = GlobalNewAccountLimitsFor(budget);
 
-            return queue.Count < perDay && CountWithin(queue, now, Hour) < perHour;
+            return fresh.Count >= newPerDay || CountWithin(fresh, now, Hour) >= newPerHour ? ReportRefusal.GlobalNewAccounts : ReportRefusal.None;
         }
     }
 
+    /// <summary>Whether the account may make another report of this budget now, as an established account. Counts nothing.</summary>
+    public bool CanAccept(ulong userId, ReportBudget budget) =>
+        CheckAccount(userId, budget) == ReportRefusal.None && CheckGlobal(budget, true) == ReportRefusal.None;
+
     /// <summary>Counts a report that was kept.</summary>
-    public void RecordAccepted(ulong userId, ReportBudget budget)
+    public void RecordAccepted(ulong userId, ReportBudget budget, bool established = true)
     {
         var now = _timeProvider.GetUtcNow();
 
@@ -109,6 +152,9 @@ public sealed class ReportRateLimiter
         {
             QueueFor(GetAccount(userId), budget).Enqueue(now);
             QueueFor(_global, budget).Enqueue(now);
+
+            if (!established)
+                QueueFor(_globalNew, budget).Enqueue(now);
         }
     }
 
@@ -129,6 +175,10 @@ public sealed class ReportRateLimiter
     private static (int PerHour, int PerDay) GlobalLimitsFor(ReportBudget budget) => budget == ReportBudget.Bug
         ? (ReportLimits.GlobalBugsPerHour, ReportLimits.GlobalBugsPerDay)
         : (ReportLimits.GlobalReportsPerHour, ReportLimits.GlobalReportsPerDay);
+
+    private static (int PerHour, int PerDay) GlobalNewAccountLimitsFor(ReportBudget budget) => budget == ReportBudget.Bug
+        ? (ReportLimits.GlobalNewAccountBugsPerHour, ReportLimits.GlobalNewAccountBugsPerDay)
+        : (ReportLimits.GlobalNewAccountReportsPerHour, ReportLimits.GlobalNewAccountReportsPerDay);
 
     private static Queue<DateTimeOffset> QueueFor(Account account, ReportBudget budget) =>
         budget == ReportBudget.Bug ? account.Bugs : account.Reports;

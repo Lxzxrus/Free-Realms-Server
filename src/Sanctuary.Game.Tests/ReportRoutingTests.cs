@@ -105,6 +105,17 @@ public sealed class ReportRoutingTests
     }
 
     [TestMethod]
+    public void ModCommand_FindsTheOnlinePlayerByGuid_NotByTheTypedName()
+    {
+        // The database matches a name without regard to case on MariaDB and the online list does not, so a name typed in
+        // another case found the character but not the player: a kick or warn did nothing and a ban left them connected.
+        var mod = Squash(Source("Sanctuary.Game/ChatCommands/ModChatCommand.cs"));
+
+        Assert.IsFalse(Regex.IsMatch(mod, @"TryGetPlayer\((target\.Name|targetName)"), "look the player up by the resolved character's guid");
+        StringAssert.Contains(mod, "TryGetPlayer(GuidHelper.GetPlayerGuid(resolved.CharacterId)");
+    }
+
+    [TestMethod]
     public void TheWebhookIsOffInEveryTrackedFile()
     {
         var gateway = Source("Sanctuary.Gateway/gateway.json");

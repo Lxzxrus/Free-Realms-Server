@@ -29,6 +29,71 @@ public sealed class ModCommandTests
     }
 
     [TestMethod]
+    [DataRow("12", 12UL, null, null)]
+    [DataRow("12 | spam", 12UL, null, "spam")]
+    [DataRow("12| spam", 12UL, null, "spam")]
+    [DataRow("12|spam", 12UL, null, "spam")]
+    [DataRow("12 |spam", 12UL, null, "spam")]
+    [DataRow("12 spam and more", 12UL, null, "spam and more")]
+    [DataRow("12 |", 12UL, null, null)]
+    [DataRow("12 | a | b", 12UL, null, "a | b")]
+    [DataRow("all bug", null, ReportKind.Bug, null)]
+    [DataRow("ALL Bugs | cleanup", null, ReportKind.Bug, "cleanup")]
+    [DataRow("all player|old", null, ReportKind.Player, "old")]
+    [DataRow("all house", null, ReportKind.House, null)]
+    public void CloseArguments_SplitAtTheFirstBarWhereverItIs(string text, ulong? id, ReportKind? kind, string? note)
+    {
+        Assert.IsTrue(ModChatCommand.TryParseClose(Words(text), out var parsedId, out var parsedKind, out var parsedNote), text);
+        Assert.AreEqual(id, parsedId);
+        Assert.AreEqual(kind, parsedKind);
+        Assert.AreEqual(note, parsedNote);
+    }
+
+    [TestMethod]
+    [DataRow("")]
+    [DataRow("|")]
+    [DataRow("spam")]
+    [DataRow("12x | note")]
+    [DataRow("12 junk | note")]
+    [DataRow("all")]
+    [DataRow("all everything")]
+    [DataRow("all | bug")]
+    [DataRow("-3")]
+    public void CloseArguments_RefuseWhatIsNotAnIdOrAllAndAKind(string text)
+    {
+        Assert.IsFalse(ModChatCommand.TryParseClose(Words(text), out _, out _, out _), text);
+    }
+
+    [TestMethod]
+    [DataRow("", true, null, 1)]
+    [DataRow("open", true, null, 1)]
+    [DataRow("all", false, null, 1)]
+    [DataRow("bug", true, ReportKind.Bug, 1)]
+    [DataRow("all bug 3", false, ReportKind.Bug, 3)]
+    [DataRow("3 house open", true, ReportKind.House, 3)]
+    [DataRow("players 2", true, ReportKind.Player, 2)]
+    public void ListArguments_TakeStatusKindAndPageInAnyOrder(string text, bool openOnly, ReportKind? kind, int page)
+    {
+        Assert.IsTrue(ModChatCommand.TryParseListArguments(Words(text), out var parsedOpen, out var parsedKind, out var parsedPage), text);
+        Assert.AreEqual(openOnly, parsedOpen);
+        Assert.AreEqual(kind, parsedKind);
+        Assert.AreEqual(page, parsedPage);
+    }
+
+    [TestMethod]
+    [DataRow("open all")]
+    [DataRow("bug house")]
+    [DataRow("1 2")]
+    [DataRow("0")]
+    [DataRow("99999999999")]
+    [DataRow("-1")]
+    [DataRow("everything")]
+    public void ListArguments_RefuseRepeatsAndNonsense(string text)
+    {
+        Assert.IsFalse(ModChatCommand.TryParseListArguments(Words(text), out _, out _, out _), text);
+    }
+
+    [TestMethod]
     [DataRow("Bob", "Bob", null, null)]
     [DataRow("Bob 30", "Bob", 30, null)]
     [DataRow("Bob Smith", "Bob Smith", null, null)]

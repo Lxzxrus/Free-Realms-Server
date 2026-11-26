@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
 
+using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.Entities;
@@ -30,7 +33,8 @@ public class ModChatCommand : IChatCommand
     // the number at the end.
     public string Usage =>
         "ban|mute <player> [minutes] [| reason], kick <player> [| reason], warn <player> | <text>, history <player>, " +
-        "unban|unmute|resetrename <player>, reports [open|all], report <id>, close <id> [| note]. Put | before the reason, text or note.";
+        "unban|unmute|resetrename <player>, reports [open|all] [bug|player|house] [page], report <id>, close <id> [| note], " +
+        "close all bug|player|house [| note]. Put | before the reason, text or note.";
 
     public string Description => "Moderation: ban, mute, kick or warn a player, read and close player reports, see a player's staff and report history, unban, unmute, or let a player rename again now.";
 
@@ -50,6 +54,14 @@ public class ModChatCommand : IChatCommand
     {
         _chatCommandManager.LogAction(this, invoker, action, targetName, detail, target?.UserId, target?.CharacterId);
     }
+
+    /// <summary>
+    /// The player online as this character, if any. Found by the character's guid, never by the name that was typed: the
+    /// database matches names without regard to case (on MariaDB), and the list of online players does not, so a name
+    /// typed in another case finds the character but not the player.
+    /// </summary>
+    private bool TryGetOnline(ResolvedTarget resolved, [MaybeNullWhen(false)] out Player player) =>
+        _zoneManager.TryGetPlayer(GuidHelper.GetPlayerGuid(resolved.CharacterId), out player);
 
     public bool Handle(Player invoker, string[] args)
     {
@@ -101,8 +113,8 @@ public class ModChatCommand : IChatCommand
     }
 
     /// <summary>
-    /// Whether the invoker may close a report about <paramref name="targetUserId"/>. The rank rule applies as it does to
-    /// every other action on a player: a moderator can't close reports about moderators or admins, or about themselves,
+    /// Whether the invoker may close, or read, a report about <paramref name="targetUserId"/>. The rank rule applies as it
+    /// does to every other action on a player: a moderator can't close reports about moderators or admins, or about themselves,
     /// or a report about staff would vanish from the open list that the others read. An admin has nobody above them, so
     /// an admin may close reports about other staff, but never about themselves. A report about no known account, or
     /// one that has been deleted (<paramref name="targetRole"/> null), is open to any staff member.
@@ -236,7 +248,7 @@ public class ModChatCommand : IChatCommand
                 .SetProperty(u => u.LockedUntil, lockedUntil)
                 .SetProperty(u => u.BanReason, reason));
 
-        if (_zoneManager.TryGetPlayer(target.Name, out var targetPlayer))
+        if (TryGetOnline(resolved, out var targetPlayer))
             targetPlayer.Disconnect();
 
         LogAction(invoker, "Ban", target.Name, resolved, Describe(banUntilTime is null ? "Permanent" : $"Until: {banUntilTime:u}", reason));
@@ -313,7 +325,7 @@ public class ModChatCommand : IChatCommand
                 .SetProperty(u => u.MutedUntil, (DateTimeOffset?)muteUntilTime)
                 .SetProperty(u => u.MuteReason, reason));
 
-        if (_zoneManager.TryGetPlayer(target.Name, out var targetPlayer))
+        if (TryGetOnline(resolved, out var targetPlayer))
         {
             targetPlayer.MutedUntil = muteUntilTime;
         }
@@ -352,7 +364,7 @@ public class ModChatCommand : IChatCommand
             return true;
         }
 
-        if (!_zoneManager.TryGetPlayer(target.Name, out var targetPlayer))
+        if (!TryGetOnline(resolved, out var targetPlayer))
         {
             ChatHelper.SendSystemMessage(invoker, $"{target.Name} is not online.");
             return true;
@@ -400,7 +412,7 @@ public class ModChatCommand : IChatCommand
             return true;
         }
 
-        if (!_zoneManager.TryGetPlayer(target.Name, out var targetPlayer))
+        if (!TryGetOnline(resolved, out var targetPlayer))
         {
             ChatHelper.SendSystemMessage(invoker, $"{target.Name} is not online.");
             return true;
@@ -428,46 +440,166 @@ public class ModChatCommand : IChatCommand
             return true;
 
         var (total, recent) = LoadHistory(dbContext, resolved.UserId);
+
+        // The reports about a staff member's own account are not shown to them (see ReportQueries.VisibleTo). Anyone else
+        // here already outranks the player, or the target would not have been resolved.
+        if (resolved.UserId == invoker.UserId)
+        {
+            ChatHelper.SendSystemMessage(invoker, string.Join('\n', FormatHistory(targetName, total, recent)));
+            return true;
+        }
+
         var (reportTotal, recentReports) = ReportQueries.LoadAbout(dbContext, resolved.UserId);
 
         ChatHelper.SendSystemMessage(invoker, string.Join('\n', FormatHistory(targetName, total, recent, reportTotal, recentReports)));
         return true;
     }
 
-    /// <summary>Lists the last reports, newest first: <c>reports</c> or <c>reports open</c> for the open ones, <c>reports all</c>.</summary>
-    private bool ListReports(Player invoker, string[] args)
+    /// <summary>
+    /// The words of <c>!mod reports</c>: <c>open</c> (the default) or <c>all</c>, a kind (<c>bug</c>, <c>player</c>,
+    /// <c>house</c>) and a page number, in any order, each at most once.
+    /// </summary>
+    internal static bool TryParseListArguments(string[] args, out bool openOnly, out ReportKind? kind, out int page)
     {
-        var openOnly = true;
+        openOnly = true;
+        kind = null;
+        page = 1;
 
-        if (args.Length > 1)
+        bool sawStatus = false, sawPage = false;
+
+        foreach (var word in args)
+        {
+            if (word.Equals("all", StringComparison.OrdinalIgnoreCase) || word.Equals("open", StringComparison.OrdinalIgnoreCase))
+            {
+                if (sawStatus)
+                    return false;
+
+                sawStatus = true;
+                openOnly = word.Equals("open", StringComparison.OrdinalIgnoreCase);
+            }
+            else if (ReportQueries.ParseKind(word) is { } parsedKind)
+            {
+                if (kind is not null)
+                    return false;
+
+                kind = parsedKind;
+            }
+            else if (int.TryParse(word, NumberStyles.None, CultureInfo.InvariantCulture, out var number) && number is >= 1 and <= 100000)
+            {
+                if (sawPage)
+                    return false;
+
+                sawPage = true;
+                page = number;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The words of <c>!mod close</c>: a report id or <c>all</c> and a kind, then an optional note after a | . The text is
+    /// split at the first | wherever it is (<c>close 12|spam</c> works), as the other subcommands do, and without a | the
+    /// words after the id are the note (<c>close 12 spam</c>).
+    /// </summary>
+    internal static bool TryParseClose(string[] args, out ulong? id, out ReportKind? allOfKind, out string? note)
+    {
+        id = null;
+        allOfKind = null;
+        note = null;
+
+        var text = string.Join(' ', args);
+        var bar = text.IndexOf(ModArguments.ReasonSeparator);
+        var head = bar < 0 ? text : text[..bar];
+        var words = head.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (words.Length == 0)
             return false;
 
-        if (args.Length == 1)
+        var used = 1;
+
+        if (words[0].Equals("all", StringComparison.OrdinalIgnoreCase))
         {
-            if (args[0].Equals("all", StringComparison.OrdinalIgnoreCase))
-                openOnly = false;
-            else if (!args[0].Equals("open", StringComparison.OrdinalIgnoreCase))
+            if (words.Length < 2 || ReportQueries.ParseKind(words[1]) is not { } kind)
                 return false;
+
+            allOfKind = kind;
+            used = 2;
         }
+        else if (ulong.TryParse(words[0], NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+        {
+            id = parsed;
+        }
+        else
+        {
+            return false;
+        }
+
+        if (bar >= 0)
+        {
+            // Nothing may stand between the id and the | but the | itself.
+            if (words.Length > used)
+                return false;
+
+            note = text[(bar + 1)..].Trim();
+        }
+        else if (words.Length > used)
+        {
+            note = string.Join(' ', words[used..]);
+        }
+
+        if (note is { Length: 0 })
+            note = null;
+
+        return true;
+    }
+
+    private static ReportQueries.Viewer ViewerOf(Player invoker) => new(invoker.UserId, invoker.ChatCommandRole);
+
+    /// <summary>
+    /// Lists reports, newest first, a page at a time: <c>reports</c> or <c>reports open</c> for the open ones,
+    /// <c>reports all</c>, and a kind and page number after them. Reports about the invoker, or about staff they do not
+    /// outrank, are left out, and the reading is written to the staff log.
+    /// </summary>
+    private bool ListReports(Player invoker, string[] args)
+    {
+        if (!TryParseListArguments(args, out var openOnly, out var kind, out var page))
+            return false;
 
         using DatabaseContext dbContext = _dbContextFactory.CreateDbContext();
 
-        var reports = ReportQueries.List(dbContext, openOnly);
+        var viewer = ViewerOf(invoker);
+        var total = ReportQueries.Count(dbContext, openOnly, kind, viewer);
+        var pages = Math.Max(1, (total + ReportQueries.ListLimit - 1) / ReportQueries.ListLimit);
+        var reports = ReportQueries.List(dbContext, openOnly, kind, page, viewer);
 
-        var lines = new List<string>(reports.Count + 1)
-        {
-            reports.Count == 0
-                ? (openOnly ? "No open reports." : "No reports.")
-                : $"{(openOnly ? "Open reports" : "Reports")}, newest first (!mod report <id> for one):"
-        };
+        var what = $"{(openOnly ? "open " : string.Empty)}{(kind is { } k ? ReportQueries.KindName(k) + " " : string.Empty)}reports";
+
+        var lines = new List<string>(reports.Count + 1);
+
+        if (total == 0)
+            lines.Add($"No {what}.");
+        else if (reports.Count == 0)
+            lines.Add($"No {what} on page {page}: there {(pages == 1 ? "is 1 page" : $"are {pages} pages")}.");
+        else
+            lines.Add($"{char.ToUpperInvariant(what[0])}{what[1..]}, newest first, page {page} of {pages} ({total} in all). !mod report <id> shows one{(page < pages ? ", add " + (page + 1) + " for the next page" : string.Empty)}:");
 
         lines.AddRange(reports.Select(ReportQueries.FormatListLine));
+
+        LogAction(invoker, "ListReports", "reports", null, $"{what}, page {page}");
 
         ChatHelper.SendSystemMessage(invoker, string.Join('\n', lines));
         return true;
     }
 
-    /// <summary>Shows one report, a few lines at a time so no single chat message is large.</summary>
+    /// <summary>
+    /// Shows one report, a few lines at a time so no single chat message is large. A report about the invoker, or about
+    /// staff they do not outrank, is not shown, and every report shown is written to the staff log under its target.
+    /// </summary>
     private bool ShowReport(Player invoker, string[] args)
     {
         if (args.Length != 1 || !ulong.TryParse(args[0], out var id))
@@ -477,11 +609,16 @@ public class ModChatCommand : IChatCommand
 
         var report = ReportQueries.Get(dbContext, id);
 
-        if (report is null)
+        // The same answer for a report that does not exist and one that may not be read, so ids can't be probed.
+        if (report is null || !MayCloseReportAbout(invoker.UserId, invoker.ChatCommandRole, report.TargetUserId, ReportQueries.GetUserRole(dbContext, report.TargetUserId)))
         {
-            ChatHelper.SendSystemMessage(invoker, $"No report #{id}.");
+            ChatHelper.SendSystemMessage(invoker, $"No report #{id} that you may read.");
             return true;
         }
+
+        LogAction(invoker, "ReadReport", report.TargetName ?? report.ReporterName,
+            report.TargetUserId is { } userId ? new ResolvedTarget(userId, report.TargetCharacterId ?? 0) : null,
+            $"Report #{id}");
 
         foreach (var chunk in ReportQueries.FormatDetails(report).Chunk(6))
             ChatHelper.SendSystemMessage(invoker, string.Join('\n', chunk));
@@ -489,17 +626,33 @@ public class ModChatCommand : IChatCommand
         return true;
     }
 
-    /// <summary>Closes an open report, with an optional note after a | .</summary>
+    /// <summary>
+    /// Closes an open report, with an optional note after a | ; or, with <c>all</c> and a kind, every open report of that
+    /// kind except those about staff, which are closed one at a time (the rank rule applies to each).
+    /// </summary>
     private bool CloseReport(Player invoker, string[] args)
     {
-        if (args.Length < 1 || !ulong.TryParse(args[0], out var id))
+        if (!TryParseClose(args, out var parsedId, out var allOfKind, out var rawNote))
             return false;
 
-        // "close 12 | done" and "close 12 done" both work.
-        var note = ModArguments.CleanText(string.Join(' ', args[1..]).TrimStart().TrimStart('|'), DbReport.MaxCloseNoteLength);
+        var note = ModArguments.CleanText(rawNote, DbReport.MaxCloseNoteLength);
 
         using DatabaseContext dbContext = _dbContextFactory.CreateDbContext();
 
+        if (allOfKind is { } kind)
+        {
+            var closedCount = ReportQueries.CloseAll(dbContext, kind, invoker.UserId, note, DateTimeOffset.UtcNow);
+
+            LogAction(invoker, "CloseReports", $"all {ReportQueries.KindName(kind)}", null,
+                note is null ? $"{closedCount} report(s)" : $"{closedCount} report(s): {note}");
+
+            ChatHelper.SendSystemMessage(invoker, closedCount == 0
+                ? $"There are no open {ReportQueries.KindName(kind)} reports to close (those about staff are closed one at a time)."
+                : $"Closed {closedCount} open {ReportQueries.KindName(kind)} report(s). Those about staff, if any, are closed one at a time.");
+            return true;
+        }
+
+        var id = parsedId!.Value;
         var report = ReportQueries.Get(dbContext, id);
 
         if (report is null)
@@ -628,7 +781,7 @@ public class ModChatCommand : IChatCommand
                 .SetProperty(u => u.MutedUntil, (DateTimeOffset?)null)
                 .SetProperty(u => u.MuteReason, (string?)null));
 
-        if (_zoneManager.TryGetPlayer(targetName, out var targetPlayer))
+        if (TryGetOnline(resolved, out var targetPlayer))
         {
             targetPlayer.MutedUntil = null;
         }

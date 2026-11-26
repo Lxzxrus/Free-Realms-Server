@@ -57,6 +57,9 @@ public sealed class ReportService
     private readonly ILogger _auditLogger;
     private readonly IReportNotifier _notifier;
 
+    // When each kind of limit warning was last logged, and how many were held back since. The keys are a few fixed strings.
+    private readonly Dictionary<string, (DateTimeOffset At, int Suppressed)> _warnings = [];
+
     public ReportService(IDbContextFactory<DatabaseContext>? dbContextFactory, TimeProvider timeProvider, ILoggerFactory loggerFactory,
         IReportNotifier notifier, ReportRateLimiter? limiter = null)
     {
@@ -121,7 +124,7 @@ public sealed class ReportService
             if (HasOpenReport(dbContext, reporter.UserId, ReportKind.Player, targetUserId, targetName, null))
                 return Dropped(ReportOutcome.Duplicate, reporter, "already open");
 
-            if (Screen(dbContext, reporter, now, targetUserId, targetName) is { } screened)
+            if (Screen(dbContext, reporter, now, ReportKind.Player, targetUserId, targetName, out var established) is { } screened)
                 return screened;
 
             var report = NewReport(reporter, ReportKind.Player, now);
@@ -134,7 +137,7 @@ public sealed class ReportService
                 ? Cap(ChatEvidence.Format(online.Chat, now, MaxServerContextForChat), DbReport.MaxServerContextLength)
                 : targetUserId is null ? "target offline; no character has that name" : "target offline";
 
-            return Save(dbContext, report, ReportBudget.Report, string.Empty);
+            return Save(dbContext, report, ReportBudget.Report, string.Empty, established);
         }
         catch (Exception exception)
         {
@@ -180,7 +183,7 @@ public sealed class ReportService
             if (HasOpenReport(dbContext, reporter.UserId, ReportKind.House, null, null, houseId))
                 return Dropped(ReportOutcome.Duplicate, reporter, "already open");
 
-            if (Screen(dbContext, reporter, now, house.UserId, null) is { } screened)
+            if (Screen(dbContext, reporter, now, ReportKind.House, house.UserId, null, out var established) is { } screened)
                 return screened;
 
             var owner = house.FullName ?? "?";
@@ -201,7 +204,7 @@ public sealed class ReportService
                 (ownerMatches ? string.Empty : " The client's owner guid does not match the server's."),
                 DbReport.MaxServerContextLength);
 
-            return Save(dbContext, report, ReportBudget.Report, string.Empty);
+            return Save(dbContext, report, ReportBudget.Report, string.Empty, established);
         }
         catch (Exception exception)
         {
@@ -237,14 +240,14 @@ public sealed class ReportService
 
             using var dbContext = _dbContextFactory.CreateDbContext();
 
-            if (Screen(dbContext, reporter, now, null, null) is { } screened)
+            if (Screen(dbContext, reporter, now, ReportKind.Bug, null, null, out var established) is { } screened)
                 return screened;
 
             var report = NewReport(reporter, ReportKind.Bug, now);
 
             report.ClientText = Cap(clientText, DbReport.MaxClientTextLength);
 
-            return Save(dbContext, report, ReportBudget.Bug, summary);
+            return Save(dbContext, report, ReportBudget.Bug, summary, established);
         }
         catch (Exception exception)
         {
@@ -252,21 +255,33 @@ public sealed class ReportService
         }
     }
 
+    /// <summary>
+    /// The cheap checks, before any database work: this account's own attempts and allowance. Nothing shared between
+    /// accounts is charged here: that happens only for a report that is kept (see <see cref="Save"/>).
+    /// </summary>
     private ReportResult? Gate(ReportContext reporter, ReportBudget budget)
     {
-        if (!Limiter.TryBeginAttempt(reporter.UserId) || !Limiter.CanAccept(reporter.UserId, budget))
+        if (!Limiter.TryBeginAttempt(reporter.UserId))
+            return Dropped(ReportOutcome.Limited, reporter, "too many attempts");
+
+        if (Limiter.CheckAccount(reporter.UserId, budget) != ReportRefusal.None)
             return Dropped(ReportOutcome.Limited, reporter, "limit reached");
 
         return null;
     }
 
     /// <summary>
-    /// The limits that need the database, checked before anything is written: the account must be old enough, there is a
-    /// ceiling on open reports overall, and one player (or house owner) cannot have more than a few open reports about
-    /// them. A target is given as an account or, when there is none, by the name the client typed.
+    /// The limits that need the database, checked before anything is written: the account must be old enough, the
+    /// allowance of all accounts together (a smaller share for accounts that are not yet established) and the ceiling on
+    /// open reports of this kind must have room, and one player (or house owner) cannot have more than a few open reports
+    /// about them. A target is given as an account or, when there is none, by the name the client typed. A limit shared
+    /// between accounts is logged as a warning, once in a while, because it also stops real players' reports.
     /// </summary>
-    private ReportResult? Screen(DatabaseContext dbContext, ReportContext reporter, DateTimeOffset now, ulong? targetUserId, string? targetName)
+    private ReportResult? Screen(DatabaseContext dbContext, ReportContext reporter, DateTimeOffset now, ReportKind kind, ulong? targetUserId, string? targetName,
+        out bool established)
     {
+        established = false;
+
         var created = dbContext.Users
             .AsNoTracking()
             .Where(user => user.Id == reporter.UserId)
@@ -276,19 +291,38 @@ public sealed class ReportService
         if (created is null || now - created.Value < ReportLimits.MinAccountAge)
             return Dropped(ReportOutcome.Limited, reporter, "account too new");
 
-        var open = dbContext.Reports.Where(report => report.Status == ReportStatus.Open);
+        established = now - created.Value >= ReportLimits.EstablishedAccountAge;
 
-        if (open.Count() >= ReportLimits.MaxOpenReports)
-            return Dropped(ReportOutcome.Limited, reporter, "too many open reports");
+        var isBug = kind == ReportKind.Bug;
+        var budget = isBug ? ReportBudget.Bug : ReportBudget.Report;
+        var what = isBug ? "bug reports" : "player and house reports";
+        var refusal = Limiter.CheckGlobal(budget, established);
+
+        if (refusal != ReportRefusal.None)
+        {
+            return Refused(reporter, refusal == ReportRefusal.Global
+                ? $"the limit on {what} from all accounts together is used up"
+                : $"the share of the limit on {what} that accounts younger than {(int)ReportLimits.EstablishedAccountAge.TotalDays} days may use is used up");
+        }
+
+        var open = dbContext.Reports.Where(report => report.Status == ReportStatus.Open && (report.Kind == ReportKind.Bug) == isBug);
+        var ceiling = isBug ? ReportLimits.MaxOpenBugReports : ReportLimits.MaxOpenReports;
+        var openCount = open.Count();
+
+        if (openCount >= ceiling)
+            return Refused(reporter, $"there are {openCount} open {what}, the most there can be. Close some with !mod close");
+
+        if (openCount * 100 >= ceiling * ReportLimits.OpenWarningPercent)
+            Warn("open-nearly-full-" + (isBug ? "bug" : "report"), $"{openCount} of {ceiling} open {what} are in use. Close some with !mod close (!mod close all {(isBug ? "bug" : "player")})");
 
         if (targetUserId is { } userId)
         {
             if (open.Count(report => report.TargetUserId == userId) >= ReportLimits.MaxOpenReportsPerTarget)
-                return Dropped(ReportOutcome.Limited, reporter, "too many open reports about the target");
+                return Refused(reporter, "one player already has the most open reports about them there can be (a pile-on?)");
         }
         else if (targetName is not null && open.Count(report => report.TargetUserId == null && report.TargetName == targetName) >= ReportLimits.MaxOpenReportsPerTarget)
         {
-            return Dropped(ReportOutcome.Limited, reporter, "too many open reports about the target");
+            return Refused(reporter, "one name already has the most open reports about it there can be (a pile-on?)");
         }
 
         return null;
@@ -296,7 +330,7 @@ public sealed class ReportService
 
     /// <summary>
     /// Deletes closed reports older than <see cref="ReportLimits.ClosedRetention"/>, so the table does not grow without
-    /// end. Open reports are never deleted: staff close them. Returns how many were deleted; a database failure is logged
+    /// end. Open reports are never deleted: staff close them, or <see cref="CloseStale"/> does. Returns how many were deleted; a database failure is logged
     /// and counts as none.
     /// </summary>
     public int PruneClosed()
@@ -342,12 +376,67 @@ public sealed class ReportService
         }
     }
 
-    private ReportResult Save(DatabaseContext dbContext, DbReport report, ReportBudget budget, string summary)
+    /// <summary>The note on a report closed by <see cref="CloseStale"/>.</summary>
+    public const string StaleCloseNote = "Closed automatically: nobody dealt with it in time.";
+
+    /// <summary>
+    /// Closes open reports older than <see cref="ReportLimits.OpenRetention"/>, with a note and no staff member, so
+    /// reports nobody reads cannot hold up the ceiling on open reports for ever. (They are deleted later like any closed
+    /// report.) Returns how many were closed; a database failure is logged and counts as none.
+    /// </summary>
+    public int CloseStale()
+    {
+        if (_dbContextFactory is null)
+            return 0;
+
+        try
+        {
+            var now = _timeProvider.GetUtcNow();
+            var cutoff = now - ReportLimits.OpenRetention;
+
+            using var dbContext = _dbContextFactory.CreateDbContext();
+
+            // The dates are compared here, not in SQL: SQLite can't compare a DateTimeOffset. The open reports are bounded by
+            // their ceilings, and only ids and dates are read.
+            var stale = dbContext.Reports
+                .AsNoTracking()
+                .Where(report => report.Status == ReportStatus.Open)
+                .Select(report => new { report.Id, report.Created })
+                .AsEnumerable()
+                .Where(report => report.Created < cutoff)
+                .Select(report => report.Id)
+                .ToList();
+
+            var closed = 0;
+
+            foreach (var batch in stale.Chunk(200))
+            {
+                closed += dbContext.Reports
+                    .Where(report => report.Status == ReportStatus.Open && batch.Contains(report.Id))
+                    .ExecuteUpdate(report => report
+                        .SetProperty(r => r.Status, ReportStatus.Closed)
+                        .SetProperty(r => r.ClosedAt, (DateTimeOffset?)now)
+                        .SetProperty(r => r.CloseNote, StaleCloseNote));
+            }
+
+            if (closed > 0)
+                _logger.LogInformation("Closed {Count} open report(s) older than {Days} days.", closed, (int)ReportLimits.OpenRetention.TotalDays);
+
+            return closed;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Failed to close stale open reports.");
+            return 0;
+        }
+    }
+
+    private ReportResult Save(DatabaseContext dbContext, DbReport report, ReportBudget budget, string summary, bool established)
     {
         dbContext.Reports.Add(report);
         dbContext.SaveChanges();
 
-        Limiter.RecordAccepted(report.ReporterUserId, budget);
+        Limiter.RecordAccepted(report.ReporterUserId, budget, established);
 
         _auditLogger.LogInformation("report|{Kind}|#{Id}, Actor: \"{ActorName}\" (user {UserId}), Target: \"{Target}\", In: {Zone} {Position}",
             report.Kind, report.Id, report.ReporterName, report.ReporterUserId, report.TargetName, report.Zone, report.Position);
@@ -412,6 +501,39 @@ public sealed class ReportService
     private static bool IsSameName(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     private static string Cap(string? text, int max) => StaffActionLog.Truncate(text, max);
+
+    /// <summary>
+    /// A report refused by a limit that is not about this account alone. It is logged as a warning, at most once per
+    /// <see cref="ReportLimits.WarningInterval"/> for each reason, because it stops real players' reports too and staff
+    /// should be able to see it in the log.
+    /// </summary>
+    private ReportResult Refused(ReportContext reporter, string why)
+    {
+        Warn(why, "Reports are being refused: " + why + ".");
+        return Dropped(ReportOutcome.Limited, reporter, why);
+    }
+
+    /// <summary>Logs a warning, but for one key no more than once per <see cref="ReportLimits.WarningInterval"/>; the others are counted and reported with the next.</summary>
+    private void Warn(string key, string message)
+    {
+        int suppressed;
+
+        lock (_warnings)
+        {
+            var now = _timeProvider.GetUtcNow();
+
+            if (_warnings.TryGetValue(key, out var last) && now - last.At < ReportLimits.WarningInterval)
+            {
+                _warnings[key] = (last.At, last.Suppressed + 1);
+                return;
+            }
+
+            suppressed = _warnings.TryGetValue(key, out last) ? last.Suppressed : 0;
+            _warnings[key] = (now, 0);
+        }
+
+        _logger.LogWarning("{Message} ({Suppressed} more since the last warning about this.)", message, suppressed);
+    }
 
     private ReportResult Dropped(ReportOutcome outcome, ReportContext reporter, string why)
     {

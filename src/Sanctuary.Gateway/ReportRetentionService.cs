@@ -8,7 +8,7 @@ using Sanctuary.Game.Reports;
 
 namespace Sanctuary.Gateway;
 
-/// <summary>Deletes old closed reports once an hour (and once at startup), so the Reports table stays small.</summary>
+/// <summary>Closes open reports nobody dealt with and deletes old closed ones, once an hour (and once at startup), so the Reports table stays small.</summary>
 public sealed class ReportRetentionService : BackgroundService
 {
     private static readonly TimeSpan Every = TimeSpan.FromHours(1);
@@ -29,7 +29,11 @@ public sealed class ReportRetentionService : BackgroundService
             do
             {
                 // A short database call, never throws; run off the host's startup thread.
-                await Task.Run(_reportService.PruneClosed, stoppingToken);
+                await Task.Run(() =>
+                {
+                    _reportService.CloseStale();
+                    _reportService.PruneClosed();
+                }, stoppingToken);
             }
             while (await timer.WaitForNextTickAsync(stoppingToken));
         }

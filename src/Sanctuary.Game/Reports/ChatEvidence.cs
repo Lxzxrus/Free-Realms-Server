@@ -33,13 +33,22 @@ public sealed class ChatEvidence
     }
 
     /// <summary>
-    /// Remembers a line the server accepted (muted, rate-limited and command lines never get here). A private tell is
-    /// never kept: the line would go to staff and to Discord on the word of anyone who reports the sender, and the record
-    /// does not say who it was to.
+    /// The channels whose lines are kept: those that everyone in the area, or on the server, can read. Any other channel
+    /// (a tell, a whisper, group or guild chat, or one added later) is private to some people: the line would go to staff
+    /// and to Discord on the word of anyone who reports the sender, who need not have seen it. An allowlist, so a new
+    /// channel stays out until someone decides otherwise.
+    /// </summary>
+    public static bool IsPublicChannel(ChatChannel channel) => channel is
+        ChatChannel.WorldSay or ChatChannel.WorldShout or ChatChannel.WorldTrade or ChatChannel.WorldLfg
+        or ChatChannel.WorldArea or ChatChannel.WorldMembersOnly;
+
+    /// <summary>
+    /// Remembers a line the server accepted (muted, rate-limited and command lines never get here), if it was said on a
+    /// <see cref="IsPublicChannel">public channel</see>. Private lines are never kept.
     /// </summary>
     public void Add(ChatChannel channel, string? text)
     {
-        if (channel == ChatChannel.Tell)
+        if (!IsPublicChannel(channel))
             return;
 
         var clean = ModArguments.CleanText(text, MaxTextLength);

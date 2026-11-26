@@ -172,18 +172,39 @@ public sealed class ReportSupportTests
     }
 
     [TestMethod]
-    public void ChatEvidence_NeverKeepsAPrivateTell()
+    public void ChatEvidence_KeepsOnlyWhatEveryoneInTheAreaCouldRead()
     {
         var evidence = new ChatEvidence(new ManualTimeProvider());
 
         evidence.Add(ChatChannel.WorldSay, "public line");
         evidence.Add(ChatChannel.Tell, "my real name is Jo and I live at 12 Elm Street");
+        evidence.Add(ChatChannel.Whisper, "whispered");
+        evidence.Add(ChatChannel.GroupSay, "group plan");
+        evidence.Add(ChatChannel.GuildSay, "guild secret");
+        evidence.Add(ChatChannel.System, "system");
+        evidence.Add((ChatChannel)99, "a channel added later");
 
         var lines = evidence.Snapshot();
 
         Assert.AreEqual(1, lines.Count);
         Assert.AreEqual("public line", lines[0].Text);
         Assert.IsFalse(ChatEvidence.Format(lines, DateTimeOffset.UtcNow, 1000).Contains("Elm Street"));
+    }
+
+    [TestMethod]
+    [DataRow(ChatChannel.WorldSay)]
+    [DataRow(ChatChannel.WorldShout)]
+    [DataRow(ChatChannel.WorldTrade)]
+    [DataRow(ChatChannel.WorldLfg)]
+    [DataRow(ChatChannel.WorldArea)]
+    [DataRow(ChatChannel.WorldMembersOnly)]
+    public void ChatEvidence_KeepsEachPublicChannel(ChatChannel channel)
+    {
+        var evidence = new ChatEvidence(new ManualTimeProvider());
+
+        evidence.Add(channel, "hello");
+
+        Assert.AreEqual(1, evidence.Snapshot().Count);
     }
 
     [TestMethod]
@@ -355,19 +376,36 @@ public sealed class ReportSupportTests
     }
 
     [TestMethod]
-    public void Limiter_AttemptsFromAllAccountsTogetherAreBounded()
+    public void Limiter_AttemptsOfOtherAccountsNeverRefuseAnAccount()
     {
         var limiter = new ReportRateLimiter(new ManualTimeProvider());
 
-        var allowed = 0;
+        // A shared ceiling on attempts was a switch any group of throwaway accounts could throw for everybody.
+        for (ulong user = 1; user <= 1000; user++)
+            Assert.IsTrue(limiter.TryBeginAttempt(user));
 
-        for (ulong user = 1; user <= (ulong)ReportLimits.GlobalAttemptsPerWindow + 50; user++)
-        {
-            if (limiter.TryBeginAttempt(user))
-                allowed++;
-        }
+        Assert.IsTrue(limiter.TryBeginAttempt(5000));
+        Assert.AreEqual(ReportRefusal.None, limiter.CheckGlobal(ReportBudget.Report, established: true));
+        Assert.AreEqual(ReportRefusal.None, limiter.CheckGlobal(ReportBudget.Bug, established: false), "attempts are not charged to the global allowance");
+    }
 
-        Assert.AreEqual(ReportLimits.GlobalAttemptsPerWindow, allowed);
+    [TestMethod]
+    public void Limiter_NewerAccountsHaveASmallerShareOfTheGlobalAllowance()
+    {
+        var limiter = new ReportRateLimiter(new ManualTimeProvider());
+
+        for (ulong user = 1; user <= (ulong)ReportLimits.GlobalNewAccountReportsPerHour; user++)
+            limiter.RecordAccepted(user, ReportBudget.Report, established: false);
+
+        Assert.AreEqual(ReportRefusal.GlobalNewAccounts, limiter.CheckGlobal(ReportBudget.Report, established: false));
+        Assert.AreEqual(ReportRefusal.None, limiter.CheckGlobal(ReportBudget.Report, established: true));
+        Assert.AreEqual(ReportRefusal.None, limiter.CheckGlobal(ReportBudget.Bug, established: false), "bugs have their own share");
+
+        for (ulong user = 100; user < 100 + (ulong)(ReportLimits.GlobalReportsPerHour - ReportLimits.GlobalNewAccountReportsPerHour); user++)
+            limiter.RecordAccepted(user, ReportBudget.Report, established: true);
+
+        Assert.AreEqual(ReportRefusal.Global, limiter.CheckGlobal(ReportBudget.Report, established: true));
+        Assert.AreEqual(ReportRefusal.Global, limiter.CheckGlobal(ReportBudget.Report, established: false));
     }
 
     [TestMethod]

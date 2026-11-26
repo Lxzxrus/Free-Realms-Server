@@ -22,8 +22,17 @@ public static class ReportLimits
     public const int GlobalBugsPerHour = 30;
     public const int GlobalBugsPerDay = 200;
 
-    /// <summary>Attempts, dropped ones included, from all accounts together in <see cref="AttemptWindow"/>.</summary>
-    public const int GlobalAttemptsPerWindow = 300;
+    /// <summary>
+    /// Accounts younger than <see cref="EstablishedAccountAge"/> may use only part of the global allowance above, so a
+    /// crowd of cheap new accounts cannot use all of it and shut out the players who have been here a while. The global
+    /// counts are charged only for reports that were kept, never for attempts: an attempt costs the attacker nothing.
+    /// </summary>
+    public const int GlobalNewAccountReportsPerHour = 20;
+    public const int GlobalNewAccountReportsPerDay = 130;
+    public const int GlobalNewAccountBugsPerHour = 20;
+    public const int GlobalNewAccountBugsPerDay = 130;
+
+    public static readonly TimeSpan EstablishedAccountAge = TimeSpan.FromDays(7);
 
     /// <summary>
     /// The most open reports about one player (or house owner) at a time. Staff already have that many to read; more would
@@ -31,8 +40,23 @@ public static class ReportLimits
     /// </summary>
     public const int MaxOpenReportsPerTarget = 10;
 
-    /// <summary>The most open reports at once, of any kind. Closing some makes room.</summary>
+    /// <summary>
+    /// The most open player and house reports at once. Closing some makes room. Bug reports have their own ceiling
+    /// (<see cref="MaxOpenBugReports"/>) so that a flood of one kind cannot block the other.
+    /// </summary>
     public const int MaxOpenReports = 1000;
+
+    /// <summary>The most open bug reports at once.</summary>
+    public const int MaxOpenBugReports = 500;
+
+    /// <summary>Staff are warned in the log when the open reports of a kind reach this share of their ceiling.</summary>
+    public const int OpenWarningPercent = 80;
+
+    /// <summary>An open report nobody has dealt with after this long is closed automatically, so the ceiling cannot be held up for ever.</summary>
+    public static readonly TimeSpan OpenRetention = TimeSpan.FromDays(60);
+
+    /// <summary>The longest between two warnings in the log about the same limit being reached.</summary>
+    public static readonly TimeSpan WarningInterval = TimeSpan.FromMinutes(10);
 
     /// <summary>An account has to be at least this old to report, so a throwaway account cannot report at once.</summary>
     public static readonly TimeSpan MinAccountAge = TimeSpan.FromMinutes(10);

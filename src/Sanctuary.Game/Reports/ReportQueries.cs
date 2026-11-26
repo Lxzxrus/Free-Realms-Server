@@ -26,16 +26,52 @@ public static class ReportQueries
     /// <summary>The most lines of chat evidence <c>!mod report</c> shows from each side.</summary>
     public const int MaxEvidenceLines = 10;
 
-    /// <summary>The last reports, newest first.</summary>
-    public static List<DbReport> List(DatabaseContext dbContext, bool openOnly)
+    /// <summary>Who is reading the reports, so that reports they may not read are left out.</summary>
+    public readonly record struct Viewer(ulong UserId, ChatCommandRole Role);
+
+    /// <summary>
+    /// The reports a staff member may read: the same rule as for closing one (<see cref="ModChatCommand.MayCloseReportAbout"/>).
+    /// Reports about the staff member themselves, and about staff they do not outrank, are left out, so nobody can read
+    /// what was said about them (or learn who said it) and then act on it. Reports about no known account are open to all.
+    /// </summary>
+    internal static IQueryable<DbReport> VisibleTo(DatabaseContext dbContext, IQueryable<DbReport> query, Viewer viewer)
+    {
+        var userId = viewer.UserId;
+
+        if (viewer.Role >= ChatCommandRole.Admin)
+            return query.Where(report => report.TargetUserId == null || report.TargetUserId != userId);
+
+        return query.Where(report => report.TargetUserId == null
+            || (report.TargetUserId != userId && !dbContext.Users.Any(user => user.Id == report.TargetUserId && (user.IsAdmin || user.IsMod))));
+    }
+
+    private static IQueryable<DbReport> Filter(DatabaseContext dbContext, bool openOnly, ReportKind? kind, Viewer? viewer)
     {
         var query = dbContext.Reports.AsNoTracking();
 
         if (openOnly)
             query = query.Where(report => report.Status == ReportStatus.Open);
 
-        return NewestFirst(dbContext, query).Take(ListLimit).ToList();
+        if (kind is { } only)
+            query = query.Where(report => report.Kind == only);
+
+        if (viewer is { } who)
+            query = VisibleTo(dbContext, query, who);
+
+        return query;
     }
+
+    /// <summary>One page of reports, newest first. Pages count from 1 and are <see cref="ListLimit"/> reports long.</summary>
+    public static List<DbReport> List(DatabaseContext dbContext, bool openOnly, ReportKind? kind = null, int page = 1, Viewer? viewer = null)
+    {
+        var skip = (Math.Max(page, 1) - 1) * ListLimit;
+
+        return NewestFirst(dbContext, Filter(dbContext, openOnly, kind, viewer)).Skip(skip).Take(ListLimit).ToList();
+    }
+
+    /// <summary>How many reports <see cref="List"/> pages over.</summary>
+    public static int Count(DatabaseContext dbContext, bool openOnly, ReportKind? kind = null, Viewer? viewer = null) =>
+        Filter(dbContext, openOnly, kind, viewer).Count();
 
     /// <summary>
     /// Newest first, by id: it grows with time. SQLite can't sort a ulong (nor a DateTimeOffset), so there it sorts by a
@@ -79,6 +115,34 @@ public static class ReportQueries
                 .SetProperty(r => r.ClosedAt, (DateTimeOffset?)now)
                 .SetProperty(r => r.CloseNote, closedNote)) > 0;
     }
+
+    /// <summary>
+    /// Closes every open report of a kind whose target is not staff, and returns how many. Reports about staff are left
+    /// for <see cref="TryClose"/>, which the rank rule governs one at a time. Reports about no account (a bug, or a name
+    /// nobody has) are closed.
+    /// </summary>
+    public static int CloseAll(DatabaseContext dbContext, ReportKind kind, ulong staffUserId, string? note, DateTimeOffset now)
+    {
+        var closedNote = ModArguments.CleanText(note, DbReport.MaxCloseNoteLength);
+
+        return dbContext.Reports
+            .Where(report => report.Status == ReportStatus.Open && report.Kind == kind
+                && (report.TargetUserId == null || !dbContext.Users.Any(user => user.Id == report.TargetUserId && (user.IsAdmin || user.IsMod))))
+            .ExecuteUpdate(report => report
+                .SetProperty(r => r.Status, ReportStatus.Closed)
+                .SetProperty(r => r.ClosedByUserId, (ulong?)staffUserId)
+                .SetProperty(r => r.ClosedAt, (DateTimeOffset?)now)
+                .SetProperty(r => r.CloseNote, closedNote));
+    }
+
+    /// <summary>The report kind a word names (<c>bug</c>, <c>player</c>, <c>house</c>), or null.</summary>
+    public static ReportKind? ParseKind(string? word) => word?.ToLowerInvariant() switch
+    {
+        "bug" or "bugs" => ReportKind.Bug,
+        "player" or "players" => ReportKind.Player,
+        "house" or "houses" => ReportKind.House,
+        _ => null
+    };
 
     /// <summary>How many reports an account has had made about it, and the last <see cref="HistoryLimit"/>, newest first.</summary>
     public static (int Total, List<DbReport> Recent) LoadAbout(DatabaseContext dbContext, ulong userId)
