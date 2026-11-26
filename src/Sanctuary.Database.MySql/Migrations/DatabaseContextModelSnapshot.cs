@@ -792,6 +792,88 @@ namespace Sanctuary.Database.MySql.Migrations
                     b.ToTable("Profiles");
                 });
 
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbReport", b =>
+                {
+                    b.Property<ulong>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint unsigned");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<ulong>("Id"));
+
+                    b.Property<string>("ClientText")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("varchar(4000)");
+
+                    b.Property<string>("CloseNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<ulong?>("ClosedByUserId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<ulong?>("HouseId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<byte>("Kind")
+                        .HasColumnType("tinyint unsigned");
+
+                    b.Property<string>("Position")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<ulong>("ReporterCharacterId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<string>("ReporterName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<ulong>("ReporterUserId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<string>("ServerContext")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("varchar(4000)");
+
+                    b.Property<byte>("Status")
+                        .HasColumnType("tinyint unsigned");
+
+                    b.Property<ulong?>("TargetCharacterId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<string>("TargetName")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<ulong?>("TargetUserId")
+                        .HasColumnType("bigint unsigned");
+
+                    b.Property<string>("Zone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TargetUserId");
+
+                    b.HasIndex("ReporterUserId", "Created");
+
+                    b.HasIndex("Status", "Created");
+
+                    b.ToTable("Reports");
+                });
+
             modelBuilder.Entity("Sanctuary.Database.Entities.DbStaffAction", b =>
                 {
                     b.Property<ulong>("Id")
