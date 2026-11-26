@@ -41,10 +41,25 @@ Notes:
 or house, zone and position, the client's text (chat lines or bug fields, capped), the server's own context, created,
 status, and who closed it with a note.
 
-**Server-side chat evidence.** Each player keeps their last 10 accepted chat lines from the last 30 minutes in memory
-(`ChatEvidence`). Only public channels count: say, shout, trade, LFG, area and members-only. Tells, whispers, group and
-guild chat are never kept, so private chat never reaches staff or Discord on someone else's word. The list goes away
-when the player logs out. A player report stores the target's lines beside the client's, so staff can compare them.
+**Server-side chat evidence.** Each character keeps their last 10 accepted chat lines from the last 30 minutes in memory
+(`ChatEvidence`, held by character id in `ChatEvidenceStore`, not on the connection). Only public channels count: say,
+shout, trade, LFG, area and members-only. Tells, whispers, group and guild chat are never kept, so private chat never
+reaches staff or Discord on someone else's word. Logging out and in does not clear the lines (they still expire after 30
+minutes); a server restart does, because it is only in memory. Records with nothing in date are dropped, and there are at
+most 5000 of them. A player report stores the target's lines beside the client's, so staff can compare them. When there
+are none, the server context says "no public chat from them recorded in the last 30 minutes", or, if the server started
+less than 30 minutes ago, "since the server started N minutes ago", so an empty record is never read as proof that nothing
+was said. The evidence is only used for a target who is online when the report arrives.
+
+**Names.** Staff commands and reports find a player by full name (first name, then last name after a space). Character
+creation, rename and the name check all use `CharacterNameHelper.Check`: each part 3 to 14 characters, letters, `'` and
+no space inside a part (so first "Alice" last "Admin" and first "Alice Admin" cannot both exist), no control, invisible
+formatting or odd space characters, and the name filter. A name is taken when its full name is taken. Characters made
+before this check can still share a full name. Then `!mod` refuses with "More than one player has the name ..." and the
+character ids (nothing is done) when the characters are on different accounts, and takes the lowest id when they are all
+on one account. A player report on such a name is kept with no target account and a server context that lists the
+character ids, so it cannot land on an innocent player; staff look at the characters themselves. There is no unique index
+on `FullName`: a migration would fail at startup on a database that already has a duplicate.
 
 `StaffActions` table (`DbStaffAction`): every action a chat command logs through `LogAction` (`!mod`, `!admin
 promote/demote`, and also the collection, npc, job, quest, reward, experience and navnpc commands), with who did it, the
@@ -101,9 +116,11 @@ Reading or closing a report is written to the staff log, but not under the repor
 "Report #N, about user M", so the row does not appear in the reported player's own `!mod history` (a staff member
 reported by a player must not learn of it from there).
 
-In the Audit log file the free text of a line (reason, warning, close note, names) has its double quotes and backslashes
-turned into apostrophes and slashes, so staff text cannot forge fields of another record. The `StaffActions` row keeps
-the text as typed.
+In the Audit log file the free text of a line (reason, warning, close note, names, the acting staff member's name) has
+its double quotes and backslashes turned into apostrophes and slashes, and its control and invisible formatting
+characters (line breaks, right-to-left overrides) dropped, so text cannot forge fields of another record or start what
+looks like a separate entry. The `StaffActions` row keeps the text as typed. A report's reporter and target names are
+cleaned the same way before they are stored, posted to Discord or written to the log.
 
 ## Discord webhook (optional, off by default)
 
@@ -143,6 +160,9 @@ Use two characters on different accounts (A reports B), plus a staff character. 
 8. **Rank rule.** A moderator cannot ban, read reports about, or close reports about an admin or another moderator.
 9. **Discord,** once the webhook is set: each kept report shows up in the channel. A message with `@everyone` or a link
    does not ping or embed.
-10. After deploying, check that the `StaffActions` and `Reports` tables exist on MariaDB and fill up.
+10. **Names.** Try to create a character whose first name has a space ("Alice Admin"): it must be refused, as must
+    a rename to one. Create "Alice" "Admin" first, then try "Alice Admin" with no last name: refused as taken.
+11. **Relog evidence.** B says something in Say, logs out and in, and A reports B: the report still shows the line.
+12. After deploying, check that the `StaffActions` and `Reports` tables exist on MariaDB and fill up.
 
 If a report in steps 1 to 5 never appears, search the Gateway log for "Refused" and send the hex bytes to Claude.

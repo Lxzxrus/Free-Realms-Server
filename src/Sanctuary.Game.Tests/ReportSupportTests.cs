@@ -234,7 +234,7 @@ public sealed class ReportSupportTests
         Assert.IsTrue(text.Length <= 1000);
         StringAssert.Contains(text, "WorldShout");
         StringAssert.Contains(text, "5s ago");
-        StringAssert.Contains(ChatEvidence.Format([], clock.GetUtcNow(), 1000), "no chat");
+        StringAssert.Contains(ChatEvidence.Format([], clock.GetUtcNow(), 1000), "no public chat");
     }
 
     // ---- The limits ----

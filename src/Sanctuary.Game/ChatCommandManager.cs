@@ -112,7 +112,7 @@ public class ChatCommandManager : IChatCommandManager
         _auditLogger.LogInformation("{Command}|{Action}|Actor: \"{ActorName}\" ({ActorGuid}){Target}{Detail}",
             command.KeyWord,
             action,
-            invoker.Name,
+            StaffActionLog.ForAuditLine(invoker.Name.FullName),
             invoker.Guid,
             targetName is null ? string.Empty : $", Target: \"{StaffActionLog.ForAuditLine(targetName)}\"",
             detail is null ? string.Empty : $", {StaffActionLog.ForAuditLine(detail)}"

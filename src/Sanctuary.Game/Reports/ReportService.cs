@@ -18,7 +18,8 @@ namespace Sanctuary.Game.Reports;
 public sealed record ReportContext(ulong UserId, ulong CharacterId, string Name, string Zone, string Position);
 
 /// <summary>The reported player when they are online: who they are, and the chat lines the server accepted from them.</summary>
-public sealed record OnlineReportTarget(ulong UserId, ulong CharacterId, string Name, IReadOnlyList<ChatEvidenceLine> Chat);
+public sealed record OnlineReportTarget(ulong UserId, ulong CharacterId, string Name, IReadOnlyList<ChatEvidenceLine> Chat,
+    DateTimeOffset? RecordingSince = null);
 
 public enum ReportOutcome
 {
@@ -107,24 +108,40 @@ public sealed class ReportService
 
             ulong? targetUserId = online?.UserId;
             ulong? targetCharacterId = online?.CharacterId;
-            string targetName = online?.Name ?? name;
+            string targetName = online is null ? name : CleanName(online.Name, name);
+            string? ambiguity = null;
 
-            if (online is null)
+            // Always asked of the database, even when an online player was found by the name: the report carries only a name, and
+            // two accounts can hold one (see CharacterNameHelper.Check; older characters were never checked). Then the target is
+            // not known, and the report must not be put on whichever of them was found first.
+            var matches = dbContext.Characters
+                .AsNoTracking()
+                .Where(character => character.FullName == name)
+                .Select(character => new { character.Id, character.UserId, character.FullName })
+                .Take(5)
+                .AsEnumerable()
+                .OrderBy(character => character.Id)
+                .ToList();
+
+            if (matches.Any(match => match.UserId != matches[0].UserId))
             {
-                var found = dbContext.Characters
-                    .AsNoTracking()
-                    .Where(character => character.FullName == name)
-                    .Select(character => new { character.Id, character.UserId, character.FullName })
-                    .FirstOrDefault();
+                online = null;
+                targetUserId = null;
+                targetCharacterId = null;
+                targetName = name;
+                ambiguity = $"{matches.Count} characters on different accounts have the name \"{name}\" (character ids {string.Join(", ", matches.Select(match => match.Id))}), so the report is not put on any account. Look at the characters before acting.";
+            }
+            else if (matches.Count > 0)
+            {
+                // The online character if it is one of them, else the lowest id (a name typed in another case misses the online lookup).
+                var found = matches.FirstOrDefault(match => match.Id == online?.CharacterId) ?? matches[0];
 
-                if (found is not null)
-                {
+                if (online?.CharacterId != found.Id)
                     online = findOnline?.Invoke(found.Id);
 
-                    targetUserId = found.UserId;
-                    targetCharacterId = found.Id;
-                    targetName = found.FullName ?? name;
-                }
+                targetUserId = found.UserId;
+                targetCharacterId = found.Id;
+                targetName = CleanName(found.FullName, name);
             }
 
             if (targetUserId == reporter.UserId)
@@ -142,9 +159,11 @@ public sealed class ReportService
             report.TargetUserId = targetUserId;
             report.TargetCharacterId = targetCharacterId;
             report.ClientText = FormatClientLines(lines);
-            report.ServerContext = online is not null
-                ? Cap(ChatEvidence.Format(online.Chat, now, MaxServerContextForChat), DbReport.MaxServerContextLength)
-                : targetUserId is null ? "target offline; no character has that name" : "target offline";
+            report.ServerContext = ambiguity is not null
+                ? Cap(ambiguity, DbReport.MaxServerContextLength)
+                : online is not null
+                    ? Cap(ChatEvidence.Format(online.Chat, now, MaxServerContextForChat, online.RecordingSince), DbReport.MaxServerContextLength)
+                    : targetUserId is null ? "target offline; no character has that name" : "target offline";
 
             return Save(dbContext, report, ReportBudget.Report, string.Empty, established);
         }
@@ -195,7 +214,7 @@ public sealed class ReportService
             if (Screen(dbContext, reporter, now, ReportKind.House, house.UserId, null, out var established) is { } screened)
                 return screened;
 
-            var owner = house.FullName ?? "?";
+            var owner = CleanName(house.FullName, "?");
             var houseLabel = ModArguments.CleanText(house.Name, 64) ?? "(unnamed)";
             var ownerMatches = ownerGuid == GuidHelper.GetPlayerGuid(house.CharacterId);
 
@@ -490,7 +509,7 @@ public sealed class ReportService
         Created = now,
         ReporterUserId = reporter.UserId,
         ReporterCharacterId = reporter.CharacterId,
-        ReporterName = Cap(reporter.Name, DbReport.MaxReporterNameLength),
+        ReporterName = CleanName(reporter.Name, "?", DbReport.MaxReporterNameLength),
         Zone = Cap(reporter.Zone, DbReport.MaxZoneLength),
         Position = Cap(reporter.Position, DbReport.MaxPositionLength),
         Status = ReportStatus.Open
@@ -527,6 +546,14 @@ public sealed class ReportService
 
         return Cap(builder.ToString(), DbReport.MaxClientTextLength);
     }
+
+    /// <summary>
+    /// A character's name as the report keeps it. Names of older characters were never checked, so one can hold a line
+    /// break or an invisible formatting character, which would forge a line of the audit file or reorder text in the
+    /// Discord post. <paramref name="fallback"/> is used if nothing is left.
+    /// </summary>
+    private static string CleanName(string? text, string fallback, int max = DbReport.MaxTargetNameLength) =>
+        Cap(ModArguments.CleanText(text, max) ?? fallback, max);
 
     private static bool IsSameName(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 

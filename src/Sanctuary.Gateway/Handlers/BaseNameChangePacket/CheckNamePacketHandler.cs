@@ -104,30 +104,20 @@ public static class CheckNamePacketHandler
 
     private static CheckNameResponse OnCheckCharacterName(GatewayConnection connection, CheckNamePacket packet)
     {
-        if (string.IsNullOrWhiteSpace(packet.Name.FirstName)
-            || packet.Name.LastName != string.Empty && string.IsNullOrWhiteSpace(packet.Name.LastName))
+        switch (CharacterNameHelper.Check(packet.Name.FirstName, packet.Name.LastName))
         {
-            return CheckNameResponse.IncorrectLength;
-        }
-
-        if (packet.Name.FirstName.Length < 3)
-            return CheckNameResponse.FirstNameTooShort;
-
-        if (packet.Name.FirstName.Length > 14)
-            return CheckNameResponse.FirstNameTooLong;
-
-        if (packet.Name.LastName != string.Empty)
-        {
-            if (packet.Name.LastName.Length < 3)
+            case CharacterNameProblem.Empty:
+                return CheckNameResponse.IncorrectLength;
+            case CharacterNameProblem.FirstNameTooShort:
+                return CheckNameResponse.FirstNameTooShort;
+            case CharacterNameProblem.FirstNameTooLong:
+                return CheckNameResponse.FirstNameTooLong;
+            case CharacterNameProblem.LastNameTooShort:
                 return CheckNameResponse.LastNameTooShort;
-
-            if (packet.Name.LastName.Length > 14)
+            case CharacterNameProblem.LastNameTooLong:
                 return CheckNameResponse.LastNameTooLong;
-        }
-
-        if (CharacterNameHelper.ContainsIllegalCharacters(packet.Name.FullName))
-        {
-            return CheckNameResponse.IllegalCharacters;
+            case CharacterNameProblem.IllegalCharacters:
+                return CheckNameResponse.IllegalCharacters;
         }
 
         if (_resourceManager.NameFilter.Any(token =>
@@ -137,7 +127,9 @@ public static class CheckNamePacketHandler
         }
 
         using var dbContext = _dbContextFactory.CreateDbContext();
-        var taken = dbContext.Characters.Any(x => x.FirstName == packet.Name.FirstName && x.LastName == packet.Name.LastName);
+        // By full name: that is what staff commands and reports find a player by (see CharacterNameHelper.Compose).
+        var fullName = CharacterNameHelper.Compose(packet.Name.FirstName, packet.Name.LastName);
+        var taken = dbContext.Characters.Any(x => x.FullName == fullName || (x.FirstName == packet.Name.FirstName && x.LastName == packet.Name.LastName));
 
         if (taken)
             return CheckNameResponse.Taken;

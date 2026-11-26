@@ -77,11 +77,14 @@ public sealed class StaffActionLog
     };
 
     /// <summary>
-    /// Text that a player chose (a name they typed), made safe to put between quotes in an audit file line: a double
-    /// quote or backslash in it could close the quotes and forge fields of the line, so each becomes an apostrophe or slash.
+    /// Text that a player chose (a name they typed), made safe to put between quotes in an audit file line. A double quote
+    /// or backslash could close the quotes and forge fields of the line, so each becomes an apostrophe or slash; a line
+    /// break could start what looks like a separate entry, and a right-to-left override could reorder the text beside it,
+    /// so control and invisible formatting characters are dropped and whitespace becomes single spaces
+    /// (<see cref="ChatCommands.ModArguments.CleanText"/>).
     /// </summary>
     internal static string ForAuditLine(string? text) =>
-        string.IsNullOrEmpty(text) ? string.Empty : text.Replace('"', '\'').Replace('\\', '/');
+        (ChatCommands.ModArguments.CleanText(text, int.MaxValue) ?? string.Empty).Replace('"', '\'').Replace('\\', '/');
 
     internal static string Truncate(string? text, int maxLength)
     {

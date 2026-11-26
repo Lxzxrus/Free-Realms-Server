@@ -189,9 +189,28 @@ public static class CharacterCreateRequestHandler
             return true;
         }
 
+        // The same rules as the name check the client runs first (and as a rename), because a modified client can skip that
+        // check. A name with a space in a part would make two characters share one full name, and staff commands and
+        // reports find a player by their full name.
+        if (CharacterNameHelper.Check(characterData.FirstName, characterData.LastName) != CharacterNameProblem.None
+            || NameIsFiltered(characterData))
+        {
+            _logger.LogWarning("Failed to create character, invalid or filtered name.");
+
+            characterCreateReply.Result = 7;
+
+            connection.Send(characterCreateReply);
+
+            return true;
+        }
+
         using var dbContext = _dbContextFactory.CreateDbContext();
 
-        var nameTaken = dbContext.Characters.Any(x => x.FirstName == characterData.FirstName && x.LastName == characterData.LastName);
+        // Taken by full name, not only by the pair: "Alice" "Admin" and "Alice Admin" are the same player to everything that looks one up.
+        var fullName = CharacterNameHelper.Compose(characterData.FirstName, characterData.LastName);
+
+        var nameTaken = dbContext.Characters.Any(x => x.FullName == fullName
+            || (x.FirstName == characterData.FirstName && x.LastName == characterData.LastName));
 
         if (nameTaken)
         {
@@ -353,6 +372,13 @@ public static class CharacterCreateRequestHandler
         connection.Send(characterCreateReply);
 
         return true;
+    }
+
+    private static bool NameIsFiltered(CharacterData characterData)
+    {
+        var fullName = CharacterNameHelper.Compose(characterData.FirstName, characterData.LastName);
+
+        return _resourceManager.NameFilter.Any(token => fullName.Contains(token, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void UnlockAllTitles(DbCharacter dbCharacter)

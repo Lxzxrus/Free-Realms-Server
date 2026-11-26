@@ -46,7 +46,8 @@ public sealed class ReportDesk
     }
 
     private static OnlineReportTarget OnlineTargetOf(Player target) =>
-        new(target.UserId, target.CharacterId, target.Name.FullName, target.ChatEvidence.Snapshot());
+        new(target.UserId, target.CharacterId, target.Name.FullName, target.ChatEvidence.Snapshot(),
+            ChatEvidenceStore.Shared.StartedAt);
 
     private OnlineReportTarget? FindOnlineByCharacter(ulong characterId) =>
         _zoneManager.TryGetPlayer(GuidHelper.GetPlayerGuid(characterId), out var player) ? OnlineTargetOf(player) : null;

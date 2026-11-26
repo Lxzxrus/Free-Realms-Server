@@ -13,8 +13,8 @@ public readonly record struct ChatEvidenceLine(ChatChannel Channel, string Text,
 /// <summary>
 /// The last few chat lines the server itself accepted from one player, for staff to compare with what a report's
 /// sender says the player wrote (the client's lines can be forged). Bounded: at most <see cref="MaxLines"/> lines of at
-/// most <see cref="MaxTextLength"/> characters, none older than <see cref="MaxAge"/>. It lives on the player, so it is
-/// gone when they log out.
+/// most <see cref="MaxTextLength"/> characters, none older than <see cref="MaxAge"/>. It belongs to a character, not to
+/// the connection: <see cref="ChatEvidenceStore"/> keeps it, so logging out and in again does not clear it.
 /// </summary>
 public sealed class ChatEvidence
 {
@@ -30,6 +30,21 @@ public sealed class ChatEvidence
     public ChatEvidence(TimeProvider? timeProvider = null)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
+        CreatedAt = _timeProvider.GetUtcNow();
+    }
+
+    /// <summary>When this record was started.</summary>
+    public DateTimeOffset CreatedAt { get; }
+
+    /// <summary>Whether it holds nothing and is old enough that nothing could still be in date: the store may drop it.</summary>
+    public bool IsIdle(DateTimeOffset now)
+    {
+        lock (_lock)
+        {
+            Expire(now);
+
+            return _lines.Count == 0 && now - CreatedAt > MaxAge;
+        }
     }
 
     /// <summary>
@@ -94,12 +109,24 @@ public sealed class ChatEvidence
 
     /// <summary>
     /// The lines as one text, a line each, oldest first, for a report's server context. <paramref name="now"/> is the
-    /// time they are shown relative to.
+    /// time they are shown relative to. <paramref name="recordingSince"/> is when the server began keeping lines (it starts
+    /// empty at every restart): with no lines, the text says so when that is less than <see cref="MaxAge"/> ago, so an empty
+    /// record is not read as proof that nothing was said.
     /// </summary>
-    public static string Format(IReadOnlyList<ChatEvidenceLine> lines, DateTimeOffset now, int maxLength)
+    public static string Format(IReadOnlyList<ChatEvidenceLine> lines, DateTimeOffset now, int maxLength, DateTimeOffset? recordingSince = null)
     {
         if (lines.Count == 0)
-            return "no chat from them in the last " + (int)MaxAge.TotalMinutes + " minutes";
+        {
+            var window = (int)MaxAge.TotalMinutes;
+
+            if (recordingSince is { } since && now - since < MaxAge)
+            {
+                return $"no public chat from them recorded since the server started {(int)Math.Max(0, (now - since).TotalMinutes)} minutes ago " +
+                    $"(the record is kept in memory and starts empty at every restart)";
+            }
+
+            return $"no public chat from them recorded in the last {window} minutes (tells, group and guild chat are never recorded)";
+        }
 
         var builder = new StringBuilder();
 

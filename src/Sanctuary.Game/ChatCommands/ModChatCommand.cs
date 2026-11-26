@@ -143,6 +143,40 @@ public class ModChatCommand : IChatCommand
         return IsAuthorizedAgainstTarget(invokerRole, targetRole.Value);
     }
 
+    /// <summary>A character found by its full name, with the roles of its account.</summary>
+    internal readonly record struct NamedCharacter(ulong Id, ulong UserId, bool IsAdmin, bool IsMod);
+
+    /// <summary>How many characters with one name are read: enough to tell that the name is not unique.</summary>
+    private const int MaxNameMatches = 5;
+
+    /// <summary>The characters with this full name, lowest id first. Names should be unique, but only new names are checked, and a name is no key in the database.</summary>
+    internal static List<NamedCharacter> FindByName(DatabaseContext dbContext, string name) =>
+        dbContext.Characters
+            .AsNoTracking()
+            .Where(character => character.FullName == name)
+            .Select(character => new { character.Id, character.UserId, character.User.IsAdmin, character.User.IsMod })
+            .Take(MaxNameMatches)
+            .AsEnumerable()
+            .Select(character => new NamedCharacter(character.Id, character.UserId, character.IsAdmin, character.IsMod))
+            .OrderBy(character => character.Id)
+            .ToList();
+
+    /// <summary>
+    /// Picks the character a name means. Characters of one account with the same name are the same player to a staff
+    /// command (the lowest id is taken). When the name belongs to more than one account there is no telling which was
+    /// meant, and acting on the wrong player is worse than a refusal: it returns false, as it does for no match.
+    /// </summary>
+    internal static bool TryChooseByName(IReadOnlyList<NamedCharacter> matches, out NamedCharacter chosen)
+    {
+        chosen = default;
+
+        if (matches.Count == 0 || matches.Any(match => match.UserId != matches[0].UserId))
+            return false;
+
+        chosen = matches.OrderBy(match => match.Id).First();
+        return true;
+    }
+
     /// <summary>
     /// Finds the character, and refuses unless the invoker outranks its account. With <paramref name="allowSelf"/> the
     /// invoker's own account is let through, for commands that only read.
@@ -151,14 +185,13 @@ public class ModChatCommand : IChatCommand
     {
         resolved = default;
 
-        var target = dbContext.Characters
-            .Where(character => character.FullName == targetName)
-            .Select(character => new { character.Id, character.UserId, character.User.IsAdmin, character.User.IsMod })
-            .SingleOrDefault();
+        var matches = FindByName(dbContext, targetName);
 
-        if (target is null)
+        if (!TryChooseByName(matches, out var target))
         {
-            ChatHelper.SendSystemMessage(invoker, $"No player named \"{targetName}\" was found.");
+            ChatHelper.SendSystemMessage(invoker, matches.Count == 0
+                ? $"No player named \"{targetName}\" was found."
+                : $"More than one player has the name \"{targetName}\" (characters {string.Join(", ", matches.Select(match => match.Id))}), so nothing was done. Deal with it in the database.");
             return false;
         }
 
@@ -770,8 +803,9 @@ public class ModChatCommand : IChatCommand
         else if (!TryResolveTarget(invoker, dbContext, targetName, false, out resolved))
             return true;
 
+        // Only the account that was resolved: another account's character with the same name is not this player.
         var updated = dbContext.Characters
-            .Where(character => character.FullName == targetName)
+            .Where(character => character.FullName == targetName && character.UserId == resolved.UserId)
             .ExecuteUpdate(character => character
                 .SetProperty(c => c.LastRenamed, (DateTimeOffset?)null));
 
