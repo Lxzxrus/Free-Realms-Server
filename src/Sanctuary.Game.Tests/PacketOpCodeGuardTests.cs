@@ -102,6 +102,9 @@ public sealed class PacketOpCodeGuardTests
         [nameof(BasePlayerUpdatePacket)] = Family(new BasePlayerUpdatePacket(PlayerUpdatePacketItemDefinitionRequest.OpCode).TryRead,
             w => { w.Write(BasePlayerUpdatePacket.OpCode); w.Write(PlayerUpdatePacketItemDefinitionRequest.OpCode); }),
 
+        [nameof(BaseReportPacket)] = Family(new BaseReportPacket(ReportPacketReportPlayer.OpCode).TryRead,
+            w => { w.Write(BaseReportPacket.OpCode); w.Write(ReportPacketReportPlayer.OpCode); }),
+
         [nameof(BaseQuickChatPacket)] = Family(new BaseQuickChatPacket(QuickChatSendTellPacket.OpCode).TryRead,
             w => { w.Write(BaseQuickChatPacket.OpCode); w.Write(QuickChatSendTellPacket.OpCode); }),
 
@@ -166,6 +169,11 @@ public sealed class PacketOpCodeGuardTests
 
         [nameof(PacketCheckNameRequest)] = Standalone<PacketCheckNameRequest>(PacketCheckNameRequest.TryDeserialize,
             Wire(w => { w.Write(PacketCheckNameRequest.OpCode); w.Write("First"); w.Write("Last"); w.Write("name"); w.Write("prefix"); w.Write("suffix"); }),
+            sizeof(short)),
+
+        // Ported with the reports, and written with the || guard from the start.
+        [nameof(BugSubmissionPacketAddBug)] = Standalone<BugSubmissionPacketAddBug>(BugSubmissionPacketAddBug.TryDeserialize,
+            Wire(w => { w.Write(BugSubmissionPacketAddBug.OpCode); w.Write(BugSubmissionPacketAddBug.SubOpCode); w.Write(0); w.Write(string.Empty); w.Write(0); w.Write("<BugSubmission/>"); }),
             sizeof(short)),
 
         [nameof(PacketClientInitializationDetails)] = Standalone<PacketClientInitializationDetails>(PacketClientInitializationDetails.TryDeserialize,
@@ -235,9 +243,10 @@ public sealed class PacketOpCodeGuardTests
     [TestMethod]
     public void EveryChangedGuardHasARow()
     {
-        // 17 families with a sub-opcode and 24 packets with only an opcode: 41 files, 58 guard lines.
-        Assert.AreEqual(17, FamilyCases.Count());
-        Assert.AreEqual(41, Cases.Count);
+        // 18 families with a sub-opcode and 25 packets with only an opcode: 43 rows. The first 41 are the files that had
+        // the && guard (58 guard lines); the report family and the bug packet are new and were written with ||.
+        Assert.AreEqual(18, FamilyCases.Count());
+        Assert.AreEqual(43, Cases.Count);
     }
 
     [TestMethod]
