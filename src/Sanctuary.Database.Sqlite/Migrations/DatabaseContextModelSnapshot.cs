@@ -779,6 +779,56 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.ToTable("Profiles");
                 });
 
+            modelBuilder.Entity("Sanctuary.Database.Entities.DbStaffAction", b =>
+                {
+                    b.Property<ulong>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Command")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("Created")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StaffName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<ulong>("StaffUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<ulong?>("TargetCharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TargetName")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<ulong?>("TargetUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Created");
+
+                    b.HasIndex("TargetUserId", "Created");
+
+                    b.ToTable("StaffActions");
+                });
+
             modelBuilder.Entity("Sanctuary.Database.Entities.DbTitle", b =>
                 {
                     b.Property<int>("Id")
@@ -799,6 +849,10 @@ namespace Sanctuary.Database.Sqlite.Migrations
                     b.Property<ulong>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("BanReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("Created")
                         .ValueGeneratedOnAdd()
@@ -830,6 +884,10 @@ namespace Sanctuary.Database.Sqlite.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(10);
+
+                    b.Property<string>("MuteReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("MutedUntil")
                         .HasColumnType("TEXT");
