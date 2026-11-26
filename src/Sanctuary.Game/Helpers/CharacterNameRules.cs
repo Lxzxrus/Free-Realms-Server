@@ -43,6 +43,9 @@ public static class CharacterNameRules
     {
         "admin", "administrator", "moderator", "mod", "gm", "gamemaster", "staff", "system", "server", "official",
         "developer", "sysop", "soe", "evergrove",
+        // whole words are compared, so the plurals too ("dev" stays allowed: it's a real first name)
+        "admins", "administrators", "moderators", "mods", "gms", "gamemasters", "officials", "developers", "devs",
+        "sysops",
     };
 
     /// <summary><see cref="ReservedWords"/> without the server's name: the words a guild name may not use.</summary>
