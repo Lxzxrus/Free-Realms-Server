@@ -107,8 +107,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     private byte[] _buffer;
     private SocketAddress _socketAddress;
 
-    /// <summary>The shortest connect request a connection can be made from: the 2-byte header, the protocol version and the connect code.</summary>
-    internal const int MinConnectRequestLength = 2 + 4 + 4;
+    /// <summary>
+    /// The shortest connect request a connection can be made from: the 2-byte header, the protocol version, the connect
+    /// code and the largest packet size. UdpConnection's Connect case reads all three and sends no confirm without them,
+    /// so a shorter request would only hold a connection slot until HandshakeTimeout.
+    /// </summary>
+    internal const int MinConnectRequestLength = 2 + 4 + 4 + 4;
 
     public bool EventQueuing
     {
@@ -744,7 +748,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             if (zeroByte == 0 && packetType == (byte)UdpPacketType.Connect)
             {
-                // A request too short to hold the protocol version and the connect code can't become a connection, so it
+                // A request too short to hold the protocol version, connect code and packet size can't become a connection, so it
                 // is dropped before it is counted against the sender's connect allowance (a burst of them would
                 // otherwise refuse the sender's next real request).
                 if (data.Length < MinConnectRequestLength)

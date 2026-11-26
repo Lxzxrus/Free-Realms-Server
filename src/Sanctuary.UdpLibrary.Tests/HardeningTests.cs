@@ -181,6 +181,9 @@ public class HardeningTests
     [DataRow(new byte[] { 0, 1, 0, 0 }, DisplayName = "protocol version cut off")]
     [DataRow(new byte[] { 0, 1, 0, 0, 3 }, DisplayName = "protocol version one byte short")]
     [DataRow(new byte[] { 0, 1, 0, 0, 0, 3, 0, 0 }, DisplayName = "connect code cut off")]
+    // 10 to 13 bytes became a connection that could never be confirmed, holding a slot until the handshake timeout
+    [DataRow(new byte[] { 0, 1, 0, 0, 0, 3, 0, 0, 0, 7 }, DisplayName = "packet size missing")]
+    [DataRow(new byte[] { 0, 1, 0, 0, 0, 3, 0, 0, 0, 7, 0, 0, 2 }, DisplayName = "packet size one byte short")]
     public void TruncatedConnectRequestIsDroppedQuietly(byte[] packet)
     {
         var network = new FakeNetwork();
