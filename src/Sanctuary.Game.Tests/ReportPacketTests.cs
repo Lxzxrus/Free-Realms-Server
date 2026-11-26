@@ -9,7 +9,7 @@ using Sanctuary.Packet;
 namespace Sanctuary.Game.Tests;
 
 /// <summary>
-/// The report packets, built in the layout the client sends (docs/research/reports.md): int16 opcode, int16 sub-opcode,
+/// The report packets, built in the layout BubbaJoeX decoded (982a800; not yet checked in the game, see <see cref="BaseReportPacket"/>): int16 opcode, int16 sub-opcode,
 /// then the fields. Every strict-parsing rule is here: the whole packet is read and nothing may follow, the counts are
 /// bounded, the opcode and the sub-opcode must both be right.
 /// </summary>

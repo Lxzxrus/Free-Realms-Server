@@ -55,7 +55,7 @@
     // "FreeLots": true,
   },
 
-  // In-game reports (docs/research/reports.md). Staff online always get a one-line notice; this also posts each new
+  // In-game reports. Staff online always get a one-line notice; this also posts each new
   // report to a private Discord channel. Read at startup: restart the server after changing it.
   "Reports": {
     // A Discord webhook address: in the channel's settings, Integrations > Webhooks > New Webhook > Copy Webhook URL.
