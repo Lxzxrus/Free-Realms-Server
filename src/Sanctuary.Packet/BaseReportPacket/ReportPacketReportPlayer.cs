@@ -8,8 +8,9 @@ namespace Sanctuary.Packet;
 /// <summary>
 /// "Report" on a name in the chat log, or /report: the name and the last chat lines (up to ten) the reporter's client
 /// has from them. With no chat history for that name the client sends nothing. Every field comes from the client and
-/// can be forged, so the server checks the lines against its own record of what it relayed. The time's unit is not
-/// known (a Unix time in seconds in the one sample we have), so it is kept as the client sent it.
+/// can be forged, so the server keeps the lines as the client's words, beside its own record of what it relayed, for
+/// staff to compare. The time is the record's first 8 bytes, as the exe writes them; its unit is not known (BubbaJoeX's
+/// test sample, 1,700,000,000, is a round number from his own unit test, not a capture), so it is kept as sent.
 /// </summary>
 public class ReportPacketReportPlayer : BaseReportPacket, IDeserializable<ReportPacketReportPlayer>
 {

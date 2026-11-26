@@ -30,11 +30,11 @@ public static class BugSubmissionPacketAddBugHandler
 
     public static bool HandlePacket(GatewayConnection connection, ReadOnlySpan<byte> data)
     {
-        // The client's XML can be cut short (it writes a long text into a fixed buffer), which shows up as a packet that
-        // does not parse. That is a bad packet, not an error worth a line each.
+        // The exe's packet writer has no practical cap, so a real client sends the whole XML: a packet that does not parse
+        // is a wire mismatch or a hostile one. It is logged, rate limited, with its bytes, so a mismatch can be seen.
         if (!BugSubmissionPacketAddBug.TryDeserialize(data, out var packet))
         {
-            _logger.LogDebug("Failed to deserialize {packet}.", nameof(BugSubmissionPacketAddBug));
+            ReportRefusalLog.Refused(_logger, nameof(BugSubmissionPacketAddBug), data);
             return false;
         }
 

@@ -27,7 +27,7 @@ public static class ReportPacketReportHouseHandler
     {
         if (!ReportPacketReportHouse.TryDeserialize(data, out var packet))
         {
-            _logger.LogDebug("Failed to deserialize {packet}.", nameof(ReportPacketReportHouse));
+            ReportRefusalLog.Refused(_logger, nameof(ReportPacketReportHouse), data);
             return false;
         }
 

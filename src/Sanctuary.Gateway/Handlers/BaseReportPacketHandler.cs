@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 
 using Sanctuary.Core.Helpers;
 using Sanctuary.Core.IO;
+using Sanctuary.Game.Reports;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common.Attributes;
 
@@ -29,7 +30,8 @@ public static class BaseReportPacketHandler
     {
         if (!reader.TryRead(out short opCode))
         {
-            _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", PacketLog.Hex(reader.Span));
+            // A hostile client can send this as fast as it likes: the same rate limit as every other refused report packet.
+            ReportRefusalLog.Refused(_logger, "no opcode", reader.Span);
             return false;
         }
 
@@ -37,7 +39,13 @@ public static class BaseReportPacketHandler
         {
             ReportPacketReportPlayer.OpCode => ReportPacketReportPlayerHandler.HandlePacket(connection, reader.Span),
             ReportPacketReportHouse.OpCode => ReportPacketReportHouseHandler.HandlePacket(connection, reader.Span),
-            _ => false
+            _ => RefuseUnknown(opCode, reader.Span)
         };
+    }
+
+    private static bool RefuseUnknown(short opCode, ReadOnlySpan<byte> data)
+    {
+        ReportRefusalLog.Refused(_logger, $"unknown sub-opcode {opCode}", data);
+        return false;
     }
 }

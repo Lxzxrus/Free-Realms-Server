@@ -27,7 +27,7 @@ public static class ReportPacketReportPlayerHandler
     {
         if (!ReportPacketReportPlayer.TryDeserialize(data, out var packet))
         {
-            _logger.LogDebug("Failed to deserialize {packet}.", nameof(ReportPacketReportPlayer));
+            ReportRefusalLog.Refused(_logger, nameof(ReportPacketReportPlayer), data);
             return false;
         }
 

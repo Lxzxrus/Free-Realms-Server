@@ -60,7 +60,8 @@ public sealed class ReportPacketTests
         w.Write(xml);
     });
 
-    // BubbaJoeX's own test wire, to show the layout we read is the one he tested against the client.
+    // BubbaJoeX's own unit-test bytes (his time, 1,700,000,000, is a round number, not a capture): they check that we read
+    // the layout his serializer writes, which matches the exe's. They show nothing about the time's unit.
     [TestMethod]
     public void PlayerReport_ReadsBubbaJoeXsSampleBytes()
     {
@@ -243,7 +244,7 @@ public sealed class ReportPacketTests
     [TestMethod]
     public void BugReport_RefusesALengthLongerThanThePacket()
     {
-        // The client copies at most a fixed buffer of the text but writes the full length: such a packet is malformed.
+        // A length that runs past the end of the packet (a forged or cut packet) is malformed.
         var bytes = Wire(w => { w.Write((short)83); w.Write((short)1); w.Write(0); w.Write(0); w.Write(0); w.Write(50_000); w.Write(new byte[100]); });
 
         Assert.IsFalse(BugSubmissionPacketAddBug.TryDeserialize(bytes, out _));
