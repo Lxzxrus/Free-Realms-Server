@@ -101,6 +101,27 @@ public class ModChatCommand : IChatCommand
     }
 
     /// <summary>
+    /// Whether the invoker may close a report about <paramref name="targetUserId"/>. The rank rule applies as it does to
+    /// every other action on a player: a moderator can't close reports about moderators or admins, or about themselves,
+    /// or a report about staff would vanish from the open list that the others read. An admin has nobody above them, so
+    /// an admin may close reports about other staff, but never about themselves. A report about no known account, or
+    /// one that has been deleted (<paramref name="targetRole"/> null), is open to any staff member.
+    /// </summary>
+    internal static bool MayCloseReportAbout(ulong invokerUserId, ChatCommandRole invokerRole, ulong? targetUserId, ChatCommandRole? targetRole)
+    {
+        if (targetUserId is null)
+            return true;
+
+        if (targetUserId == invokerUserId)
+            return false;
+
+        if (targetRole is null || invokerRole == ChatCommandRole.Admin)
+            return true;
+
+        return IsAuthorizedAgainstTarget(invokerRole, targetRole.Value);
+    }
+
+    /// <summary>
     /// Finds the character, and refuses unless the invoker outranks its account. With <paramref name="allowSelf"/> the
     /// invoker's own account is let through, for commands that only read.
     /// </summary>
@@ -484,6 +505,12 @@ public class ModChatCommand : IChatCommand
         if (report is null)
         {
             ChatHelper.SendSystemMessage(invoker, $"No report #{id}.");
+            return true;
+        }
+
+        if (!MayCloseReportAbout(invoker.UserId, invoker.ChatCommandRole, report.TargetUserId, ReportQueries.GetUserRole(dbContext, report.TargetUserId)))
+        {
+            ChatHelper.SendSystemMessage(invoker, "You don't have permission to close a report about this player. Ask someone who outranks them.");
             return true;
         }
 

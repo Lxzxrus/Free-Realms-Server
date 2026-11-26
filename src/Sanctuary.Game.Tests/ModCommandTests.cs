@@ -161,6 +161,43 @@ public sealed class ModCommandTests
         Assert.AreEqual(allowed, ModChatCommand.IsAuthorizedAgainstTarget(invoker, target));
     }
 
+    [TestMethod]
+    [DataRow(ChatCommandRole.Mod, 1UL, 2UL, ChatCommandRole.Player, true)]
+    [DataRow(ChatCommandRole.Mod, 1UL, 2UL, ChatCommandRole.Mod, false)]
+    [DataRow(ChatCommandRole.Mod, 1UL, 2UL, ChatCommandRole.Admin, false)]
+    [DataRow(ChatCommandRole.Mod, 1UL, 1UL, ChatCommandRole.Mod, false)]
+    [DataRow(ChatCommandRole.Mod, 1UL, null, null, true)]
+    [DataRow(ChatCommandRole.Mod, 1UL, 2UL, null, true)]
+    [DataRow(ChatCommandRole.Admin, 1UL, 2UL, ChatCommandRole.Mod, true)]
+    [DataRow(ChatCommandRole.Admin, 1UL, 2UL, ChatCommandRole.Admin, true)]
+    [DataRow(ChatCommandRole.Admin, 1UL, 1UL, ChatCommandRole.Admin, false)]
+    public void CloseReport_FollowsTheRankRule_AndNobodyClosesReportsAboutThemselves(ChatCommandRole invoker, ulong invokerUser, ulong? targetUser, ChatCommandRole? targetRole, bool allowed)
+    {
+        Assert.AreEqual(allowed, ModChatCommand.MayCloseReportAbout(invokerUser, invoker, targetUser, targetRole));
+    }
+
+    [TestMethod]
+    public void GetUserRole_ReadsTheAccountsFlags_AndIsNullForNoAccount()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+
+        using var dbContext = new SqliteDatabaseContext(new DbContextOptionsBuilder().UseSqlite(connection).Options);
+
+        dbContext.Database.Migrate();
+        dbContext.Users.AddRange(
+            new DbUser { Id = 1, Username = "p", Password = "x", Created = DateTimeOffset.UnixEpoch },
+            new DbUser { Id = 2, Username = "m", Password = "x", Created = DateTimeOffset.UnixEpoch, IsMod = true },
+            new DbUser { Id = 3, Username = "a", Password = "x", Created = DateTimeOffset.UnixEpoch, IsAdmin = true });
+        dbContext.SaveChanges();
+
+        Assert.AreEqual(ChatCommandRole.Player, Sanctuary.Game.Reports.ReportQueries.GetUserRole(dbContext, 1));
+        Assert.AreEqual(ChatCommandRole.Mod, Sanctuary.Game.Reports.ReportQueries.GetUserRole(dbContext, 2));
+        Assert.AreEqual(ChatCommandRole.Admin, Sanctuary.Game.Reports.ReportQueries.GetUserRole(dbContext, 3));
+        Assert.IsNull(Sanctuary.Game.Reports.ReportQueries.GetUserRole(dbContext, 99));
+        Assert.IsNull(Sanctuary.Game.Reports.ReportQueries.GetUserRole(dbContext, null));
+    }
+
     private static DbStaffAction Action(ulong id, string action, string? details, string staff = "Ariel Mod") => new()
     {
         Id = id,

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.ChatCommands;
+using Sanctuary.Game.Helpers;
 
 namespace Sanctuary.Game.Reports;
 
@@ -33,12 +34,37 @@ public static class ReportQueries
         if (openOnly)
             query = query.Where(report => report.Status == ReportStatus.Open);
 
-        // By id: it grows with time, and SQLite can't sort a DateTimeOffset or a ulong (hence the cast).
-        return query.OrderByDescending(report => (long)report.Id).Take(ListLimit).ToList();
+        return NewestFirst(dbContext, query).Take(ListLimit).ToList();
     }
+
+    /// <summary>
+    /// Newest first, by id: it grows with time. SQLite can't sort a ulong (nor a DateTimeOffset), so there it sorts by a
+    /// cast to long. MySQL sorts the plain column, so the primary key serves the ORDER BY: a cast there would be an
+    /// expression no index can satisfy, and every listing would sort the whole table.
+    /// </summary>
+    internal static IQueryable<DbReport> NewestFirst(DatabaseContext dbContext, IQueryable<DbReport> query) =>
+        IsSqlite(dbContext) ? query.OrderByDescending(report => (long)report.Id) : query.OrderByDescending(report => report.Id);
+
+    private static bool IsSqlite(DatabaseContext dbContext) =>
+        dbContext.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
 
     public static DbReport? Get(DatabaseContext dbContext, ulong id) =>
         dbContext.Reports.AsNoTracking().FirstOrDefault(report => report.Id == id);
+
+    /// <summary>The role of an account, or null for no account (none given, or it has been deleted).</summary>
+    public static ChatCommandRole? GetUserRole(DatabaseContext dbContext, ulong? userId)
+    {
+        if (userId is not { } id)
+            return null;
+
+        var flags = dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == id)
+            .Select(user => new { user.IsAdmin, user.IsMod })
+            .FirstOrDefault();
+
+        return flags is null ? null : ChatHelper.GetRoleFromFlags(flags.IsAdmin, flags.IsMod);
+    }
 
     /// <summary>Closes an open report. False if there is none with that id, or it is already closed.</summary>
     public static bool TryClose(DatabaseContext dbContext, ulong id, ulong staffUserId, string? note, DateTimeOffset now)
@@ -59,10 +85,7 @@ public static class ReportQueries
     {
         var total = dbContext.Reports.Count(report => report.TargetUserId == userId);
 
-        var recent = dbContext.Reports
-            .AsNoTracking()
-            .Where(report => report.TargetUserId == userId)
-            .OrderByDescending(report => (long)report.Id)
+        var recent = NewestFirst(dbContext, dbContext.Reports.AsNoTracking().Where(report => report.TargetUserId == userId))
             .Take(HistoryLimit)
             .ToList();
 

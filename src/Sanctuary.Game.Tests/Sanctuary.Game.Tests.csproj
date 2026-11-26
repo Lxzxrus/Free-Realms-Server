@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Sanctuary.Game\Sanctuary.Game.csproj" />
+    <ProjectReference Include="..\Sanctuary.Database.MySql\Sanctuary.Database.MySql.csproj" />
   </ItemGroup>
 
 </Project>
