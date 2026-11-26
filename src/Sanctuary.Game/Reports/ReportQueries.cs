@@ -94,7 +94,10 @@ public static class ReportQueries
     public static DbReport? Get(DatabaseContext dbContext, ulong id) =>
         dbContext.Reports.AsNoTracking().FirstOrDefault(report => report.Id == id);
 
-    /// <summary>The role of an account, or null for no account (none given, or it has been deleted).</summary>
+    /// <summary>
+    /// The role of an account from its stored flags (the same in Debug and Release), or null for no account (none given,
+    /// or it has been deleted).
+    /// </summary>
     public static ChatCommandRole? GetUserRole(DatabaseContext dbContext, ulong? userId)
     {
         if (userId is not { } id)
@@ -106,7 +109,7 @@ public static class ReportQueries
             .Select(user => new { user.IsAdmin, user.IsMod })
             .FirstOrDefault();
 
-        return flags is null ? null : ChatHelper.GetRoleFromFlags(flags.IsAdmin, flags.IsMod);
+        return flags is null ? null : ChatHelper.GetStoredRole(flags.IsAdmin, flags.IsMod);
     }
 
     /// <summary>Closes an open report. False if there is none with that id, or it is already closed.</summary>
@@ -217,7 +220,10 @@ public static class ReportQueries
         {
             var note = ModArguments.CleanText(report.CloseNote, DbReport.MaxCloseNoteLength);
 
-            lines.Add(Cap($"Closed {report.ClosedAt?.UtcDateTime:yyyy-MM-dd HH:mm} by user {report.ClosedByUserId}" + (note is null ? "." : $": {note}")));
+            // A report the server closed itself (CloseStale) has no staff member.
+            var closer = report.ClosedByUserId is { } closedBy ? $"by user {closedBy}" : "automatically";
+
+            lines.Add(Cap($"Closed {report.ClosedAt?.UtcDateTime:yyyy-MM-dd HH:mm} {closer}" + (note is null ? "." : $": {note}")));
         }
 
         if (report.Kind == ReportKind.Bug)

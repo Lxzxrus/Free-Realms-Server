@@ -606,6 +606,30 @@ public sealed class ReportServiceTests
     }
 
     [TestMethod]
+    public void Queries_AReportTheServerClosedSaysSoInsteadOfNamingNoUser()
+    {
+        var closedAt = new DateTimeOffset(2026, 12, 1, 3, 0, 0, TimeSpan.Zero);
+        var byServer = new DbReport { ReporterName = "r", Id = 5, Kind = ReportKind.Bug, Status = ReportStatus.Closed, ClosedAt = closedAt, CloseNote = ReportService.StaleCloseNote };
+        var byStaff = new DbReport { ReporterName = "r", Id = 6, Kind = ReportKind.Bug, Status = ReportStatus.Closed, ClosedAt = closedAt, ClosedByUserId = 7, CloseNote = "spam" };
+
+        var automatic = ReportQueries.FormatDetails(byServer).Single(line => line.StartsWith("Closed "));
+        var manual = ReportQueries.FormatDetails(byStaff).Single(line => line.StartsWith("Closed "));
+
+        Assert.AreEqual("Closed 2026-12-01 03:00 automatically: " + ReportService.StaleCloseNote, automatic);
+        Assert.AreEqual("Closed 2026-12-01 03:00 by user 7: spam", manual);
+    }
+
+    [TestMethod]
+    public void TheAuditTargetOfReadingAReport_IsNeverTheReporter()
+    {
+        var bug = new DbReport { Kind = ReportKind.Bug, ReporterName = "Rita Reporter" };
+        var player = new DbReport { Kind = ReportKind.Player, ReporterName = "Rita Reporter", TargetName = "Bob Smith" };
+
+        Assert.AreEqual("bug report", ModChatCommand.ReportAuditTarget(bug));
+        Assert.AreEqual("Bob Smith", ModChatCommand.ReportAuditTarget(player));
+    }
+
+    [TestMethod]
     public void Queries_ALongBugDescriptionIsWrappedSoStaffCanReadAllOfIt()
     {
         var words = Enumerable.Range(1, 250).Select(i => $"w{i:D3}").ToArray();

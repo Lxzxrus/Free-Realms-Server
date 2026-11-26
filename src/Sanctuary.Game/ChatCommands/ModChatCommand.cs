@@ -632,7 +632,7 @@ public class ModChatCommand : IChatCommand
         }
 
         // No target ids: see above. The account is named in the details instead, and the name only in the quoted target.
-        LogAction(invoker, "ReadReport", report.TargetName ?? report.ReporterName, null, ReportActionDetails(id, report.TargetUserId, null));
+        LogAction(invoker, "ReadReport", ReportAuditTarget(report), null, ReportActionDetails(id, report.TargetUserId, null));
 
         foreach (var chunk in ReportQueries.FormatDetails(report).Chunk(6))
             ChatHelper.SendSystemMessage(invoker, string.Join('\n', chunk));
@@ -685,11 +685,17 @@ public class ModChatCommand : IChatCommand
 
         // No target ids, as when reading: the report may be about a staff member, and a row on their account would show
         // them in their own "!mod history" that they were reported, who dealt with it and what was written about the reporter.
-        LogAction(invoker, "CloseReport", report.TargetName ?? report.ReporterName, null, ReportActionDetails(id, report.TargetUserId, note));
+        LogAction(invoker, "CloseReport", ReportAuditTarget(report), null, ReportActionDetails(id, report.TargetUserId, note));
 
         ChatHelper.SendSystemMessage(invoker, $"Report #{id} is closed.");
         return true;
     }
+
+    /// <summary>
+    /// The name an audit line gives as the target of reading or closing a report: the player or house owner it is about, or
+    /// a neutral label. Never the reporter, who is not the subject of the staff action (a bug report has no target).
+    /// </summary>
+    internal static string ReportAuditTarget(DbReport report) => report.TargetName ?? (report.Kind == ReportKind.Bug ? "bug report" : "report");
 
     /// <summary>The staff log details of reading or closing a report: its id, the account it is about (in the text, not as a target), and the note.</summary>
     internal static string ReportActionDetails(ulong id, ulong? targetUserId, string? note)

@@ -46,8 +46,10 @@ status, and who closed it with a note.
 guild chat are never kept, so private chat never reaches staff or Discord on someone else's word. The list goes away
 when the player logs out. A player report stores the target's lines beside the client's, so staff can compare them.
 
-`StaffActions` table (`DbStaffAction`): every `!mod` and `!admin promote/demote` action, with who did it, the target
-account and character, and details. It is written as well as the existing Audit log file. If the database write
+`StaffActions` table (`DbStaffAction`): every action a chat command logs through `LogAction` (`!mod`, `!admin
+promote/demote`, and also the collection, npc, job, quest, reward, experience and navnpc commands), with who did it, the
+target account and character, and details. Only actions with a target account appear in `!mod history`; the others are
+rows with no target ids, and an action name is cut at 32 characters. It is written as well as the existing Audit log file. If the database write
 fails, the error is logged and the command still counts.
 
 `Users` gains `BanReason` and `MuteReason`, set by `!mod ban` and `!mod mute` and cleared by unban and unmute.
