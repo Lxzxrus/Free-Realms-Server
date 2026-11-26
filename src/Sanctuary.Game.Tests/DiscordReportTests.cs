@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -90,32 +91,80 @@ public sealed class DiscordReportTests
     }
 
     [TestMethod]
-    public void Payload_NeutralisesEveryoneHereAndMentionSyntax()
+    public void Payload_SuppressesEmbeds()
     {
-        var content = DiscordPayload.BuildContent(Notification(reporter: "@everyone", target: "@here", client: "@everyone <@123456> <@&99> <#5>", server: "@everyone"));
+        Assert.AreEqual(4, Parse(DiscordPayload.Build(Notification())).GetProperty("flags").GetInt32());
+    }
 
-        Assert.IsFalse(content.Contains("@everyone"), content);
-        Assert.IsFalse(content.Contains("@here"), content);
-        // Every "<" is escaped with a backslash, so none can start a mention or a channel link.
-        Assert.IsFalse(content.Replace(@"\<", string.Empty).Contains('<'), content);
-        StringAssert.Contains(content, "@​everyone");
+    /// <summary>What Discord would render as markdown: the message with every code block and code span taken out.</summary>
+    private static string OutsideCode(string content)
+    {
+        var withoutBlocks = Regex.Replace(content, "```.*?```", string.Empty, RegexOptions.Singleline);
+
+        return Regex.Replace(withoutBlocks, "`[^`\n]*`", string.Empty);
+    }
+
+    private static readonly string[] Hostile =
+    [
+        "@everyone", "@here", "<@123456>", "<@&99>", "<#5>",
+        "https://evil.example/x", "staff-help.evil-example.com/fix", "www.evil.example", "evil.example", "discord.gg/abc123", "discord.com/invite/abc123",
+        "[click here](http://evil.example)", "**bold** _it_ ~~x~~ ||spoiler|| > quote # head :smile:"
+    ];
+
+    [TestMethod]
+    public void Payload_PutsEveryPieceOfPlayerTextInsideCode_SoNoLinkInviteOrMentionIsLive()
+    {
+        foreach (var hostile in Hostile)
+        {
+            var notifications = new[]
+            {
+                Notification(reporter: hostile),
+                Notification(target: hostile),
+                Notification(summary: hostile),
+                Notification(client: hostile),
+                Notification(server: hostile),
+                Notification(kind: ReportKind.Bug, target: null, summary: hostile, client: hostile, server: hostile) with { Zone = hostile, Position = hostile }
+            };
+
+            foreach (var notification in notifications)
+            {
+                var content = DiscordPayload.BuildContent(notification);
+
+                StringAssert.Contains(content, hostile, "the text is still there for staff to read");
+
+                var live = OutsideCode(content);
+
+                foreach (var part in new[] { "evil", "discord", "@", "<", "[", "**bold", "||" })
+                    Assert.IsFalse(live.Contains(part), $"\"{part}\" is live outside code for \"{hostile}\":\n{content}");
+            }
+        }
     }
 
     [TestMethod]
-    public void Payload_EscapesMarkdownAndBreaksLinks()
+    public void Payload_ABacktickCannotLetPlayerTextOutOfItsBlock()
     {
-        var escaped = DiscordPayload.Escape("*bold* _it_ ~~x~~ `code` ||spoiler|| > quote # head [a](b) \\ https://evil.example/x");
+        var attacks = new[]
+        {
+            "``` then see staff-help.evil-example.com/fix",
+            "` and evil.example `",
+            "```\nevil.example\n```\ndiscord.gg/x\n```",
+            "\u0060\u0060\u0060 @everyone",
+            "x`` ``y evil.example"
+        };
 
-        Assert.IsFalse(escaped.Contains("https://"));
-        StringAssert.Contains(escaped, "\\*bold\\*");
-        StringAssert.Contains(escaped, "\\_it\\_");
-        StringAssert.Contains(escaped, "\\~\\~x\\~\\~");
-        StringAssert.Contains(escaped, "\\`code\\`");
-        StringAssert.Contains(escaped, "\\|\\|spoiler\\|\\|");
-        StringAssert.Contains(escaped, "\\> quote");
-        StringAssert.Contains(escaped, "\\# head");
-        StringAssert.Contains(escaped, "\\[a\\]\\(b\\)");
-        StringAssert.Contains(escaped, "\\\\");
+        foreach (var attack in attacks)
+        {
+            foreach (var notification in new[] { Notification(reporter: attack), Notification(target: attack), Notification(client: attack), Notification(server: attack), Notification(summary: attack) })
+            {
+                var content = DiscordPayload.BuildContent(notification);
+                var live = OutsideCode(content);
+
+                Assert.IsFalse(live.Contains("evil"), content);
+                Assert.IsFalse(live.Contains("discord"), content);
+                Assert.IsFalse(live.Contains("@everyone"), content);
+                Assert.AreEqual(0, Regex.Matches(content, "```").Count % 2, "every code block is closed:\n" + content);
+            }
+        }
     }
 
     [TestMethod]
@@ -127,20 +176,28 @@ public sealed class DiscordReportTests
         Assert.IsTrue(content.Length <= DiscordPayload.MaxContentLength, content.Length.ToString());
         Assert.IsTrue(Parse(DiscordPayload.Build(Notification(client: big, server: big)))
             .GetProperty("content").GetString()!.Length <= 2000);
+
+        // Even with every field at a length the database would never hold, the blocks are closed and the end is intact.
+        var huge = new string('x', 100_000);
+        var worst = DiscordPayload.BuildContent(Notification(reporter: huge, target: huge, client: huge, server: huge, summary: huge) with { Zone = huge, Position = huge });
+
+        Assert.IsTrue(worst.Length <= DiscordPayload.MaxContentLength, worst.Length.ToString());
+        Assert.AreEqual(0, Regex.Matches(worst, "```").Count % 2);
+        StringAssert.EndsWith(worst, "!mod report 7");
     }
 
     [TestMethod]
-    public void Payload_CutNeverLeavesALoneBackslashOrHalfAPair()
+    public void Payload_CutNeverSplitsASurrogatePair()
     {
-        // Every cut position over an all-escaped text, and over surrogate pairs.
         foreach (var text in new[] { new string('*', 3000), string.Concat(Enumerable.Repeat("\U0001F600", 1500)) })
         {
             for (var extra = 0; extra < 8; extra++)
             {
                 var content = DiscordPayload.BuildContent(Notification(client: new string('a', extra) + text, server: string.Empty));
-                var body = content[..^3];
+                var cutAt = content.IndexOf("...\n```", StringComparison.Ordinal);
 
-                Assert.IsFalse(char.IsHighSurrogate(body.TrimEnd('.')[^1]), "cut inside a surrogate pair");
+                Assert.IsTrue(cutAt > 0, "the long text was cut");
+                Assert.IsFalse(char.IsHighSurrogate(content[cutAt - 1]), "cut inside a surrogate pair");
             }
         }
     }

@@ -62,26 +62,38 @@ public static class DiscordWebhookUrl
     }
 }
 
-/// <summary>Builds the JSON posted to the webhook. Player text can never ping anyone or make a link.</summary>
+/// <summary>
+/// Builds the JSON posted to the webhook. Every piece of player text is put inside a code span or a code block: Discord
+/// shows those as plain text, so a link (with or without a scheme, a bare domain or a discord.gg invite), a mention,
+/// markdown or an emoji code in it stays inert and nothing in it is unfurled into an embed. The text only has to not
+/// contain a backtick to be unable to leave its block, so backticks are replaced.
+/// </summary>
 public static class DiscordPayload
 {
     /// <summary>Discord refuses a message over 2000 characters; this stays well under.</summary>
     public const int MaxContentLength = 1900;
 
+    private const int MaxNameLength = 64;
+    private const int MaxSummaryLength = 100;
+    private const int MaxWhereLength = 64;
     private const int MaxClientTextLength = 700;
     private const int MaxServerContextLength = 600;
-    private const char ZeroWidthSpace = '​';
+
+    /// <summary>The message flag that stops Discord making embeds for any link in the message.</summary>
+    private const int SuppressEmbeds = 4;
 
     public static string Build(ReportNotification notification)
     {
         var content = BuildContent(notification);
 
         // allowed_mentions with an empty parse list means no mention in the message pings anyone, whatever it says.
+        // SuppressEmbeds is a second layer: even a link that got through would not be unfurled.
         return JsonSerializer.Serialize(new
         {
             username = "Evergrove reports",
             content,
-            allowed_mentions = new { parse = Array.Empty<string>() }
+            allowed_mentions = new { parse = Array.Empty<string>() },
+            flags = SuppressEmbeds
         });
     }
 
@@ -90,79 +102,68 @@ public static class DiscordPayload
         var builder = new StringBuilder();
 
         builder.Append(notification.Kind == ReportKind.Bug ? "**Bug report #" : "**Report #").Append(notification.Id).Append("** (")
-            .Append(notification.Kind.ToString().ToLowerInvariant()).Append(") from **").Append(Escape(notification.ReporterName)).Append("**");
+            .Append(notification.Kind.ToString().ToLowerInvariant()).Append(") from ").Append(Inline(notification.ReporterName, MaxNameLength));
 
         if (notification.Kind != ReportKind.Bug && !string.IsNullOrEmpty(notification.TargetName))
-            builder.Append(" about **").Append(Escape(notification.TargetName)).Append("**");
+            builder.Append(" about ").Append(Inline(notification.TargetName, MaxNameLength));
 
         if (!string.IsNullOrEmpty(notification.Summary))
-            builder.Append(": ").Append(Escape(Cut(notification.Summary, 100)));
+            builder.Append(": ").Append(Inline(notification.Summary, MaxSummaryLength));
 
-        builder.Append('\n').Append("Where: ").Append(Escape(notification.Zone)).Append(' ').Append(Escape(notification.Position));
+        builder.Append('\n').Append("Where: ").Append(Inline(notification.Zone, MaxWhereLength)).Append(' ').Append(Inline(notification.Position, MaxWhereLength));
 
         if (notification.ClientText.Length > 0)
-            builder.Append("\nThe reporter's client says:\n").Append(Escape(Cut(notification.ClientText, MaxClientTextLength)));
+            builder.Append("\nThe reporter's client says:\n").Append(Block(notification.ClientText, MaxClientTextLength));
 
         if (notification.ServerContext.Length > 0)
-            builder.Append("\nThe server saw:\n").Append(Escape(Cut(notification.ServerContext, MaxServerContextLength)));
+            builder.Append("\nThe server saw:\n").Append(Block(notification.ServerContext, MaxServerContextLength));
 
         builder.Append("\nIn game: !mod report ").Append(notification.Id);
 
-        return Cut(builder.ToString(), MaxContentLength);
+        // The pieces are capped, so this is only a guard against a later change; it is not expected to cut anything.
+        return builder.Length <= MaxContentLength ? builder.ToString() : builder.ToString(0, MaxContentLength);
     }
 
-    /// <summary>
-    /// Makes player text plain text in Discord: markdown characters are escaped, an <c>@</c> is broken so
-    /// <c>@everyone</c> and <c>@here</c> are not mentions, <c>&lt;</c> is escaped so <c>&lt;@id&gt;</c> is not one, and a
-    /// link's <c>://</c> is broken so it is not clickable or embedded.
-    /// </summary>
-    public static string Escape(string? text)
+    /// <summary>Player text on one line, as a code span: no backtick, no line break, cut to the length.</summary>
+    public static string Inline(string? text, int max)
+    {
+        var clean = Clean(text, max, keepLineBreaks: false);
+
+        return clean.Length == 0 ? "`?`" : "`" + clean + "`";
+    }
+
+    /// <summary>Player text as a code block: no backtick, so no way to end the block, cut to the length.</summary>
+    public static string Block(string? text, int max)
+    {
+        var clean = Clean(text, max, keepLineBreaks: true);
+
+        return "```\n" + (clean.Length == 0 ? "(nothing)" : clean) + "\n```";
+    }
+
+    /// <summary>Backticks become apostrophes, control characters (and line breaks, if not kept) become spaces, then it is cut.</summary>
+    private static string Clean(string? text, int max, bool keepLineBreaks)
     {
         if (string.IsNullOrEmpty(text))
             return string.Empty;
 
-        var builder = new StringBuilder(text.Length + 16);
+        var builder = new StringBuilder(Math.Min(text.Length, max + 3));
 
-        for (var i = 0; i < text.Length; i++)
+        foreach (var c in text)
         {
-            var c = text[i];
-
-            switch (c)
-            {
-                case '\\':
-                case '*':
-                case '_':
-                case '~':
-                case '`':
-                case '|':
-                case '>':
-                case '<':
-                case '#':
-                case '[':
-                case ']':
-                case '(':
-                case ')':
-                    builder.Append('\\').Append(c);
-                    break;
-
-                case '@':
-                    builder.Append('@').Append(ZeroWidthSpace);
-                    break;
-
-                case ':' when i + 2 < text.Length && text[i + 1] == '/' && text[i + 2] == '/':
-                    builder.Append(':').Append(ZeroWidthSpace);
-                    break;
-
-                default:
-                    builder.Append(c);
-                    break;
-            }
+            if (c == '`')
+                builder.Append('\'');
+            else if (c == '\n' && keepLineBreaks)
+                builder.Append(c);
+            else if (char.IsControl(c))
+                builder.Append(' ');
+            else
+                builder.Append(c);
         }
 
-        return builder.ToString();
+        return Cut(builder.ToString().Trim(), max);
     }
 
-    /// <summary>Cuts to the length, not in the middle of a surrogate pair or after a lone escaping backslash.</summary>
+    /// <summary>Cuts to the length, not in the middle of a surrogate pair.</summary>
     private static string Cut(string text, int max)
     {
         if (text.Length <= max)
@@ -170,16 +171,7 @@ public static class DiscordPayload
 
         var length = max - 3;
 
-        if (char.IsHighSurrogate(text[length - 1]))
-            length--;
-
-        // An odd run of backslashes at the cut would escape the dots.
-        var backslashes = 0;
-
-        for (var i = length - 1; i >= 0 && text[i] == '\\'; i--)
-            backslashes++;
-
-        if (backslashes % 2 == 1)
+        if (length > 0 && char.IsHighSurrogate(text[length - 1]))
             length--;
 
         return text[..length] + "...";
