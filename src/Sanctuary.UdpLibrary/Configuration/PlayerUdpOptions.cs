@@ -60,10 +60,19 @@ public sealed class PlayerUdpOptions
 
     /// <summary>
     /// Packets one connection may have waiting for their handlers. Only the Gateway queues them (it runs its handlers after
-    /// the UDP library's locks are released). A real client sends a few packets a second and the queue is delivered many
-    /// times a second, so this only catches a client sending them faster than the server can handle them.
+    /// the UDP library's locks are released). A real client sends a few packets a second, but the first value, 512,
+    /// disconnected a player every time they entered their apartment (25 November 2026): more than 512 waited at once
+    /// while the Gateway built the zone. Which packets they were wasn't recorded; the client wrote about 260 log lines in
+    /// that second, and it can send log lines to the server. So this is set well above it, and
+    /// <see cref="MaxQueuedBytesPerConnection"/> bounds the memory; the warning now lists the commonest sizes waiting.
     /// </summary>
-    public int MaxQueuedPacketsPerConnection { get; set; } = 512;
+    public int MaxQueuedPacketsPerConnection { get; set; } = 4096;
+
+    /// <summary>
+    /// Memory one connection's waiting packets may hold, counted as <c>UdpManager.QueuedPacketCost</c> does (at least 640
+    /// bytes a packet with the Gateway's settings). 2 MiB holds about 3,200 small packets, or 32 of the largest.
+    /// </summary>
+    public int MaxQueuedBytesPerConnection { get; set; } = 2 * 1024 * 1024;
 
     public void ApplyTo(UdpParams udpParams)
     {
@@ -84,5 +93,6 @@ public sealed class PlayerUdpOptions
         udpParams.FaultLimit = FaultLimit;
         udpParams.FaultWindow = FaultWindow;
         udpParams.MaxQueuedPacketsPerConnection = MaxQueuedPacketsPerConnection;
+        udpParams.MaxQueuedBytesPerConnection = MaxQueuedBytesPerConnection;
     }
 }

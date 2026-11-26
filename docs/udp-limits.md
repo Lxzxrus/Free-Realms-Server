@@ -28,7 +28,8 @@ The server-to-server link between Login and Gateway (UDP 20041) doesn't use them
 | `ReliableBacklogBytes` | 512 KiB | See `ReliableBacklogTimeout` |
 | `FaultLimit` | 5 | Exceptions handling one connection's packets, within `FaultWindow`, before it's disconnected |
 | `FaultWindow` | 60000 ms | The window `FaultLimit` counts over |
-| `MaxQueuedPacketsPerConnection` | 512 | Gateway only: packets one connection may have waiting for their handlers, which the Gateway runs from a queue after the UDP library's locks are released. A real client sends a few a second and the queue is delivered many times a second, so only a client sending them faster than they can be handled reaches it |
+| `MaxQueuedPacketsPerConnection` | 4096 | Gateway only: packets one connection may have waiting for their handlers, which the Gateway runs from a queue after the UDP library's locks are released. A real client sends a few a second. The first value, 512, disconnected a player every time they entered their apartment (25 November 2026): more than 512 waited at once while the Gateway built the zone. Which packets they were wasn't recorded, so the warning now lists the commonest sizes waiting (the packets are still encrypted there) and says which limit was hit |
+| `MaxQueuedBytesPerConnection` | 2 MiB | Gateway only: memory those waiting packets may hold, so the queue's memory per player stays bounded whatever the count. Each packet counts what it really holds: at least `PooledPacketSize` (512) plus 128 for its event, however few bytes it carries. That's about 3,200 small packets, or 32 of the largest |
 
 A connect request over a connection limit is ignored, so the client times out as if the server were full. All other
 limits disconnect. Every one of them logs a warning saying which limit and why; refused connects are logged once a
@@ -40,7 +41,7 @@ Five more things changed with no setting:
   logs the error, with the packet's first bytes. It never stops the server.
 - The Gateway's disconnect line says the most reliable data that was waiting for that player at once, for tuning
   `ReliableOverflowBytes` and `ReliableBacklogBytes`.
-- A packet that fails its CRC check never disconnects, and doesn't count towards `MaxQueuedPacketsPerConnection`:
+- A packet that fails its CRC check never disconnects, and doesn't count towards `MaxQueuedPacketsPerConnection` or `MaxQueuedBytesPerConnection`:
   anyone who knows a player's address can send one, so it proves nothing about who sent it. It's thrown away and
   reported to the server, which logs the first and then at most one a minute per connection, with how many there have
   been. On the Gateway, at most 8 of a connection's wait to be reported; the rest aren't.

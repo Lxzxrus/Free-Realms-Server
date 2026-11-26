@@ -151,18 +151,19 @@ internal sealed class FakeManager : UdpManager<FakeConnection>, IGiveTime
 
     public FakeUdpDriver Driver { get; }
 
-    private FakeManager(UdpParams udpParams, FakeUdpDriver driver) : base(udpParams, new ServiceCollection().BuildServiceProvider())
+    private FakeManager(UdpParams udpParams, FakeUdpDriver driver, IServiceProvider? services)
+        : base(udpParams, services ?? new ServiceCollection().BuildServiceProvider())
     {
         Driver = driver;
     }
 
-    public static FakeManager Create(FakeNetwork network, string ipAddress, UdpParams udpParams)
+    public static FakeManager Create(FakeNetwork network, string ipAddress, UdpParams udpParams, IServiceProvider? services = null)
     {
         var driver = network.CreateDriver(ipAddress);
 
         udpParams.UdpDriver = driver;
 
-        return new FakeManager(udpParams, driver);
+        return new FakeManager(udpParams, driver, services);
     }
 
     public static UdpParams ServerParams(int port = 20260) => new()
