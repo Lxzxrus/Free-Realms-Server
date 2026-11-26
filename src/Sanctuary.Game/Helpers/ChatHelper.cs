@@ -8,12 +8,14 @@ public static class ChatHelper
 {
     public static void SendSystemMessage(Player player, string message, bool formatted = false)
     {
-        player.SendTunneled(new ChatPacketDebugChat
-        {
-            PrintToChat = true,
-            Message = formatted ? message : EscapeMarkup(message)
-        });
+        player.SendTunneled(CreateSystemMessage(message, formatted));
     }
+
+    public static ChatPacketDebugChat CreateSystemMessage(string message, bool formatted = false) => new()
+    {
+        PrintToChat = true,
+        Message = formatted ? message : EscapeMarkup(message)
+    };
 
     private static string EscapeMarkup(string message)
     {

@@ -349,7 +349,8 @@ public sealed class TradeCommitter : ITradeCommitter
                 reservedCount,
                 known,
                 definition is null || definition.NoTrade || definition.Type == TradingCardItemType,
-                PetProtected: false,
+                PetProtected: definition?.Type is Helpers.ItemDefinitionHelper.PetItemType
+                    or Helpers.ItemDefinitionHelper.MountItemType,
                 definition?.MaxStackSize ?? 0));
         }
 
