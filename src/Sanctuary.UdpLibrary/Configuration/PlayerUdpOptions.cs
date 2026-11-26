@@ -81,6 +81,21 @@ public sealed class PlayerUdpOptions
     /// </summary>
     public int MaxQueuedBytesPerConnection { get; set; } = 2 * 1024 * 1024;
 
+    /// <summary>
+    /// <see cref="MaxQueuedPacketsPerConnection"/> until a player's login to the Gateway has succeeded. The limits above
+    /// are sized for a player loading a zone; a connection that hasn't logged in has one packet to send, its login. 0 =
+    /// the same limit from the start. The Login server doesn't queue its packets, so this does nothing there.
+    /// </summary>
+    public int PreLoginMaxQueuedPackets { get; set; } = 32;
+
+    /// <summary>
+    /// <see cref="MaxQueuedBytesPerConnection"/> until a player's login to the Gateway has succeeded. A real client's
+    /// login packet is about 60 bytes and counts as 640 here, like any small packet, so
+    /// <see cref="PreLoginMaxQueuedPackets"/> is the limit that small packets reach first; this one stops large ones.
+    /// 0 = the same limit from the start; a value under 640 would refuse every packet, so the server won't start with one.
+    /// </summary>
+    public int PreLoginMaxQueuedBytes { get; set; } = 32 * 1024;
+
     public void ApplyTo(UdpParams udpParams)
     {
         udpParams.IncomingBufferSize = IncomingBufferSize;
@@ -102,5 +117,7 @@ public sealed class PlayerUdpOptions
         udpParams.FaultWindow = FaultWindow;
         udpParams.MaxQueuedPacketsPerConnection = MaxQueuedPacketsPerConnection;
         udpParams.MaxQueuedBytesPerConnection = MaxQueuedBytesPerConnection;
+        udpParams.StartingMaxQueuedPacketsPerConnection = PreLoginMaxQueuedPackets;
+        udpParams.StartingMaxQueuedBytesPerConnection = PreLoginMaxQueuedBytes;
     }
 }

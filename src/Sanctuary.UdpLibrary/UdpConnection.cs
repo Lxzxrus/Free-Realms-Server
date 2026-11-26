@@ -145,6 +145,43 @@ public class UdpConnection : PriorityQueueMember
     // memory those packets hold, as UdpManager.QueuedPacketCost counts it (see UdpParams.MaxQueuedBytesPerConnection)
     internal int QueuedBytes;
 
+    // set by RaiseQueuedPacketLimits; until then the lower UdpParams.StartingMaxQueued...PerConnection limits apply
+    private volatile bool _queuedPacketLimitsRaised;
+
+    /// <summary>Whether a starting limit is set and still applies to this connection (it hasn't been raised).</summary>
+    internal bool AtStartingQueueLimits =>
+        !_queuedPacketLimitsRaised
+        && (UdpManager.Params.StartingMaxQueuedPacketsPerConnection > 0 || UdpManager.Params.StartingMaxQueuedBytesPerConnection > 0);
+
+    /// <summary>
+    /// From now on this connection may have as much waiting for the application as any other
+    /// (<see cref="Configuration.UdpParams.MaxQueuedPacketsPerConnection"/> and
+    /// <see cref="Configuration.UdpParams.MaxQueuedBytesPerConnection"/>) rather than the lower limits every connection
+    /// starts with. Call it once the application knows who is on the other end, never before: the starting limits are
+    /// what keeps a stranger from making the server hold a full queue.
+    /// </summary>
+    public void RaiseQueuedPacketLimits()
+    {
+        _queuedPacketLimitsRaised = true;
+    }
+
+    /// <summary>The most packets this connection may have waiting for the application now; 0 = no limit.</summary>
+    internal int MaxQueuedPackets =>
+        StartingOrFull(UdpManager.Params.StartingMaxQueuedPacketsPerConnection, UdpManager.Params.MaxQueuedPacketsPerConnection);
+
+    /// <summary>The most memory those packets may hold now; 0 = no limit.</summary>
+    internal int MaxQueuedBytes =>
+        StartingOrFull(UdpManager.Params.StartingMaxQueuedBytesPerConnection, UdpManager.Params.MaxQueuedBytesPerConnection);
+
+    // the starting limit only ever lowers: it never loosens a full limit that is lower still, and 0 means there is none
+    private int StartingOrFull(int starting, int full)
+    {
+        if (_queuedPacketLimitsRaised || starting <= 0)
+            return full;
+
+        return full > 0 ? Math.Min(starting, full) : starting;
+    }
+
     // packets that failed their CRC check, waiting in the manager's event queue for OnCrcReject (see UdpManager.MaxQueuedCrcRejects)
     internal int QueuedCrcRejects;
 

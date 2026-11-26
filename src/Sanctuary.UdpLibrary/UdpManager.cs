@@ -203,6 +203,14 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
         Params.MaxDataHoldSize = Math.Min(Params.MaxDataHoldSize, Params.MaxRawPacketSize);
 
+        // the starting queue limits (see UdpConnection.RaiseQueuedPacketLimits): 0 is off, less makes no sense, and a
+        // memory limit that can't hold even one packet would have every connection dropped at its first
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingMaxQueuedPacketsPerConnection);
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingMaxQueuedBytesPerConnection);
+
+        if (Params.StartingMaxQueuedBytesPerConnection > 0)
+            ArgumentOutOfRangeException.ThrowIfLessThan(Params.StartingMaxQueuedBytesPerConnection, QueuedPacketCost(0));
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             _driver = udpParams.UdpDriver ?? new UdpDriverWindows();
@@ -1098,9 +1106,13 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         {
             // Queued, the handlers run when the queue is delivered, so a connection sending packets faster than they run
             // would queue them without limit, and every other connection's packets would wait behind its own.
+            // The limits are the connection's own: lower until the application has said who it is (see
+            // UdpConnection.RaiseQueuedPacketLimits).
             var cost = QueuedPacketCost(data.Length);
-            var overCount = Params.MaxQueuedPacketsPerConnection > 0 && con.QueuedPackets >= Params.MaxQueuedPacketsPerConnection;
-            var overBytes = Params.MaxQueuedBytesPerConnection > 0 && (long)con.QueuedBytes + cost > Params.MaxQueuedBytesPerConnection;
+            var maxCount = con.MaxQueuedPackets;
+            var maxBytes = con.MaxQueuedBytes;
+            var overCount = maxCount > 0 && con.QueuedPackets >= maxCount;
+            var overBytes = maxBytes > 0 && (long)con.QueuedBytes + cost > maxBytes;
 
             if (overCount || overBytes)
             {
@@ -1110,9 +1122,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                 }
 
                 // The packets are still encrypted here, so their kind can't be read without the connection's cipher; the
-                // commonest sizes tell a burst of one kind (a zone load) from a flood.
+                // commonest sizes tell a burst of one kind (a zone load) from a flood.  They aren't worked out for a
+                // connection still at the starting limits: working them out walks every waiting event, and such a
+                // connection can go over its limits with a single datagram, as often as it can connect.
                 Logger.LogWarning("Disconnecting {connection}: it sent packets faster than their handlers run, and went over the {limit} limit. Waiting: {count} packets holding {bytes} bytes (limits: {maxCount} packets, {maxBytes} bytes). Commonest sizes waiting (bytes x count): {sizes}.",
-                    con, overCount ? "packet count" : "memory", con.QueuedPackets, con.QueuedBytes, Params.MaxQueuedPacketsPerConnection, Params.MaxQueuedBytesPerConnection, DescribeQueuedSizes(con));
+                    con, overCount ? "packet count" : "memory", con.QueuedPackets, con.QueuedBytes, maxCount, maxBytes,
+                    con.AtStartingQueueLimits ? "not listed at the starting limits" : DescribeQueuedSizes(con));
 
                 con.InternalDisconnect(0, DisconnectReason.CorruptPacket);
                 return;

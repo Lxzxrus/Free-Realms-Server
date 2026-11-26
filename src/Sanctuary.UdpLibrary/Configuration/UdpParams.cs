@@ -535,6 +535,27 @@ public class UdpParams
     /// <remarks>default = 0</remarks>
     public int MaxQueuedBytesPerConnection;
 
+    /// <summary>
+    /// <see cref="MaxQueuedPacketsPerConnection"/> for a connection until the application calls
+    /// <see cref="UdpConnection.RaiseQueuedPacketLimits"/> on it, which it does once it knows who is on the other end (the
+    /// Gateway does when a player's login succeeds).  Before that a connection has next to nothing to say, so there is no
+    /// reason to let it hold much.  It only ever lowers the limit: a value above
+    /// <see cref="MaxQueuedPacketsPerConnection"/> changes nothing.  0 = the same limit from the start.  An application
+    /// that sets this and turns <see cref="EventQueuing"/> on must call that method, or its connections keep the starting
+    /// limits for as long as they live.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int StartingMaxQueuedPacketsPerConnection;
+
+    /// <summary>
+    /// <see cref="MaxQueuedBytesPerConnection"/> for a connection until the application calls
+    /// <see cref="UdpConnection.RaiseQueuedPacketLimits"/> on it.  It only ever lowers the limit.  0 = the same limit from
+    /// the start.  Otherwise it must be enough for one packet (<see cref="PooledPacketSize"/> plus 128), or the manager
+    /// refuses to start.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int StartingMaxQueuedBytesPerConnection;
+
     public string ProtocolName;
 
     /// <summary>
@@ -607,6 +628,8 @@ public class UdpParams
         FaultWindow = 60000;
         MaxQueuedPacketsPerConnection = 0;
         MaxQueuedBytesPerConnection = 0;
+        StartingMaxQueuedPacketsPerConnection = 0;
+        StartingMaxQueuedBytesPerConnection = 0;
         ProtocolName = string.Empty;
         UserSuppliedEncryptExpansionBytes = 0;
         UserSuppliedEncryptExpansionBytes2 = 0;
