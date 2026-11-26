@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Globalization;
+using System.Net.Http;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -17,6 +19,7 @@ using Sanctuary.Game.Housing;
 using Sanctuary.Game.Jobs;
 using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Quests;
+using Sanctuary.Game.Reports;
 using Sanctuary.Game.Trading;
 using Sanctuary.Gateway;
 using Sanctuary.Scripting;
@@ -62,6 +65,9 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
 
     serviceCollection.AddOptions<CompetitionOptions>()
         .BindConfiguration(CompetitionOptions.Section);
+
+    serviceCollection.AddOptions<ReportsOptions>()
+        .BindConfiguration(ReportsOptions.Section);
 
     // Database
     serviceCollection.AddDatabase(hostBuilderContext.Configuration);
@@ -149,6 +155,27 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<ITradeCommitter, TradeCommitter>();
     serviceCollection.AddSingleton<ITradeManager, TradeManager>();
     serviceCollection.AddSingleton<IRewardManager, RewardManager>();
+
+    // In-game reports. Discord is the only call this server makes to a third party: it goes from a background queue,
+    // through a client with a 5 second timeout that follows no redirects, so a slow Discord can't stall the Gateway.
+    serviceCollection.AddDiscordWebhookClient();
+
+    serviceCollection.AddSingleton(serviceProvider => DiscordWebhookReportNotifier.Create(
+        serviceProvider.GetRequiredService<IOptions<ReportsOptions>>().Value.DiscordWebhookUrl,
+        serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(DiscordWebhookHttpClient.Name),
+        serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("ReportNotifier")));
+
+    serviceCollection.AddSingleton<IReportNotifier>(serviceProvider => serviceProvider.GetRequiredService<DiscordWebhookReportNotifier>());
+
+    serviceCollection.AddSingleton(serviceProvider => new ReportService(
+        serviceProvider.GetRequiredService<IDbContextFactory<DatabaseContext>>(),
+        serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System,
+        serviceProvider.GetRequiredService<ILoggerFactory>(),
+        serviceProvider.GetRequiredService<IReportNotifier>()));
+
+    serviceCollection.AddSingleton<ReportDesk>();
+    serviceCollection.AddHostedService<ReportNotifierService>();
+    serviceCollection.AddHostedService<ReportRetentionService>();
 });
 
 builder.ConfigureLogging((hostBuilderContext, loggingBuilder) =>

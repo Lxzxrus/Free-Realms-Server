@@ -22,4 +22,10 @@ public interface IChatCommandManager
     bool TryHandle(Player invoker, string command);
 
     void LogAction(IChatCommand command, Player invoker, string action, string? targetName, string? detail);
+
+    /// <summary>
+    /// As above, for an action on a player whose account and character are known, so the staff log can list it in that
+    /// account's history.
+    /// </summary>
+    void LogAction(IChatCommand command, Player invoker, string action, string? targetName, string? detail, ulong? targetUserId, ulong? targetCharacterId);
 }

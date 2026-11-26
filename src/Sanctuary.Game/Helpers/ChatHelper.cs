@@ -23,6 +23,18 @@ public static class ChatHelper
             .Replace(">", "&gt;");
     }
 
+    /// <summary>
+    /// The role an account's stored flags give it, with no Debug override: a plain account is a Player in every build.
+    /// For data about accounts (who a report is about), not for what a logged-in player may run.
+    /// </summary>
+    public static ChatCommandRole GetStoredRole(bool isAdmin, bool isMod)
+    {
+        if (isAdmin)
+            return ChatCommandRole.Admin;
+
+        return isMod ? ChatCommandRole.Mod : ChatCommandRole.Player;
+    }
+
     public static ChatCommandRole GetRoleFromFlags(bool isAdmin, bool isMod)
     {
         if (isAdmin)

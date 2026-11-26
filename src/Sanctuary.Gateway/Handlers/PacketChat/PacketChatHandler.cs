@@ -99,6 +99,10 @@ public static class PacketChatHandler
         packet.FromGuid = connection.Player.Guid;
         packet.FromName = connection.Player.Name;
 
+        // What the server accepted from this player, for checking a report against (what the reporter's client says
+        // they wrote can be forged). Only a record: nothing about how the chat is relayed changes.
+        connection.Player.ChatEvidence.Add(packet.Channel, packet.Message);
+
         // Only a tell is to someone, and it's delivered only if the name is a player's. On any other channel the name
         // would go to everyone who gets the message just as the client wrote it.
         if (packet.Channel != ChatChannel.Tell)

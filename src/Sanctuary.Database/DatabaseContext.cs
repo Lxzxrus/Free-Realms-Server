@@ -7,6 +7,8 @@ namespace Sanctuary.Database;
 public abstract class DatabaseContext : DbContext
 {
     public DbSet<DbUser> Users => Set<DbUser>();
+    public DbSet<DbStaffAction> StaffActions => Set<DbStaffAction>();
+    public DbSet<DbReport> Reports => Set<DbReport>();
     public DbSet<DbItem> Items => Set<DbItem>();
     public DbSet<DbTitle> Titles => Set<DbTitle>();
     public DbSet<DbMount> Mounts => Set<DbMount>();

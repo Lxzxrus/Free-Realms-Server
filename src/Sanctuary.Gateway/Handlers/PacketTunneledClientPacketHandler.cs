@@ -84,6 +84,8 @@ public static class PacketTunneledClientPacketHandler
             BaseQuestPacket.OpCode => BaseQuestPacketHandler.HandlePacket(connection, reader),
             BaseUiPacket.OpCode => BaseUiPacketHandler.HandlePacket(connection, reader),
             ClientPathBasePacket.OpCode => ClientPathBasePacketHandler.HandlePacket(connection, reader),
+            BaseReportPacket.OpCode => BaseReportPacketHandler.HandlePacket(connection, reader),
+            BugSubmissionPacketAddBug.OpCode => BugSubmissionPacketAddBugHandler.HandlePacket(connection, packetTunneledClientPacket.Payload),
             _ => false
         };
 

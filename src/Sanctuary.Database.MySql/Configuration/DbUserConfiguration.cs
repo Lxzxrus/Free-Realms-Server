@@ -28,6 +28,9 @@ public sealed class DbUserConfiguration : IEntityTypeConfiguration<DbUser>
         builder.Property(u => u.LockedUntil).IsRequired(false);
         builder.Property(u => u.MutedUntil).IsRequired(false);
 
+        builder.Property(u => u.BanReason).IsRequired(false).HasMaxLength(DbUser.MaxReasonLength);
+        builder.Property(u => u.MuteReason).IsRequired(false).HasMaxLength(DbUser.MaxReasonLength);
+
         builder.Property(u => u.Created).IsRequired().HasDefaultValueSql("NOW()");
         builder.Property(u => u.LastLogin).IsRequired(false);
 

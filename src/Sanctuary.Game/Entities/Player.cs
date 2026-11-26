@@ -115,6 +115,12 @@ public sealed class Player : ClientPcData, IEntity
     /// <summary>Chat messages the player may still send (<see cref="ChatLimits"/>).</summary>
     public Allowance ChatAllowance { get; } = new(ChatLimits.Burst, ChatLimits.RefillMs, Environment.TickCount64);
 
+    /// <summary>
+    /// The last chat lines the server accepted from this character, for staff to check a report against. Kept by character
+    /// (<see cref="Reports.ChatEvidenceStore"/>), not by connection, so a log out and in does not clear it.
+    /// </summary>
+    public Reports.ChatEvidence ChatEvidence => Reports.ChatEvidenceStore.Shared.For(CharacterId);
+
     /// <summary>When (<see cref="Environment.TickCount64"/>) the player may next be told they chat too fast.</summary>
     public long NextChatTooFastNoticeAt { get; set; }
 

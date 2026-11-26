@@ -116,6 +116,11 @@ public static class GuidHelper
         return GetGuid(GuidType.House, id);
     }
 
+    public static bool IsHouseGuid(ulong guid)
+    {
+        return IsType(GuidType.House, guid);
+    }
+
     public static ulong GetHouseId(ulong guid)
     {
         return GetId(GuidType.House, guid);

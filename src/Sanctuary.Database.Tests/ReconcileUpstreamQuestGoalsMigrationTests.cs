@@ -71,7 +71,10 @@ public class ReconcileUpstreamQuestGoalsMigrationTests
 
         using (var dbContext = new SqliteDatabaseContext(options))
         {
-            var user = new DbUser { Id = 1, Username = "players", Password = string.Empty };
+            // The account goes in as SQL: the model has columns since (ban and mute reasons) that this schema lacks.
+            dbContext.Database.ExecuteSqlRaw(
+                "INSERT INTO Users (Id, Username, Password, MaxCharacters, IsMember, IsAdmin, IsMod, Created) " +
+                "VALUES (1, 'players', '', 10, 0, 0, 0, '2026-01-01')");
 
             // 10 has found three pages; 11 found every page and is on the way back to Hasti; 12 finished the quest
             // long ago; 13 is on another quest; 14 has a row under each id (a server that ran the new data early).
@@ -91,9 +94,11 @@ public class ReconcileUpstreamQuestGoalsMigrationTests
             both.Quests.Add(NewQuest(Homework, OldGoal, (OldGoal, 0, 2), (NewGoal, 0, 5), (NewGoal, 4321, 1)));
 
             foreach (var character in new[] { gathering, returning, done, elsewhere, both })
-                user.Characters.Add(character);
+            {
+                character.UserId = 1;
+                dbContext.Characters.Add(character);
+            }
 
-            dbContext.Users.Add(user);
             dbContext.SaveChanges();
         }
 

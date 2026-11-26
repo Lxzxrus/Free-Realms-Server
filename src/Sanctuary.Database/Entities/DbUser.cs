@@ -5,6 +5,8 @@ namespace Sanctuary.Database.Entities;
 
 public sealed class DbUser
 {
+    public const int MaxReasonLength = 200;
+
     public ulong Id { get; set; }
 
     public required string Username { get; set; }
@@ -21,6 +23,12 @@ public sealed class DbUser
 
     public DateTimeOffset? LockedUntil { get; set; }
     public DateTimeOffset? MutedUntil { get; set; }
+
+    /// <summary>Why the account was banned (<c>!mod ban</c>), up to <see cref="MaxReasonLength"/> characters. Cleared by <c>!mod unban</c>.</summary>
+    public string? BanReason { get; set; }
+
+    /// <summary>Why the account was muted (<c>!mod mute</c>), up to <see cref="MaxReasonLength"/> characters. Cleared by <c>!mod unmute</c>.</summary>
+    public string? MuteReason { get; set; }
 
     public DateTimeOffset Created { get; set; }
     public DateTimeOffset? LastLogin { get; set; }
