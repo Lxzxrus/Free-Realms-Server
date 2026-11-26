@@ -26,6 +26,18 @@ public class GatewayConnection : LoginServerConnection
 
     public HashSet<ulong> OnlineCharacters { get; set; } = new();
 
+    /// <summary>Whether this connection passed the challenge (GatewayLoginRequestHandler). Until then it is not a gateway.</summary>
+    public bool IsAuthenticated { get; set; }
+
+    /// <summary>
+    /// How many packets other than the challenge a connection may send before passing it. The real Gateway sends its
+    /// challenge first, perhaps behind a logout or two it queued while reconnecting; anything sending more isn't it.
+    /// </summary>
+    public const int MaxPacketsBeforeChallenge = 16;
+
+    // packets ignored because they came before the challenge was passed
+    private int _ignoredBeforeChallenge;
+
     public GatewayConnection(ILogger<GatewayConnection> logger, IOptionsMonitor<LoginServerOptions> options, GatewayServer gatewayServer, SocketAddress socketAddress, int connectCode) : base(options, gatewayServer, socketAddress, connectCode)
     {
         _logger = logger;
@@ -45,11 +57,36 @@ public class GatewayConnection : LoginServerConnection
 
     public override void OnRoutePacket(Span<byte> data)
     {
+        // a connection being closed (see below) handles nothing more of the datagram it came in
+        if (Status != Status.Connected)
+            return;
+
         var reader = new PacketReader(data);
 
         if (!reader.TryRead(out byte opCode))
         {
             _logger.LogError("Failed to read opcode from packet. ( Data: {data} )", PacketLog.Hex(data));
+            return;
+        }
+
+        // Only the challenge may come before the challenge is passed: anyone who reaches this port could otherwise report
+        // characters online, which the server status counts (Evergrove). Ignored rather than disconnected: the real
+        // Gateway may have queued a logout while it was reconnecting, ahead of its challenge, and must not lose the link.
+        if (!IsAuthenticated && opCode != GatewayLoginRequest.OpCode)
+        {
+            _ignoredBeforeChallenge++;
+
+            // the first is logged; a line for each would let whatever this is fill the log
+            if (_ignoredBeforeChallenge == 1)
+                _logger.LogWarning("{connection} sent opcode {opcode} before passing the challenge; ignored (any more are counted, not logged).", this, opCode);
+
+            if (_ignoredBeforeChallenge > MaxPacketsBeforeChallenge)
+            {
+                _logger.LogWarning("{connection} sent {count} packets before passing the challenge. Disconnecting it.", this, _ignoredBeforeChallenge);
+
+                Disconnect();
+            }
+
             return;
         }
 

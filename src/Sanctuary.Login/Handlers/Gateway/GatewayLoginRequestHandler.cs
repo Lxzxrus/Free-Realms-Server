@@ -62,6 +62,7 @@ public static class GatewayLoginRequestHandler
 
         connection.ServerData = packet.Data;
         connection.ServerAddress = packet.ServerAddress;
+        connection.IsAuthenticated = true;
 
         gatewayLoginReply.Success = true;
 

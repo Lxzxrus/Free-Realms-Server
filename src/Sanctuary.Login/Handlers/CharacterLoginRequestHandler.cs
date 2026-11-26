@@ -77,7 +77,8 @@ public static class CharacterLoginRequestHandler
             return true;
         }
 
-        var ticket = Guid.NewGuid();
+        // Carries the time it was made, so the Gateway refuses it once it is a few minutes old (GatewayTicket).
+        var ticket = GatewayTicket.Create(DateTimeOffset.UtcNow);
 
         character.Ticket = ticket;
 

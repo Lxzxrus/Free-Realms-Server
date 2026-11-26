@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import urllib.parse
 import urllib.request
 import uuid
@@ -210,6 +211,18 @@ def run_client(client_folder, address, port, args):
     print(f"Running client with arguments: {' '.join(full_args)}")
     subprocess.run(full_args, cwd=str(client_folder))
 
+def make_gateway_ticket():
+    """A ticket made now, as the Login server makes them (GatewayTicket.Create): a version 7 Guid as 32 hex digits.
+    The Gateway refuses any other version, and any ticket older than a few minutes, in every build. A Debug Gateway
+    only skips matching it against the database. (uuid.uuid7 would do this, but needs Python 3.14.)"""
+    unix_ms = int(time.time() * 1000) & ((1 << 48) - 1)
+    random_bits = int.from_bytes(os.urandom(10), "big")
+    rand_a = (random_bits >> 62) & 0xFFF
+    rand_b = random_bits & ((1 << 62) - 1)
+    # 48 bits of time, version 7, 12 random bits, variant 0b10, 62 random bits
+    value = (unix_ms << 80) | (7 << 76) | (rand_a << 64) | (0b10 << 62) | rand_b
+    return uuid.UUID(int=value).hex
+
 def run_client_for_gateway(client_folder, address, port, character_id):
     print("Running in gateway mode. The gateway server must be running.")
     print()
@@ -219,8 +232,7 @@ def run_client_for_gateway(client_folder, address, port, character_id):
 
     character_guid = (int(character_id) << 4) + 1
 
-    ticket = uuid.uuid4()
-    ticket = str(ticket).replace("-", "")
+    ticket = make_gateway_ticket()
 
     args = []
     args.append(f"GUID={character_guid}")

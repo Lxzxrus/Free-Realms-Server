@@ -175,6 +175,193 @@ public class HardeningTests
         Assert.AreEqual(1, server.Stats.CorruptPacketErrors);
     }
 
+    [TestMethod]
+    // 2 to 5 bytes made Advance(4) throw (a line with a stack trace for each); 6 to 9 bytes were already dropped
+    [DataRow(new byte[] { 0, 1 }, DisplayName = "header only")]
+    [DataRow(new byte[] { 0, 1, 0, 0 }, DisplayName = "protocol version cut off")]
+    [DataRow(new byte[] { 0, 1, 0, 0, 3 }, DisplayName = "protocol version one byte short")]
+    [DataRow(new byte[] { 0, 1, 0, 0, 0, 3, 0, 0 }, DisplayName = "connect code cut off")]
+    // 10 to 13 bytes became a connection that could never be confirmed, holding a slot until the handshake timeout
+    [DataRow(new byte[] { 0, 1, 0, 0, 0, 3, 0, 0, 0, 7 }, DisplayName = "packet size missing")]
+    [DataRow(new byte[] { 0, 1, 0, 0, 0, 3, 0, 0, 0, 7, 0, 0, 2 }, DisplayName = "packet size one byte short")]
+    public void TruncatedConnectRequestIsDroppedQuietly(byte[] packet)
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var stranger = new IPEndPoint(IPAddress.Parse("10.0.0.9"), 40999);
+
+        network.Deliver(stranger, server.EndPoint, packet);
+        network.Pump(3, server);
+
+        Assert.AreEqual(0, server.Accepted.Count);
+        Assert.AreEqual(0, server.Stats.ConnectionFaults, "dropped before it can throw, so nothing is logged as an exception");
+
+        var (_, a) = Client(network, server, "10.0.0.2");
+        Assert.AreEqual(Status.Connected, a.Status, "the server still accepts players");
+    }
+
+    [TestMethod]
+    public void TruncatedConnectRequestsDoNotUseUpTheConnectAllowance()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.ConnectRatePerIp = 2;
+            p.ConnectRateWindow = 10_000;
+        });
+
+        // from the player's own address, more short requests than the allowance
+        var sameAddress = new IPEndPoint(IPAddress.Parse("10.0.0.2"), 40999);
+
+        for (var i = 0; i < 3; i++)
+            network.Deliver(sameAddress, server.EndPoint, [0, 1, 0, 0, 0, 3, 0, 0]);
+
+        network.Pump(3, server);
+
+        var (_, a) = Client(network, server, "10.0.0.2");
+
+        Assert.AreEqual(Status.Connected, a.Status, "the player's real request is still admitted");
+        Assert.AreEqual(1, server.Accepted.Count);
+    }
+
+    /// <summary>
+    /// A connection's entries are removed only if they are still its own. When a connection was removed late (twice,
+    /// say), after a new connection had taken over its address, removing by address alone took the new one's entry,
+    /// and the new connection's packets went nowhere.
+    /// </summary>
+    [TestMethod]
+    public void RemovingAnOldConnectionLeavesTheNewOneAtItsAddress()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+
+        (FakeManager Manager, FakeConnection Connection) ClientAt(int port)
+        {
+            var udpParams = FakeManager.ClientParams();
+            udpParams.Port = port;
+
+            var manager = FakeManager.Create(network, "10.0.0.2", udpParams);
+            var connection = manager.EstablishConnection(ServerIp, server.EndPoint.Port);
+            Assert.IsNotNull(connection);
+
+            network.Pump(5, server, manager);
+
+            return (manager, connection);
+        }
+
+        var (first, a) = ClientAt(41000);
+        Assert.AreEqual(Status.Connected, a.Status);
+        var serverA = server.Accepted.Single();
+
+        a.Disconnect();
+        network.Pump(10, server, first);
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        first.Dispose();
+
+        // the same address and port again: a player reconnecting from the same place
+        var (second, b) = ClientAt(41000);
+        Assert.AreEqual(Status.Connected, b.Status);
+        var serverB = server.Accepted.Last();
+        Assert.AreNotSame(serverA, serverB);
+
+        // the old connection is removed again, late
+        server.RemoveConnection(serverA);
+
+        b.Send(UdpChannel.Reliable1, [7]);
+        network.Pump(10, server, second);
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        CollectionAssert.AreEqual(new byte[] { 7 }, serverB.Received.Single(), "the new connection still gets its packets");
+    }
+
+    /// <summary>
+    /// Connections were filed under their address's hash code alone, so two addresses whose hash codes match shared an
+    /// entry: the second's connect request went to the first's connection. Two such addresses are found by search.
+    /// </summary>
+    [TestMethod]
+    public void AddressesWithTheSameHashCodeGetConnectionsOfTheirOwn()
+    {
+        var (first, second) = FindAddressesWithTheSameHashCode();
+
+        var network = new FakeNetwork();
+        var server = Server(network);
+
+        (FakeManager Manager, FakeConnection Connection) ClientAt(IPEndPoint endPoint)
+        {
+            var udpParams = FakeManager.ClientParams();
+            udpParams.Port = endPoint.Port;
+
+            var manager = FakeManager.Create(network, endPoint.Address.ToString(), udpParams);
+            Assert.AreEqual(endPoint, manager.EndPoint);
+
+            var connection = manager.EstablishConnection(ServerIp, server.EndPoint.Port);
+            Assert.IsNotNull(connection);
+
+            network.Pump(5, server, manager);
+
+            return (manager, connection);
+        }
+
+        var (clientA, a) = ClientAt(first);
+        var (clientB, b) = ClientAt(second);
+
+        Assert.AreEqual(Status.Connected, a.Status);
+        Assert.AreEqual(Status.Connected, b.Status);
+        Assert.AreEqual(2, server.Accepted.Count, "each address has a connection of its own");
+
+        var serverA = server.Accepted[0];
+        var serverB = server.Accepted[1];
+
+        a.Send(UdpChannel.Reliable1, [1]);
+        b.Send(UdpChannel.Reliable1, [2]);
+        network.Pump(10, server, clientA, clientB);
+
+        CollectionAssert.AreEqual(new byte[] { 1 }, serverA.Received.Single());
+        CollectionAssert.AreEqual(new byte[] { 2 }, serverB.Received.Single());
+
+        // one leaving takes nothing of the other's with it
+        a.Disconnect();
+        network.Pump(10, server, clientA, clientB);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+
+        b.Send(UdpChannel.Reliable1, [3]);
+        network.Pump(10, server, clientA, clientB);
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        Assert.AreEqual(2, serverB.Received.Count);
+    }
+
+    private static (IPEndPoint First, IPEndPoint Second) FindAddressesWithTheSameHashCode()
+    {
+        // The hash code is seeded afresh in each process, so the pair can't be written down; spread over 10.0.0.0/8 and
+        // all ports, one turns up within about 100,000 addresses (a few milliseconds). Varying one octet and the port
+        // alone never collides.
+        var seen = new System.Collections.Generic.Dictionary<int, IPEndPoint>();
+        uint state = 12345;
+
+        uint Next() => state = state * 1664525 + 1013904223;
+
+        for (var i = 0; i < 5_000_000; i++)
+        {
+            var address = new IPAddress(new byte[] { 10, (byte)(Next() >> 24), (byte)(state >> 16), (byte)(state >> 8) });
+            var endPoint = new IPEndPoint(address, 1024 + (int)(Next() >> 16) % 64000);
+            var hashCode = endPoint.Serialize().GetHashCode();
+
+            if (seen.TryGetValue(hashCode, out var other))
+            {
+                if (!other.Equals(endPoint) && other.Address.ToString() != ServerIp && endPoint.Address.ToString() != ServerIp)
+                    return (other, endPoint);
+
+                continue;
+            }
+
+            seen.Add(hashCode, endPoint);
+        }
+
+        throw new InvalidOperationException("No two addresses with the same hash code were found.");
+    }
+
     // ---- F5: connection limits, connect-rate limits, packet and fragment caps ----
 
     [TestMethod]
