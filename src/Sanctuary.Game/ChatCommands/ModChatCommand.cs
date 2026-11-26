@@ -8,6 +8,7 @@ using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.Entities;
 using Sanctuary.Game.Helpers;
+using Sanctuary.Game.Reports;
 
 namespace Sanctuary.Game.ChatCommands;
 
@@ -29,9 +30,9 @@ public class ModChatCommand : IChatCommand
     // the number at the end.
     public string Usage =>
         "ban|mute <player> [minutes] [| reason], kick <player> [| reason], warn <player> | <text>, history <player>, " +
-        "unban|unmute|resetrename <player>. Put | before the reason or text.";
+        "unban|unmute|resetrename <player>, reports [open|all], report <id>, close <id> [| note]. Put | before the reason, text or note.";
 
-    public string Description => "Moderation: ban, mute, kick or warn a player, see a player's staff history, unban, unmute, or let a player rename again now.";
+    public string Description => "Moderation: ban, mute, kick or warn a player, read and close player reports, see a player's staff and report history, unban, unmute, or let a player rename again now.";
 
     public ChatCommandRole RequiredRole => ChatCommandRole.Mod;
 
@@ -71,6 +72,12 @@ public class ModChatCommand : IChatCommand
                 return Warn(invoker, args);
             case "history":
                 return History(invoker, args);
+            case "reports":
+                return ListReports(invoker, args);
+            case "report":
+                return ShowReport(invoker, args);
+            case "close":
+                return CloseReport(invoker, args);
             case "unban":
                 return Unban(invoker, args);
             case "unmute":
@@ -400,8 +407,97 @@ public class ModChatCommand : IChatCommand
             return true;
 
         var (total, recent) = LoadHistory(dbContext, resolved.UserId);
+        var (reportTotal, recentReports) = ReportQueries.LoadAbout(dbContext, resolved.UserId);
 
-        ChatHelper.SendSystemMessage(invoker, string.Join('\n', FormatHistory(targetName, total, recent)));
+        ChatHelper.SendSystemMessage(invoker, string.Join('\n', FormatHistory(targetName, total, recent, reportTotal, recentReports)));
+        return true;
+    }
+
+    /// <summary>Lists the last reports, newest first: <c>reports</c> or <c>reports open</c> for the open ones, <c>reports all</c>.</summary>
+    private bool ListReports(Player invoker, string[] args)
+    {
+        var openOnly = true;
+
+        if (args.Length > 1)
+            return false;
+
+        if (args.Length == 1)
+        {
+            if (args[0].Equals("all", StringComparison.OrdinalIgnoreCase))
+                openOnly = false;
+            else if (!args[0].Equals("open", StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+
+        using DatabaseContext dbContext = _dbContextFactory.CreateDbContext();
+
+        var reports = ReportQueries.List(dbContext, openOnly);
+
+        var lines = new List<string>(reports.Count + 1)
+        {
+            reports.Count == 0
+                ? (openOnly ? "No open reports." : "No reports.")
+                : $"{(openOnly ? "Open reports" : "Reports")}, newest first (!mod report <id> for one):"
+        };
+
+        lines.AddRange(reports.Select(ReportQueries.FormatListLine));
+
+        ChatHelper.SendSystemMessage(invoker, string.Join('\n', lines));
+        return true;
+    }
+
+    /// <summary>Shows one report, a few lines at a time so no single chat message is large.</summary>
+    private bool ShowReport(Player invoker, string[] args)
+    {
+        if (args.Length != 1 || !ulong.TryParse(args[0], out var id))
+            return false;
+
+        using DatabaseContext dbContext = _dbContextFactory.CreateDbContext();
+
+        var report = ReportQueries.Get(dbContext, id);
+
+        if (report is null)
+        {
+            ChatHelper.SendSystemMessage(invoker, $"No report #{id}.");
+            return true;
+        }
+
+        foreach (var chunk in ReportQueries.FormatDetails(report).Chunk(6))
+            ChatHelper.SendSystemMessage(invoker, string.Join('\n', chunk));
+
+        return true;
+    }
+
+    /// <summary>Closes an open report, with an optional note after a | .</summary>
+    private bool CloseReport(Player invoker, string[] args)
+    {
+        if (args.Length < 1 || !ulong.TryParse(args[0], out var id))
+            return false;
+
+        // "close 12 | done" and "close 12 done" both work.
+        var note = ModArguments.CleanText(string.Join(' ', args[1..]).TrimStart().TrimStart('|'), DbReport.MaxCloseNoteLength);
+
+        using DatabaseContext dbContext = _dbContextFactory.CreateDbContext();
+
+        var report = ReportQueries.Get(dbContext, id);
+
+        if (report is null)
+        {
+            ChatHelper.SendSystemMessage(invoker, $"No report #{id}.");
+            return true;
+        }
+
+        if (!ReportQueries.TryClose(dbContext, id, invoker.UserId, note, DateTimeOffset.UtcNow))
+        {
+            ChatHelper.SendSystemMessage(invoker, $"Report #{id} is already closed.");
+            return true;
+        }
+
+        LogAction(invoker, "CloseReport", report.TargetName ?? report.ReporterName,
+            report.TargetUserId is { } userId ? new ResolvedTarget(userId, report.TargetCharacterId ?? 0) : null,
+            note is null ? $"Report #{id}" : $"Report #{id}: {note}");
+
+        ChatHelper.SendSystemMessage(invoker, $"Report #{id} is closed.");
         return true;
     }
 
@@ -422,10 +518,11 @@ public class ModChatCommand : IChatCommand
     }
 
     /// <summary>
-    /// The lines of <c>!mod history</c>: a heading, then one short line per action. Reports about the player go after
-    /// these lines, once the report system exists.
+    /// The lines of <c>!mod history</c>: a heading, then one short line per action, then how many reports are about the
+    /// player and the last few.
     /// </summary>
-    internal static List<string> FormatHistory(string targetName, int total, IReadOnlyList<DbStaffAction> recent)
+    internal static List<string> FormatHistory(string targetName, int total, IReadOnlyList<DbStaffAction> recent,
+        int reportTotal = 0, IReadOnlyList<DbReport>? recentReports = null)
     {
         var lines = new List<string>(recent.Count + 1)
         {
@@ -442,6 +539,10 @@ public class ModChatCommand : IChatCommand
 
             lines.Add(details is null ? line : $"{line}: {details}");
         }
+
+        // With no list given the caller has no report data to show (the staff actions alone).
+        if (recentReports is not null)
+            lines.AddRange(ReportQueries.FormatAboutLines(reportTotal, recentReports));
 
         return lines;
     }
