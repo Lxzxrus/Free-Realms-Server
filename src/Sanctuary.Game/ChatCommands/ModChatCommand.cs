@@ -598,7 +598,9 @@ public class ModChatCommand : IChatCommand
 
     /// <summary>
     /// Shows one report, a few lines at a time so no single chat message is large. A report about the invoker, or about
-    /// staff they do not outrank, is not shown, and every report shown is written to the staff log under its target.
+    /// staff they do not outrank, is not shown. Every report shown is written to the staff log, but not under its target:
+    /// reading is not something done to the player, and a row for each read would let a moderator fill the player's
+    /// <c>!mod history</c> (which lists only the newest <see cref="HistoryLimit"/> rows) and push real actions out of it.
     /// </summary>
     private bool ShowReport(Player invoker, string[] args)
     {
@@ -616,9 +618,9 @@ public class ModChatCommand : IChatCommand
             return true;
         }
 
-        LogAction(invoker, "ReadReport", report.TargetName ?? report.ReporterName,
-            report.TargetUserId is { } userId ? new ResolvedTarget(userId, report.TargetCharacterId ?? 0) : null,
-            $"Report #{id}");
+        // No target ids: see above. The account is named in the details instead, and the name only in the quoted target.
+        LogAction(invoker, "ReadReport", report.TargetName ?? report.ReporterName, null,
+            report.TargetUserId is { } userId ? $"Report #{id}, about user {userId}" : $"Report #{id}");
 
         foreach (var chunk in ReportQueries.FormatDetails(report).Chunk(6))
             ChatHelper.SendSystemMessage(invoker, string.Join('\n', chunk));
@@ -655,15 +657,11 @@ public class ModChatCommand : IChatCommand
         var id = parsedId!.Value;
         var report = ReportQueries.Get(dbContext, id);
 
-        if (report is null)
+        // The same answer for a report that does not exist and one that may not be closed (as for reading one), so a
+        // moderator cannot probe ids for reports about staff. "Already closed" is only said once the permission is passed.
+        if (report is null || !MayCloseReportAbout(invoker.UserId, invoker.ChatCommandRole, report.TargetUserId, ReportQueries.GetUserRole(dbContext, report.TargetUserId)))
         {
-            ChatHelper.SendSystemMessage(invoker, $"No report #{id}.");
-            return true;
-        }
-
-        if (!MayCloseReportAbout(invoker.UserId, invoker.ChatCommandRole, report.TargetUserId, ReportQueries.GetUserRole(dbContext, report.TargetUserId)))
-        {
-            ChatHelper.SendSystemMessage(invoker, "You don't have permission to close a report about this player. Ask someone who outranks them.");
+            ChatHelper.SendSystemMessage(invoker, $"No report #{id} that you may close.");
             return true;
         }
 
