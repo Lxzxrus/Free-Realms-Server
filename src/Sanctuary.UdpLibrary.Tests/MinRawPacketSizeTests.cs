@@ -363,8 +363,9 @@ public class MinRawPacketSizeTests
         {
             PlayerServer(network, udpParams => udpParams.MinRawPacketSize = minimum);
         }
-        catch (ArgumentOutOfRangeException)
+        catch (ArgumentOutOfRangeException exception)
         {
+            StringAssert.Contains(exception.ParamName, nameof(UdpParams.MinRawPacketSize), "it was this setting that stopped it");
             return;
         }
 

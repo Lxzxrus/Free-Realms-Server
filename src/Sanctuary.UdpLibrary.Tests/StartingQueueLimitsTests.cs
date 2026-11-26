@@ -203,6 +203,9 @@ public class StartingQueueLimitsTests
         {
             udpParams.MaxQueuedPacketsPerConnection = 4;
             udpParams.StartingMaxQueuedPacketsPerConnection = 100;
+
+            // the same for memory, so that no starting limit is the one in force
+            udpParams.StartingMaxQueuedBytesPerConnection = udpParams.MaxQueuedBytesPerConnection * 2;
         });
 
         var (client, sender) = Client(network, server);
@@ -212,6 +215,7 @@ public class StartingQueueLimitsTests
         network.Pump(1, server);
 
         Assert.AreEqual(Status.Disconnected, accepted.Status, "the lower of the two holds: a starting limit never loosens the full one");
+        Assert.IsFalse(accepted.AtStartingQueueLimits, "and the limit in force is the full one, not a starting one");
     }
 
     [TestMethod]
@@ -281,8 +285,9 @@ public class StartingQueueLimitsTests
                 udpParams.StartingMaxQueuedBytesPerConnection = bytes;
             });
         }
-        catch (ArgumentOutOfRangeException)
+        catch (ArgumentOutOfRangeException exception)
         {
+            StringAssert.Contains(exception.ParamName, "StartingMaxQueued", "it was one of these settings that stopped it");
             return;
         }
 

@@ -148,10 +148,10 @@ public class UdpConnection : PriorityQueueMember
     // set by RaiseQueuedPacketLimits; until then the lower UdpParams.StartingMaxQueued...PerConnection limits apply
     private volatile bool _queuedPacketLimitsRaised;
 
-    /// <summary>Whether a starting limit is set and still applies to this connection (it hasn't been raised).</summary>
+    /// <summary>Whether a limit now in force on this connection is a starting one, lower than the full limit.</summary>
     internal bool AtStartingQueueLimits =>
-        !_queuedPacketLimitsRaised
-        && (UdpManager.Params.StartingMaxQueuedPacketsPerConnection > 0 || UdpManager.Params.StartingMaxQueuedBytesPerConnection > 0);
+        MaxQueuedPackets != UdpManager.Params.MaxQueuedPacketsPerConnection
+        || MaxQueuedBytes != UdpManager.Params.MaxQueuedBytesPerConnection;
 
     /// <summary>
     /// From now on this connection may have as much waiting for the application as any other

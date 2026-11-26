@@ -971,12 +971,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
     private void LogRefusal(SocketAddress socketAddress, ConnectRefusal refusal, int askedSize = 0)
     {
-        ref var _lastRefusalLogTime = ref (refusal == ConnectRefusal.PacketSize ? ref _lastSizeRefusalLogTime : ref this._lastRefusalLogTime);
-        ref var _refusalsSinceLog = ref (refusal == ConnectRefusal.PacketSize ? ref _sizeRefusalsSinceLog : ref this._refusalsSinceLog);
+        ref var lastLogTime = ref (refusal == ConnectRefusal.PacketSize ? ref _lastSizeRefusalLogTime : ref _lastRefusalLogTime);
+        ref var sinceLog = ref (refusal == ConnectRefusal.PacketSize ? ref _sizeRefusalsSinceLog : ref _refusalsSinceLog);
 
-        if (_lastRefusalLogTime != 0 && CachedClockElapsed(_lastRefusalLogTime) < RefusalLogInterval)
+        if (lastLogTime != 0 && CachedClockElapsed(lastLogTime) < RefusalLogInterval)
         {
-            _refusalsSinceLog++;
+            sinceLog++;
             return;
         }
 
@@ -990,13 +990,13 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
             _ => "too many addresses are connecting at once"
         };
 
-        if (_refusalsSinceLog > 0)
-            Logger.LogWarning("Ignored a connect request from {address}: {reason}. {count} other requests were ignored since the last line like this.", FormatAddress(socketAddress), why, _refusalsSinceLog);
+        if (sinceLog > 0)
+            Logger.LogWarning("Ignored a connect request from {address}: {reason}. {count} other requests were ignored since the last line like this.", FormatAddress(socketAddress), why, sinceLog);
         else
             Logger.LogWarning("Ignored a connect request from {address}: {reason}.", FormatAddress(socketAddress), why);
 
-        _lastRefusalLogTime = CachedClock;
-        _refusalsSinceLog = 0;
+        lastLogTime = CachedClock;
+        sinceLog = 0;
     }
 
     private void CountRefusal(ConnectRefusal refusal)
