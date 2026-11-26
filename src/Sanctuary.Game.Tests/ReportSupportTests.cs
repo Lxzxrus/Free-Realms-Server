@@ -171,6 +171,21 @@ public sealed class ReportSupportTests
     }
 
     [TestMethod]
+    public void ChatEvidence_NeverKeepsAPrivateTell()
+    {
+        var evidence = new ChatEvidence(new ManualTimeProvider());
+
+        evidence.Add(ChatChannel.WorldSay, "public line");
+        evidence.Add(ChatChannel.Tell, "my real name is Jo and I live at 12 Elm Street");
+
+        var lines = evidence.Snapshot();
+
+        Assert.AreEqual(1, lines.Count);
+        Assert.AreEqual("public line", lines[0].Text);
+        Assert.IsFalse(ChatEvidence.Format(lines, DateTimeOffset.UtcNow, 1000).Contains("Elm Street"));
+    }
+
+    [TestMethod]
     public void ChatEvidence_ClearEmptiesIt()
     {
         var evidence = new ChatEvidence(new ManualTimeProvider());

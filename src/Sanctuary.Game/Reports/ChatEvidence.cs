@@ -32,9 +32,16 @@ public sealed class ChatEvidence
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
-    /// <summary>Remembers a line the server accepted (muted, rate-limited and command lines never get here).</summary>
+    /// <summary>
+    /// Remembers a line the server accepted (muted, rate-limited and command lines never get here). A private tell is
+    /// never kept: the line would go to staff and to Discord on the word of anyone who reports the sender, and the record
+    /// does not say who it was to.
+    /// </summary>
     public void Add(ChatChannel channel, string? text)
     {
+        if (channel == ChatChannel.Tell)
+            return;
+
         var clean = ModArguments.CleanText(text, MaxTextLength);
 
         if (clean is null)
