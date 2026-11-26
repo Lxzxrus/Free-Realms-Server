@@ -85,9 +85,23 @@ All in `Sanctuary.Game/Reports/ReportLimits.cs`.
 
 The `|` starts the reason, text or note, because names can contain spaces.
 
+A ban, mute, unmute, kick or warn is on the account, so it reaches every character of the account that is online (one
+account can have two characters in game at once), not only the one whose name was typed. `!mod kick` says "not online"
+only when none is.
+
+`!mod report <id>` shows a bug report's text wrapped over up to 16 lines of 140 characters, so a long description
+can be read in game; if it is longer still, the last line says how much is left in the `Reports` table. Chat evidence of
+player and house reports is shown one line per chat line, each cut at 140 characters.
+
 The rank rule applies everywhere: a moderator cannot act on, read, close or be told about reports about themselves or
 other staff they don't outrank. A report about staff goes to Discord only as a short line with no names or text.
-Reading a report is written to the staff log.
+Reading or closing a report is written to the staff log, but not under the report's target account: the details say
+"Report #N, about user M", so the row does not appear in the reported player's own `!mod history` (a staff member
+reported by a player must not learn of it from there).
+
+In the Audit log file the free text of a line (reason, warning, close note, names) has its double quotes and backslashes
+turned into apostrophes and slashes, so staff text cannot forge fields of another record. The `StaffActions` row keeps
+the text as typed.
 
 ## Discord webhook (optional, off by default)
 
@@ -118,11 +132,12 @@ Use two characters on different accounts (A reports B), plus a staff character. 
 4. **House report.** A visits B's house and uses Report Offensive on the side panel. A house report appears with B as
    the owner.
 5. **Bug window.** Send a bug report with a category, a severity and some text. `!mod report N` shows the fields. Try
-   a long text too.
+   a long text too (500 characters or more): it should be wrapped over several lines, all of it readable.
 6. **Limits.** Report B again: no second open report. Six reports in an hour: the sixth is not kept.
 7. **Commands.** `!mod ban B 5 | test` (B is disconnected; the Users row has the reason), `!mod unban B`,
    `!mod mute B 5 | test`, `!mod kick B` (B can log straight back in), `!mod warn B | test` (B sees "Warning from staff"),
    `!mod history B`, `!mod reports`, `!mod close N | done`, `!mod close all bug`.
+   Once with two characters of one account in game: ban, mute and kick should reach both.
 8. **Rank rule.** A moderator cannot ban, read reports about, or close reports about an admin or another moderator.
 9. **Discord,** once the webhook is set: each kept report shows up in the channel. A message with `@everyone` or a link
    does not ping or embed.

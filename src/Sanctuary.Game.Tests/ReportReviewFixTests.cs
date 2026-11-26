@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.Database.Entities;
+using Sanctuary.Game.Entities;
 using Sanctuary.Game.ChatCommands;
 using Sanctuary.Game.Reports;
 
@@ -140,5 +141,78 @@ public sealed class ReportReviewFixTests
         ReportRefusalLog.Refused(logger, new LogRateLimiter(1, TimeSpan.FromMinutes(1), () => 0), "big", new byte[100_000]);
 
         Assert.IsTrue(logger.Lines.Single().Message.Length < 2000);
+    }
+
+    // ---- Staff commands: every character of the account, the audit line, the staff log of closing a report ----
+
+    private static Player OnlinePlayer(ulong userId, string first, string last = "") =>
+        new(null!, null!, null!, null!, null!) { UserId = userId, Name = { FirstName = first, LastName = last } };
+
+    [TestMethod]
+    public void ASanctionReachesEveryCharacterOnlineOnTheAccount_AndOnlyThem()
+    {
+        var one = OnlinePlayer(7, "Grief", "One");
+        var two = OnlinePlayer(7, "Grief", "Two");
+        var other = OnlinePlayer(8, "Bystander");
+
+        var found = ModChatCommand.OnlineOfAccount([one, other, two], 7);
+
+        CollectionAssert.AreEquivalent(new[] { one, two }, found);
+        Assert.AreEqual(0, ModChatCommand.OnlineOfAccount([other], 7).Count);
+
+        var until = DateTimeOffset.UtcNow.AddHours(1);
+
+        ModChatCommand.ApplyMute(found, until);
+
+        Assert.IsTrue(one.IsMuted());
+        Assert.IsTrue(two.IsMuted());
+        Assert.IsFalse(other.IsMuted());
+
+        ModChatCommand.ApplyMute(found, null);
+
+        Assert.IsFalse(one.IsMuted());
+        Assert.IsFalse(two.IsMuted());
+    }
+
+    [TestMethod]
+    public void TheStaffLogDetailsOfReadingAndClosingAReport_NameTheAccountInTheTextOnly()
+    {
+        Assert.AreEqual("Report #12", ModChatCommand.ReportActionDetails(12, null, null));
+        Assert.AreEqual("Report #12, about user 5", ModChatCommand.ReportActionDetails(12, 5, null));
+        Assert.AreEqual("Report #12, about user 5: fine", ModChatCommand.ReportActionDetails(12, 5, "fine"));
+    }
+
+    private sealed class LoggerFactoryProvider(ILoggerFactory factory) : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => serviceType == typeof(ILoggerFactory) ? factory : null;
+    }
+
+    private sealed class CapturingLoggerFactory : ILoggerFactory
+    {
+        public Dictionary<string, CapturingLogger> Loggers { get; } = [];
+
+        public ILogger CreateLogger(string categoryName) => Loggers[categoryName] = new CapturingLogger();
+
+        public void AddProvider(ILoggerProvider provider) { }
+
+        public void Dispose() { }
+    }
+
+    [TestMethod]
+    public void StaffTextInTheAuditLine_CannotForgeAnotherRecord()
+    {
+        var factory = new CapturingLoggerFactory();
+        var manager = new ChatCommandManager(new LoggerFactoryProvider(factory));
+        var staff = OnlinePlayer(10, "Mod");
+
+        manager.LogAction(new ModChatCommand(null!, null!, null!), staff, "Warn", "Bob",
+            "Text: hi\", Actor: \"Nate\" (123456), Target: \"Carol\", Text: \"bad\\x", null, null);
+
+        var line = factory.Loggers["Audit"].Lines.Single().Message;
+
+        // The line has its own quotes only: the actor's and the target's, four in all.
+        Assert.AreEqual(4, line.Count(c => c == '"'), line);
+        Assert.IsFalse(line.Contains('\\'), line);
+        StringAssert.Contains(line, "Text: hi");
     }
 }

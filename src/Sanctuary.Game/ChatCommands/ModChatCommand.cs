@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 
@@ -56,12 +55,23 @@ public class ModChatCommand : IChatCommand
     }
 
     /// <summary>
-    /// The player online as this character, if any. Found by the character's guid, never by the name that was typed: the
-    /// database matches names without regard to case (on MariaDB), and the list of online players does not, so a name
-    /// typed in another case finds the character but not the player.
+    /// Every player online on the target's account. A sanction is on the account, and one account can have two characters
+    /// online at once (login only refuses a character that is already online), so the character that was typed is not
+    /// the only one to act on. Found by account id, never by the name that was typed: the database matches names without
+    /// regard to case (on MariaDB), and the list of online players does not.
     /// </summary>
-    private bool TryGetOnline(ResolvedTarget resolved, [MaybeNullWhen(false)] out Player player) =>
-        _zoneManager.TryGetPlayer(GuidHelper.GetPlayerGuid(resolved.CharacterId), out player);
+    private List<Player> OnlineOf(ResolvedTarget resolved) =>
+        OnlineOfAccount(_zoneManager.Zones.SelectMany(zone => zone.Players), resolved.UserId);
+
+    internal static List<Player> OnlineOfAccount(IEnumerable<Player> players, ulong userId) =>
+        players.Where(player => player.UserId == userId).ToList();
+
+    /// <summary>Sets, or with null lifts, the mute on players who are already in the game: <see cref="Player.MutedUntil"/> is a copy read at login.</summary>
+    internal static void ApplyMute(IEnumerable<Player> players, DateTimeOffset? mutedUntil)
+    {
+        foreach (var player in players)
+            player.MutedUntil = mutedUntil;
+    }
 
     public bool Handle(Player invoker, string[] args)
     {
@@ -248,8 +258,8 @@ public class ModChatCommand : IChatCommand
                 .SetProperty(u => u.LockedUntil, lockedUntil)
                 .SetProperty(u => u.BanReason, reason));
 
-        if (TryGetOnline(resolved, out var targetPlayer))
-            targetPlayer.Disconnect();
+        foreach (var online in OnlineOf(resolved))
+            online.Disconnect();
 
         LogAction(invoker, "Ban", target.Name, resolved, Describe(banUntilTime is null ? "Permanent" : $"Until: {banUntilTime:u}", reason));
 
@@ -325,10 +335,7 @@ public class ModChatCommand : IChatCommand
                 .SetProperty(u => u.MutedUntil, (DateTimeOffset?)muteUntilTime)
                 .SetProperty(u => u.MuteReason, reason));
 
-        if (TryGetOnline(resolved, out var targetPlayer))
-        {
-            targetPlayer.MutedUntil = muteUntilTime;
-        }
+        ApplyMute(OnlineOf(resolved), muteUntilTime);
 
         LogAction(invoker, "Mute", target.Name, resolved, Describe($"Until: {muteUntilTime:u}", reason));
 
@@ -364,13 +371,16 @@ public class ModChatCommand : IChatCommand
             return true;
         }
 
-        if (!TryGetOnline(resolved, out var targetPlayer))
+        var online = OnlineOf(resolved);
+
+        if (online.Count == 0)
         {
             ChatHelper.SendSystemMessage(invoker, $"{target.Name} is not online.");
             return true;
         }
 
-        targetPlayer.Disconnect();
+        foreach (var onlinePlayer in online)
+            onlinePlayer.Disconnect();
 
         LogAction(invoker, "Kick", target.Name, resolved, target.Reason is null ? null : $"Reason: {target.Reason}");
 
@@ -412,13 +422,16 @@ public class ModChatCommand : IChatCommand
             return true;
         }
 
-        if (!TryGetOnline(resolved, out var targetPlayer))
+        var online = OnlineOf(resolved);
+
+        if (online.Count == 0)
         {
             ChatHelper.SendSystemMessage(invoker, $"{target.Name} is not online.");
             return true;
         }
 
-        ChatHelper.SendSystemMessage(targetPlayer, $"Warning from staff: {text}");
+        foreach (var onlinePlayer in online)
+            ChatHelper.SendSystemMessage(onlinePlayer, $"Warning from staff: {text}");
 
         LogAction(invoker, "Warn", target.Name, resolved, $"Text: {text}");
 
@@ -619,8 +632,7 @@ public class ModChatCommand : IChatCommand
         }
 
         // No target ids: see above. The account is named in the details instead, and the name only in the quoted target.
-        LogAction(invoker, "ReadReport", report.TargetName ?? report.ReporterName, null,
-            report.TargetUserId is { } userId ? $"Report #{id}, about user {userId}" : $"Report #{id}");
+        LogAction(invoker, "ReadReport", report.TargetName ?? report.ReporterName, null, ReportActionDetails(id, report.TargetUserId, null));
 
         foreach (var chunk in ReportQueries.FormatDetails(report).Chunk(6))
             ChatHelper.SendSystemMessage(invoker, string.Join('\n', chunk));
@@ -671,12 +683,20 @@ public class ModChatCommand : IChatCommand
             return true;
         }
 
-        LogAction(invoker, "CloseReport", report.TargetName ?? report.ReporterName,
-            report.TargetUserId is { } userId ? new ResolvedTarget(userId, report.TargetCharacterId ?? 0) : null,
-            note is null ? $"Report #{id}" : $"Report #{id}: {note}");
+        // No target ids, as when reading: the report may be about a staff member, and a row on their account would show
+        // them in their own "!mod history" that they were reported, who dealt with it and what was written about the reporter.
+        LogAction(invoker, "CloseReport", report.TargetName ?? report.ReporterName, null, ReportActionDetails(id, report.TargetUserId, note));
 
         ChatHelper.SendSystemMessage(invoker, $"Report #{id} is closed.");
         return true;
+    }
+
+    /// <summary>The staff log details of reading or closing a report: its id, the account it is about (in the text, not as a target), and the note.</summary>
+    internal static string ReportActionDetails(ulong id, ulong? targetUserId, string? note)
+    {
+        var details = targetUserId is { } userId ? $"Report #{id}, about user {userId}" : $"Report #{id}";
+
+        return note is null ? details : $"{details}: {note}";
     }
 
     /// <summary>How many staff actions an account has, and the last <see cref="HistoryLimit"/> of them, newest first.</summary>
@@ -779,10 +799,7 @@ public class ModChatCommand : IChatCommand
                 .SetProperty(u => u.MutedUntil, (DateTimeOffset?)null)
                 .SetProperty(u => u.MuteReason, (string?)null));
 
-        if (TryGetOnline(resolved, out var targetPlayer))
-        {
-            targetPlayer.MutedUntil = null;
-        }
+        ApplyMute(OnlineOf(resolved), null);
 
         LogAction(invoker, "Unmute", targetName, resolved);
 
