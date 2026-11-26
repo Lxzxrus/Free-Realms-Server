@@ -9,6 +9,7 @@ public interface IResourceManager
     IdToStringLookup SkinToneMappings { get; }
     IdToStringLookup FacePaintMappings { get; }
     IdToStringLookup ModelCustomizationMappings { get; }
+    StarterClothingCollection StarterClothing { get; }
 
     ModelDefinitionCollection Models { get; }
 

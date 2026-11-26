@@ -1,3 +1,12 @@
+# Docker keeps each container's console output in a json file, with no size limit unless one is set, and the servers
+# write every log line to the console as well as to Logs/. So each server keeps at most five files of 20 MB here, and
+# a flood of log lines can't fill the disk this way (`docker compose logs` still reads all five).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   sanctuary.mysql:
     # MariaDB 11.4 is a long-term release, supported until May 2029. When the image's version is newer than the data's,
@@ -27,6 +36,7 @@ services:
       context: ../
       dockerfile: Docker/Sanctuary.WebAPI.dockerfile
     restart: unless-stopped
+    logging: *logging
     ports:
       # Loopback only: put a TLS proxy such as Caddy in front (docs/webapi.md). Never expose plain HTTP.
       - "127.0.0.1:20040:20040"
@@ -53,6 +63,7 @@ services:
       context: ../
       dockerfile: Docker/Sanctuary.Gateway.dockerfile
     restart: unless-stopped
+    logging: *logging
     ports:
       - "20260:20260/udp"
     volumes: *common-volumes
@@ -69,6 +80,7 @@ services:
       context: ../
       dockerfile: Docker/Sanctuary.Login.dockerfile
     restart: unless-stopped
+    logging: *logging
     # The LoginGateway port (20041) is reachable only by the Gateway, over the Compose network. Never publish it.
     ports:
       - "20042:20042/udp"

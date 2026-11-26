@@ -13,6 +13,7 @@ using Microsoft.Extensions.Options;
 
 using MiniValidation;
 
+using Sanctuary.Core.Helpers;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.WebAPI.Models;
@@ -65,7 +66,7 @@ public static class AuthEndpoints
         // Checked before the password, so a locked-out attacker learns nothing from further guesses.
         if (loginThrottle.GetRetryAfter(request.Username, address) is { } retryAfter)
         {
-            _logger.LogWarning("Login refused, locked out for {RetryAfter}. ( Username: {Username}, Address: {Address} )", retryAfter, request.Username, address);
+            _logger.LogWarning("Login refused, locked out for {RetryAfter}. ( Username: {Username}, Address: {Address} )", retryAfter, PacketLog.Text(request.Username, 64), address);
 
             context.Response.Headers.RetryAfter = RateLimiting.RetryAfterSeconds(retryAfter);
 
@@ -82,7 +83,7 @@ public static class AuthEndpoints
 
             loginThrottle.RecordFailure(request.Username, address);
 
-            _logger.LogWarning("Login failed, user not found for username: {Username}", request.Username);
+            _logger.LogWarning("Login failed, user not found for username: {Username}", PacketLog.Text(request.Username, 64));
 
             return Results.Unauthorized();
         }
@@ -91,7 +92,7 @@ public static class AuthEndpoints
         {
             loginThrottle.RecordFailure(request.Username, address);
 
-            _logger.LogWarning("Login failed, invalid password for username: {Username}", request.Username);
+            _logger.LogWarning("Login failed, invalid password for username: {Username}", PacketLog.Text(request.Username, 64));
 
             return Results.Unauthorized();
         }
@@ -100,7 +101,7 @@ public static class AuthEndpoints
 
         if (dbUser.LockedUntil > DateTimeOffset.UtcNow)
         {
-            _logger.LogWarning("Login failed, account is banned for username: {Username}", request.Username);
+            _logger.LogWarning("Login failed, account is banned for username: {Username}", PacketLog.Text(request.Username, 64));
 
             return Results.StatusCode(StatusCodes.Status403Forbidden);
         }
@@ -156,7 +157,7 @@ public static class AuthEndpoints
 
         if (usernameTaken)
         {
-            _logger.LogWarning("Registration failed, username already taken {Username}", request.Username);
+            _logger.LogWarning("Registration failed, username already taken {Username}", PacketLog.Text(request.Username, 64));
 
             return Results.Conflict();
         }
@@ -179,7 +180,7 @@ public static class AuthEndpoints
 
         if (await dbContext.SaveChangesAsync(cancellationToken) <= 0)
         {
-            _logger.LogError("Failed to add new user: {Username}", request.Username);
+            _logger.LogError("Failed to add new user: {Username}", PacketLog.Text(request.Username, 64));
 
             return Results.InternalServerError();
         }
