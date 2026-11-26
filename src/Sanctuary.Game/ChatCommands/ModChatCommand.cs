@@ -557,7 +557,13 @@ public class ModChatCommand : IChatCommand
 
         using DatabaseContext dbContext = _dbContextFactory.CreateDbContext();
 
-        if (!IsSelfTarget(invoker, targetName) && !TryResolveTarget(invoker, dbContext, targetName, false, out _))
+        // The resolved target goes in the staff log, or "!mod history" would never list this action. For the invoker's own
+        // character there is nothing to resolve: the account is theirs.
+        ResolvedTarget resolved;
+
+        if (IsSelfTarget(invoker, targetName))
+            resolved = new ResolvedTarget(invoker.UserId, invoker.CharacterId);
+        else if (!TryResolveTarget(invoker, dbContext, targetName, false, out resolved))
             return true;
 
         var updated = dbContext.Characters
@@ -571,7 +577,7 @@ public class ModChatCommand : IChatCommand
             return true;
         }
 
-        LogAction(invoker, "ResetRename", targetName, null);
+        LogAction(invoker, "ResetRename", targetName, resolved);
 
         ChatHelper.SendSystemMessage(invoker, $"{targetName} can rename now.");
         return true;
