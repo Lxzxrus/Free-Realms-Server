@@ -23,6 +23,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public static readonly string SkinToneMappingsFile = Path.Combine(BaseDirectory, "CharacterCreate", "SkinToneMappings.txt");
     public static readonly string FacePaintMappingsFile = Path.Combine(BaseDirectory, "CharacterCreate", "FacePaintMappings.txt");
     public static readonly string ModelCustomizationMappingsFile = Path.Combine(BaseDirectory, "CharacterCreate", "ModelCustomizationMappings.txt");
+    public static readonly string StarterClothingFile = Path.Combine(BaseDirectory, "CharacterCreate", "StarterClothing.txt");
 
     public static readonly string ModelsFile = Path.Combine(BaseDirectory, "Models.txt");
 
@@ -80,6 +81,7 @@ public class ResourceManager : IResourceManager, IDisposable
     public IdToStringLookup SkinToneMappings { get; }
     public IdToStringLookup FacePaintMappings { get; }
     public IdToStringLookup ModelCustomizationMappings { get; }
+    public StarterClothingCollection StarterClothing { get; }
 
     public ModelDefinitionCollection Models { get; }
 
@@ -149,6 +151,7 @@ public class ResourceManager : IResourceManager, IDisposable
         SkinToneMappings = new(_logger);
         FacePaintMappings = new(_logger);
         ModelCustomizationMappings = new(_logger);
+        StarterClothing = new(_logger);
 
         Models = new(_logger);
 
@@ -215,6 +218,9 @@ public class ResourceManager : IResourceManager, IDisposable
             return false;
 
         if (!ModelCustomizationMappings.Load(ModelCustomizationMappingsFile))
+            return false;
+
+        if (!StarterClothing.Load(StarterClothingFile))
             return false;
 
         if (!Models.Load(ModelsFile))
@@ -429,6 +435,29 @@ public class ResourceManager : IResourceManager, IDisposable
                     _logger.LogWarning("Collect goal on quest {id} uses node type {type}, which has no player-specific pool; it can never be credited.",
                         quest.QuestId, collectGoal.CollectNodeType);
             }
+
+            foreach (var playGoal in quest.Goals.OfType<PlayActivityGoal>().Where(goal => goal.ActivityId > 0))
+            {
+                var wins = PlayableActivities.WinsOf(playGoal.ActivityId, Mimic);
+
+                if (wins == ActivityWins.NotReported)
+                    _logger.LogWarning("Play goal on quest {id} names activity {activity}, whose wins the server doesn't report; it can never be credited.",
+                        quest.QuestId, playGoal.ActivityId);
+
+                // Evergrove: a Cooking win is the client's report, which a modified client can make without playing: the
+                // step may lead to coins and stars, never to anything scarce.
+                if (wins == ActivityWins.ReportedByClient && quest.RewardsBeyondCoinsAndStars().ToList() is { Count: > 0 } scarce)
+                    _logger.LogWarning("Quest {id} is won by activity {activity}, whose wins the client reports, but rewards more than coins and stars " +
+                        "({rewards}); a modified client could take them without playing.", quest.QuestId, playGoal.ActivityId, string.Join("; ", scarce));
+            }
+
+            if (quest.TeachesProfileId != 0 && !Profiles.ContainsKey(quest.TeachesProfileId))
+                _logger.LogWarning("Quest {id} teaches job {profileId}, which isn't in Profiles.json; its turn-in teaches nothing.",
+                    quest.QuestId, quest.TeachesProfileId);
+
+            if (quest.RewardProfileId != 0 && !Profiles.ContainsKey(quest.RewardProfileId))
+                _logger.LogWarning("Quest {id} pays its stars to job {profileId}, which isn't in Profiles.json; they go to the job worn at the turn-in.",
+                    quest.QuestId, quest.RewardProfileId);
         }
 
         foreach (var coin in CollectionCoins.Values)
@@ -510,6 +539,8 @@ public class ResourceManager : IResourceManager, IDisposable
                 loaded = FacePaintMappings.Load(FacePaintMappingsFile);
             else if (e.FullPath == ModelCustomizationMappingsFile)
                 loaded = ModelCustomizationMappings.Load(ModelCustomizationMappingsFile);
+            else if (e.FullPath == StarterClothingFile)
+                loaded = StarterClothing.Load(StarterClothingFile);
             else if (e.FullPath == ModelsFile)
                 loaded = Models.Load(ModelsFile);
             else if (e.FullPath == ClientItemDefinitionsFile)

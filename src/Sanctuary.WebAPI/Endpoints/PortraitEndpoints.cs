@@ -107,7 +107,7 @@ public static class PortraitEndpoints
 
         if (context.Request.ContentType != ClientContentType)
         {
-            _logger.LogWarning("Invalid Content-Type: {ContentType}", context.Request.ContentType);
+            _logger.LogWarning("Invalid Content-Type: {ContentType}", PacketLog.Text(context.Request.ContentType, 64));
 
             return Results.BadRequest("Invalid Content-Type");
         }
@@ -152,7 +152,7 @@ public static class PortraitEndpoints
         // ImageType is hardcoded in the client.
         if (form["imageType"] != "portrait")
         {
-            _logger.LogWarning("Invalid imageType: {ImageType}", form["imageType"].ToString());
+            _logger.LogWarning("Invalid imageType: {ImageType}", PacketLog.Text(form["imageType"].ToString(), 32));
 
             return Results.BadRequest("Invalid imageType.");
         }
@@ -160,7 +160,7 @@ public static class PortraitEndpoints
         // The client sends the character's player guid, which is also the folder the Gateway reads portraits from.
         if (!ulong.TryParse(form["characterId"], out var characterGuid) || !IsPlayerGuid(characterGuid))
         {
-            _logger.LogWarning("Invalid characterId: {CharacterId}", form["characterId"].ToString());
+            _logger.LogWarning("Invalid characterId: {CharacterId}", PacketLog.Text(form["characterId"].ToString(), 32));
 
             return Results.BadRequest("Invalid characterId.");
         }
@@ -264,14 +264,14 @@ public static class PortraitEndpoints
     {
         if (file.Length == 0)
         {
-            _logger.LogWarning("Invalid file name: {FileName}", file.FileName);
+            _logger.LogWarning("Invalid file name: {FileName}", PacketLog.Text(file.FileName, 64));
 
             return Results.BadRequest("Invalid file name.");
         }
 
         if (file.ContentType != "image/png")
         {
-            _logger.LogWarning("Invalid file name: {FileName}", file.FileName);
+            _logger.LogWarning("Invalid file name: {FileName}", PacketLog.Text(file.FileName, 64));
 
             return Results.BadRequest("Invalid file name.");
         }
@@ -279,7 +279,7 @@ public static class PortraitEndpoints
         // Names are hardcoded in the client.
         if (file.Name != "thumbnailFile" && file.Name != "imageFile")
         {
-            _logger.LogWarning("Invalid name: {Name}", file.Name);
+            _logger.LogWarning("Invalid name: {Name}", PacketLog.Text(file.Name, 64));
 
             return Results.BadRequest("Invalid name.");
         }
@@ -289,14 +289,14 @@ public static class PortraitEndpoints
         // File names are hardcoded in the client.
         if (fileName != "headshot.png" && fileName != "portrait.png")
         {
-            _logger.LogWarning("Invalid file name: {FileName}", file.FileName);
+            _logger.LogWarning("Invalid file name: {FileName}", PacketLog.Text(file.FileName, 64));
 
             return Results.BadRequest("Invalid file name.");
         }
 
         if (images.Any(x => x.FileName == fileName))
         {
-            _logger.LogWarning("Duplicate file name: {FileName}", fileName);
+            _logger.LogWarning("Duplicate file name: {FileName}", PacketLog.Text(fileName, 64));
 
             return Results.BadRequest("Invalid file name.");
         }

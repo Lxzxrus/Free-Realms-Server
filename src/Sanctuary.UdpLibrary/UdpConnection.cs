@@ -142,6 +142,9 @@ public class UdpConnection : PriorityQueueMember
     // packets waiting in the manager's event queue for OnRoutePacket (see UdpParams.MaxQueuedPacketsPerConnection)
     internal int QueuedPackets;
 
+    // memory those packets hold, as UdpManager.QueuedPacketCost counts it (see UdpParams.MaxQueuedBytesPerConnection)
+    internal int QueuedBytes;
+
     // packets that failed their CRC check, waiting in the manager's event queue for OnCrcReject (see UdpManager.MaxQueuedCrcRejects)
     internal int QueuedCrcRejects;
 
@@ -181,7 +184,12 @@ public class UdpConnection : PriorityQueueMember
 
             ConnectionConfig.CrcBytes = UdpManager.Params.CrcBytes;
             ConnectionConfig.MaxRawPacketSize = UdpManager.Params.MaxRawPacketSize;
-            ConnectionConfig.EncryptCode = UdpManager.Random();
+            // The code every packet's CRC is seeded with, which the client learns from the confirm: knowing a
+            // connection's code is what it takes to send that connection packets it accepts. UdpManager.Random's
+            // generator is seeded from the clock and its next value is its last one fed back, so a client that saw
+            // its own code could work out the next player's. A value from the system's secure generator can't be
+            // worked out (the range is the one UdpManager.Random gives).
+            ConnectionConfig.EncryptCode = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1, int.MaxValue);
 
             SetupEncryptModel();
 
@@ -753,6 +761,15 @@ public class UdpConnection : PriorityQueueMember
                         finalLen = len + 1;
                     }
 
+                    // A sender never builds a packet larger than MaxRawPacketSize before it encrypts it (see
+                    // rawDataBytesMax), so one that comes out larger was made to: compression can turn a few dozen
+                    // bytes into the whole 8 KiB buffer, and the reliable channel keeps what arrives ahead of its turn.
+                    if (finalLen > UdpManager.Params.MaxRawPacketSize)
+                    {
+                        CallbackCorruptPacket(data, UdpCorruptionReason.DecryptedTooLarge);
+                        return;
+                    }
+
                     finalStart = _tempDecryptBuffer[i];
                 }
 
@@ -805,7 +822,45 @@ public class UdpConnection : PriorityQueueMember
         InternalDisconnect(0, DisconnectReason.CorruptPacket);
     }
 
+    /// <summary>
+    /// How deep packets may nest (a reliable packet in a group in a reliable packet...). A real client nests a few levels
+    /// at most. Each level is a call, and nothing else limited them: a reliable packet carrying another with the same
+    /// stamp is handled before the stamp moves on, so a 64 KiB message of them made thousands of nested calls, and the
+    /// stack overflow that followed can't be caught. The whole server process died.
+    /// </summary>
+    internal const int MaxCookedPacketDepth = 8;
+
+    // how deep ProcessCookedPacket is nested right now
+    private int _cookedPacketDepth;
+
+    /// <summary>The least time, in milliseconds, between two answers to a connection's clock-sync requests.</summary>
+    internal const int ClockReflectMinInterval = 1000;
+
+    // when this connection last answered a clock-sync request, if it has
+    private UdpClockStamp _lastClockReflectTime;
+    private bool _clockReflectSent;
+
     internal void ProcessCookedPacket(Span<byte> data)
+    {
+        if (_cookedPacketDepth >= MaxCookedPacketDepth)
+        {
+            CallbackCorruptPacket(data, UdpCorruptionReason.NestedTooDeep);
+            return;
+        }
+
+        _cookedPacketDepth++;
+
+        try
+        {
+            ProcessCookedPacketAtDepth(data);
+        }
+        finally
+        {
+            _cookedPacketDepth--;
+        }
+    }
+
+    private void ProcessCookedPacketAtDepth(Span<byte> data)
     {
         var reader = new PacketReader(data);
 
@@ -1153,6 +1208,14 @@ public class UdpConnection : PriorityQueueMember
                     // if it has been over a second since our manager got processing time, then we should not reflect clock-sync packets as we will have introduced too much lag ourselves.
                     if (UdpManager.ProcessingInducedLag > 1000)
                         break;
+
+                    // One answer per interval. A client asks every ClockSyncDelay (tens of seconds), or every 10 s until
+                    // it has two answers; one datagram can hold many requests, and each answer is a send of its own.
+                    if (_clockReflectSent && UdpManager.CachedClockElapsed(_lastClockReflectTime) < ClockReflectMinInterval)
+                        break;
+
+                    _clockReflectSent = true;
+                    _lastClockReflectTime = UdpManager.CachedClock;
 
                     // prepare UdpPacketClockReflect packet
                     Span<byte> buf = stackalloc byte[40 + 4];

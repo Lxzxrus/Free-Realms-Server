@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -557,6 +558,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                         break;
 
                     Interlocked.Decrement(ref ce.Source.QueuedPackets);
+                    Interlocked.Add(ref ce.Source.QueuedBytes, -QueuedPacketCost(ce.Payload?.GetDataLen() ?? 0));
 
                     // Inline, a packet is routed only while its connection is connected (UdpConnection.CallbackRoutePacket).
                     // Queued, the connection may have gone since: a refused login or a kick in the packet before this one,
@@ -1067,21 +1069,28 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         {
             // Queued, the handlers run when the queue is delivered, so a connection sending packets faster than they run
             // would queue them without limit, and every other connection's packets would wait behind its own.
-            if (Params.MaxQueuedPacketsPerConnection > 0 && con.QueuedPackets >= Params.MaxQueuedPacketsPerConnection)
+            var cost = QueuedPacketCost(data.Length);
+            var overCount = Params.MaxQueuedPacketsPerConnection > 0 && con.QueuedPackets >= Params.MaxQueuedPacketsPerConnection;
+            var overBytes = Params.MaxQueuedBytesPerConnection > 0 && (long)con.QueuedBytes + cost > Params.MaxQueuedBytesPerConnection;
+
+            if (overCount || overBytes)
             {
                 lock (_statsGuard)
                 {
                     ManagerStats.QueueLimitDisconnects++;
                 }
 
-                Logger.LogWarning("Disconnecting {connection}: it sent packets faster than their handlers run, and {count} were waiting, the most allowed.",
-                    con, con.QueuedPackets);
+                // The packets are still encrypted here, so their kind can't be read without the connection's cipher; the
+                // commonest sizes tell a burst of one kind (a zone load) from a flood.
+                Logger.LogWarning("Disconnecting {connection}: it sent packets faster than their handlers run, and went over the {limit} limit. Waiting: {count} packets holding {bytes} bytes (limits: {maxCount} packets, {maxBytes} bytes). Commonest sizes waiting (bytes x count): {sizes}.",
+                    con, overCount ? "packet count" : "memory", con.QueuedPackets, con.QueuedBytes, Params.MaxQueuedPacketsPerConnection, Params.MaxQueuedBytesPerConnection, DescribeQueuedSizes(con));
 
                 con.InternalDisconnect(0, DisconnectReason.CorruptPacket);
                 return;
             }
 
             Interlocked.Increment(ref con.QueuedPackets);
+            Interlocked.Add(ref con.QueuedBytes, cost);
 
             var ce = AvailableEventBorrow();
             var packet = CreatePacket(data, data.Length);
@@ -1232,6 +1241,43 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                 AvailableEventList.AddFirst(ce);
             }
         }
+    }
+
+    // what a queued packet's event and list node hold beside its data (see QueuedPacketCost)
+    internal const int QueuedEventOverhead = 128;
+
+    /// <summary>
+    /// The memory a packet of <paramref name="length"/> bytes holds while it waits in the event queue, which is what
+    /// <see cref="UdpParams.MaxQueuedBytesPerConnection"/> counts: <see cref="CreatePacket"/> gives a small packet a buffer of
+    /// <see cref="UdpParams.PooledPacketSize"/> whatever its length, plus the event and its list node. Counting the length
+    /// alone let tiny packets hold far more memory than the limit says.
+    /// </summary>
+    internal int QueuedPacketCost(int length) => Math.Max(length, Params.PooledPacketSize) + QueuedEventOverhead;
+
+    /// <summary>
+    /// The five commonest sizes among a connection's packets waiting in the event queue, as "size x count" pairs, for the
+    /// queue-limit warning. It walks the whole queue, so it runs only when a connection is disconnected for its queue.
+    /// </summary>
+    internal string DescribeQueuedSizes(UdpConnection con)
+    {
+        var sizes = new Dictionary<int, int>();
+
+        lock (_eventListGuard)
+        {
+            foreach (var ce in EventList)
+            {
+                if (ce.EventType != CallbackEventType.RoutePacket || ce.Source != con || ce.Payload is null)
+                    continue;
+
+                var len = ce.Payload.GetDataLen();
+                sizes[len] = sizes.GetValueOrDefault(len) + 1;
+            }
+        }
+
+        if (sizes.Count == 0)
+            return "none";
+
+        return string.Join(", ", sizes.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(5).Select(p => $"{p.Key} x {p.Value}"));
     }
 
     private void EventListAppend(CallbackEvent ce)

@@ -20,10 +20,13 @@ public static class AdventurersJournal
 
     /// <summary>
     /// Evergrove's first story, in the order it is played: Introduce Yourself (Samantha sends you to Ricky), Call the
-    /// Crew! (Ricky sends you to Shakey and back), then Back for More (Ricky sends you back to Samantha). Each quest is
-    /// offered where the one before it is handed in.
+    /// Crew! (Ricky sends you to Shakey and back), Back for More (Ricky sends you back to Samantha), Samantha's Mail (to
+    /// the Sanctuary warpstone and home by the map), then Chef: Assistant Needed (Samantha sends you to Simone, who
+    /// teaches you the chef job), Chef: Cobblestone Village Cafe (cook Simone's Spiralmint Steak), Chef: Delivery
+    /// Derailed (Simone sends you to Jonelle) and Chef: Package Recovery! (Jonelle's packages). Each quest is offered
+    /// where the one before it is handed in.
     /// </summary>
-    public static readonly IReadOnlyList<int> CobblestoneVillageStory = [2563, 1801, 3290];
+    public static readonly IReadOnlyList<int> CobblestoneVillageStory = [2563, 1801, 3290, 9101, 9102, 9103, 9104, 9105];
 
     /// <summary>Every story, by the hub it fills.</summary>
     public static readonly IReadOnlyDictionary<int, IReadOnlyList<int>> Stories = new Dictionary<int, IReadOnlyList<int>>

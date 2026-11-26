@@ -73,9 +73,8 @@ public static class CharacterCreateRequestHandler
             return true;
         }
 
-        // TODO: Validate name against CharacterCreateItemClothingSets.txt, CharacterCreateItemMappings.txt
-
-        if (!_resourceManager.Models.TryGetValue(characterData.Model, out var model))
+        // Only the models the character creator offers: the rest of the model list is npcs and creatures.
+        if (!_resourceManager.Models.TryGetPlayerModel(characterData.Model, out var model))
         {
             _logger.LogError("Failed to create character, invalid character model. {id}", characterData.Model);
 
@@ -137,6 +136,18 @@ public static class CharacterCreateRequestHandler
         if (characterData.ModelCustomization > 0 && !_resourceManager.ModelCustomizationMappings.TryGetValue(characterData.ModelCustomization, out modelCustomization))
         {
             _logger.LogError("Failed to create character, invalid character model customization. {id}", characterData.ModelCustomization);
+
+            characterCreateReply.Result = 2;
+
+            connection.Send(characterCreateReply);
+
+            return true;
+        }
+
+        // The character creator offers a fixed set of starting outfits. Any other item is not a starting choice.
+        if (!_resourceManager.StarterClothing.Allows(characterData.ItemFeet, characterData.ItemLegs, characterData.ItemChest))
+        {
+            _logger.LogWarning("Failed to create character, not starter clothing. ( Feet: {feet}, Legs: {legs}, Chest: {chest} )", characterData.ItemFeet, characterData.ItemLegs, characterData.ItemChest);
 
             characterCreateReply.Result = 2;
 

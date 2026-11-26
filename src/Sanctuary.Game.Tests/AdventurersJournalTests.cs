@@ -22,7 +22,20 @@ public sealed class AdventurersJournalTests
     private const int IntroduceYourself = 2563;
     private const int CallTheCrew = 1801;
     private const int BackForMore = 3290;
+    private const int SamanthasMail = 9101;
+    private const int AssistantNeeded = 9102;
+    private const int CobblestoneVillageCafe = 9103;
+    private const int DeliveryDerailed = 9104;
+    private const int PackageRecovery = 9105;
     private const int IntroduceYourselfElsewhere = 2564;
+
+    /// <summary>Every story quest up to and including this one handed in.</summary>
+    private static Dictionary<int, bool> HandedInUpTo(int questId)
+    {
+        var story = AdventurersJournal.CobblestoneVillageStory.ToList();
+
+        return story.Take(story.IndexOf(questId) + 1).ToDictionary(id => id, _ => true);
+    }
 
     private static string FindSourceFile(params string[] relativePath)
     {
@@ -55,7 +68,12 @@ public sealed class AdventurersJournalTests
             journal.Hubs.Values.Where(hub => hub.RegionId == 1).Select(hub => hub.Id).ToArray(),
             "The client makes a region's first unfinished hub current, so no other hub may come before the story's.");
 
-        CollectionAssert.AreEqual(new[] { IntroduceYourself, CallTheCrew, BackForMore },
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                IntroduceYourself, CallTheCrew, BackForMore, SamanthasMail, AssistantNeeded, CobblestoneVillageCafe, DeliveryDerailed,
+                PackageRecovery
+            },
             journal.HubQuests.Values
                 .Where(quest => quest.HubId == AdventurersJournal.CobblestoneVillageHubId)
                 .OrderBy(quest => quest.Unknown)
@@ -66,7 +84,7 @@ public sealed class AdventurersJournalTests
     [TestMethod]
     public void HubQuests_AreNumberedInStoryOrderFromOne()
     {
-        CollectionAssert.AreEqual(new[] { 1, 2, 3 },
+        CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5, 6, 7, 8 },
             AdventurersJournal.HubQuests().Select(quest => quest.Unknown).ToArray());
     }
 
@@ -115,6 +133,7 @@ public sealed class AdventurersJournalTests
     {
         Assert.IsTrue(AdventurersJournal.IsStoryQuest(IntroduceYourself));
         Assert.IsTrue(AdventurersJournal.IsStoryQuest(CallTheCrew));
+        Assert.IsTrue(AdventurersJournal.IsStoryQuest(PackageRecovery));
         Assert.IsFalse(AdventurersJournal.IsStoryQuest(IntroduceYourselfElsewhere));
     }
 
@@ -128,7 +147,15 @@ public sealed class AdventurersJournalTests
         Assert.IsTrue(Between(new() { [IntroduceYourself] = true }), "Handed in, and Call the Crew! not taken yet.");
         Assert.IsFalse(Between(new() { [IntroduceYourself] = true, [CallTheCrew] = false }), "The next one is in the log.");
         Assert.IsTrue(Between(new() { [IntroduceYourself] = true, [CallTheCrew] = true }), "Back for More not taken yet.");
-        Assert.IsFalse(Between(new() { [IntroduceYourself] = true, [CallTheCrew] = true, [BackForMore] = true }), "The story is finished.");
+        Assert.IsTrue(Between(HandedInUpTo(BackForMore)), "Samantha's Mail not taken yet.");
+        Assert.IsTrue(Between(HandedInUpTo(AssistantNeeded)), "The Cafe not taken yet: Simone offers it as Assistant Needed is handed in.");
+
+        var cafeTaken = HandedInUpTo(AssistantNeeded);
+        cafeTaken[CobblestoneVillageCafe] = false;
+        Assert.IsFalse(Between(cafeTaken), "The Cafe is in the log.");
+
+        Assert.IsTrue(Between(HandedInUpTo(CobblestoneVillageCafe)), "Delivery Derailed not taken yet.");
+        Assert.IsFalse(Between(HandedInUpTo(PackageRecovery)), "The story is finished.");
         Assert.IsFalse(Between(new() { [IntroduceYourselfElsewhere] = true }),
             "The other town's Introduce Yourself rules this story out; its quests are never taken.");
     }

@@ -43,7 +43,9 @@ public static class GatewayLoginRequestHandler
             connection.Send(gatewayLoginReply);
             connection.Disconnect();
 
-            _logger.LogWarning("Gateway tried to connect but failed the challenge, \"{challenge}\".", packet.Challenge);
+            // Never the challenge itself: it is the shared secret, and with the two servers set up differently, the real
+            // Gateway's would land in this log. Its length is enough to tell a wrong secret from an empty one.
+            _logger.LogWarning("Gateway tried to connect but failed the challenge ( {length} chars ).", packet.Challenge?.Length ?? 0);
 
             return true;
         }
@@ -53,7 +55,7 @@ public static class GatewayLoginRequestHandler
             connection.Send(gatewayLoginReply);
             connection.Disconnect();
 
-            _logger.LogWarning("Gateway tried to connect but is missing the server address, \"{serveraddress}\".", packet.ServerAddress);
+            _logger.LogWarning("Gateway tried to connect but is missing the server address.");
 
             return true;
         }

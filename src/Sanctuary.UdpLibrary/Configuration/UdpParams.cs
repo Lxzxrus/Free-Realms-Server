@@ -510,10 +510,21 @@ public class UdpParams
     /// Most packets one connection may have waiting for the application while <see cref="EventQueuing"/> is on.  Queued, a
     /// packet's handler runs when the queue is delivered, not as the packet arrives, so a connection that sends packets
     /// faster than its handlers run could fill the queue without limit, with every other connection's packets waiting
-    /// behind its own.  A connection that goes over is disconnected.  0 = no limit.
+    /// behind its own.  A connection that goes over is disconnected (as for <see cref="MaxQueuedBytesPerConnection"/>).
+    /// 0 = no limit.
     /// </summary>
     /// <remarks>default = 0</remarks>
     public int MaxQueuedPacketsPerConnection;
+
+    /// <summary>
+    /// Most memory, in bytes, one connection's packets waiting for the application may hold while <see cref="EventQueuing"/>
+    /// is on, the memory counterpart of <see cref="MaxQueuedPacketsPerConnection"/>: a packet can be up to
+    /// <see cref="IncomingLogicalPacketMax"/> long, so the count alone doesn't bound what the queue holds.  Each packet counts
+    /// what it really holds, at least <see cref="PooledPacketSize"/> plus its event, not just its length.  A connection that
+    /// goes over is disconnected.  0 = no limit.
+    /// </summary>
+    /// <remarks>default = 0</remarks>
+    public int MaxQueuedBytesPerConnection;
 
     public string ProtocolName;
 
@@ -585,6 +596,7 @@ public class UdpParams
         FaultLimit = 0;
         FaultWindow = 60000;
         MaxQueuedPacketsPerConnection = 0;
+        MaxQueuedBytesPerConnection = 0;
         ProtocolName = string.Empty;
         UserSuppliedEncryptExpansionBytes = 0;
         UserSuppliedEncryptExpansionBytes2 = 0;

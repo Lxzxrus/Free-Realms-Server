@@ -2614,6 +2614,7 @@
     "RewardExperience": 70,
     "RewardItems": [],
     "PrerequisiteQuestId": 1801,
+    "NextQuestId": 9101,
     "NotificationAvailable": 2,
     "NotificationActive": 6,
     "Goals": [
@@ -2625,6 +2626,200 @@
         "Targets": [
           {
             "NpcId": 2045
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Samantha's Mail",
+    "QuestId": 9101,
+    "TitleId": 46179,
+    "DescriptionId": 46158,
+    "GiverDialogueId": 47895,
+    "ObjectiveDescriptionId": 46158,
+    "IconId": 43278,
+    "GiverNpcId": 2045,
+    "TargetNpcId": 2045,
+    "RewardCoins": 25,
+    "RewardExperience": 60,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 3290,
+    "NextQuestId": 9102,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Evergrove's first hour: Samantha's bundle of mail lies beside the warpstone outside Sanctuary (pool sanctuary-samanthas-mail), and the return step's text teaches teleporting home with the world map. 47895 is Samantha's own offer line; the rows near the title have none.",
+    "Goals": [
+      {
+        "Type": 2,
+        "NameId": 46175,
+        "DescriptionId": 46176,
+        "CollectNodeType": "samanthas-mail",
+        "RequiredCount": 1
+      },
+      {
+        "Type": 0,
+        "NameId": 46177,
+        "DescriptionId": 46178,
+        "DialogueId": 46160,
+        "Targets": [
+          {
+            "NpcId": 2045
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Chef: Assistant Needed",
+    "QuestId": 9102,
+    "TitleId": 140523,
+    "DescriptionId": 140524,
+    "GiverDialogueId": 140522,
+    "ObjectiveDescriptionId": 140547,
+    "IconId": 43278,
+    "GiverNpcId": 2045,
+    "TargetNpcId": 2069,
+    "RewardCoins": 15,
+    "RewardExperience": 40,
+    "RewardProfileId": 45,
+    "RewardItems": [],
+    "TeachesProfileId": 45,
+    "PrerequisiteQuestId": 9101,
+    "NextQuestId": 9103,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Simone says she'll teach you the chef job (140529), and the turn-in does: Chef (45) is given the way her trainer menu gives it, before the rewards. Its stars go to Chef (RewardProfileId), as do the rest of the chef chain's (9103 to 9105), whichever job is worn. She offers the Cobblestone Village Cafe (9103) straight after.",
+    "Goals": [
+      {
+        "Type": 0,
+        "NameId": 140539,
+        "DescriptionId": 140547,
+        "DialogueId": 140529,
+        "Targets": [
+          {
+            "NpcId": 2069
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Chef: Cobblestone Village Cafe",
+    "QuestId": 9103,
+    "TitleId": 94275,
+    "DescriptionId": 94276,
+    "GiverDialogueId": 94274,
+    "ObjectiveDescriptionId": 100247,
+    "IconId": 43278,
+    "GiverNpcId": 2069,
+    "TargetNpcId": 2069,
+    "RewardCoins": 20,
+    "RewardExperience": 50,
+    "RewardProfileId": 45,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 9102,
+    "NextQuestId": 9104,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Win Cooking: Simone's Spiralmint Steak (activity 450), then take it to Simone. No world object starts a game yet, so Simone offers the steak herself while the step is open (its NpcId): clicking her opens the game's start screen as the Games menu does, and the step's marker and Take Me There point at her. The steak can be cooked from the Games menu all the same. Her offer 94278 and the step's row 94528 send you to her cooking table, so they wait for it: her offer is 94274, the same words without the table, and the step's row is 21837, from the unreleased first version of this quest (21831), which names only the steak. 100259 and 100265 are her offer to a player who arrives without Assistant Needed. No row near the title is her thanks: 21841 is, from that first version.",
+    "Goals": [
+      {
+        "Type": 3,
+        "NameId": 21837,
+        "DescriptionId": 94534,
+        "ActivityId": 450,
+        "NpcId": 2069
+      },
+      {
+        "Type": 0,
+        "NameId": 94536,
+        "DialogueId": 21841,
+        "Targets": [
+          {
+            "NpcId": 2069
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Chef: Delivery Derailed",
+    "QuestId": 9104,
+    "TitleId": 94291,
+    "DescriptionId": 94292,
+    "GiverDialogueId": 94290,
+    "ObjectiveDescriptionId": 100536,
+    "IconId": 43278,
+    "GiverNpcId": 2069,
+    "TargetNpcId": 4096,
+    "RewardCoins": 20,
+    "RewardExperience": 50,
+    "RewardProfileId": 45,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 9103,
+    "NextQuestId": 9105,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "Simone sends you to Jonelle, on the road north towards Sanctuary.",
+    "Goals": [
+      {
+        "Type": 0,
+        "NameId": 100158,
+        "DescriptionId": 100159,
+        "DialogueId": 94293,
+        "Targets": [
+          {
+            "NpcId": 4096
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "Chef: Package Recovery!",
+    "QuestId": 9105,
+    "TitleId": 94299,
+    "DescriptionId": 94300,
+    "GiverDialogueId": 94298,
+    "ObjectiveDescriptionId": 100537,
+    "IconId": 43278,
+    "GiverNpcId": 4096,
+    "TargetNpcId": 4096,
+    "RewardCoins": 30,
+    "RewardExperience": 70,
+    "RewardProfileId": 45,
+    "RewardItems": [],
+    "PrerequisiteQuestId": 9104,
+    "NotificationAvailable": 2,
+    "NotificationActive": 6,
+    "Comment": "The pickups stand in for the Package Recovery! minigame (100540), which this server doesn't have: any five of the six packages on the road around Jonelle (pool cobblestone-jonelles-packages). 101999, the step's row, is that minigame's own words for it.",
+    "Goals": [
+      {
+        "Type": 0,
+        "NameId": 100538,
+        "DescriptionId": 100539,
+        "Targets": [
+          {
+            "NpcId": 4095
+          }
+        ]
+      },
+      {
+        "Type": 2,
+        "NameId": 101999,
+        "DescriptionId": 100537,
+        "CollectNodeType": "jonelles-packages",
+        "RequiredCount": 5
+      },
+      {
+        "Type": 0,
+        "NameId": 139895,
+        "DescriptionId": 139896,
+        "DialogueId": 94301,
+        "Targets": [
+          {
+            "NpcId": 4096
           }
         ]
       }

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Net;
 using System.Text;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Sanctuary.UdpLibrary.Configuration;
@@ -21,11 +23,11 @@ public class HardeningTests
 {
     private const string ServerIp = "10.0.0.1";
 
-    private static FakeManager Server(FakeNetwork network, Action<UdpParams>? configure = null)
+    private static FakeManager Server(FakeNetwork network, Action<UdpParams>? configure = null, IServiceProvider? services = null)
     {
         var udpParams = FakeManager.ServerParams();
         configure?.Invoke(udpParams);
-        return FakeManager.Create(network, ServerIp, udpParams);
+        return FakeManager.Create(network, ServerIp, udpParams, services);
     }
 
     private static (FakeManager Manager, FakeConnection Connection) Client(FakeNetwork network, FakeManager server, string ipAddress)
@@ -108,6 +110,48 @@ public class HardeningTests
 
         var (_, c) = Client(network, server, "10.0.0.3");
         Assert.AreEqual(Status.Connected, c.Status, "the server still accepts players");
+    }
+
+    /// <summary>
+    /// A reliable packet carrying another with the same stamp is handled before the stamp moves on, so packets could nest
+    /// without end: one call per 4 bytes, thousands in a 64 KiB message, and a stack overflow, which nothing can catch,
+    /// ended the whole server. Nesting stops at UdpConnection.MaxCookedPacketDepth.
+    /// </summary>
+    [TestMethod]
+    public void DeeplyNestedPacketsAreCorruptNotAStackOverflow()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // 100 reliable packets one inside the other, all stamped 0, around one byte of game data
+        var packet = Enumerable.Range(0, 100).SelectMany(_ => new byte[] { 0, 9, 0, 0 }).Append((byte)1).ToArray();
+
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(packet));
+        network.Pump(3, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+        Assert.AreEqual(0, serverA.Received.Count, "nothing from inside it was handled");
+
+        var (_, b) = Client(network, server, "10.0.0.3");
+        Assert.AreEqual(Status.Connected, b.Status, "the server still accepts players");
+    }
+
+    [TestMethod]
+    public void PacketsNestedAFewLevelsStillArrive()
+    {
+        var network = new FakeNetwork();
+        var server = Server(network);
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(0, 9, 0, 0, 0, 9, 0, 0, 42));
+        network.Pump(3, server);
+
+        Assert.AreEqual(Status.Connected, serverA.Status);
+        CollectionAssert.AreEqual(new byte[] { 42 }, serverA.Received.Single());
     }
 
     [TestMethod]
@@ -642,6 +686,140 @@ public class HardeningTests
     }
 
     [TestMethod]
+    public void ConnectionOverTheQueuedMemoryLimitIsDisconnected()
+    {
+        var log = new ListLoggerProvider();
+        var network = new FakeNetwork();
+        var server = Server(network, p => p.EventQueuing = true, new ServiceCollection().AddSingleton<ILoggerFactory>(log).BuildServiceProvider());
+
+        // each small packet counts what it holds (a buffer of PooledPacketSize plus its event), not its few bytes: room for
+        // exactly three
+        var cost = server.QueuedPacketCost(4);
+        Assert.AreEqual(server.QueuedPacketCost(5), cost, "a small packet costs the same whatever its length");
+        Assert.IsTrue(cost > 4 + UdpManager<FakeConnection>.QueuedEventOverhead);
+        server.Params.MaxQueuedBytesPerConnection = 3 * cost;
+
+        var (clientA, a) = Client(network, server, "10.0.0.2");
+        var (clientB, b) = Client(network, server, "10.0.0.3");
+        var serverA = server.Accepted[0];
+        var serverB = server.Accepted[1];
+
+        // all read in one poll, before any is handled: four 4-byte packets from A (the fourth goes over) and three 5-byte
+        // packets from B (exactly at the limit, which is allowed)
+        for (byte i = 1; i <= 4; i++)
+        {
+            network.Deliver(clientA.EndPoint, server.EndPoint, a.Craft(i, 2, 3, 4));
+
+            if (i <= 3)
+                network.Deliver(clientB.EndPoint, server.EndPoint, b.Craft(i, 2, 3, 4, 5));
+        }
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Disconnected, serverA.Status);
+        Assert.AreEqual(DisconnectReason.CorruptPacket, serverA.DisconnectReason);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+        Assert.IsEmpty(serverA.Received, "what it had queued went with it");
+        Assert.AreEqual(0, serverA.QueuedPackets);
+        Assert.AreEqual(0, serverA.QueuedBytes, "its queued packets were dropped, and their memory with them");
+
+        // the warning says which limit and lists the commonest sizes of A's own waiting packets, not B's
+        var warning = log.Messages.Single(m => m.Contains("Disconnecting"));
+        StringAssert.Contains(warning, "went over the memory limit");
+        StringAssert.Contains(warning, "Waiting: 3 packets");
+        StringAssert.Contains(warning, "(bytes x count): 4 x 3.");
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        Assert.HasCount(3, serverB.Received);
+        Assert.AreEqual(0, serverB.QueuedBytes, "delivered packets no longer count");
+
+        // the limit is on memory held by packets waiting, not packets sent
+        for (byte i = 4; i <= 6; i++)
+            network.Deliver(clientB.EndPoint, server.EndPoint, b.Craft(i, 2, 3, 4, 5));
+
+        network.Pump(1, server);
+
+        Assert.AreEqual(Status.Connected, serverB.Status);
+        Assert.HasCount(6, serverB.Received);
+        Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+    }
+
+    [TestMethod]
+    public void TheQueueLimitWarningSaysWhenItWasThePacketCount()
+    {
+        var log = new ListLoggerProvider();
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            p.EventQueuing = true;
+            p.MaxQueuedPacketsPerConnection = 4;
+        }, new ServiceCollection().AddSingleton<ILoggerFactory>(log).BuildServiceProvider());
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+
+        // two sizes waiting: 3 bytes three times, 2 bytes once; the fifth packet goes over
+        network.Deliver(client.EndPoint, server.EndPoint, a.Craft(1, 2));
+
+        for (byte i = 1; i <= 4; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(i, 2, 3));
+
+        network.Pump(1, server);
+
+        var warning = log.Messages.Single(m => m.Contains("Disconnecting"));
+        StringAssert.Contains(warning, "went over the packet count limit");
+        StringAssert.Contains(warning, "(bytes x count): 3 x 3, 2 x 1.");
+    }
+
+    // On 25 November 2026 the old limit of 512 waiting packets disconnected a player every time they entered their
+    // apartment: more than 512 waited at once while the Gateway built the zone. Which packets they were wasn't recorded
+    // (the client wrote about 260 log lines in that second). This checks that a burst of 1000 small packets, about twice
+    // what tripped the old limit, now waits its turn.
+    [TestMethod]
+    [DataRow(0, true, DisplayName = "launch defaults: the burst is kept")]
+    [DataRow(512, false, DisplayName = "the old limit of 512: the burst disconnected the player")]
+    public void AZoneLoadBurstStaysUnderTheLaunchLimits(int packetLimit, bool kept)
+    {
+        const int burst = 1000;
+
+        var network = new FakeNetwork();
+        var server = Server(network, p =>
+        {
+            new PlayerUdpOptions().ApplyTo(p);
+            p.EventQueuing = true;
+
+            if (packetLimit > 0)
+                p.MaxQueuedPacketsPerConnection = packetLimit;
+        });
+
+        var (client, a) = Client(network, server, "10.0.0.2");
+        var serverA = server.Accepted[0];
+
+        // all read in one poll, before any is handled: small packets (40 bytes)
+        var line = new byte[40];
+        line[0] = 1;
+
+        for (var i = 0; i < burst; i++)
+            network.Deliver(client.EndPoint, server.EndPoint, a.Craft(line));
+
+        network.Pump(1, server);
+
+        if (!kept)
+        {
+            Assert.AreEqual(Status.Disconnected, serverA.Status);
+            Assert.AreEqual(1, server.Stats.QueueLimitDisconnects);
+            return;
+        }
+
+        network.Pump(20, server);
+
+        Assert.AreEqual(Status.Connected, serverA.Status);
+        Assert.AreEqual(0, server.Stats.QueueLimitDisconnects);
+        Assert.HasCount(burst, serverA.Received);
+        Assert.AreEqual(0, serverA.QueuedPackets);
+        Assert.AreEqual(0, serverA.QueuedBytes);
+    }
+
+    [TestMethod]
     public void ConnectionOverTheQueuedPacketLimitOnAReliablePacketLeavesThePriorityQueue()
     {
         var network = new FakeNetwork();
@@ -1021,7 +1199,10 @@ public class HardeningTests
         Assert.IsTrue(udpParams.ReliableOverflowBytes > 4400 * 1024, "above the 4.2 MiB a zone entry queues");
         Assert.IsTrue(udpParams.ReliableBacklogTimeout > 0);
         Assert.IsTrue(udpParams.FaultLimit > 0);
-        Assert.IsTrue(udpParams.MaxQueuedPacketsPerConnection > 0);
+        Assert.IsTrue(udpParams.MaxQueuedPacketsPerConnection >= 2048, "far above a zone-load burst of several hundred packets");
+        Assert.IsTrue(udpParams.MaxQueuedBytesPerConnection is > 0 and <= 4 * 1024 * 1024, "bounds the queue's memory per player");
+        Assert.IsTrue(udpParams.MaxQueuedBytesPerConnection >= 16 * udpParams.IncomingLogicalPacketMax, "room for several of the largest packets");
+        Assert.IsTrue(udpParams.MaxQueuedBytesPerConnection >= 2048 * (512 + 128), "room for a burst of 2048 small packets");
     }
 }
 

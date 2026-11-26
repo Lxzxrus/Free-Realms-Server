@@ -8351,5 +8351,19 @@
     "NodeType": "one-mans-trash-stage",
     "MaxActiveNodes": 1,
     "PlayerSpecific": true
+  },
+  {
+    "Key": "sanctuary-samanthas-mail",
+    "ZoneDefinitionId": 1,
+    "NodeType": "samanthas-mail",
+    "MaxActiveNodes": 1,
+    "PlayerSpecific": true
+  },
+  {
+    "Key": "cobblestone-jonelles-packages",
+    "ZoneDefinitionId": 1,
+    "NodeType": "jonelles-packages",
+    "MaxActiveNodes": 6,
+    "PlayerSpecific": true
   }
 ]

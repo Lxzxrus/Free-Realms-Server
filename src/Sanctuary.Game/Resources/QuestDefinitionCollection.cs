@@ -29,7 +29,8 @@ public class QuestDefinitionCollection
 
     public ConcurrentDictionary<int, QuestDefinition> Quests => _index.Quests;
 
-    // NPC definition id -> the quests it offers, and the quests it is a goal target or turn-in for.
+    // NPC definition id -> the quests it offers, and the quests it is a goal target or turn-in for (Evergrove: or offers a
+    // play step's game for).
     public ConcurrentDictionary<int, List<int>> ByGiver => _index.ByGiver;
     public ConcurrentDictionary<int, List<int>> ByTarget => _index.ByTarget;
     public ConcurrentDictionary<int, List<int>> ByStateNpc => _index.ByStateNpc;
@@ -237,8 +238,35 @@ public class QuestDefinitionCollection
                     if (collectGoal.RequiredCount <= 0)
                         _logger.LogWarning("Collect goal on quest {id} has no RequiredCount in \"{file}\"; it can never be completed.", quest.QuestId, filePath);
                     break;
+
+                case PlayActivityGoal playGoal:
+                    if (playGoal.ActivityId <= 0)
+                        _logger.LogWarning("Play goal on quest {id} has no ActivityId in \"{file}\"; it can never be credited.", quest.QuestId, filePath);
+
+                    if (playGoal.RequiredCount <= 0)
+                        _logger.LogWarning("Play goal on quest {id} has no RequiredCount in \"{file}\"; it can never be completed.", quest.QuestId, filePath);
+
+                    // Evergrove: the NPC who offers the step's game is clicked for it, and is the step's target, as a
+                    // talk step's NPC is.
+                    if (playGoal.NpcId != 0)
+                    {
+                        var questIds = index.ByTarget.GetOrAdd(playGoal.NpcId, _ => []);
+
+                        if (!questIds.Contains(quest.QuestId))
+                            questIds.Add(quest.QuestId);
+                    }
+                    else
+                        _logger.LogWarning("Play goal on quest {id} has no NpcId in \"{file}\"; no NPC offers its game, so it has no target or Take Me There.", quest.QuestId, filePath);
+                    break;
             }
         }
+
+        // Evergrove: a quest is handed in when the last goal of its last step is done, so a play goal anywhere in that step
+        // could hand it in the moment the game is won, its reward window over the game and no line from anyone, as a game
+        // has no conversation: last of all, or beside the hand-in talk (WithPrevious) once the talk is done. A talk step of
+        // its own after the game takes the hand-in.
+        if (quest.LastStepGoals().Any(goal => goal is PlayActivityGoal))
+            _logger.LogWarning("Quest {id}'s last step has a play goal in \"{file}\"; winning the game could hand it in, over the game and with nobody's thanks. End the quest with a talk goal in a step of its own, not WithPrevious.", quest.QuestId, filePath);
     }
 
     private void EnforceSymmetricExclusions(Index index, string filePath)

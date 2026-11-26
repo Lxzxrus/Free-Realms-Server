@@ -15,6 +15,7 @@ using Sanctuary.Database;
 using Sanctuary.Game;
 using Sanctuary.Game.Housing;
 using Sanctuary.Game.Jobs;
+using Sanctuary.Game.Minigames;
 using Sanctuary.Game.Quests;
 using Sanctuary.Game.Trading;
 using Sanctuary.Gateway;
@@ -130,6 +131,17 @@ builder.ConfigureServices((hostBuilderContext, serviceCollection) =>
     serviceCollection.AddSingleton<IChatCommandManager, ChatCommandManager>();
     serviceCollection.AddSingleton<IQuestManager, QuestManager>();
     serviceCollection.AddSingleton<IJobManager, JobManager>();
+
+    // A quest that teaches a job grants it through the job manager, which refreshes trainer badges through the quest
+    // manager: the quest manager takes the job manager lazily, so neither has to be built before the other.
+    serviceCollection.AddSingleton(serviceProvider => new Lazy<IJobManager>(() => serviceProvider.GetRequiredService<IJobManager>()));
+
+    // The NPC who offers a quest step's game opens it through the Games menu's own code, here in the Gateway. The quest
+    // manager takes the launcher as it is, not lazily, so the container builds it with the quest manager as the Gateway
+    // starts (its zones and packet handlers take the quest manager): a registration missing here stops the Gateway then,
+    // not at a player's click.
+    serviceCollection.AddSingleton<IActivityLauncher, ActivityLauncher>();
+
     serviceCollection.AddSingleton<IHouseManager, HouseManager>();
     serviceCollection.AddSingleton<HouseInvites>();
     serviceCollection.AddSingleton<HousingCreativeCatalog>();
