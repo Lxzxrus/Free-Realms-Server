@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Sanctuary.Core.IO;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Helpers;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 
@@ -19,8 +20,16 @@ public sealed class TradeManager : ITradeManager, IDisposable
 
     private readonly object _sync = new();
     private readonly Dictionary<int, TradeSession> _sessions = [];
+
+    // Open trade windows (active or confirming) only. An unanswered request is not here, so it never makes either
+    // player busy: the target can still be asked by others, ask others, and answer whichever request they like.
     private readonly Dictionary<ulong, TradeSession> _sessionsByPlayer = [];
     private readonly Dictionary<ulong, TradeSession> _committingByPlayer = [];
+
+    // Each player has at most one request out. Sending another replaces it.
+    private readonly Dictionary<ulong, TradeSession> _pendingByInviter = [];
+    private readonly Dictionary<ulong, long> _lastRequestTimestamps = [];
+    private readonly Dictionary<(ulong Inviter, ulong Invitee), long> _declinedTimestamps = [];
     private readonly ConcurrentQueue<Action> _externalActions = new();
     private readonly ILogger<TradeManager> _logger;
     private readonly IResourceManager _resourceManager;
@@ -30,6 +39,12 @@ public sealed class TradeManager : ITradeManager, IDisposable
     private readonly ITimer _cleanupTimer;
     private int _externalDrainScheduled;
     private int _nextSessionId = Random.Shared.Next(1, int.MaxValue - 1);
+
+    /// <summary>Tests: receives every packet instead of the player's connection.</summary>
+    internal Action<Player, ISerializablePacket>? PacketSink { get; init; }
+
+    /// <summary>Tests: runs the sends of a transition on the caller's thread, once the lock is released.</summary>
+    internal bool RunExternalActionsInline { get; init; }
 
     public TradeManager(
         ILogger<TradeManager> logger,
@@ -134,13 +149,22 @@ public sealed class TradeManager : ITradeManager, IDisposable
             return;
         }
 
-        if (IsBusyLocked(requester.Guid) || IsBusyLocked(target.Guid))
+        string? refusal = GetRequestRefusalLocked(requester, target);
+        if (refusal is not null)
         {
+            QueueSystemMessage(actions, requester, refusal);
             _logger.LogDebug(
-                "Rejected a player trade request because a participant is busy. ( Requester: {RequesterGuid}, Target: {TargetGuid} )",
+                "Refused a player trade request. ( Requester: {RequesterGuid}, Target: {TargetGuid}, Reason: {Reason} )",
                 requester.Guid,
-                target.Guid);
+                target.Guid,
+                refusal);
             return;
+        }
+
+        // A new request replaces the requester's older one, and clears it from that player's screen.
+        if (_pendingByInviter.TryGetValue(requester.Guid, out TradeSession? previous))
+        {
+            ClosePendingLocked(previous, actions, inviterNotice: null);
         }
 
         int sessionId = AllocateSessionIdLocked();
@@ -148,10 +172,11 @@ public sealed class TradeManager : ITradeManager, IDisposable
         var session = new TradeSession(sessionId, requester, target, createdTimestamp);
 
         _sessions.Add(sessionId, session);
-        _sessionsByPlayer.Add(requester.Guid, session);
-        _sessionsByPlayer.Add(target.Guid, session);
+        _pendingByInviter.Add(requester.Guid, session);
+        _lastRequestTimestamps[requester.Guid] = createdTimestamp;
 
         QueueSend(actions, target, BaseTradePacket.CreateInvite(requester.Name, requester.Guid, sessionId));
+        QueueSystemMessage(actions, requester, $"You sent {target.Name.FullName} a trade request.");
         _logger.LogInformation(
             "Created a player trade invitation. ( Session: {SessionId}, Inviter: {InviterGuid}, Invitee: {InviteeGuid} )",
             sessionId,
@@ -163,9 +188,10 @@ public sealed class TradeManager : ITradeManager, IDisposable
     {
         if (command.SessionId <= 0
             || !_sessions.TryGetValue(command.SessionId, out TradeSession? session)
-            || !_sessionsByPlayer.TryGetValue(player.Guid, out TradeSession? playerSession)
-            || !ReferenceEquals(session, playerSession)
-            || !session.Contains(player))
+            || !session.Contains(player)
+            || (session.State != TradeSessionState.Pending
+                && (!_sessionsByPlayer.TryGetValue(player.Guid, out TradeSession? playerSession)
+                    || !ReferenceEquals(session, playerSession))))
         {
             _logger.LogDebug(
                 "Ignored a player trade packet for an unknown or mismatched session. ( Player: {PlayerGuid}, Session: {SessionId}, Command: {CommandType} )",
@@ -212,6 +238,23 @@ public sealed class TradeManager : ITradeManager, IDisposable
 
     private void OnDisconnectedLocked(Player player, List<Action> actions)
     {
+        foreach (TradeSession pending in PendingSessionsOfLocked(player))
+        {
+            if (pending.IsInvitee(player))
+            {
+                ClosePendingLocked(
+                    pending,
+                    actions,
+                    inviterNotice: $"Your trade request to {player.Name.FullName} was canceled.",
+                    notifyInvitee: false);
+            }
+            else
+            {
+                // Native message 2 also clears the request from the invitee's action queue.
+                ClosePendingLocked(pending, actions, inviterNotice: null, TradeMessageCode.PartnerDisconnected);
+            }
+        }
+
         if (_sessionsByPlayer.TryGetValue(player.Guid, out TradeSession? session))
         {
             if (!session.Contains(player))
@@ -220,25 +263,10 @@ public sealed class TradeManager : ITradeManager, IDisposable
             }
 
             Player other = session.Other(player);
-            TradeSessionState previousState = session.State;
             RemoveSessionLocked(session);
 
-            if (previousState == TradeSessionState.Pending)
-            {
-                if (session.IsInvitee(player))
-                {
-                    QueueSend(actions, other, BaseTradePacket.CreateRejected(player.Name));
-                }
-                else
-                {
-                    QueueSend(actions, other, BaseTradePacket.CreateEndSession(session.Id));
-                }
-            }
-            else
-            {
-                QueueSend(actions, other, BaseTradePacket.CreateMessage(TradeMessageCode.PartnerDisconnected));
-                QueueSend(actions, other, BaseTradePacket.CreateEndSession(session.Id));
-            }
+            QueueSend(actions, other, BaseTradePacket.CreateMessage(TradeMessageCode.PartnerDisconnected));
+            QueueSend(actions, other, BaseTradePacket.CreateEndSession(session.Id));
 
             _logger.LogInformation(
                 "Closed a player trade after disconnect. ( Session: {SessionId}, Player: {PlayerGuid} )",
@@ -257,6 +285,16 @@ public sealed class TradeManager : ITradeManager, IDisposable
 
     private void OnZoningLocked(Player player, List<Action> actions)
     {
+        foreach (TradeSession pending in PendingSessionsOfLocked(player))
+        {
+            ClosePendingLocked(
+                pending,
+                actions,
+                inviterNotice: pending.IsInvitee(player)
+                    ? $"Your trade request to {player.Name.FullName} was canceled."
+                    : null);
+        }
+
         if (_sessionsByPlayer.TryGetValue(player.Guid, out TradeSession? session))
         {
             if (!session.Contains(player))
@@ -300,12 +338,7 @@ public sealed class TradeManager : ITradeManager, IDisposable
 
         if (!accepted)
         {
-            RemoveSessionLocked(session);
-            QueueSend(actions, session.Inviter, BaseTradePacket.CreateRejected(session.Invitee.Name));
-            _logger.LogInformation(
-                "Player trade invitation declined. ( Session: {SessionId}, Invitee: {InviteeGuid} )",
-                session.Id,
-                session.Invitee.Guid);
+            DeclineLocked(session, actions);
             return;
         }
 
@@ -315,8 +348,34 @@ public sealed class TradeManager : ITradeManager, IDisposable
             return;
         }
 
+        if (IsBusyLocked(session.Inviter.Guid) || IsBusyLocked(session.Invitee.Guid))
+        {
+            // Not expected: opening a window withdraws both players' other requests. Never open a second window.
+            ClosePendingLocked(session, actions, inviterNotice: null);
+            QueueSystemMessage(actions, session.Invitee, $"{session.Inviter.Name.FullName} is busy trading right now.");
+            return;
+        }
+
+        // Both players are now trading with each other, so every other request either of them sent or received is
+        // withdrawn and cleared from the other player's screen.
+        foreach (TradeSession other in _sessions.Values
+            .Where(candidate => !ReferenceEquals(candidate, session)
+                && candidate.State == TradeSessionState.Pending
+                && (candidate.Contains(session.Inviter) || candidate.Contains(session.Invitee)))
+            .ToArray())
+        {
+            Player trader = other.Contains(session.Inviter) ? session.Inviter : session.Invitee;
+            ClosePendingLocked(
+                other,
+                actions,
+                inviterNotice: other.IsInvitee(trader) ? $"{trader.Name.FullName} started another trade." : null);
+        }
+
+        DetachPendingLocked(session);
         session.State = TradeSessionState.Active;
         session.Revision = 1;
+        _sessionsByPlayer.Add(session.Inviter.Guid, session);
+        _sessionsByPlayer.Add(session.Invitee.Guid, session);
 
         QueueSend(
             actions,
@@ -590,23 +649,21 @@ public sealed class TradeManager : ITradeManager, IDisposable
             return;
         }
 
-        TradeSessionState previousState = session.State;
-        RemoveSessionLocked(session);
-
-        if (previousState == TradeSessionState.Pending)
+        if (session.State == TradeSessionState.Pending)
         {
             if (session.IsInvitee(player))
             {
-                QueueSend(actions, session.Inviter, BaseTradePacket.CreateRejected(session.Invitee.Name));
+                DeclineLocked(session, actions);
             }
             else
             {
-                QueueSend(actions, session.Invitee, BaseTradePacket.CreateEndSession(session.Id));
+                ClosePendingLocked(session, actions, inviterNotice: null);
             }
 
             return;
         }
 
+        RemoveSessionLocked(session);
         QueueSend(actions, session.Other(player), BaseTradePacket.CreateMessage(TradeMessageCode.TradeCanceled));
         QueueSend(actions, session.Inviter, BaseTradePacket.CreateEndSession(session.Id));
         QueueSend(actions, session.Invitee, BaseTradePacket.CreateEndSession(session.Id));
@@ -830,7 +887,7 @@ public sealed class TradeManager : ITradeManager, IDisposable
             || item.Count <= 0
             || !_resourceManager.ClientItemDefinitions.TryGetValue(item.Definition, out ClientItemDefinition? definition)
             || definition.NoTrade
-            || definition.Type == TradingCardItemType)
+            || !IsTradeableItemType(definition.Type))
         {
             return false;
         }
@@ -870,8 +927,24 @@ public sealed class TradeManager : ITradeManager, IDisposable
             && ReferenceEquals(targetView, requester);
     }
 
+    /// <summary>
+    /// Trading cards stay with their owner, and so do pets and mounts (as upstream OSFR's trade rules, PR #179).
+    /// Evergrove keeps pets and mounts as their own rows, not inventory items, so this only stops a stray one.
+    /// </summary>
+    internal static bool IsTradeableItemType(int itemType) =>
+        itemType is not (TradingCardItemType or ItemDefinitionHelper.PetItemType or ItemDefinitionHelper.MountItemType);
+
     private void AbortForContextLocked(TradeSession session, List<Action> actions)
     {
+        if (session.State == TradeSessionState.Pending)
+        {
+            ClosePendingLocked(
+                session,
+                actions,
+                inviterNotice: $"Your trade request to {session.Invitee.Name.FullName} was canceled.");
+            return;
+        }
+
         RemoveSessionLocked(session);
         QueueSend(actions, session.Inviter, BaseTradePacket.CreateMessage(TradeMessageCode.TradeCanceled));
         QueueSend(actions, session.Invitee, BaseTradePacket.CreateMessage(TradeMessageCode.TradeCanceled));
@@ -902,7 +975,7 @@ public sealed class TradeManager : ITradeManager, IDisposable
         QueueSend(actions, session.Invitee, BaseTradePacket.CreateEndSession(session.Id));
     }
 
-    private void CleanupExpiredAndInvalidSessions()
+    internal void CleanupExpiredAndInvalidSessions()
     {
         try
         {
@@ -916,37 +989,39 @@ public sealed class TradeManager : ITradeManager, IDisposable
                         continue;
                     }
 
-                    TimeSpan timeout = session.State == TradeSessionState.Pending
-                        ? _options.InviteTimeout
-                        : _options.SessionTimeout;
-                    long baseline = session.State == TradeSessionState.Pending
-                        ? session.CreatedTimestamp
-                        : session.LastActivityTimestamp;
-                    if (_timeProvider.GetElapsedTime(baseline) < timeout)
+                    if (session.State == TradeSessionState.Pending)
+                    {
+                        if (_timeProvider.GetElapsedTime(session.CreatedTimestamp) >= _options.InviteTimeout)
+                        {
+                            ClosePendingLocked(
+                                session,
+                                actions,
+                                inviterNotice: $"Your trade request to {session.Invitee.Name.FullName} timed out.");
+                            _logger.LogInformation(
+                                "Expired a player trade invitation. ( Session: {SessionId} )",
+                                session.Id);
+                        }
+
+                        continue;
+                    }
+
+                    if (_timeProvider.GetElapsedTime(session.LastActivityTimestamp) < _options.SessionTimeout)
                     {
                         continue;
                     }
 
-                    TradeSessionState previousState = session.State;
                     RemoveSessionLocked(session);
-
-                    if (previousState == TradeSessionState.Pending)
-                    {
-                        QueueSend(actions, session.Inviter, BaseTradePacket.CreateRejected(session.Invitee.Name));
-                        QueueSend(actions, session.Invitee, BaseTradePacket.CreateEndSession(session.Id));
-                    }
-                    else
-                    {
-                        QueueSend(actions, session.Inviter, BaseTradePacket.CreateMessage(TradeMessageCode.TradeCanceled));
-                        QueueSend(actions, session.Invitee, BaseTradePacket.CreateMessage(TradeMessageCode.TradeCanceled));
-                        QueueSend(actions, session.Inviter, BaseTradePacket.CreateEndSession(session.Id));
-                        QueueSend(actions, session.Invitee, BaseTradePacket.CreateEndSession(session.Id));
-                    }
+                    QueueSend(actions, session.Inviter, BaseTradePacket.CreateMessage(TradeMessageCode.TradeCanceled));
+                    QueueSend(actions, session.Invitee, BaseTradePacket.CreateMessage(TradeMessageCode.TradeCanceled));
+                    QueueSend(actions, session.Inviter, BaseTradePacket.CreateEndSession(session.Id));
+                    QueueSend(actions, session.Invitee, BaseTradePacket.CreateEndSession(session.Id));
 
                     _logger.LogInformation(
                         "Expired a player trade session. ( Session: {SessionId} )",
                         session.Id);
                 }
+
+                PruneRequestLimitsLocked();
             });
         }
         catch (Exception exception)
@@ -966,7 +1041,11 @@ public sealed class TradeManager : ITradeManager, IDisposable
             scheduleDrain = PublishExternalBatchLocked(actions);
         }
 
-        if (scheduleDrain)
+        if (scheduleDrain && RunExternalActionsInline)
+        {
+            DrainExternalActions();
+        }
+        else if (scheduleDrain)
         {
             ThreadPool.UnsafeQueueUserWorkItem(
                 static manager => manager.DrainExternalActions(),
@@ -1031,13 +1110,25 @@ public sealed class TradeManager : ITradeManager, IDisposable
     }
 
     private void QueueSend(List<Action> actions, Player player, byte[] payload) =>
-        actions.Add(() => Send(player, payload));
+        actions.Add(() => Send(player, new RawTradePacket(payload)));
 
-    private void Send(Player player, byte[] payload)
+    private void QueueSystemMessage(List<Action> actions, Player player, string message) =>
+        actions.Add(() => Send(player, ChatHelper.CreateSystemMessage(message)));
+
+    private void Send(Player player, byte[] payload) => Send(player, new RawTradePacket(payload));
+
+    private void Send(Player player, ISerializablePacket packet)
     {
         try
         {
-            player.SendTunneled(new RawTradePacket(payload));
+            if (PacketSink is { } sink)
+            {
+                sink(player, packet);
+            }
+            else
+            {
+                player.SendTunneled(packet);
+            }
         }
         catch (Exception exception)
         {
@@ -1078,6 +1169,139 @@ public sealed class TradeManager : ITradeManager, IDisposable
     private bool IsBusyLocked(ulong playerGuid) =>
         _sessionsByPlayer.ContainsKey(playerGuid) || _committingByPlayer.ContainsKey(playerGuid);
 
+    /// <summary>Why a request can't be sent, in words for the requester, or null when it can.</summary>
+    private string? GetRequestRefusalLocked(Player requester, Player target)
+    {
+        string targetName = target.Name.FullName;
+
+        if (IsBusyLocked(requester.Guid))
+        {
+            return "You are already trading.";
+        }
+
+        if (IsBusyLocked(target.Guid))
+        {
+            return $"{targetName} is busy trading right now.";
+        }
+
+        if (_pendingByInviter.TryGetValue(requester.Guid, out TradeSession? outgoing)
+            && outgoing.Invitee.Guid == target.Guid)
+        {
+            return $"You already sent {targetName} a trade request.";
+        }
+
+        if (_pendingByInviter.TryGetValue(target.Guid, out TradeSession? incoming)
+            && incoming.Invitee.Guid == requester.Guid)
+        {
+            return $"{targetName} already sent you a trade request.";
+        }
+
+        if (_lastRequestTimestamps.TryGetValue(requester.Guid, out long lastRequest)
+            && _timeProvider.GetElapsedTime(lastRequest) < _options.RequestInterval)
+        {
+            return "Please wait a moment before sending another trade request.";
+        }
+
+        if (_declinedTimestamps.TryGetValue((requester.Guid, target.Guid), out long declined)
+            && _timeProvider.GetElapsedTime(declined) < _options.DeclinedRequestCooldown)
+        {
+            return $"{targetName} turned down your last trade request. Please wait a little before asking again.";
+        }
+
+        int waiting = _sessions.Values.Count(
+            session => session.State == TradeSessionState.Pending && session.Invitee.Guid == target.Guid);
+        if (waiting >= _options.MaximumPendingInvitesPerTarget)
+        {
+            return $"{targetName} has too many trade requests waiting. Please try again soon.";
+        }
+
+        return null;
+    }
+
+    private TradeSession[] PendingSessionsOfLocked(Player player) =>
+        _sessions.Values
+            .Where(session => session.State == TradeSessionState.Pending && session.Contains(player))
+            .ToArray();
+
+    private void DeclineLocked(TradeSession session, List<Action> actions)
+    {
+        RemoveSessionLocked(session);
+        _declinedTimestamps[(session.Inviter.Guid, session.Invitee.Guid)] = _timeProvider.GetTimestamp();
+        QueueSend(actions, session.Inviter, BaseTradePacket.CreateRejected(session.Invitee.Name));
+        _logger.LogInformation(
+            "Player trade invitation declined. ( Session: {SessionId}, Invitee: {InviteeGuid} )",
+            session.Id,
+            session.Invitee.Guid);
+    }
+
+    /// <summary>
+    /// Closes an unanswered request. The invitee is sent native message 8 ("Your trade with [player] has been
+    /// canceled."), which also removes the request from the client's action queue (upstream OSFR PR #194), and the
+    /// inviter is told why when there is something to tell.
+    /// </summary>
+    private void ClosePendingLocked(
+        TradeSession session,
+        List<Action> actions,
+        string? inviterNotice,
+        byte inviteeMessage = TradeMessageCode.PartnerChangedInstance,
+        bool notifyInvitee = true)
+    {
+        if (session.State != TradeSessionState.Pending)
+        {
+            return;
+        }
+
+        RemoveSessionLocked(session);
+
+        if (notifyInvitee)
+        {
+            QueueSend(actions, session.Invitee, BaseTradePacket.CreateMessage(inviteeMessage));
+            QueueSend(actions, session.Invitee, BaseTradePacket.CreateEndSession(session.Id));
+        }
+
+        if (inviterNotice is not null)
+        {
+            QueueSystemMessage(actions, session.Inviter, inviterNotice);
+        }
+    }
+
+    private void DetachPendingLocked(TradeSession session)
+    {
+        if (_pendingByInviter.TryGetValue(session.Inviter.Guid, out TradeSession? pending)
+            && ReferenceEquals(pending, session))
+        {
+            _pendingByInviter.Remove(session.Inviter.Guid);
+        }
+    }
+
+    private void PruneRequestLimitsLocked()
+    {
+        foreach ((ulong guid, long timestamp) in _lastRequestTimestamps.ToArray())
+        {
+            if (_timeProvider.GetElapsedTime(timestamp) >= _options.RequestInterval)
+            {
+                _lastRequestTimestamps.Remove(guid);
+            }
+        }
+
+        foreach (((ulong, ulong) pair, long timestamp) in _declinedTimestamps.ToArray())
+        {
+            if (_timeProvider.GetElapsedTime(timestamp) >= _options.DeclinedRequestCooldown)
+            {
+                _declinedTimestamps.Remove(pair);
+            }
+        }
+    }
+
+    /// <summary>Tests: the session id of the request a player has out, if any.</summary>
+    internal int? PendingSessionIdOf(Player inviter)
+    {
+        lock (_sync)
+        {
+            return _pendingByInviter.TryGetValue(inviter.Guid, out TradeSession? session) ? session.Id : null;
+        }
+    }
+
     private int AllocateSessionIdLocked()
     {
         do
@@ -1104,6 +1328,7 @@ public sealed class TradeManager : ITradeManager, IDisposable
     private void DetachSessionMappingsLocked(TradeSession session)
     {
         _sessions.Remove(session.Id);
+        DetachPendingLocked(session);
 
         if (_sessionsByPlayer.TryGetValue(session.Inviter.Guid, out TradeSession? inviterSession)
             && ReferenceEquals(inviterSession, session))
@@ -1189,6 +1414,16 @@ public sealed class TradeManager : ITradeManager, IDisposable
         if (options.MaximumDistinctItemsPerPlayer is < 1 or > 50)
         {
             throw new ArgumentOutOfRangeException(nameof(options), "A trade offer must allow between one and fifty distinct items.");
+        }
+
+        if (options.RequestInterval < TimeSpan.Zero || options.DeclinedRequestCooldown < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "Trade request limits cannot be negative.");
+        }
+
+        if (options.MaximumPendingInvitesPerTarget is < 1 or > 10)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "A player must be able to hold between one and ten trade requests.");
         }
     }
 
