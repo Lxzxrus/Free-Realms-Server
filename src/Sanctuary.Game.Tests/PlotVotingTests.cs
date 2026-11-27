@@ -351,7 +351,11 @@ public sealed class PlotVotingTests
         Assert.AreEqual(5.0, Standings(Now).For(RankedPlot).Average, "Unlocked, its votes count again.");
     }
 
-    /// <summary>Past votes are kept for history and moderation, even when the owner deletes the character and house.</summary>
+    /// <summary>
+    /// Past votes are kept for history and moderation, even after the house is deleted: a house goes with the character
+    /// holding it when no other character on the account can take it (<see cref="HouseHandover"/>). Here the character
+    /// is deleted directly, so the database's cascade takes the house.
+    /// </summary>
     [TestMethod]
     public void VotesOutliveTheHouse_WithTheOwnersAccount()
     {

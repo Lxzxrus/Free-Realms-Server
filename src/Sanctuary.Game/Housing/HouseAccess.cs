@@ -9,8 +9,8 @@ namespace Sanctuary.Game.Housing;
 
 /// <summary>
 /// Who may be in a house. A house belongs to its account (see <see cref="HouseOwnership"/>), so every character on
-/// that account may always come in. So may the friends of the character who bought it; anyone else only while the
-/// house is published and unlocked.
+/// that account may always come in. So may the friends of the character holding it (<c>DbHouse.CharacterId</c>);
+/// anyone else only while the house is published and unlocked.
 /// </summary>
 public static class HouseAccess
 {
@@ -23,7 +23,7 @@ public static class HouseAccess
         return playerUserId != 0 && playerUserId == ownerUserId;
     }
 
-    /// <summary>Whether the character who bought the house is on a player's friend list.</summary>
+    /// <summary>Whether the character holding the house is on a player's friend list.</summary>
     public static bool IsOwnersFriend(IEnumerable<FriendData> friends, ulong ownerCharacterId)
     {
         var ownerGuid = GuidHelper.GetPlayerGuid(ownerCharacterId);
@@ -33,7 +33,7 @@ public static class HouseAccess
 
     /// <summary>Whether a player may stay in, or come into, the house while it is locked.</summary>
     /// <param name="ownerUserId">The account that owns the house.</param>
-    /// <param name="ownerCharacterId">The character who bought it.</param>
+    /// <param name="ownerCharacterId">The character holding it.</param>
     public static bool MayBeInLockedHouse(
         ulong playerUserId,
         IEnumerable<FriendData> friends,
@@ -46,7 +46,7 @@ public static class HouseAccess
     /// <summary>
     /// Whether a player may enter a house. Its account always may. A members-only house turns away everyone else who
     /// isn't a member, and a house that is unpublished or locked turns away everyone but the friends of the character
-    /// who bought it.
+    /// holding it.
     /// </summary>
     /// <param name="ownerUserId">The account that owns <paramref name="house"/>.</param>
     public static bool MayEnter(

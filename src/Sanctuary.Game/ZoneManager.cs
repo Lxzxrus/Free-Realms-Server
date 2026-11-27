@@ -13,8 +13,12 @@ using Microsoft.Extensions.Logging;
 using Sanctuary.Database;
 using Sanctuary.Database.Entities;
 using Sanctuary.Game.Entities;
+using Sanctuary.Game.Housing;
 using Sanctuary.Game.Resources.Definitions.Zones;
 using Sanctuary.Game.Zones;
+
+// A house, and the account that owns it (HouseOwnership.FindHeld).
+using HeldHouse = (ulong HouseId, ulong UserId);
 
 namespace Sanctuary.Game;
 
@@ -168,9 +172,19 @@ public class ZoneManager : IZoneManager
             return false;
         }
 
-        var key = (zoneDefinitionId, ownerId);
+        // Evergrove: a house is looked up once, here. It must exist, it keys its instance (InstanceKey) and it's what
+        // the instance is made for.
+        HeldHouse? house = null;
 
-        zone = _zones.GetOrAdd(key, _ => CreateZoneInstance(zoneDefinition, ownerId));
+        if (zoneDefinition is HousingZoneDefinition && !TryGetHouse(ownerId!.Value, zoneDefinitionId, out house))
+        {
+            zone = null;
+            return false;
+        }
+
+        var key = InstanceKey(zoneDefinitionId, ownerId, house?.HouseId);
+
+        zone = _zones.GetOrAdd(key, _ => CreateZoneInstance(zoneDefinition, ownerId, house));
 
         try
         {
@@ -190,16 +204,15 @@ public class ZoneManager : IZoneManager
         return true;
     }
 
-    private IZone CreateZoneInstance(BaseZoneDefinition zoneDefinition, ulong? ownerId) => zoneDefinition switch
+    private IZone CreateZoneInstance(BaseZoneDefinition zoneDefinition, ulong? ownerId, HeldHouse? house) => zoneDefinition switch
     {
         WorldZoneDefinition worldZoneDefinition => new WorldZone(worldZoneDefinition, _serviceProvider)
         {
             Id = NextID(),
             OwnerId = ownerId // Note: should always be 'null'.
         },
-        HousingZoneDefinition housingZoneDefinition when ownerId is not null
-            && TryGetHouse(ownerId.Value, housingZoneDefinition.Id, out var houseId, out var ownerUserId) =>
-            new HousingZone(housingZoneDefinition, houseId, ownerUserId, _serviceProvider)
+        HousingZoneDefinition housingZoneDefinition when house is { } held =>
+            new HousingZone(housingZoneDefinition, held.HouseId, held.UserId, _serviceProvider)
         {
             Id = NextID(),
             OwnerId = ownerId
@@ -219,9 +232,22 @@ public class ZoneManager : IZoneManager
 
     public bool TryRemoveZoneInstance(IZone zone)
     {
-        var key = (zone.DefinitionId, zone.OwnerId);
-        return _zones.TryRemove(new(key, zone));
+        return _zones.TryRemove(new(InstanceKey(zone), zone));
     }
+
+    /// <summary>
+    /// The key a zone instance is kept under: its definition and its owner. Evergrove: a house's is its lot and the
+    /// house itself (<paramref name="houseId"/>), not the character holding it, which can change while the house is
+    /// loaded: a deleted character's houses move to another character on the account (<see cref="HouseHandover"/>). So
+    /// whoever comes in under the new holder joins the instance already loaded, rather than loading a second copy of
+    /// the house beside it. Finding an instance and removing it both use this, so the two can't disagree.
+    /// </summary>
+    /// <param name="houseId">The house, for a housing zone; <c>null</c> for any other zone.</param>
+    internal static (int, ulong?) InstanceKey(int definitionId, ulong? ownerId, ulong? houseId) =>
+        houseId is ulong house ? (definitionId, house) : (definitionId, ownerId);
+
+    private static (int, ulong?) InstanceKey(IZone zone) =>
+        InstanceKey(zone.DefinitionId, zone.OwnerId, (zone as HousingZone)?.HouseId);
 
     public void EvictIfEmpty(IZone zone)
     {
@@ -284,24 +310,19 @@ public class ZoneManager : IZoneManager
         // This is why we don't pass a player instance here directly.
         WorldZoneDefinition => true,
         CombatZoneDefinition => ownerId is not null,
-        HousingZoneDefinition housing => ownerId is not null && TryGetHouse(ownerId.Value, housing.Id, out _, out _),
+        // Evergrove: and the house must exist, which TryGetOrCreateZoneInstance looks up.
+        HousingZoneDefinition => ownerId is not null,
         FishingZoneDefinition => ownerId is null,
         _ => false
     };
 
-    /// <param name="ownerId">The character who bought the house.</param>
-    /// <param name="ownerUserId">The account that owns it.</param>
-    private bool TryGetHouse(ulong ownerId, int zoneDefinitionId, out ulong houseId, out ulong ownerUserId)
+    /// <param name="ownerId">The character holding the house.</param>
+    /// <param name="house">The house, and the account that owns it.</param>
+    private bool TryGetHouse(ulong ownerId, int zoneDefinitionId, [NotNullWhen(true)] out HeldHouse? house)
     {
         using var dbContext = _dbContextFactory.CreateDbContext();
 
-        var house = dbContext.Houses
-            .Where(house => house.CharacterId == ownerId && house.ZoneDefinitionId == zoneDefinitionId)
-            .Select(house => new { house.Id, house.Character.UserId })
-            .SingleOrDefault();
-
-        houseId = house?.Id ?? 0;
-        ownerUserId = house?.UserId ?? 0;
+        house = HouseOwnership.FindHeld(dbContext, ownerId, zoneDefinitionId);
 
         return house is not null;
     }

@@ -57,7 +57,7 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
     }
 
     /// <summary>
-    /// Sends the player their account's houses, whichever of its characters bought them, as the player's own: the
+    /// Sends the player their account's houses, whichever of its characters holds them, as the player's own: the
     /// client enters one from "My Houses" by its guid.
     /// </summary>
     public static void SendHouseList(GatewayConnection connection)
@@ -78,8 +78,8 @@ public static class ClientHousingPacketRequestPlayerHousesHandler
     }
 
     /// <summary>
-    /// Answers "Go to House" on another player with the houses that player bought which the requester may enter (see
-    /// <see cref="HouseAccess.MayEnter"/>). Houses another character on the same account bought aren't listed, so the
+    /// Answers "Go to House" on another player with the houses that player holds which the requester may enter (see
+    /// <see cref="HouseAccess.MayEnter"/>). Houses another character on the same account holds aren't listed, so the
     /// list doesn't tell visitors which characters share an account. Picking one sends
     /// <see cref="ClientHousingPacketEnterRequest"/>, which checks the same rule again.
     /// </summary>
