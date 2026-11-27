@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Microsoft.EntityFrameworkCore;
@@ -12,16 +13,50 @@ using Sanctuary.Database;
 using Sanctuary.Packet;
 using Sanctuary.Packet.Common;
 using Sanctuary.Packet.Common.Attributes;
+using Sanctuary.UdpLibrary.Enumerations;
 
 namespace Sanctuary.Login.Handlers;
 
 [PacketHandler]
 public static class CharacterLoginRequestHandler
 {
+    // A quiet client (idle in the world) sends nothing for up to about 15 seconds: its UDP keep-alive is 15 s
+    // (FreeRealms.exe, ClientGatewayApi sets it over the library's 29 s default), and real captures show 5 to 8 s gaps
+    // even in active play. So 20 seconds of silence means a crashed session. It has to stay under the Gateway's 30 s
+    // no-data timeout, which drops a silent connection anyway.
+    private const uint CrashIdleMilliseconds = 20000;
+
+    // How often to ask the gateway again while a login is waiting on the old session.
+    private const long ReleaseRetryMilliseconds = 2000;
+
+    // After a waiting login is let in, other waiters for that character hold off this long for it to reach the gateway.
+    private const long HandoffMilliseconds = 10000;
+
+    // Evergrove: how many logins may wait at once. Each one asks the gateway every couple of seconds, so a client that
+    // keeps asking can't grow the list or the gateway traffic without bound. Past this a login is refused (status 8).
+    internal const int MaxPendingLogins = 256;
+
     private static ILogger _logger = null!;
     private static GatewayServer _gatewayServer = null!;
     private static LoginServerOptions _options = null!;
     private static IDbContextFactory<DatabaseContext> _dbContextFactory = null!;
+    private static uint _nextReleaseRequestId = 1;
+
+    // The client only leaves its waiting state on status 1; any other status leaves it stuck at character select
+    // until it is restarted. So a login for a character that's still online is held here, never refused.
+    private static readonly List<PendingCharacterLogin> _pendingLogins = new();
+
+    // Character id -> until when a just-admitted login has the character to itself.
+    private static readonly Dictionary<ulong, long> _handoffs = new();
+
+    private sealed class PendingCharacterLogin
+    {
+        public required LoginConnection Connection { get; init; }
+        public required GatewayConnection Gateway { get; set; }
+        public required ulong CharacterId { get; init; }
+        public long LastRequestAt { get; set; } = long.MinValue / 2;
+        public uint RequestId { get; set; }
+    }
 
     public static void ConfigureServices(IServiceProvider serviceProvider)
     {
@@ -77,22 +112,9 @@ public static class CharacterLoginRequestHandler
             return true;
         }
 
-        var ticket = Guid.NewGuid();
-
-        character.Ticket = ticket;
-
-        if (dbContext.SaveChanges() <= 0)
-        {
-            characterLoginReply.Status = 6;
-
-            connection.Send(characterLoginReply);
-
-            return true;
-        }
-
         // TODO: Client currently doesn't let the user pick a server so default to the first one.
 
-        var gatewayServer = _gatewayServer.Gateways.FirstOrDefault();
+        var gatewayServer = GetGateway();
 
         if (gatewayServer is null)
         {
@@ -103,32 +125,189 @@ public static class CharacterLoginRequestHandler
             return true;
         }
 
-        // Character is already logged in.
-        if (gatewayServer.OnlineCharacters.Contains(character.Id))
+        // Still online: hold the login until the old session is released (gone quiet, a crash) or logs out on its own.
+        if (IsBusy(gatewayServer, character.Id))
         {
-            characterLoginReply.Status = 8;
+            _logger.LogInformation("Character {id} is still online; holding the login until the old session is released or logs out.", character.Id);
 
-            connection.Send(characterLoginReply);
+            // Evergrove: one waiting login per client and per character. An older wait for the same character (the
+            // same account asking again, from this client or another) is told "already online" and replaced.
+            foreach (var older in _pendingLogins.Where(x => x.Connection == connection || x.CharacterId == character.Id).ToList())
+            {
+                _pendingLogins.Remove(older);
+
+                if (older.Connection != connection)
+                    older.Connection.Send(new CharacterLoginReply { Status = 8 });
+            }
+
+            if (_pendingLogins.Count >= MaxPendingLogins)
+            {
+                _logger.LogWarning("Refused the login of character {id}: {count} logins are already waiting.", character.Id, _pendingLogins.Count);
+
+                characterLoginReply.Status = 8;
+
+                connection.Send(characterLoginReply);
+
+                return true;
+            }
+
+            _pendingLogins.Add(new PendingCharacterLogin
+            {
+                Connection = connection,
+                Gateway = gatewayServer,
+                CharacterId = character.Id
+            });
+
+            ProcessPendingLogins();
 
             return true;
         }
 
-        characterLoginReply.Status = 1;
+        Admit(connection, gatewayServer, character.Id);
+
+        return true;
+    }
+
+    public static void CompleteRelease(GatewayConnection gateway, uint requestId, bool released)
+    {
+        // Evergrove: only the gateway that was asked can answer. Request ids count up, so they are easy to guess.
+        var pending = _pendingLogins.Find(x => x.RequestId == requestId && x.Gateway == gateway);
+
+        if (pending is null)
+            return;
+
+        pending.RequestId = 0;
+
+        _logger.LogDebug("Character {id} release: released={released}.", pending.CharacterId, released);
+
+        // Normally the old session's logout has already cleared it; this covers the reply arriving first.
+        if (released)
+            pending.Gateway.MarkReleased(pending.CharacterId);
+
+        ProcessPendingLogins();
+    }
+
+    /// <summary>
+    /// Lets waiting logins in once their character is free, and keeps asking the gateway to release it meanwhile.
+    /// Called every loop from <see cref="LoginService"/>.
+    /// </summary>
+    public static void ProcessPendingLogins()
+    {
+        if (_pendingLogins.Count == 0)
+            return;
+
+        var now = Environment.TickCount64;
+
+        foreach (var pending in _pendingLogins.ToList())
+        {
+            if (pending.Connection.Status == Status.Disconnected)
+            {
+                _pendingLogins.Remove(pending);
+                _logger.LogInformation("Stopped holding the login for character {id}; the client disconnected.", pending.CharacterId);
+                continue;
+            }
+
+            // The gateway this login was waiting on went away (restart); follow the current one.
+            if (pending.Gateway.Status == Status.Disconnected && GetGateway() is { } current)
+                pending.Gateway = current;
+
+            if (!IsBusy(pending.Gateway, pending.CharacterId))
+            {
+                _pendingLogins.Remove(pending);
+                _logger.LogInformation("Character {id} is free; letting the held login in.", pending.CharacterId);
+                Admit(pending.Connection, pending.Gateway, pending.CharacterId);
+                continue;
+            }
+
+            // Ask again every so often; an unanswered request just gets retried.
+            if (pending.Gateway.IsOnline(pending.CharacterId) && now - pending.LastRequestAt >= ReleaseRetryMilliseconds)
+            {
+                pending.RequestId = _nextReleaseRequestId++;
+                pending.LastRequestAt = now;
+
+                pending.Gateway.Send(new GatewayCharacterReleaseRequest
+                {
+                    RequestId = pending.RequestId,
+                    Id = pending.CharacterId,
+                    IdleThresholdMilliseconds = CrashIdleMilliseconds
+                });
+            }
+        }
+    }
+
+    // Only gateways that completed their login (ServerAddress set); a dropped one may still be in the list briefly.
+    private static GatewayConnection? GetGateway() => _gatewayServer.Gateways.LastOrDefault(x => !string.IsNullOrEmpty(x.ServerAddress));
+
+    private static bool IsBusy(GatewayConnection gateway, ulong characterId)
+    {
+        if (gateway.IsOnline(characterId))
+            return true;
+
+        if (!_handoffs.TryGetValue(characterId, out var until))
+            return false;
+
+        if (Environment.TickCount64 < until)
+            return true;
+
+        _handoffs.Remove(characterId);
+        return false;
+    }
+
+    // Issues a fresh ticket and sends status 1. The ticket is made here, not when the request arrived, so a login that
+    // waited (or a second one for the same character) always carries the ticket the gateway will check.
+    private static void Admit(LoginConnection connection, GatewayConnection gateway, ulong characterId)
+    {
+        var ticket = Guid.NewGuid();
+
+        int updated;
+
+        // Evergrove: this also runs from Login's main loop (held logins), where an exception would stop the whole
+        // Login server. A database error refuses this one login instead.
+        try
+        {
+            using var dbContext = _dbContextFactory.CreateDbContext();
+
+            updated = dbContext.Characters
+                .Where(x => x.Id == characterId)
+                .ExecuteUpdate(x => x.SetProperty(c => c.Ticket, (Guid?)ticket));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to issue a login ticket for character {id}.", characterId);
+            updated = 0;
+        }
+
+        if (updated <= 0)
+        {
+            connection.Send(new CharacterLoginReply { Status = 6 });
+            return;
+        }
+
+        var now = Environment.TickCount64;
+
+        // Evergrove: drop the handoffs that have run out, so the map doesn't keep one per character ever let in.
+        if (_handoffs.Count > MaxPendingLogins)
+        {
+            foreach (var expired in _handoffs.Where(x => x.Value <= now).Select(x => x.Key).ToList())
+                _handoffs.Remove(expired);
+        }
+
+        _handoffs[characterId] = now + HandoffMilliseconds;
 
         var serverTicket = ticket.ToString("N");
 
-        var clientCharacterData = new ClientCharacterData
+        var characterLoginReply = new CharacterLoginReply
         {
-            ServerAddress = gatewayServer.ServerAddress,
-            ServerTicket = serverTicket,
-            CryptoKey = serverTicket, // Use ticket as key.
-            Guid = GuidHelper.GetPlayerGuid(character.Id)
+            Status = 1,
+            Payload = new ClientCharacterData
+            {
+                ServerAddress = gateway.ServerAddress,
+                ServerTicket = serverTicket,
+                CryptoKey = serverTicket, // Use ticket as key.
+                Guid = GuidHelper.GetPlayerGuid(characterId)
+            }.Serialize()
         };
 
-        characterLoginReply.Payload = clientCharacterData.Serialize();
-
         connection.Send(characterLoginReply);
-
-        return true;
     }
 }

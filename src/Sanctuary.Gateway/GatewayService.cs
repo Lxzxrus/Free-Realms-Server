@@ -183,6 +183,15 @@ public class GatewayService : BackgroundService
         // Register services on static packet handlers.
         _serviceProvider.ConfigurePacketHandlers();
 
+        if (!_server.IsSocketBound)
+        {
+            _logger.LogCritical("Cannot start {server}. Port {port} could not be bound; is another instance still running?", nameof(GatewayServer), _options.Port);
+
+            _hostApplicationLifetime.StopApplication();
+
+            return Task.CompletedTask;
+        }
+
         // Connect to the Login Server.
 
         var clientConnection = _client.EstablishConnection(_options.LoginGatewayAddress);
@@ -237,10 +246,10 @@ public class GatewayService : BackgroundService
 
                         // Login keeps its own list of who is online here, to refuse a second login of the same
                         // character. A new connection starts that list empty.
-                        var online = _server.OnlineCharacterIds();
+                        var online = _server.OnlineCharacterSessions();
 
-                        foreach (var id in online)
-                            _client.SendCharacterLogin(id);
+                        foreach (var (id, session) in online)
+                            _client.SendCharacterLogin(id, session);
 
                         if (online.Count > 0)
                             _logger.LogInformation("Told the Login server about {Count} players already online.", online.Count);

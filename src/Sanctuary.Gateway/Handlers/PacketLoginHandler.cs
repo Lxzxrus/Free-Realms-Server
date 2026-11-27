@@ -268,7 +268,8 @@ public static class PacketLoginHandler
             .Where(x => x.Id == character.Id)
             .ExecuteUpdate(x => x.SetProperty(x => x.LastLogin, connection.Player!.LoginStartedAt));
 
-        _loginClient.SendCharacterLogin(character.Id);
+        connection.BeginLoginSession();
+        _loginClient.SendCharacterLogin(character.Id, connection.LoginSession);
 
         // The ticket checked out, so this is a player: let them send the larger packets a real client sends after login,
         // such as the Coin Shop search's request for every item's definition (about 68 KiB). Until here every connection
