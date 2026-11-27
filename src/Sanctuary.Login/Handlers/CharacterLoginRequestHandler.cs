@@ -20,8 +20,11 @@ namespace Sanctuary.Login.Handlers;
 [PacketHandler]
 public static class CharacterLoginRequestHandler
 {
-    // The client sends a packet about every second, so five seconds of silence is a crashed session.
-    private const uint CrashIdleMilliseconds = 5000;
+    // A quiet client (idle in the world) sends nothing for up to about 15 seconds: its UDP keep-alive is 15 s
+    // (FreeRealms.exe, ClientGatewayApi sets it over the library's 29 s default), and real captures show 5 to 8 s gaps
+    // even in active play. So 20 seconds of silence means a crashed session. It has to stay under the Gateway's 30 s
+    // no-data timeout, which drops a silent connection anyway.
+    private const uint CrashIdleMilliseconds = 20000;
 
     // How often to ask the gateway again while a login is waiting on the old session.
     private const long ReleaseRetryMilliseconds = 2000;
