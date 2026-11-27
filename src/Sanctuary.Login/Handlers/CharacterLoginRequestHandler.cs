@@ -256,11 +256,23 @@ public static class CharacterLoginRequestHandler
     {
         var ticket = Guid.NewGuid();
 
-        using var dbContext = _dbContextFactory.CreateDbContext();
+        int updated;
 
-        var updated = dbContext.Characters
-            .Where(x => x.Id == characterId)
-            .ExecuteUpdate(x => x.SetProperty(c => c.Ticket, (Guid?)ticket));
+        // Evergrove: this also runs from Login's main loop (held logins), where an exception would stop the whole
+        // Login server. A database error refuses this one login instead.
+        try
+        {
+            using var dbContext = _dbContextFactory.CreateDbContext();
+
+            updated = dbContext.Characters
+                .Where(x => x.Id == characterId)
+                .ExecuteUpdate(x => x.SetProperty(c => c.Ticket, (Guid?)ticket));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to issue a login ticket for character {id}.", characterId);
+            updated = 0;
+        }
 
         if (updated <= 0)
         {
