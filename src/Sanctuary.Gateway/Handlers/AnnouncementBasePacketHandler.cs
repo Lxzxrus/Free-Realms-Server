@@ -12,8 +12,9 @@ public static class AnnouncementBasePacketHandler
         if (!reader.TryRead(out byte subOpCode) || subOpCode != 1)
             return false;
 
-        // Evergrove: an empty list, not upstream OSFR's "Hot New Items!" Marketplace ad (PR #118 took store ads out of
-        // the welcome window; WorldZone doesn't send it at login either).
+        // Evergrove answers with an empty list, not upstream's Marketplace announcement (PR #118). The welcome window
+        // still shows its built-in "Hot New Items!" ad: it reads the list before this answer arrives and draws that ad
+        // when the list is empty.
         connection.SendTunneled(WelcomeScreenHelper.GetAnnouncementsPacket([]));
         return true;
     }
