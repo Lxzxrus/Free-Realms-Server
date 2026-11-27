@@ -211,6 +211,7 @@ public static class FishingHandler
 
         player.FishingOfferAfterLoadingActivityId = activity.Id;
         player.FishingOfferAfterLoadingUntil = Environment.TickCount64 + OfferAfterLoadingMs;
+        player.FishingOfferAfterLoadingZoneEntry = player.ZoneEntry;
     }
 
     /// <summary>The client's loading screen dropped: the start screen of a hole the map just took the player to.</summary>
@@ -224,7 +225,10 @@ public static class FishingHandler
 
         player.FishingOfferAfterLoadingActivityId = 0;
 
+        // A loading screen from a later trip (the player left the zone before this one's came) isn't the map
+        // teleport's: offering the hole then would pull them into fishing from wherever they are now.
         if (Environment.TickCount64 > player.FishingOfferAfterLoadingUntil ||
+            player.ZoneEntry != player.FishingOfferAfterLoadingZoneEntry ||
             !_resourceManager.ClientActivityDefinitions.TryGetValue(activityId, out var activity))
             return;
 

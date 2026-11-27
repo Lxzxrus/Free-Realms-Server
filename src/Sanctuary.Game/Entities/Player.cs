@@ -197,6 +197,12 @@ public sealed class Player : ClientPcData, IEntity
     /// <summary>Until when (<see cref="Environment.TickCount64"/>) <see cref="FishingOfferAfterLoadingActivityId"/> waits.</summary>
     public long FishingOfferAfterLoadingUntil { get; set; }
 
+    /// <summary>
+    /// <see cref="ZoneEntry"/> when <see cref="FishingOfferAfterLoadingActivityId"/> was set: the offer only stands in
+    /// that visit to the zone, so a loading screen after leaving it (a house, a hole, and back) can't start fishing.
+    /// </summary>
+    public int FishingOfferAfterLoadingZoneEntry { get; set; }
+
     /// <summary>The player's fishing, while they are in a fishing hole; <c>null</c> otherwise.</summary>
     public Minigames.Fishing.FishingSession? FishingSession { get; set; }
 

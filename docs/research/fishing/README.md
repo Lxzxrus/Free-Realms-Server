@@ -51,7 +51,8 @@ code the pieces live as below. Where they say to type `tp x y z`, `tporigin` or 
    The map first teleports the player to the hole's water in Fabled Realms, as before (from a house or another hole it
    only takes the player back to Fabled Realms). That teleport shows a loading screen, even within the zone, and the
    client cancels a start screen that arrives before it drops, so the offer waits for the client's "Viewed loading
-   screen" report (`PacketClientLog`), for at most 30 seconds.
+   screen" report (`PacketClientLog`), for at most 30 seconds, and only while the player is still on that visit to
+   Fabled Realms: once they've left the zone, a later loading screen doesn't start fishing.
 
    **No rod equipped** (on any profile): the client can't cast without one. From the map there is no start screen,
    only a chat line telling the player to buy and equip a rod. From the Games menu the start screen still opens,
