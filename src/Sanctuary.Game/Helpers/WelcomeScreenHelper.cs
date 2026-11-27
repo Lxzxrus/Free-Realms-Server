@@ -46,12 +46,57 @@ public static class WelcomeScreenHelper
     private const int SandwichClaimCodeIconId = 949;
     private const int FirstLoginSecondsSinceLastLogin = -1;
 
+    /// <summary>
+    /// Returns the ids of the category groups whose bundles the client shows: groups that were sent and have at least
+    /// one category whose ParentId chain reaches the root (0) through the sent categories. The client drops a bundle
+    /// of any other group, and every merchant-only bundle, from a bundle group (0x99f150).
+    /// </summary>
+    public static HashSet<int> GetShowableCategoryGroupIds(
+        IEnumerable<StoreBundleCategoryGroupDefinition> categoryGroups,
+        IReadOnlyDictionary<int, StoreBundleCategoryNode> categories)
+    {
+        var showable = new HashSet<int>();
+        foreach (var group in categoryGroups)
+        {
+            if (group.CategoryIds is null)
+                continue;
+            foreach (var categoryId in group.CategoryIds)
+            {
+                if (IsUnderRoot(categoryId, categories))
+                {
+                    showable.Add(group.Id);
+                    break;
+                }
+            }
+        }
+
+        return showable;
+    }
+
+    private static bool IsUnderRoot(int categoryId, IReadOnlyDictionary<int, StoreBundleCategoryNode> categories)
+    {
+        var visited = new HashSet<int>();
+        var current = categoryId;
+        while (current != 0)
+        {
+            if (!visited.Add(current))
+                return false;
+            if (!categories.TryGetValue(current, out var node))
+                return false;
+            current = node.ParentId;
+        }
+
+        return true;
+    }
+
     public static StoreBundleGroupDefinition GetPopularItems(
         StoreBundleGroupDefinition template, IEnumerable<AppStoreBundleDefinition> catalog,
+        IReadOnlySet<int> showableCategoryGroupIds,
         int count = PopularItemCount, int currencyType = StationCashCurrencyType)
     {
         var candidates = catalog.Where(x => x.CurrencyType == currencyType && x.NameId > 0
-            && x.DescriptionId > 0 && int.TryParse(x.Image.Image, out var imageId) && imageId > 0)
+            && x.DescriptionId > 0 && int.TryParse(x.Image.Image, out var imageId) && imageId > 0
+            && !x.IsMerchantOnly && showableCategoryGroupIds.Contains(x.CategoryGroupId))
             .DistinctBy(x => x.Id).ToArray();
         Random.Shared.Shuffle(candidates);
 

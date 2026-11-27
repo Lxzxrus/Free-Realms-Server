@@ -709,8 +709,16 @@ public abstract class BaseZone : IZone, IDisposable
             player.SendTunneled(packetInGamePurchaseStoreBundles);
 
             if (packetInGamePurchaseStoreBundleGroups.BundleGroups.TryGetValue(WelcomeScreenHelper.PopularItemsGroupId, out var popularItems))
+            {
+                // Evergrove: pick only bundles the client will show. It drops merchant-only bundles and bundles whose
+                // category group has no category in the tree sent above (0x99f150), which hid about a fifth of the 8.
+                var showableCategoryGroupIds = WelcomeScreenHelper.GetShowableCategoryGroupIds(
+                    packetInGamePurchaseStoreBundleCategoryGroups.CategoryGroups.Values,
+                    packetInGamePurchaseStoreBundleCategories.CategoryTree.Categories);
+
                 packetInGamePurchaseStoreBundleGroups.BundleGroups[WelcomeScreenHelper.PopularItemsGroupId] = WelcomeScreenHelper.GetPopularItems(
-                    popularItems, packetInGamePurchaseStoreBundles.Store.Bundles.Values);
+                    popularItems, packetInGamePurchaseStoreBundles.Store.Bundles.Values, showableCategoryGroupIds);
+            }
         }
 
         player.SendTunneled(packetInGamePurchaseStoreBundleGroups);
