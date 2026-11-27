@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -149,6 +150,10 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         // raw packet size must be at least 64 bytes
         ArgumentOutOfRangeException.ThrowIfLessThan(udpParams.MaxRawPacketSize, 64);
 
+        // the least a connect request may ask for can't be more than we use ourselves, or every request would be ignored
+        ArgumentOutOfRangeException.ThrowIfNegative(udpParams.MinRawPacketSize);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(udpParams.MinRawPacketSize, Math.Min(udpParams.MaxRawPacketSize, Constants.HardMaxRawPacketSize));
+
         // incoming socket buffer size must be at least as big as one raw packet
         ArgumentOutOfRangeException.ThrowIfLessThan(udpParams.IncomingBufferSize, udpParams.MaxRawPacketSize);
 
@@ -197,6 +202,26 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
             Params.PooledPacketSize = Params.MaxRawPacketSize;
 
         Params.MaxDataHoldSize = Math.Min(Params.MaxDataHoldSize, Params.MaxRawPacketSize);
+
+        // the starting queue limits (see UdpConnection.RaiseStartingLimits): 0 is off, less makes no sense, and a
+        // memory limit that can't hold even one packet would have every connection dropped at its first
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingMaxQueuedPacketsPerConnection);
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingMaxQueuedBytesPerConnection);
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingReliableWindow);
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingReliableOverflowBytes);
+        ArgumentOutOfRangeException.ThrowIfNegative(Params.StartingTimeout);
+
+        // room for the few small answers a connection gets before the application knows it, or the first would end it
+        if (Params.StartingReliableOverflowBytes > 0)
+            ArgumentOutOfRangeException.ThrowIfLessThan(Params.StartingReliableOverflowBytes, 4 * Params.MaxRawPacketSize);
+
+        // a time too short to log in within would end every connection, and one inside the handshake's own would only
+        // count the connections that has already given up on
+        if (Params.StartingTimeout > 0)
+            ArgumentOutOfRangeException.ThrowIfLessThan(Params.StartingTimeout, Math.Max(1000, Params.HandshakeTimeout));
+
+        if (Params.StartingMaxQueuedBytesPerConnection > 0)
+            ArgumentOutOfRangeException.ThrowIfLessThan(Params.StartingMaxQueuedBytesPerConnection, QueuedPacketCost(0));
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
@@ -738,6 +763,22 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
 
             if (zeroByte == 0 && packetType == (byte)UdpPacketType.Connect)
             {
+                // Checked before the limits below, so a request that is ignored for its size uses up none of them and makes
+                // no connection.  (A request too short to say a size is never answered either: under 10 bytes makes no
+                // connection, and the connection that 10 to 13 bytes make can't read a size, so it never confirms and goes
+                // at the handshake timeout.)
+                if (Params.MinRawPacketSize > 0 && data.Length >= ConnectRequestSizeOffset + sizeof(int))
+                {
+                    var askedSize = BinaryPrimitives.ReadInt32BigEndian(data.Slice(ConnectRequestSizeOffset));
+
+                    if (askedSize < Params.MinRawPacketSize)
+                    {
+                        CountRefusal(ConnectRefusal.PacketSize);
+                        LogRefusal(socketAddress, ConnectRefusal.PacketSize, askedSize);
+                        return;
+                    }
+                }
+
                 ConnectRefusal refusal;
 
                 lock (_connectionGuard)
@@ -931,11 +972,23 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
     // the largest server status reply an application may write (the Login server's is 6 bytes)
     private const int MaxServerStatusReply = 64;
 
-    private void LogRefusal(SocketAddress socketAddress, ConnectRefusal refusal)
+    // where a connect request says the largest packet its sender takes: a zero, the type, the protocol version, the connect
+    // code, then this
+    internal const int ConnectRequestSizeOffset = 10;
+
+    // Requests ignored for their size have a line a minute of their own.  They use up no limit, so whoever sends them can
+    // send as many as they like, and sharing the line would let them hide which connection limit was being hit.
+    private UdpClockStamp _lastSizeRefusalLogTime;
+    private int _sizeRefusalsSinceLog;
+
+    private void LogRefusal(SocketAddress socketAddress, ConnectRefusal refusal, int askedSize = 0)
     {
-        if (_lastRefusalLogTime != 0 && CachedClockElapsed(_lastRefusalLogTime) < RefusalLogInterval)
+        ref var lastLogTime = ref (refusal == ConnectRefusal.PacketSize ? ref _lastSizeRefusalLogTime : ref _lastRefusalLogTime);
+        ref var sinceLog = ref (refusal == ConnectRefusal.PacketSize ? ref _sizeRefusalsSinceLog : ref _refusalsSinceLog);
+
+        if (lastLogTime != 0 && CachedClockElapsed(lastLogTime) < RefusalLogInterval)
         {
-            _refusalsSinceLog++;
+            sinceLog++;
             return;
         }
 
@@ -945,16 +998,44 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
             ConnectRefusal.AddressConnections => $"that address already has {Params.MaxConnectionsPerIp} connections, the most allowed",
             ConnectRefusal.AddressRate => $"that address opened {Params.ConnectRatePerIp} connections within {Params.ConnectRateWindow / 1000} s, the most allowed",
             ConnectRefusal.GlobalRate => $"{Params.ConnectRateGlobal} connections were opened within {Params.ConnectRateWindow / 1000} s, the most allowed",
+            ConnectRefusal.PacketSize => $"it asked for packets of at most {askedSize} bytes, and the least allowed is {Params.MinRawPacketSize}",
             _ => "too many addresses are connecting at once"
         };
 
-        if (_refusalsSinceLog > 0)
-            Logger.LogWarning("Ignored a connect request from {address}: {reason}. {count} other requests were ignored since the last line like this.", FormatAddress(socketAddress), why, _refusalsSinceLog);
+        if (sinceLog > 0)
+            Logger.LogWarning("Ignored a connect request from {address}: {reason}. {count} other requests were ignored since the last line like this.", FormatAddress(socketAddress), why, sinceLog);
         else
             Logger.LogWarning("Ignored a connect request from {address}: {reason}.", FormatAddress(socketAddress), why);
 
-        _lastRefusalLogTime = CachedClock;
-        _refusalsSinceLog = 0;
+        lastLogTime = CachedClock;
+        sinceLog = 0;
+    }
+
+    // connections dropped at the starting timeout come as fast as strangers can connect, so they share a line a minute
+    private UdpClockStamp _lastStartingTimeoutLogTime;
+    private int _startingTimeoutsSinceLog;
+
+    /// <summary>Counts, and now and then logs, a connection dropped at <see cref="UdpParams.StartingTimeout"/>.</summary>
+    public void ReportStartingTimeout(UdpConnection con, long age)
+    {
+        lock (_statsGuard)
+        {
+            ManagerStats.StartingTimeoutDisconnects++;
+        }
+
+        if (_lastStartingTimeoutLogTime != 0 && CachedClockElapsed(_lastStartingTimeoutLogTime) < RefusalLogInterval)
+        {
+            _startingTimeoutsSinceLog++;
+            return;
+        }
+
+        if (_startingTimeoutsSinceLog > 0)
+            Logger.LogWarning("Disconnecting {connection}: it connected {seconds} s ago and still hasn't logged in (the limit is {limit} s). {count} other connections went the same way since the last line like this.", con, age / 1000, Params.StartingTimeout / 1000, _startingTimeoutsSinceLog);
+        else
+            Logger.LogWarning("Disconnecting {connection}: it connected {seconds} s ago and still hasn't logged in (the limit is {limit} s).", con, age / 1000, Params.StartingTimeout / 1000);
+
+        _lastStartingTimeoutLogTime = CachedClock;
+        _startingTimeoutsSinceLog = 0;
     }
 
     private void CountRefusal(ConnectRefusal refusal)
@@ -968,6 +1049,7 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                 case ConnectRefusal.AddressRate: ManagerStats.RefusedAddressRate++; break;
                 case ConnectRefusal.GlobalRate: ManagerStats.RefusedGlobalRate++; break;
                 case ConnectRefusal.TooManyAddresses: ManagerStats.RefusedTooManyAddresses++; break;
+                case ConnectRefusal.PacketSize: ManagerStats.RefusedPacketSize++; break;
             }
         }
     }
@@ -1063,9 +1145,13 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
         {
             // Queued, the handlers run when the queue is delivered, so a connection sending packets faster than they run
             // would queue them without limit, and every other connection's packets would wait behind its own.
+            // The limits are the connection's own: lower until the application has said who it is (see
+            // UdpConnection.RaiseStartingLimits).
             var cost = QueuedPacketCost(data.Length);
-            var overCount = Params.MaxQueuedPacketsPerConnection > 0 && con.QueuedPackets >= Params.MaxQueuedPacketsPerConnection;
-            var overBytes = Params.MaxQueuedBytesPerConnection > 0 && (long)con.QueuedBytes + cost > Params.MaxQueuedBytesPerConnection;
+            var maxCount = con.MaxQueuedPackets;
+            var maxBytes = con.MaxQueuedBytes;
+            var overCount = maxCount > 0 && con.QueuedPackets >= maxCount;
+            var overBytes = maxBytes > 0 && (long)con.QueuedBytes + cost > maxBytes;
 
             if (overCount || overBytes)
             {
@@ -1075,9 +1161,12 @@ public class UdpManager<TConnection> : IUdpManager, IDisposable where TConnectio
                 }
 
                 // The packets are still encrypted here, so their kind can't be read without the connection's cipher; the
-                // commonest sizes tell a burst of one kind (a zone load) from a flood.
+                // commonest sizes tell a burst of one kind (a zone load) from a flood.  They aren't worked out for a
+                // connection still at the starting limits: working them out walks every waiting event, and such a
+                // connection can go over its limits with a single datagram, as often as it can connect.
                 Logger.LogWarning("Disconnecting {connection}: it sent packets faster than their handlers run, and went over the {limit} limit. Waiting: {count} packets holding {bytes} bytes (limits: {maxCount} packets, {maxBytes} bytes). Commonest sizes waiting (bytes x count): {sizes}.",
-                    con, overCount ? "packet count" : "memory", con.QueuedPackets, con.QueuedBytes, Params.MaxQueuedPacketsPerConnection, Params.MaxQueuedBytesPerConnection, DescribeQueuedSizes(con));
+                    con, overCount ? "packet count" : "memory", con.QueuedPackets, con.QueuedBytes, maxCount, maxBytes,
+                    con.AtStartingQueueLimits ? "not listed at the starting limits" : DescribeQueuedSizes(con));
 
                 con.InternalDisconnect(0, DisconnectReason.CorruptPacket);
                 return;

@@ -258,6 +258,11 @@ public static class PacketLoginHandler
             return true;
         }
 
+        // This is a player now: let their packets queue as a zone load needs (PlayerUdpOptions.MaxQueuedPacketsPerConnection).
+        // Until here every connection has the low starting limits (PlayerUdpOptions.PreLogin...), which keep a stranger
+        // from filling a queue or holding a place. A connection that hasn't got here by PreLoginTimeout is dropped.
+        connection.RaiseStartingLimits();
+
         // CreatePlayerFromDatabase set the player; the admission check above compared it with null, hence the "!".
         dbContext.Characters
             .Where(x => x.Id == character.Id)

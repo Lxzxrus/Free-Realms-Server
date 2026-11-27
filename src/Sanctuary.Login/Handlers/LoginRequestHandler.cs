@@ -136,6 +136,10 @@ public static class LoginRequestHandler
 
         connection.UserId = user.Id;
 
+        // Signed in: this connection now stays for as long as the player is at character select, and has the full limits.
+        // Until here it had the starting ones (PlayerUdpOptions.PreLogin...), and PreLoginTimeout to get here.
+        connection.RaiseStartingLimits();
+
         loginReply.LoggedIn = true;
         loginReply.Status = 1;
         // Everyone is a member (Membership).

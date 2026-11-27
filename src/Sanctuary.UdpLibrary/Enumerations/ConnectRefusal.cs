@@ -20,5 +20,8 @@ public enum ConnectRefusal
     GlobalRate,
 
     /// <summary>The per-address table is full of addresses still inside their window.</summary>
-    TooManyAddresses
+    TooManyAddresses,
+
+    /// <summary>The request asked for packets smaller than <c>MinRawPacketSize</c>.</summary>
+    PacketSize
 }
