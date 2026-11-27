@@ -834,14 +834,14 @@ internal class UdpReliableChannel
                     return;
                 }
 
-                if (BigDataTargetLen > UdpConnection.UdpManager.Params.IncomingLogicalPacketMax)
+                if (BigDataTargetLen > UdpConnection.IncomingLogicalPacketMax)
                 {
                     UdpConnection.CallbackCorruptPacket(data, UdpCorruptionReason.FragmentOversized);
                     return;
                 }
 
                 // the buffer is sized by what the other side declares, so cap what one connection can make us hold across its channels
-                var fragmentBytesMax = UdpConnection.UdpManager.Params.IncomingFragmentBytesMax;
+                var fragmentBytesMax = UdpConnection.IncomingFragmentBytesMax;
 
                 if (fragmentBytesMax > 0 && UdpConnection.IncomingFragmentBytes + BigDataTargetLen > fragmentBytesMax)
                 {

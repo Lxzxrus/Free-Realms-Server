@@ -265,6 +265,11 @@ public static class PacketLoginHandler
 
         _loginClient.SendCharacterLogin(character.Id);
 
+        // The ticket checked out, so this is a player: let them send the larger packets a real client sends after login,
+        // such as the Coin Shop search's request for every item's definition (about 68 KiB). Until here every connection
+        // has the lower limits, which is what keeps strangers from making the server hold large buffers.
+        connection.RaiseIncomingPacketLimits();
+
         packetLoginReply.Success = true;
 
         connection.Send(packetLoginReply);

@@ -21,8 +21,10 @@ The server-to-server link between Login and Gateway (UDP 20041) doesn't use them
 | `HandshakeTimeout` | 10000 ms | A connection that hasn't sent one valid packet within this is dropped without a reply. A real client talks as soon as it's connected; a connect request with a forged sender address never can |
 | `UnverifiedReplyRatePerIp` | 20 | Replies one address may get per `UnverifiedReplyWindow` before it has proven it owns that address: see [Replies to forged addresses](#replies-to-forged-addresses) |
 | `UnverifiedReplyWindow` | 10000 ms | The window `UnverifiedReplyRatePerIp` counts over |
-| `IncomingLogicalPacketMax` | 64 KiB | Largest packet a client may send, after reassembly. Was 20 MB |
-| `IncomingFragmentBytesMax` | 64 KiB | Bytes of fragmented packets one connection may have half-received at once, across its four reliable channels |
+| `IncomingLogicalPacketMax` | 64 KiB | Largest packet a client may send, after reassembly, until it has logged in. Was 20 MB |
+| `IncomingFragmentBytesMax` | 64 KiB | Bytes of fragmented packets one connection may have half-received at once, across its four reliable channels, until it has logged in |
+| `LoggedInLogicalPacketMax` | 96 KiB | `IncomingLogicalPacketMax` once a player's login to the Gateway has succeeded (the Login server never raises it). Searching the Coin Shop sends the largest packet a real client sends: a request for every store item's definition, 15 bytes plus 4 per item, 68,879 bytes for today's 17,216 items. 96 KiB fits 24,572; a test in `LoggedInPacketLimitsTests` fails if `CoinStoreItems.json` outgrows it |
+| `LoggedInFragmentBytesMax` | 96 KiB | `IncomingFragmentBytesMax` once a player's login to the Gateway has succeeded |
 | `ReliableOverflowBytes` | 16 MiB | Reliable data that may wait for one player before they're disconnected: a hard ceiling on memory per player. Entering a zone queues about 4.2 MiB at once, so it can't be lower |
 | `ReliableBacklogTimeout` | 60000 ms | A player with more than `ReliableBacklogBytes` waiting for them for this long without a break is disconnected: they've fallen behind and aren't catching up. This is what lets an overloaded server recover |
 | `ReliableBacklogBytes` | 512 KiB | See `ReliableBacklogTimeout` |
