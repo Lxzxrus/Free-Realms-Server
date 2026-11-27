@@ -40,8 +40,26 @@ code the pieces live as below. Where they say to type `tp x y z`, `tporigin` or 
 
 1. **Start screen.** Choosing a hole in the Games menu (activities 560 to 565), or picking a hole on the map's
    points of interest while in Fabled Realms, sends the hole's start screen: the invite, "launched" and minigame info
-   packets edenfps sent. The map first teleports the player to the hole's water in Fabled Realms, as before; from a
-   house or another hole it only takes the player back to Fabled Realms.
+   packets edenfps sent, with two fields the client needs for a start screen (found in FreeRealms.exe and checked in
+   a local run on 2026-11-25):
+   - `MiniGameInfo.Unknown11` (the client's offset 0x267) on. Off, as edenfps sent it, the client starts the game
+     the moment the info arrives (`PlayerStartMiniGame`, 0x9BEB70), with no start screen at all.
+   - `MiniGameInfo.Unknown13`, an asset the client loads before it turns the screen's Go on: empty, Go stays on
+     "Loading..." forever. A Flash minigame sends its game's .gfx there; fishing sends `fishingStatus.gfx`, a small
+     fishing movie in the client's own packs.
+
+   The map first teleports the player to the hole's water in Fabled Realms, as before (from a house or another hole it
+   only takes the player back to Fabled Realms). That teleport shows a loading screen, even within the zone, and the
+   client cancels a start screen that arrives before it drops, so the offer waits for the client's "Viewed loading
+   screen" report (`PacketClientLog`), for at most 30 seconds, and only while the player is still on that visit to
+   Fabled Realms: once they've left the zone, a later loading screen doesn't start fishing.
+
+   **No rod equipped** (on any profile): the client can't cast without one. From the map there is no start screen,
+   only a chat line telling the player to buy and equip a rod. From the Games menu the start screen still opens,
+   because the client hid its whole HUD when Play was pressed and only closing a start screen gives it back, but
+   without the asset: Go stays on "Loading...", the same chat line explains why, and closing the screen restores the
+   HUD. A rod taken off while the screen is up is caught at Go: the minigame is started and left at once (a leave
+   alone doesn't give the HUD back), with the chat line.
 2. **Into the hole.** The start screen's button sends a start game for the activity. The server takes the player into
    the hole's zone with `Player.TeleportToZone` (zone id = activity id) and sets the fishing state bit, 0x400000. The
    client switches to fishing and asks to register; the loading screen waits for the answer: casting range (from the
@@ -115,9 +133,9 @@ refused and not used up (before, any use ate it for nothing).
 - **The treasure chest is item 3016,** a members-only house fixture (`hsg_chest_02`, cost 50,000, no trade), granted
   to anyone, member or not. About one cast in seventeen brings it up (one in six with the Treasure Magnet). On a
   housing server that may be too generous, or the wrong item.
-- **No rod or job check on the server.** The real client needs a rod to cast, but a modified one could fish without.
-  Catches pay no coins today (fish have no resell value), so this is left for later: refuse a start or a cast when
-  `FishingHandler.EquippedRodId` finds no rod.
+- **No job check, and the rod is only checked on the way in.** A hole isn't offered or started without a rod
+  equipped (any profile's), but casts aren't checked: a modified client could take the rod off once inside. Catches
+  pay no coins today (fish have no resell value), so that is left for later.
 
 ## Check in game (Nate)
 

@@ -31,6 +31,11 @@ public static class PacketClientLogHandler
 
         // TODO: Save to a separate file based on packet value
 
+        // The client reports each loading screen once it has dropped (MarketingData.log, "Viewed loading screen
+        // <movie> for <n> seconds."). A fishing hole the map took the player to offers its start screen then.
+        if (packet.Message?.StartsWith("Viewed loading screen", StringComparison.Ordinal) == true)
+            FishingHandler.OnLoadingScreenDropped(connection);
+
         return true;
     }
 }

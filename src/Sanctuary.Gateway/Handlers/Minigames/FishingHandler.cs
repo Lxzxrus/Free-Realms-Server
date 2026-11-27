@@ -60,11 +60,28 @@ public static class FishingHandler
         return false;
     }
 
+    /// <summary>The asset the start screen loads before its Go turns on (see <see cref="Join(GatewayConnection, ClientActivityDefinition, bool)"/>).</summary>
+    private const string ReadyAsset = "fishingStatus.gfx";
+
+    /// <summary>What a player without a rod is told when they try a hole.</summary>
+    public const string NeedARod = "You need a fishing rod to fish here. Buy one in the Coin Store and equip it, then try again.";
+
     /// <summary>
-    /// The hole's start screen, as edenfps sent it: the invite, "launched", and the minigame's info. The client then
-    /// shows the start screen, and its Go button sends a start game (39/5) with the activity id as the state id.
+    /// The hole's start screen: the invite, "launched", and the minigame's info. The client shows the start screen,
+    /// and its Go button sends a start game (39/5) with the activity id as the state id. A player with no rod equipped
+    /// can't go in (<see cref="TryStart"/>): the client can't cast without one, so fishing would leave them stuck.
     /// </summary>
-    public static void Join(GatewayConnection connection, ClientActivityDefinition activity)
+    /// <remarks>
+    /// From the Games menu the start screen goes out even without a rod: the client hides its whole HUD as it asks to
+    /// join, and closing a minigame's start screen is what gives it back. Answering with nothing but a chat line left
+    /// the player with no UI at all (seen in a local run on 2026-11-25). Without a rod the screen leaves out
+    /// <see cref="ReadyAsset"/>, so its Go stays on "Loading..." and the player can only close it, and the chat line
+    /// says why.
+    /// </remarks>
+    public static void Join(GatewayConnection connection, ClientActivityDefinition activity) =>
+        Join(connection, activity, fromMap: false);
+
+    private static void Join(GatewayConnection connection, ClientActivityDefinition activity, bool fromMap)
     {
         var player = connection.Player;
 
@@ -72,9 +89,23 @@ public static class FishingHandler
         if (player.FishingSession?.ActivityId == activity.Id)
             return;
 
+        var hasRod = EquippedRodId(player) != 0;
+
+        // From the map the player only teleported to the water and their HUD is untouched: a chat line is enough.
+        if (fromMap && !hasRod)
+        {
+            player.PendingFishingActivityId = 0;
+            ChatHelper.SendSystemMessage(player, NeedARod);
+            _logger.LogDebug("Fishing: {player} has no rod, so hole {activityId} wasn't offered.", player.Guid, activity.Id);
+            return;
+        }
+
         player.PendingFishingActivityId = activity.Id;
 
-        _logger.LogDebug("Fishing: {player} opened the start screen of hole {activityId}.", player.Guid, activity.Id);
+        _logger.LogDebug("Fishing: {player} opened the start screen of hole {activityId} (rod: {hasRod}).", player.Guid, activity.Id, hasRod);
+
+        if (!hasRod)
+            ChatHelper.SendSystemMessage(player, NeedARod);
 
         var miniGameInfo = new MiniGameInfo
         {
@@ -85,7 +116,16 @@ public static class FishingHandler
             ProfileType = FishingMiniGameType,
             Type = FishingMiniGameType,
             PreselectedGameId = activity.Id,
-            ShowActionBar = true
+            ShowActionBar = true,
+            // The start screen: the client shows it and waits for Go (MiniGameInfo offset 0x267, read by the client's
+            // PlayerStartMiniGame, 0x9BEB70). Off, as edenfps sent it, the client starts the game by itself the moment
+            // the info arrives, so the map's teleport to a hole's water threw the player straight into the hole.
+            Unknown11 = true,
+            // An asset the client loads before it turns the start screen's Go on: PlayerStartMiniGame only waits for
+            // a load (and so ever becomes ready) when this name isn't empty, and Go stays on "Loading..." otherwise.
+            // A Flash minigame sends its game here; fishing has none, so it names a small fishing movie that is in
+            // the client's own packs.
+            Unknown13 = hasRod ? ReadyAsset : null
         };
 
         var miniGameGroupInfo = new MiniGameGroupInfo
@@ -144,17 +184,55 @@ public static class FishingHandler
         });
     }
 
+    /// <summary>How long a hole's start screen waits for the map teleport's loading screen to drop.</summary>
+    private const int OfferAfterLoadingMs = 30_000;
+
     /// <summary>
     /// A point of interest at a fishing hole (the map lists all six) also offers that hole's start screen, once the
     /// player stands by its water. Matched by name: each hole's point of interest has its activity's name.
     /// </summary>
+    /// <remarks>
+    /// The teleport shows a loading screen, even within the zone, and a start screen that arrives before it drops is
+    /// cancelled by the client (it sends a minigame end at once; seen in a local run on 2026-11-25). So the offer
+    /// waits for the client's report that the loading screen was seen (<see cref="OnLoadingScreenDropped"/>), for at
+    /// most <see cref="OfferAfterLoadingMs"/>.
+    /// </remarks>
     public static void OfferHoleAt(GatewayConnection connection, PointOfInterestDefinition pointOfInterest)
     {
+        var player = connection.Player;
+
+        player.FishingOfferAfterLoadingActivityId = 0;
+
         var activity = _resourceManager.ClientActivityDefinitions.Values
             .FirstOrDefault(activity => activity.NameId == pointOfInterest.NameId && IsFishingHole(activity.Id));
 
-        if (activity is not null)
-            Join(connection, activity);
+        if (activity is null)
+            return;
+
+        player.FishingOfferAfterLoadingActivityId = activity.Id;
+        player.FishingOfferAfterLoadingUntil = Environment.TickCount64 + OfferAfterLoadingMs;
+        player.FishingOfferAfterLoadingZoneEntry = player.ZoneEntry;
+    }
+
+    /// <summary>The client's loading screen dropped: the start screen of a hole the map just took the player to.</summary>
+    public static void OnLoadingScreenDropped(GatewayConnection connection)
+    {
+        var player = connection.Player;
+        var activityId = player.FishingOfferAfterLoadingActivityId;
+
+        if (activityId == 0)
+            return;
+
+        player.FishingOfferAfterLoadingActivityId = 0;
+
+        // A loading screen from a later trip (the player left the zone before this one's came) isn't the map
+        // teleport's: offering the hole then would pull them into fishing from wherever they are now.
+        if (Environment.TickCount64 > player.FishingOfferAfterLoadingUntil ||
+            player.ZoneEntry != player.FishingOfferAfterLoadingZoneEntry ||
+            !_resourceManager.ClientActivityDefinitions.TryGetValue(activityId, out var activity))
+            return;
+
+        Join(connection, activity, fromMap: true);
     }
 
     /// <summary>The start screen's Go: into the hole, and into fishing. False if it isn't a hole the player joined.</summary>
@@ -166,6 +244,20 @@ public static class FishingHandler
             return false;
 
         player.PendingFishingActivityId = 0;
+
+        // A rod taken off while the start screen was up (without one its Go never turns on): close the minigame
+        // rather than strand them in the hole. The client keeps the three Fish Finder buttons on its action bar
+        // afterwards, until something refreshes it; seen in a local run, harmless.
+        if (EquippedRodId(player) == 0)
+        {
+            _logger.LogDebug("Fishing: {player} has no rod, so hole {activityId} wasn't started.", player.Guid, stateId);
+            // Started, then left at once: a leave alone, for a minigame the client hasn't seen start, doesn't give
+            // back the HUD it hid at Go (the client's leave, 0x9BF190, only quits a started game).
+            connection.SendTunneled(new MiniGameGameStartPacket(stateId, groupId, gameId));
+            connection.SendTunneled(new MiniGameLeavePacket(stateId));
+            ChatHelper.SendSystemMessage(player, NeedARod);
+            return true;
+        }
 
         // Echoed as the client sent it, as edenfps did.
         connection.SendTunneled(new MiniGameGameStartPacket(stateId, groupId, gameId));
