@@ -84,28 +84,9 @@ public static class ChangeNameRequestPacketHandler
 
     private static ChangeNameResponse OnChangeCharacterName(GatewayConnection connection, ChangeNameRequestPacket packet)
     {
-        if (string.IsNullOrWhiteSpace(packet.Name.FirstName)
-            || packet.Name.LastName != string.Empty && string.IsNullOrWhiteSpace(packet.Name.LastName))
-        {
+        // The same rules as at creation and in the name check (CharacterNameRules).
+        if (CharacterNameRules.Check(packet.Name.FirstName, packet.Name.LastName, _resourceManager.NameFilter) != CharacterNameProblem.None)
             return ChangeNameResponse.Error;
-        }
-
-        if (packet.Name.FirstName.Length is < 3 or > 14)
-            return ChangeNameResponse.Error;
-
-        if (packet.Name.LastName != string.Empty && (packet.Name.LastName.Length is < 3 or > 14))
-            return ChangeNameResponse.Error;
-
-        if (CharacterNameHelper.ContainsIllegalCharacters(packet.Name.FullName))
-        {
-            return ChangeNameResponse.Error;
-        }
-
-        if (_resourceManager.NameFilter.Any(token =>
-            packet.Name.FullName.Contains(token, StringComparison.OrdinalIgnoreCase)))
-        {
-            return ChangeNameResponse.Error;
-        }
 
         using var dbContext = _dbContextFactory.CreateDbContext();
 
@@ -171,7 +152,7 @@ public static class ChangeNameRequestPacketHandler
         if (!GuildHelper.IsValidName(guildName))
             return ChangeNameResponse.Error;
 
-        if (GuildHelper.IsProfane(guildName, _resourceManager.NameFilter))
+        if (GuildHelper.IsRefused(guildName, _resourceManager.NameFilter))
             return ChangeNameResponse.Error;
 
         using var dbContext = _dbContextFactory.CreateDbContext();

@@ -104,36 +104,26 @@ public static class CheckNamePacketHandler
 
     private static CheckNameResponse OnCheckCharacterName(GatewayConnection connection, CheckNamePacket packet)
     {
-        if (string.IsNullOrWhiteSpace(packet.Name.FirstName)
-            || packet.Name.LastName != string.Empty && string.IsNullOrWhiteSpace(packet.Name.LastName))
+        // The same rules as at creation (CharacterNameRules).
+        switch (CharacterNameRules.Check(packet.Name.FirstName, packet.Name.LastName, _resourceManager.NameFilter))
         {
-            return CheckNameResponse.IncorrectLength;
-        }
-
-        if (packet.Name.FirstName.Length < 3)
-            return CheckNameResponse.FirstNameTooShort;
-
-        if (packet.Name.FirstName.Length > 14)
-            return CheckNameResponse.FirstNameTooLong;
-
-        if (packet.Name.LastName != string.Empty)
-        {
-            if (packet.Name.LastName.Length < 3)
+            case CharacterNameProblem.Invalid:
+                return CheckNameResponse.IncorrectLength;
+            case CharacterNameProblem.FirstNameTooShort:
+                return CheckNameResponse.FirstNameTooShort;
+            case CharacterNameProblem.FirstNameTooLong:
+                return CheckNameResponse.FirstNameTooLong;
+            case CharacterNameProblem.LastNameTooShort:
                 return CheckNameResponse.LastNameTooShort;
-
-            if (packet.Name.LastName.Length > 14)
+            case CharacterNameProblem.LastNameTooLong:
                 return CheckNameResponse.LastNameTooLong;
-        }
-
-        if (CharacterNameHelper.ContainsIllegalCharacters(packet.Name.FullName))
-        {
-            return CheckNameResponse.IllegalCharacters;
-        }
-
-        if (_resourceManager.NameFilter.Any(token =>
-            packet.Name.FullName.Contains(token, StringComparison.OrdinalIgnoreCase)))
-        {
-            return CheckNameResponse.Profane;
+            case CharacterNameProblem.IllegalCharacters:
+                return CheckNameResponse.IllegalCharacters;
+            case CharacterNameProblem.Profane:
+                return CheckNameResponse.Profane;
+            case CharacterNameProblem.Reserved:
+                // a staff or server word: "taken" is the client's message that fits
+                return CheckNameResponse.Taken;
         }
 
         using var dbContext = _dbContextFactory.CreateDbContext();
@@ -157,7 +147,7 @@ public static class CheckNamePacketHandler
                 return CheckNameResponse.IllegalCharacters;
         }
 
-        if (GuildHelper.IsProfane(guildName, _resourceManager.NameFilter))
+        if (GuildHelper.IsRefused(guildName, _resourceManager.NameFilter))
             return CheckNameResponse.Profane;
 
         using var dbContext = _dbContextFactory.CreateDbContext();

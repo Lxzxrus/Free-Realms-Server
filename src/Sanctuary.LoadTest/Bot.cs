@@ -94,13 +94,20 @@ public sealed class Bot : IBotConnectionHandler
     {
         Index = index;
         Username = $"{options.AccountPrefix}{index:D3}";
-        _characterName = $"Loadbot{index:D3}";
+        _characterName = $"Loadbot{Letters(index)}";
         _options = options;
         _serviceProvider = serviceProvider;
         _moveTracker = moveTracker;
         _counters = counters;
         _random = new Random(HashCode.Combine(options.Seed, index));
     }
+
+    /// <summary>
+    /// A bot's number as three letters (0 is "aaa", 1 is "aab"): character names may not hold digits
+    /// (CharacterNameRules), so "Loadbot001" is refused.
+    /// </summary>
+    public static string Letters(int index) =>
+        new([(char)('a' + index / 676 % 26), (char)('a' + index / 26 % 26), (char)('a' + index % 26)]);
 
     public void Post(Action action) => _inbox.Enqueue(action);
 
@@ -387,7 +394,7 @@ public sealed class Bot : IBotConnectionHandler
                 else if (result == 4 && ++_nameAttempts < 5)
                 {
                     // Name taken, perhaps by a bot account with a different prefix.
-                    _characterName = $"Loadbot{Index:D3}{(char)('a' + _random.Next(26))}{(char)('a' + _random.Next(26))}";
+                    _characterName = $"Loadbot{Letters(Index)}{(char)('a' + _random.Next(26))}{(char)('a' + _random.Next(26))}";
                     CreateCharacter();
                 }
                 else

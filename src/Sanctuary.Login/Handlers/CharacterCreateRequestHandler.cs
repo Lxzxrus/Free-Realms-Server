@@ -189,6 +189,20 @@ public static class CharacterCreateRequestHandler
             return true;
         }
 
+        // Evergrove: the client checks the name first (PacketCheckNameRequestHandler), but a modified one needn't.
+        var nameProblem = CharacterNameRules.Check(characterData.FirstName, characterData.LastName, _resourceManager.NameFilter);
+
+        if (nameProblem != CharacterNameProblem.None)
+        {
+            _logger.LogInformation("Failed to create character, name refused: {problem}.", nameProblem);
+
+            characterCreateReply.Result = 7;
+
+            connection.Send(characterCreateReply);
+
+            return true;
+        }
+
         using var dbContext = _dbContextFactory.CreateDbContext();
 
         var nameTaken = dbContext.Characters.Any(x => x.FirstName == characterData.FirstName && x.LastName == characterData.LastName);
